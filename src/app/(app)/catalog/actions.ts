@@ -16,10 +16,15 @@ export async function saveItemType(formData: FormData) {
   const unit = String(formData.get("unit") || "יח'").trim() || "יח'";
   const isSensitive = formData.get("isSensitive") === "on";
   const trackLocation = formData.get("trackLocation") === "on";
+  // תמונת מוצר (data-URL, אופציונלי). "__CLEAR__" = הסרת תמונה קיימת.
+  const rawImage = String(formData.get("imageData") || "");
+  const imageData =
+    rawImage === "__CLEAR__" ? null : rawImage.startsWith("data:image") ? rawImage : undefined;
 
   if (!sku || !name || !categoryId) return;
 
-  const data = { sku, name, categoryId, trackingMethod, unit, isSensitive, trackLocation };
+  const base = { sku, name, categoryId, trackingMethod, unit, isSensitive, trackLocation };
+  const data = imageData !== undefined ? { ...base, imageData } : base;
   if (id) {
     await prisma.itemType.update({ where: { id }, data });
   } else {

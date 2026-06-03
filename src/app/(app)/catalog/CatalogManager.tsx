@@ -14,8 +14,33 @@ type EditData = {
   unit: string;
   isSensitive: boolean;
   trackLocation: boolean;
+  imageData: string | null;
   kitComponents: { id: string; name: string; quantity: number }[];
 };
+
+/** דחיסת תמונה ל-data-URL קטן (max 500px, JPEG) */
+function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 500;
+        let { width, height } = img;
+        if (width > height && width > max) { height = (height * max) / width; width = max; }
+        else if (height > max) { width = (width * max) / height; height = max; }
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      };
+      img.onerror = reject;
+      img.src = reader.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function CatalogManager({
   categories,
@@ -28,6 +53,8 @@ export default function CatalogManager({
 }) {
   const [open, setOpen] = useState(false);
   const [method, setMethod] = useState(edit?.trackingMethod || "QUANTITY");
+  const [image, setImage] = useState<string | null>(edit?.imageData ?? null);
+  const [busy, setBusy] = useState(false);
 
   return (
     <>
@@ -109,6 +136,36 @@ export default function CatalogManager({
                   <input type="checkbox" name="trackLocation" defaultChecked={edit?.trackLocation} className="w-4 h-4" />
                   מעקב מיקום פיזי
                 </label>
+              </div>
+
+              {/* צילום מוצר (אופציונלי) */}
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">צילום מוצר (אופציונלי)</label>
+                <input type="hidden" name="imageData" value={image === null ? (edit?.imageData ? "__CLEAR__" : "") : image} />
+                <div className="flex items-center gap-3">
+                  {image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={image} alt="מוצר" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg border border-dashed border-slate-300 flex items-center justify-center text-slate-300 text-2xl">📷</div>
+                  )}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-sm bg-white border border-slate-300 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-slate-50">
+                      {busy ? "טוען..." : "בחר / צלם תמונה"}
+                      <input type="file" accept="image/*" capture="environment" className="hidden"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          if (!f) return;
+                          setBusy(true);
+                          try { setImage(await compressImage(f)); } finally { setBusy(false); }
+                        }} />
+                    </label>
+                    {image && (
+                      <button type="button" onClick={() => setImage(null)}
+                        className="text-xs text-rose-500 text-right">הסר תמונה</button>
+                    )}
+                  </div>
+                </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setOpen(false)}

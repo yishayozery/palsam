@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card, Table, Th, Td, EmptyState } from "@/components/ui";
 import { TRACKING_METHOD } from "@/lib/labels";
 import InventoryActions from "./InventoryActions";
+import OcrIntake from "./OcrIntake";
 
 export const dynamic = "force-dynamic";
 
@@ -48,10 +49,16 @@ export default async function InventoryPage({
         subtitle="תמונת מלאי לפי מחזיק — כמותי, פרטני ואצווה"
         action={
           canManage ? (
-            <InventoryActions
-              items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod }))}
-              statuses={statuses.map((s) => ({ id: s.id, name: s.name }))}
-            />
+            <div className="flex gap-2">
+              <OcrIntake
+                items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod }))}
+                statuses={statuses.map((s) => ({ id: s.id, name: s.name }))}
+              />
+              <InventoryActions
+                items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod }))}
+                statuses={statuses.map((s) => ({ id: s.id, name: s.name }))}
+              />
+            </div>
           ) : undefined
         }
       />

@@ -15,9 +15,9 @@ export default function LoginPage() {
           <div className="mx-auto w-14 h-14 rounded-xl bg-slate-800 text-white flex items-center justify-center text-2xl mb-3">
             🛡️
           </div>
-          <h1 className="text-xl font-bold text-slate-800">ניהול מלאי גדודי</h1>
+          <h1 className="text-2xl font-bold text-slate-800 tracking-wide">KALAG</h1>
           <p className="text-sm text-slate-500 mt-1">
-            שרשרת אספקה, מלאי והחתמות ציוד
+            ניהול שרשרת אספקה, מלאי והחתמות ציוד
           </p>
         </div>
 

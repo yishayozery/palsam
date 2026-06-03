@@ -21,7 +21,7 @@ export default async function AppLayout({
           <div className="flex items-center gap-2">
             <span className="text-2xl">🛡️</span>
             <div>
-              <div className="font-bold text-sm">ניהול מלאי גדודי</div>
+              <div className="font-bold text-base tracking-wide">KALAG</div>
               <div className="text-xs text-slate-400">{unitName}</div>
             </div>
           </div>

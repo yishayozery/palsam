@@ -40,6 +40,7 @@ export default async function CatalogPage() {
         <Table>
           <thead>
             <tr>
+              <Th></Th>
               <Th>מק״ט</Th>
               <Th>שם</Th>
               <Th>קטגוריה</Th>
@@ -52,6 +53,14 @@ export default async function CatalogPage() {
           <tbody>
             {items.map((i) => (
               <tr key={i.id} className={i.active ? "" : "opacity-50"}>
+                <Td>
+                  {i.imageData ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={i.imageData} alt={i.name} className="w-10 h-10 object-cover rounded-md border border-slate-200" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-md bg-slate-100 flex items-center justify-center text-slate-300">📦</div>
+                  )}
+                </Td>
                 <Td className="font-mono text-xs">{i.sku}</Td>
                 <Td className="font-medium">
                   {i.name}
@@ -89,6 +98,7 @@ export default async function CatalogPage() {
                       unit: i.unit,
                       isSensitive: i.isSensitive,
                       trackLocation: i.trackLocation,
+                      imageData: i.imageData,
                       kitComponents: i.kitComponents.map((k) => ({
                         id: k.id,
                         name: k.componentType.name,

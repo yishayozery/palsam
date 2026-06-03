@@ -206,6 +206,7 @@ model ItemType {
   unit           String         @default("יח'") // יחידת מידה
   isSensitive    Boolean        @default(false) // ציוד רגיש (הפרדת אחריות/מיקום)
   trackLocation  Boolean        @default(false) // מעקב מיקום פיזי
+  imageData      String? // תמונת מוצר (data-URL, אופציונלי)
   active         Boolean        @default(true)
   createdAt      DateTime       @default(now())
 
