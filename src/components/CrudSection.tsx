@@ -1,0 +1,147 @@
+"use client";
+
+import { useState } from "react";
+
+export type Field = {
+  name: string;
+  label: string;
+  type?: "text" | "number" | "checkbox" | "select";
+  options?: { value: string; label: string }[];
+  default?: string | boolean;
+};
+
+export type Row = {
+  id: string;
+  values: Record<string, string | boolean>;
+  display: React.ReactNode;
+  locked?: boolean; // לא ניתן למחיקה (בשימוש)
+};
+
+export default function CrudSection({
+  title,
+  fields,
+  rows,
+  saveAction,
+  deleteAction,
+  addLabel = "הוספה",
+}: {
+  title: string;
+  fields: Field[];
+  rows: Row[];
+  saveAction: (fd: FormData) => Promise<void>;
+  deleteAction?: (fd: FormData) => Promise<void>;
+  addLabel?: string;
+}) {
+  const [editId, setEditId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+
+  const editingRow = rows.find((r) => r.id === editId);
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-bold text-slate-800">{title}</h2>
+        <button
+          onClick={() => {
+            setAdding((v) => !v);
+            setEditId(null);
+          }}
+          className="text-sm bg-slate-800 text-white rounded-lg px-3 py-1.5 hover:bg-slate-900"
+        >
+          {adding ? "ביטול" : `+ ${addLabel}`}
+        </button>
+      </div>
+
+      {(adding || editingRow) && (
+        <form
+          action={async (fd) => {
+            await saveAction(fd);
+            setAdding(false);
+            setEditId(null);
+          }}
+          className="mb-4 p-3 bg-slate-50 rounded-lg flex flex-wrap items-end gap-3"
+        >
+          {editingRow && <input type="hidden" name="id" value={editingRow.id} />}
+          {fields.map((f) => {
+            const cur = editingRow?.values[f.name];
+            if (f.type === "checkbox") {
+              return (
+                <label key={f.name} className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    name={f.name}
+                    defaultChecked={Boolean(cur)}
+                    className="w-4 h-4"
+                  />
+                  {f.label}
+                </label>
+              );
+            }
+            if (f.type === "select") {
+              return (
+                <div key={f.name}>
+                  <label className="block text-xs text-slate-500 mb-1">{f.label}</label>
+                  <select
+                    name={f.name}
+                    defaultValue={String(cur ?? f.default ?? "")}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                  >
+                    {f.options?.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            }
+            return (
+              <div key={f.name}>
+                <label className="block text-xs text-slate-500 mb-1">{f.label}</label>
+                <input
+                  name={f.name}
+                  type={f.type || "text"}
+                  defaultValue={String(cur ?? f.default ?? "")}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                />
+              </div>
+            );
+          })}
+          <button className="bg-emerald-600 text-white rounded-lg px-4 py-1.5 text-sm hover:bg-emerald-700">
+            שמירה
+          </button>
+        </form>
+      )}
+
+      <div className="divide-y divide-slate-100">
+        {rows.length === 0 && (
+          <p className="text-sm text-slate-400 py-3">אין רשומות עדיין</p>
+        )}
+        {rows.map((r) => (
+          <div key={r.id} className="flex items-center justify-between py-2.5">
+            <div className="text-sm">{r.display}</div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setEditId(r.id);
+                  setAdding(false);
+                }}
+                className="text-xs text-slate-500 hover:text-slate-800"
+              >
+                עריכה
+              </button>
+              {deleteAction && !r.locked && (
+                <form action={deleteAction}>
+                  <input type="hidden" name="id" value={r.id} />
+                  <button className="text-xs text-rose-500 hover:text-rose-700">
+                    מחיקה
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

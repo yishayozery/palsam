@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-heebo);
+}
+
+body {
+  font-family: var(--font-heebo), "Segoe UI", Arial, sans-serif;
+}
+
+/* גלילה עדינה */
+* {
+  scrollbar-width: thin;
+}
+
+/* כותרות טבלה דביקות */
+.table-sticky thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}

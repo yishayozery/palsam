@@ -1,0 +1,23 @@
+# Multi-Instance: כל גדוד מקבל סט קונטיינרים + מסד נתונים מבודד משלו.
+# קובץ זה מריץ מופע יחיד (גדוד אחד). לכל גדוד נוסף — העתק עם שמות/פורטים/סיסמאות אחרים.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: gadsam_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gadsam}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gadsam_dev_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-gadsam}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - gadsam_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gadsam}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  gadsam_pgdata:

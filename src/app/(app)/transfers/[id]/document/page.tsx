@@ -1,0 +1,121 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { requireUser } from "@/lib/guard";
+import { prisma } from "@/lib/prisma";
+import PrintButton from "@/components/PrintButton";
+import { TRANSFER_TYPE, TRANSFER_STATUS } from "@/lib/labels";
+
+export const dynamic = "force-dynamic";
+
+export default async function TransferDocumentPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  await requireUser();
+  const { id } = await params;
+
+  const t = await prisma.transfer.findUnique({
+    where: { id },
+    include: {
+      fromHolder: true,
+      toHolder: true,
+      toSoldier: true,
+      createdBy: true,
+      approvedBy: true,
+      lines: { include: { itemType: true, serialUnit: true, status: true } },
+    },
+  });
+  if (!t) notFound();
+
+  const unitName = process.env.UNIT_NAME || "גדוד";
+  const docNumber = t.id.slice(-8).toUpperCase();
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4 print:hidden">
+        <Link href="/transfers" className="text-sm text-slate-500 hover:text-slate-800">→ חזרה להעברות</Link>
+        <PrintButton />
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 max-w-3xl mx-auto print:shadow-none print:border-0">
+        {/* כותרת */}
+        <div className="flex justify-between items-start border-b-2 border-slate-800 pb-4 mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">תעודת העברת ציוד</h1>
+            <p className="text-sm text-slate-500 mt-1">{TRANSFER_TYPE[t.type]}</p>
+          </div>
+          <div className="text-left text-sm">
+            <div className="font-bold">{unitName}</div>
+            <div className="text-slate-500">מס׳ תעודה: {docNumber}</div>
+            <div className="text-slate-500">{t.createdAt.toLocaleDateString("he-IL")} {t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}</div>
+          </div>
+        </div>
+
+        {/* פרטי העברה */}
+        <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+          <div>
+            <span className="text-slate-500">מאת:</span>{" "}
+            <span className="font-medium">{t.fromHolder?.name ?? "חטיבה (גורם חיצוני)"}</span>
+          </div>
+          <div>
+            <span className="text-slate-500">אל:</span>{" "}
+            <span className="font-medium">{t.toSoldier?.fullName ?? t.toHolder?.name ?? "חטיבה (גורם חיצוני)"}</span>
+          </div>
+          <div>
+            <span className="text-slate-500">סטטוס:</span>{" "}
+            <span className="font-medium">{TRANSFER_STATUS[t.status]}</span>
+          </div>
+          {t.reason && (
+            <div><span className="text-slate-500">הערה:</span> {t.reason}</div>
+          )}
+        </div>
+
+        {/* טבלת פריטים */}
+        <table className="w-full text-sm text-right border border-slate-300 mb-6">
+          <thead>
+            <tr className="bg-slate-100">
+              <th className="border border-slate-300 px-3 py-2">#</th>
+              <th className="border border-slate-300 px-3 py-2">פריט</th>
+              <th className="border border-slate-300 px-3 py-2">מספר סריאלי</th>
+              <th className="border border-slate-300 px-3 py-2">כמות</th>
+              <th className="border border-slate-300 px-3 py-2">סטטוס</th>
+            </tr>
+          </thead>
+          <tbody>
+            {t.lines.map((l, i) => (
+              <tr key={l.id}>
+                <td className="border border-slate-300 px-3 py-2 text-center">{i + 1}</td>
+                <td className="border border-slate-300 px-3 py-2">{l.itemType.name}</td>
+                <td className="border border-slate-300 px-3 py-2 font-mono text-xs">{l.serialUnit?.serialNumber ?? "—"}</td>
+                <td className="border border-slate-300 px-3 py-2 text-center">{l.quantity}</td>
+                <td className="border border-slate-300 px-3 py-2">{l.status?.name ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* חתימות */}
+        <div className="grid grid-cols-2 gap-8 mt-10 text-sm">
+          <div className="border-t border-slate-400 pt-2">
+            <div className="text-slate-500">מוסר / יוצר התעודה</div>
+            <div className="font-medium mt-1">{t.createdBy.fullName}</div>
+          </div>
+          <div className="border-t border-slate-400 pt-2">
+            <div className="text-slate-500">מקבל / מאשר</div>
+            <div className="font-medium mt-1">
+              {t.approvedBy?.fullName ?? "________________"}
+              {t.approvedAt && (
+                <span className="text-slate-400"> · {t.approvedAt.toLocaleDateString("he-IL")}</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-400 text-center mt-8">
+          מסמך זה הופק אוטומטית ממערכת ניהול המלאי הגדודי · {docNumber}
+        </p>
+      </div>
+    </div>
+  );
+}

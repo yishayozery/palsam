@@ -1,0 +1,482 @@
+// מערכת ניהול שרשרת אספקה, מלאי והחתמות ציוד — דרג גדודי
+// Multi-Instance: סכמה זו מתארת מסד נתונים אחד = גדוד אחד.
+// עקרון על: Admin-Driven — סטטוסים/קטגוריות/תדירויות/מבנה ארגוני מנוהלים בטבלאות (Dictionaries), ללא Hardcoding.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===================== Enums מבניים (לא דיקשנרי) =====================
+
+enum Role {
+  ADMIN // מנהל מערכת
+  LOGISTICS // אחראי לוגיסטיקה (קל"ג/מחסן)
+  COMPANY_SP // רס"פ (מנהל פלוגה)
+  ARMORY // אחראי ארמון (נשקייה)
+  VIEWER // צופה / מבקר (קריאה בלבד)
+}
+
+enum HolderType {
+  WAREHOUSE // מחסן גדודי
+  COMPANY // פלוגה
+  ARMORY // נשקייה / ארמון
+}
+
+enum TrackingMethod {
+  QUANTITY // מלאי כמותי
+  SERIAL // מלאי פרטני (S/N)
+  LOT // מלאי אצווה (חומרי חבלה)
+  KIT // ערכה
+}
+
+enum TransferType {
+  INTAKE // קליטת מלאי חדש (מול חטיבה)
+  WRITE_OFF // גריעת מלאי (מול חטיבה)
+  ISSUE // הקצאה: מחסן גדודי ◄ פלוגה/ארמון
+  RETURN // החזרה: פלוגה ◄ מחסן גדודי
+  SIGNOUT // החתמת חייל (מחסן/פלוגה/ארמון ◄ חייל)
+  CHECKIN // זיכוי חייל (חייל ◄ מחזיק)
+}
+
+enum TransferStatus {
+  PENDING // מלאי במעבר / ממתין לאישור / ממתין לחתימה
+  APPROVED // אושר (לחיצת יד הושלמה)
+  REJECTED // נדחה
+  COMPLETED // הושלם
+}
+
+enum SignatureMethod {
+  LINK // קישור (וואטסאפ)
+  QR // קוד QR
+  ONSITE // שרבוט על מכשיר הרס"פ/אחראי
+}
+
+enum SignatureStatus {
+  PENDING // הונפק קישור/QR, טרם נחתם
+  SIGNED // נחתם
+  EXPIRED // פג תוקף
+  CANCELED
+}
+
+enum CountType {
+  WAREHOUSE // מחסן בלבד
+  COMPANY // פלוגה
+  GLOBAL // רוחבי (הקפאת מצב + אימות סנכרוני בכל הרמות)
+}
+
+enum CountSessionStatus {
+  DRAFT
+  FROZEN // הוקפא מצב (ספירה רוחבית)
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+}
+
+enum DiscrepancyKind {
+  LOSS // חוסר / אובדן
+  SURPLUS // עודף
+  STATUS_MISMATCH // אי-התאמת סטטוס
+}
+
+enum DiscrepancyStatus {
+  OPEN // פתוח — מחייב אישור Admin
+  RESOLVED // נסגר
+}
+
+// ===================== משתמשים והרשאות =====================
+
+model AppUser {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  fullName     String
+  role         Role
+  // המחזיק שעליו המשתמש אחראי (פלוגה לרס"פ, ארמון לאחראי ארמון). null ל-Admin/קל"ג/צופה.
+  holderId     String?
+  holder       Holder?  @relation(fields: [holderId], references: [id])
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  createdTransfers  Transfer[]     @relation("TransferCreatedBy")
+  approvedTransfers Transfer[]     @relation("TransferApprovedBy")
+  startedCounts     CountSession[] @relation("CountStartedBy")
+  resolvedGaps      Discrepancy[]  @relation("DiscrepancyResolvedBy")
+  auditLogs         AuditLog[]
+}
+
+// ===================== מבנה ארגוני (היררכיה) =====================
+
+model Holder {
+  id        String     @id @default(cuid())
+  type      HolderType
+  name      String
+  code      String?
+  parentId  String?
+  parent    Holder?    @relation("HolderHierarchy", fields: [parentId], references: [id])
+  children  Holder[]   @relation("HolderHierarchy")
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+
+  users         AppUser[]
+  soldiers      Soldier[]
+  stockBalances StockBalance[]
+  serialUnits   SerialUnit[]      @relation("SerialUnitHolder")
+  kitInstances  KitInstance[]     @relation("KitInstanceHolder")
+  transfersFrom Transfer[]        @relation("TransferFrom")
+  transfersTo   Transfer[]        @relation("TransferTo")
+  countDefs     CountDefinition[]
+  countLines    CountLine[]
+  discrepancies Discrepancy[]
+
+  @@index([type])
+  @@index([parentId])
+}
+
+// ===================== חיילים (משתמשי קצה — ללא יוזרים) =====================
+
+model Soldier {
+  id             String   @id @default(cuid())
+  fullName       String
+  personalNumber String   @unique // מספר אישי
+  phone          String?
+  companyId      String? // הפלוגה שאליה משויך
+  company        Holder?  @relation(fields: [companyId], references: [id])
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  signedSerialUnits  SerialUnit[]  @relation("SerialUnitSignedSoldier")
+  signedKitInstances KitInstance[] @relation("KitInstanceSignedSoldier")
+  transfersTo        Transfer[]    @relation("TransferToSoldier")
+  signatures         Signature[]
+
+  @@index([companyId])
+}
+
+// ===================== Dictionaries (admin-driven) =====================
+
+model Category {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  code      String?
+  active    Boolean    @default(true)
+  sortOrder Int        @default(0)
+  itemTypes ItemType[]
+}
+
+model ItemStatus {
+  id         String  @id @default(cuid())
+  name       String  @unique // תקין, בלאי, פגום, שצ"ל, אבוד...
+  code       String?
+  isDefault  Boolean @default(false) // סטטוס ברירת מחדל לקליטה
+  isLoss     Boolean @default(false) // נחשב אובדן (לדשבורד)
+  isWear     Boolean @default(false) // בלאי
+  isConsumed Boolean @default(false) // שצ"ל / נצרך
+  sortOrder  Int     @default(0)
+  active     Boolean @default(true)
+
+  serialUnits   SerialUnit[]
+  stockBalances StockBalance[]
+  transferLines TransferLine[]
+}
+
+model CountFrequency {
+  id           String            @id @default(cuid())
+  name         String            @unique // יומי, שבועי, חודשי...
+  intervalDays Int               @default(7)
+  active       Boolean           @default(true)
+  countDefs    CountDefinition[]
+}
+
+// ===================== קטלוג פריטים (עץ מוצר) =====================
+
+model ItemType {
+  id             String         @id @default(cuid())
+  sku            String         @unique // מק"ט
+  name           String
+  categoryId     String
+  category       Category       @relation(fields: [categoryId], references: [id])
+  trackingMethod TrackingMethod
+  unit           String         @default("יח'") // יחידת מידה
+  isSensitive    Boolean        @default(false) // ציוד רגיש (הפרדת אחריות/מיקום)
+  trackLocation  Boolean        @default(false) // מעקב מיקום פיזי
+  active         Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+
+  stockBalances StockBalance[]
+  serialUnits   SerialUnit[]
+  transferLines TransferLine[]
+  countLines    CountLine[]
+  discrepancies Discrepancy[]
+  // ערכות: רכיבי ה-BOM כאשר פריט זה הוא KIT
+  kitComponents KitComponent[] @relation("KitParent")
+  // היכן פריט זה מופיע כרכיב בערכות אחרות
+  usedInKits    KitComponent[] @relation("KitChild")
+  kitInstances  KitInstance[]
+
+  @@index([categoryId])
+  @@index([trackingMethod])
+}
+
+// BOM של ערכה (כאשר ItemType.trackingMethod = KIT)
+model KitComponent {
+  id              String   @id @default(cuid())
+  kitItemTypeId   String
+  kitItemType     ItemType @relation("KitParent", fields: [kitItemTypeId], references: [id], onDelete: Cascade)
+  componentTypeId String
+  componentType   ItemType @relation("KitChild", fields: [componentTypeId], references: [id])
+  quantity        Int      @default(1)
+
+  @@unique([kitItemTypeId, componentTypeId])
+}
+
+// ===================== מלאי =====================
+
+// מלאי כמותי: יתרה לכל (פריט × מחזיק × סטטוס)
+model StockBalance {
+  id         String     @id @default(cuid())
+  itemTypeId String
+  itemType   ItemType   @relation(fields: [itemTypeId], references: [id])
+  holderId   String
+  holder     Holder     @relation(fields: [holderId], references: [id])
+  statusId   String
+  status     ItemStatus @relation(fields: [statusId], references: [id])
+  quantity   Int        @default(0)
+  updatedAt  DateTime   @updatedAt
+
+  @@unique([itemTypeId, holderId, statusId])
+  @@index([holderId])
+}
+
+// יחידה סריאלית (SERIAL) או אצווה (LOT — עם lotQuantity)
+model SerialUnit {
+  id           String     @id @default(cuid())
+  itemTypeId   String
+  itemType     ItemType   @relation(fields: [itemTypeId], references: [id])
+  serialNumber String // מספר סריאלי (פרטני) או מספר אצווה (קבוצתי)
+  lotQuantity  Int? // כמות באצווה (LOT). null/1 עבור SERIAL
+  statusId     String
+  status       ItemStatus @relation(fields: [statusId], references: [id])
+
+  // מיקום ארגוני (אחריות פיזית ברמת מחסן/פלוגה/ארמון)
+  currentHolderId  String?
+  currentHolder    Holder?  @relation("SerialUnitHolder", fields: [currentHolderId], references: [id])
+  // אחריות משפטית: החייל החתום (נפרד ממיקום ארגוני)
+  signedSoldierId  String?
+  signedSoldier    Soldier? @relation("SerialUnitSignedSoldier", fields: [signedSoldierId], references: [id])
+  // מיקום פיזי חופשי (לדוגמה: "רכב צ-12345") — ניתן לעדכון ע"י הרס"פ ללא שינוי החתום
+  physicalLocation String?
+
+  // שיוך לערכה (אם הפריט חלק ממופע ערכה)
+  kitInstanceId String?
+  kitInstance   KitInstance? @relation(fields: [kitInstanceId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transferLines TransferLine[]
+  countLines    CountLine[]
+
+  @@unique([itemTypeId, serialNumber])
+  @@index([currentHolderId])
+  @@index([signedSoldierId])
+  @@index([statusId])
+}
+
+// מופע ערכה (Kit) — אוגד פריטים מרובים תחת ישות-אב
+model KitInstance {
+  id            String   @id @default(cuid())
+  kitItemTypeId String
+  kitItemType   ItemType @relation(fields: [kitItemTypeId], references: [id])
+  label         String // מזהה הערכה (לדוגמה "ערכת חפ"ק 04")
+
+  currentHolderId String?
+  currentHolder   Holder?  @relation("KitInstanceHolder", fields: [currentHolderId], references: [id])
+  signedSoldierId String?
+  signedSoldier   Soldier? @relation("KitInstanceSignedSoldier", fields: [signedSoldierId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  serialUnits SerialUnit[] // רכיבים סריאליים בערכה
+  qtyLines    KitQtyLine[] // רכיבים כמותיים בערכה
+
+  @@index([currentHolderId])
+  @@index([signedSoldierId])
+}
+
+// רכיב כמותי בתוך מופע ערכה
+model KitQtyLine {
+  id            String      @id @default(cuid())
+  kitInstanceId String
+  kitInstance   KitInstance @relation(fields: [kitInstanceId], references: [id], onDelete: Cascade)
+  itemTypeId    String
+  quantity      Int         @default(1)
+  present       Boolean     @default(true) // האם הרכיב קיים (לפירוק קיט בהחזרה)
+}
+
+// ===================== העברות + לחיצת יד (Handshake) =====================
+
+model Transfer {
+  id     String         @id @default(cuid())
+  type   TransferType
+  status TransferStatus @default(PENDING)
+
+  fromHolderId String?
+  fromHolder   Holder?  @relation("TransferFrom", fields: [fromHolderId], references: [id])
+  toHolderId   String?
+  toHolder     Holder?  @relation("TransferTo", fields: [toHolderId], references: [id])
+  toSoldierId  String?
+  toSoldier    Soldier? @relation("TransferToSoldier", fields: [toSoldierId], references: [id])
+
+  reason String? // סיבת גריעה / סטטוס בהחזרה / הערות
+  notes  String?
+
+  createdById  String
+  createdBy    AppUser  @relation("TransferCreatedBy", fields: [createdById], references: [id])
+  approvedById String?
+  approvedBy   AppUser? @relation("TransferApprovedBy", fields: [approvedById], references: [id])
+
+  pdfPath    String? // תעודת PDF חתומה
+  createdAt  DateTime  @default(now())
+  approvedAt DateTime?
+
+  lines      TransferLine[]
+  signatures Signature[]
+
+  @@index([type])
+  @@index([status])
+  @@index([toSoldierId])
+}
+
+model TransferLine {
+  id         String   @id @default(cuid())
+  transferId String
+  transfer   Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  itemTypeId String
+  itemType   ItemType @relation(fields: [itemTypeId], references: [id])
+  quantity   Int      @default(1)
+
+  serialUnitId  String?
+  serialUnit    SerialUnit? @relation(fields: [serialUnitId], references: [id])
+  kitInstanceId String?
+  // סטטוס הפריט בעת התנועה (למשל בהחזרה: תקין/בלאי/פגום)
+  statusId      String?
+  status        ItemStatus? @relation(fields: [statusId], references: [id])
+
+  @@index([transferId])
+}
+
+// ===================== החתמות חיילים =====================
+
+model Signature {
+  id            String          @id @default(cuid())
+  soldierId     String
+  soldier       Soldier         @relation(fields: [soldierId], references: [id])
+  transferId    String?
+  transfer      Transfer?       @relation(fields: [transferId], references: [id])
+  method        SignatureMethod
+  status        SignatureStatus @default(PENDING)
+  token         String          @unique // טוקן לקישור/QR
+  tokenExpires  DateTime?
+  signatureData String? // data-url של שרבוט החתימה
+  signedAt      DateTime?
+  createdAt     DateTime        @default(now())
+
+  @@index([soldierId])
+  @@index([status])
+}
+
+// ===================== ספירות מלאי + פערים =====================
+
+model CountDefinition {
+  id            String          @id @default(cuid())
+  name          String
+  type          CountType
+  frequencyId   String?
+  frequency     CountFrequency? @relation(fields: [frequencyId], references: [id])
+  scopeHolderId String? // אם ממוקד למחזיק מסוים
+  scopeHolder   Holder?         @relation(fields: [scopeHolderId], references: [id])
+  categoryIds   String[] // קטגוריות בספירה (ריק = הכל)
+  daysOfWeek    Int[] // ימים בשבוע (0-6)
+  active        Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+
+  sessions CountSession[]
+}
+
+model CountSession {
+  id           String             @id @default(cuid())
+  definitionId String?
+  definition   CountDefinition?   @relation(fields: [definitionId], references: [id])
+  type         CountType
+  status       CountSessionStatus @default(DRAFT)
+  frozen       Boolean            @default(false) // הקפאת מצב (רוחבי)
+  startedById  String
+  startedBy    AppUser            @relation("CountStartedBy", fields: [startedById], references: [id])
+  startedAt    DateTime           @default(now())
+  completedAt  DateTime?
+
+  lines         CountLine[]
+  discrepancies Discrepancy[]
+}
+
+model CountLine {
+  id           String       @id @default(cuid())
+  sessionId    String
+  session      CountSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  itemTypeId   String
+  itemType     ItemType     @relation(fields: [itemTypeId], references: [id])
+  holderId     String?
+  holder       Holder?      @relation(fields: [holderId], references: [id])
+  serialUnitId String?
+  serialUnit   SerialUnit?  @relation(fields: [serialUnitId], references: [id])
+  expectedQty  Int          @default(0)
+  countedQty   Int?
+  note         String?
+
+  @@index([sessionId])
+}
+
+model Discrepancy {
+  id           String            @id @default(cuid())
+  sessionId    String?
+  session      CountSession?     @relation(fields: [sessionId], references: [id])
+  itemTypeId   String
+  itemType     ItemType          @relation(fields: [itemTypeId], references: [id])
+  holderId     String?
+  holder       Holder?           @relation(fields: [holderId], references: [id])
+  expectedQty  Int
+  countedQty   Int
+  diff         Int
+  kind         DiscrepancyKind
+  status       DiscrepancyStatus @default(OPEN)
+  resolution   String?
+  resolvedById String?
+  resolvedBy   AppUser?          @relation("DiscrepancyResolvedBy", fields: [resolvedById], references: [id])
+  createdAt    DateTime          @default(now())
+  resolvedAt   DateTime?
+
+  @@index([status])
+}
+
+// ===================== יומן פעולות =====================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      AppUser? @relation(fields: [userId], references: [id])
+  action    String // CREATE/UPDATE/DELETE/APPROVE/SIGN/...
+  entity    String // שם הישות
+  entityId  String?
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}

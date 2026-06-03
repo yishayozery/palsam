@@ -1,0 +1,74 @@
+import { requireCapability } from "@/lib/guard";
+import { prisma } from "@/lib/prisma";
+import { PageHeader, Badge, Card } from "@/components/ui";
+import CrudSection from "@/components/CrudSection";
+import { saveSoldier, toggleSoldier } from "./actions";
+
+export const dynamic = "force-dynamic";
+
+export default async function SoldiersPage() {
+  const user = await requireCapability("soldiers.manage");
+
+  // רס"פ/ארמון רואים רק את חיילי תחומם
+  const where = user.holderId ? { companyId: user.holderId } : {};
+  const [soldiers, companies] = await Promise.all([
+    prisma.soldier.findMany({
+      where,
+      orderBy: { fullName: "asc" },
+      include: {
+        company: true,
+        _count: { select: { signedSerialUnits: true, signedKitInstances: true } },
+      },
+    }),
+    prisma.holder.findMany({ where: { type: "COMPANY", active: true }, orderBy: { name: "asc" } }),
+  ]);
+
+  const fields = [
+    { name: "fullName", label: "שם מלא" },
+    { name: "personalNumber", label: "מספר אישי" },
+    { name: "phone", label: "טלפון" },
+    ...(user.holderId
+      ? []
+      : [{
+          name: "companyId",
+          label: "פלוגה",
+          type: "select" as const,
+          options: companies.map((c) => ({ value: c.id, label: c.name })),
+        }]),
+  ];
+
+  return (
+    <div>
+      <PageHeader title="חיילים" subtitle="משתמשי קצה — ללא יוזרים במערכת" />
+      <CrudSection
+        title="רשימת חיילים"
+        addLabel="חייל"
+        fields={fields}
+        saveAction={saveSoldier}
+        deleteAction={toggleSoldier}
+        rows={soldiers.map((s) => ({
+          id: s.id,
+          values: {
+            fullName: s.fullName,
+            personalNumber: s.personalNumber,
+            phone: s.phone ?? "",
+            companyId: s.companyId ?? "",
+          },
+          display: (
+            <span className="flex items-center gap-2">
+              <span className="font-medium">{s.fullName}</span>
+              <span className="font-mono text-xs text-slate-400">{s.personalNumber}</span>
+              {s.company && <Badge>{s.company.name}</Badge>}
+              {s._count.signedSerialUnits + s._count.signedKitInstances > 0 && (
+                <Badge className="bg-blue-100 text-blue-700">
+                  חתום על {s._count.signedSerialUnits + s._count.signedKitInstances}
+                </Badge>
+              )}
+              {!s.active && <Badge className="bg-rose-100 text-rose-700">לא פעיל</Badge>}
+            </span>
+          ),
+        }))}
+      />
+    </div>
+  );
+}
