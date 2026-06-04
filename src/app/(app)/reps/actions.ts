@@ -19,8 +19,24 @@ export async function inviteRep(formData: FormData) {
   const phone = String(formData.get("phone") || "").trim() || null;
   if (!companyId || !fullName || !enteredUsername) return;
 
+  // הגנה: כבר יש רס"פ פעיל לאותה פלוגה במחסן הזה?
+  const existingLink = await prisma.warehouseCompany.findUnique({
+    where: { warehouseId_companyId: { warehouseId: user.holderId, companyId } },
+  });
+  if (existingLink?.repUserId) {
+    throw new Error("REP_EXISTS: כבר קיים נציג לפלוגה זו במחסן. הסר את הקיים לפני הוספת חדש.");
+  }
+
+  // ייחודיות שם משתמש: enteredUsername + סיומת פלוגה (לא רק חטיבה) כדי שיהיה ברור
+  const company = await prisma.holder.findUnique({ where: { id: companyId } });
   const battalion = await prisma.battalion.findUnique({ where: { id: bId } });
-  const username = await resolveUniqueUsername(enteredUsername, battalion?.brigade || battalion?.code || null);
+  const companySlug = (company?.name || "")
+    .replace(/[^֐-׿a-zA-Z0-9]+/g, "")
+    .toLowerCase()
+    .slice(0, 12) || "co";
+  const brigadeSlug = battalion?.brigade || battalion?.code || "";
+  const fullSuffix = [companySlug, brigadeSlug].filter(Boolean).join(".");
+  const username = await resolveUniqueUsername(enteredUsername, fullSuffix);
 
   const rep = await prisma.appUser.create({
     data: {

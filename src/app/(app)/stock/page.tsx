@@ -22,6 +22,18 @@ export default async function StockPage({
   const bId = user.battalionId!;
   const { q = "", category = "", warehouse = "" } = await searchParams;
 
+  // סקופ לקצין מחסן — רק טיפוסי המחסנים שהוא מורשה אליהם
+  const isWarehouseManager = user.role === "WAREHOUSE_MANAGER";
+  const myWarehouseTypes: string[] = [];
+  if (isWarehouseManager && user.holderIds?.length) {
+    const myHolders = await prisma.holder.findMany({
+      where: { id: { in: user.holderIds }, kind: "WAREHOUSE" },
+      select: { warehouseType: true },
+    });
+    for (const h of myHolders) if (h.warehouseType) myWarehouseTypes.push(h.warehouseType);
+  }
+  const isScoped = isWarehouseManager && myWarehouseTypes.length > 0;
+
   // קווי העברה במצב PENDING (מלאי במעבר)
   const transitLines = await prisma.transferLine.findMany({
     where: { transfer: { battalionId: bId, status: "PENDING", type: { in: ["ISSUE", "RETURN"] } } },
@@ -31,7 +43,10 @@ export default async function StockPage({
   for (const l of transitLines) if (!l.serialUnitId) transitByItem.set(l.itemTypeId, (transitByItem.get(l.itemTypeId) ?? 0) + l.quantity);
 
   const items = await prisma.itemType.findMany({
-    where: { battalionId: bId, active: true },
+    where: {
+      battalionId: bId, active: true,
+      ...(isScoped ? { category: { warehouseType: { in: myWarehouseTypes as never[] } } } : {}),
+    },
     orderBy: { name: "asc" },
     include: {
       category: true,
@@ -48,8 +63,10 @@ export default async function StockPage({
   return (
     <div>
       <PageHeader
-        title="מלאי הגדוד"
-        subtitle="הצהרת הכמויות שהגדוד חתום עליהן מול החטיבה — לפי מק״ט, סטטוס ושייכות"
+        title={isScoped ? "מלאי המחסן" : "מלאי הגדוד"}
+        subtitle={isScoped
+          ? `המלאי במחסניך בלבד (${myWarehouseTypes.length} מחסנים). הוספה/גריעה מבוצעת אל המחסן שלך.`
+          : "הצהרת הכמויות שהגדוד חתום עליהן מול החטיבה — לפי מק״ט, סטטוס ושייכות"}
         action={
           <div className="flex gap-2">
             <StockEntryModal
