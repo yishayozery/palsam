@@ -10,6 +10,7 @@ type Item = {
   trackingMethod: "QUANTITY" | "SERIAL" | "LOT" | "KIT";
   category: string | null;
   total: number;
+  transit: number;
 };
 
 export default function StockTable({ items }: { items: Item[] }) {
@@ -52,7 +53,10 @@ export default function StockTable({ items }: { items: Item[] }) {
                   <Td className="font-mono text-xs text-slate-500">{i.sku ?? "—"}</Td>
                   <Td>{i.category ?? "—"}</Td>
                   <Td><Badge>{TRACKING_METHOD[i.trackingMethod]}</Badge></Td>
-                  <Td className="font-bold text-slate-800">{i.total} <span className="text-xs text-slate-400 font-normal">{i.unit}</span></Td>
+                  <Td className="font-bold text-slate-800">
+                    {i.total} <span className="text-xs text-slate-400 font-normal">{i.unit}</span>
+                    {i.transit > 0 && <div className="text-[10px] text-amber-600 font-normal">כולל {i.transit} במעבר</div>}
+                  </Td>
                   <Td>
                     <form action={declareStock} className="flex items-center gap-1">
                       <input type="hidden" name="itemTypeId" value={i.id} />

@@ -50,6 +50,19 @@ export default async function ItemsPage({
     ...(category ? { categoryId: category } : {}),
   };
 
+  // קווי העברה במצב PENDING (ISSUE/RETURN) — נחשבים כ"מלאי במעבר" בתוך הגדוד
+  const transitLines = await prisma.transferLine.findMany({
+    where: { transfer: { battalionId: bId, status: "PENDING", type: { in: ["ISSUE", "RETURN"] } } },
+    select: { itemTypeId: true, quantity: true, serialUnitId: true },
+  });
+  const transitByItem = new Map<string, number>();
+  for (const l of transitLines) {
+    // לסריאלי לא מוסיפים — היחידה נספרת כי serialUnit עדיין קיים (currentHolderId=null)
+    if (!l.serialUnitId) {
+      transitByItem.set(l.itemTypeId, (transitByItem.get(l.itemTypeId) ?? 0) + l.quantity);
+    }
+  }
+
   const [allItems, items, categories, statuses, frequencies] = await Promise.all([
     prisma.itemType.findMany({
       where: { battalionId: bId },
@@ -139,9 +152,11 @@ export default async function ItemsPage({
             unit: i.unit,
             trackingMethod: i.trackingMethod,
             category: i.category?.name ?? null,
-            // סך הכמות בגדוד: סכום stockBalances + סכום lotQuantities של serial/lot
+            // סך הכמות בגדוד: stockBalances + serialUnits (כולל "במעבר" עם currentHolder=null) + transit כמותי
             total: i.stockBalances.reduce((s, b) => s + b.quantity, 0)
-                 + i.serialUnits.reduce((s, u) => s + (u.lotQuantity ?? 1), 0),
+                 + i.serialUnits.reduce((s, u) => s + (u.lotQuantity ?? 1), 0)
+                 + (transitByItem.get(i.id) ?? 0),
+            transit: transitByItem.get(i.id) ?? 0,
           }))}
         />
       )}
