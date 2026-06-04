@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
-import { NAV } from "@/lib/nav";
+import { NAV, GROUP_ROLES } from "@/lib/nav";
 import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/Sidebar";
 
@@ -16,6 +16,9 @@ export default async function AppLayout({
     // אדמין-על: רק פריטים שמיועדים לו (ניהול גדודים)
     if (user.role === "SUPER_ADMIN") return n.roles?.includes("SUPER_ADMIN") ?? false;
     if (n.cap && !can(user.role, n.cap)) return false;
+    // סינון לפי קבוצה: כל קבוצה שייכת לתפקיד ספציפי (מונע "דלף" בין תפקידים)
+    const groupRoles = GROUP_ROLES[n.group];
+    if (groupRoles && !groupRoles.includes(user.role)) return false;
     return true;
   });
   // דה-דופ לפי href — אם פריט מופיע בכמה קבוצות, מציגים רק את הראשונה.

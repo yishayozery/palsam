@@ -148,25 +148,39 @@ export default function StockEntryModal({ items, statuses, currentUserName, requ
                     </div>
                   )}
 
-                  {selected.trackingMethod === "SERIAL" && qty > 0 && (
+                  {selected.trackingMethod === "SERIAL" && qty > 0 && (() => {
+                    const trimmed = serials.map((s) => s.trim());
+                    const filledCount = trimmed.filter(Boolean).length;
+                    const seen = new Map<string, number>();
+                    trimmed.forEach((s, i) => { if (s) seen.set(s, (seen.get(s) ?? 0) + 1); });
+                    const dupIndices = trimmed.map((s, i) => s && (seen.get(s)! > 1));
+                    const hasDup = dupIndices.some(Boolean);
+                    return (
                     <div>
                       <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                        מספרים סריאליים ({serials.length} שורות)
+                        מספרים סריאליים — חובה ({filledCount}/{qty} מולאו)
+                        {hasDup && <span className="text-rose-600 text-xs mr-2">⚠️ יש כפילויות</span>}
                       </label>
                       <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1.5 bg-slate-50">
-                        {serials.map((sn, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <span className="text-xs text-slate-400 font-mono w-8 text-center">#{i + 1}</span>
-                            <input value={sn}
-                              onChange={(e) => setSerials((prev) => prev.map((v, idx) => idx === i ? e.target.value : v))}
-                              placeholder={`SN-${String(i + 1).padStart(3, "0")}`}
-                              className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-slate-400" />
-                          </div>
-                        ))}
+                        {serials.map((sn, i) => {
+                          const isDup = dupIndices[i];
+                          return (
+                            <div key={i} className="flex items-center gap-2">
+                              <span className="text-xs text-slate-400 font-mono w-8 text-center">#{i + 1}</span>
+                              <input value={sn} required
+                                onChange={(e) => setSerials((prev) => prev.map((v, idx) => idx === i ? e.target.value : v))}
+                                placeholder={`SN-${String(i + 1).padStart(3, "0")}`}
+                                className={`flex-1 rounded-lg border px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 ${isDup ? "border-rose-400 bg-rose-50 focus:ring-rose-400" : sn.trim() ? "border-emerald-300 bg-emerald-50 focus:ring-emerald-400" : "border-slate-300 focus:ring-slate-400"}`} />
+                              {isDup && <span className="text-xs text-rose-600">כפילות</span>}
+                              {sn.trim() && !isDup && <span className="text-xs text-emerald-600">✓</span>}
+                            </div>
+                          );
+                        })}
                       </div>
-                      <p className="text-xs text-slate-400 mt-1">כל שורה = יחידה. הזן את המספר הסריאלי לכל יחידה.</p>
+                      <p className="text-xs text-slate-400 mt-1">כל שורה = יחידה. כל מספר סריאלי חייב להיות ייחודי.</p>
                     </div>
-                  )}
+                    );
+                  })()}
 
                   {/* מנפק / מקבל */}
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
@@ -234,20 +248,31 @@ export default function StockEntryModal({ items, statuses, currentUserName, requ
                         </button>
                       </form>
                     )}
-                    {selected.trackingMethod === "SERIAL" && (
-                      <form action={async (fd) => { await declareSerials(fd); reset(); setOpen(false); }}>
+                    {selected.trackingMethod === "SERIAL" && (() => {
+                      const trimmed = serials.map((s) => s.trim());
+                      const filled = trimmed.filter(Boolean);
+                      const allFilled = filled.length === qty && qty > 0;
+                      const noDup = new Set(filled).size === filled.length;
+                      const valid = allFilled && noDup;
+                      return (
+                      <form action={async (fd) => {
+                          if (!valid) return;
+                          await declareSerials(fd); reset(); setOpen(false);
+                        }}>
                         <input type="hidden" name="itemTypeId" value={itemId} />
-                        <input type="hidden" name="serials" value={serials.filter((s) => s.trim()).join("\n")} />
+                        <input type="hidden" name="serials" value={trimmed.join("\n")} />
                         <input type="hidden" name="statusId" value={statusId} />
                         <input type="hidden" name="externalUnit" value={externalUnit} />
                         <input type="hidden" name="externalContact" value={externalContact} />
                         <input type="hidden" name="recipientPersonalId" value={recipientPersonalId} />
-                        <button disabled={serials.filter((s) => s.trim()).length === 0}
-                          className="bg-emerald-600 text-white rounded-lg px-5 py-2 text-sm hover:bg-emerald-700 disabled:opacity-50">
-                          הוסף {serials.filter((s) => s.trim()).length} יחידות
+                        <button disabled={!valid}
+                          title={!allFilled ? "מלא את כל מספרי הסריאל" : !noDup ? "יש מספרים כפולים" : ""}
+                          className="bg-emerald-600 text-white rounded-lg px-5 py-2 text-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                          הוסף {qty} יחידות
                         </button>
                       </form>
-                    )}
+                      );
+                    })()}
                   </div>
 
                   {/* טעינה מקובץ */}

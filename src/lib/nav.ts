@@ -10,6 +10,15 @@ export type NavItem = {
   roles?: Role[];
 };
 
+/** איזה תפקיד שייך לאיזו קבוצה. סינון ברמת הקבוצה — מונע "דלף" של פריטים בין תפקידים. */
+export const GROUP_ROLES: Record<string, Role[]> = {
+  "ראשי": ["SUPER_ADMIN", "BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"],
+  "פלסם": ["BATTALION_ADMIN"],
+  "המחסנים שלי": ["WAREHOUSE_MANAGER", "BATTALION_ADMIN"],
+  "הפלוגה שלי": ["COMPANY_REP"],
+  "דוחות ובקרה": ["BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"],
+};
+
 export const NAV: NavItem[] = [
   // ===== ראשי =====
   { href: "/admin/battalions", label: "ניהול גדודים", icon: "🏛️", group: "ראשי", roles: ["SUPER_ADMIN"] },

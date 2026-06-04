@@ -32,6 +32,20 @@ export default async function ItemsPage({
   const { tab, q = "", category = "", warehouse = "", catQ = "", catWh = "" } = await searchParams;
   const active = tab || "items";
 
+  // סקופ לקצין מחסן: רק טיפוסי המחסנים שלו
+  const isWarehouseManager = user.role === "WAREHOUSE_MANAGER";
+  const myWarehouseTypes: string[] = [];
+  if (isWarehouseManager && user.holderIds?.length) {
+    const myHolders = await prisma.holder.findMany({
+      where: { id: { in: user.holderIds }, kind: "WAREHOUSE" },
+      select: { warehouseType: true },
+    });
+    for (const h of myHolders) if (h.warehouseType) myWarehouseTypes.push(h.warehouseType);
+  }
+  const scoped = isWarehouseManager && myWarehouseTypes.length > 0;
+  const scopeFilter = scoped ? { category: { warehouseType: { in: myWarehouseTypes as ("EQUIPMENT"|"COMMS"|"AMMO"|"ARMORY"|"VEHICLES"|"MEDICAL"|"GENERAL")[] } } } : {};
+  const categoryScopeFilter = scoped ? { warehouseType: { in: myWarehouseTypes as ("EQUIPMENT"|"COMMS"|"AMMO"|"ARMORY"|"VEHICLES"|"MEDICAL"|"GENERAL")[] } } : {};
+
   const tabs = [
     { key: "items", label: "פריטים (מק״טים)", href: "/items?tab=items" },
     { key: "categories", label: "קטגוריות", href: "/items?tab=categories" },
@@ -42,23 +56,25 @@ export default async function ItemsPage({
   const search = q.trim();
   const itemWhere = {
     battalionId: bId,
+    ...scopeFilter,
     ...(search ? { OR: [
       { name: { contains: search, mode: "insensitive" as const } },
       { sku: { contains: search, mode: "insensitive" as const } },
     ] } : {}),
     ...(category ? { categoryId: category } : {}),
-    ...(warehouse ? { category: { warehouseType: warehouse as "EQUIPMENT" | "COMMS" | "AMMO" | "ARMORY" | "VEHICLES" | "MEDICAL" | "GENERAL" } } : {}),
+    ...(warehouse && !scoped ? { category: { warehouseType: warehouse as "EQUIPMENT" | "COMMS" | "AMMO" | "ARMORY" | "VEHICLES" | "MEDICAL" | "GENERAL" } } : {}),
   };
 
   // סינון קטגוריות (טאב 'קטגוריות')
   const catSearch = catQ.trim();
   const categoryWhere = {
     battalionId: bId,
+    ...categoryScopeFilter,
     ...(catSearch ? { name: { contains: catSearch, mode: "insensitive" as const } } : {}),
-    ...(catWh ? { warehouseType: catWh as "EQUIPMENT" | "COMMS" | "AMMO" | "ARMORY" | "VEHICLES" | "MEDICAL" | "GENERAL" } : {}),
+    ...(catWh && !scoped ? { warehouseType: catWh as "EQUIPMENT" | "COMMS" | "AMMO" | "ARMORY" | "VEHICLES" | "MEDICAL" | "GENERAL" } : {}),
   };
 
-  const allCategories = await prisma.category.findMany({ where: { battalionId: bId }, orderBy: { name: "asc" } });
+  const allCategories = await prisma.category.findMany({ where: { battalionId: bId, ...categoryScopeFilter }, orderBy: { name: "asc" } });
 
   const [items, categories, statuses, frequencies] = await Promise.all([
     prisma.itemType.findMany({

@@ -15,8 +15,19 @@ export default async function TransfersPage() {
   const canReturn = can(user.role, "company.manage");
   const canApprove = can(user.role, "transfer.approve");
 
+  // סקופ לקצין מחסן: רק העברות שמערבות את המחסנים שלו
+  const isWarehouseManager = user.role === "WAREHOUSE_MANAGER";
+  const myHolderIds = user.holderIds ?? [];
+  const scopeFilter = (isWarehouseManager && myHolderIds.length > 0)
+    ? { OR: [{ fromHolderId: { in: myHolderIds } }, { toHolderId: { in: myHolderIds } }] }
+    : {};
+
   const transfers = await prisma.transfer.findMany({
-    where: { battalionId: bId, type: { in: ["ISSUE", "RETURN", "INTAKE", "WRITE_OFF"] } },
+    where: {
+      battalionId: bId,
+      type: { in: ["ISSUE", "RETURN", "INTAKE", "WRITE_OFF"] },
+      ...scopeFilter,
+    },
     orderBy: { createdAt: "desc" },
     take: 100,
     include: {

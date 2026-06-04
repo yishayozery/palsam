@@ -207,10 +207,17 @@ export default function StockTable({
                       {i.transit > 0 && <div className="text-[10px] text-amber-600 font-normal">כולל {i.transit} במעבר</div>}
                     </Td>
                     <Td>
-                      <button onClick={() => setExpanded(expanded === i.id ? null : i.id)}
-                        className="text-xs bg-slate-800 text-white rounded-md px-3 py-1 hover:bg-slate-900">
-                        {expanded === i.id ? "סגור" : "עדכן / הוסף"}
-                      </button>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <a href={`/items/${i.id}/history`}
+                          className="text-xs bg-white border border-slate-300 text-slate-700 rounded-md px-2.5 py-1 hover:bg-slate-50"
+                          title="היסטוריית תנועות + ייצוא Excel">
+                          🕘 היסטוריה
+                        </a>
+                        <button onClick={() => setExpanded(expanded === i.id ? null : i.id)}
+                          className="text-xs bg-slate-800 text-white rounded-md px-3 py-1 hover:bg-slate-900">
+                          {expanded === i.id ? "סגור" : "עדכן / הוסף"}
+                        </button>
+                      </div>
                     </Td>
                   </tr>
                   {expanded === i.id && (
