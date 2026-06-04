@@ -20,6 +20,7 @@ export default async function ProfilePage() {
           battalion={{
             name: battalion.name, code: battalion.code, brigade: battalion.brigade, commander: battalion.commander,
             motto: battalion.motto, notes: battalion.notes, logoData: battalion.logoData,
+            requirePersonalIdOnHandover: battalion.requirePersonalIdOnHandover,
           }}
         />
       </Card>

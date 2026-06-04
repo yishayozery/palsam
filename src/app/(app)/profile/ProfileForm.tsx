@@ -8,6 +8,7 @@ const initial: ProfileState = {};
 
 type B = {
   name: string; code: string; brigade: string | null; commander: string | null; motto: string | null; notes: string | null; logoData: string | null;
+  requirePersonalIdOnHandover: boolean;
 };
 
 export default function ProfileForm({ battalion }: { battalion: B }) {
@@ -23,9 +24,11 @@ export default function ProfileForm({ battalion }: { battalion: B }) {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">חטיבה</label>
-          <input name="brigade" defaultValue={battalion.brigade ?? ""} placeholder="לדוגמה: כרמלי"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <label className="block text-sm font-medium text-slate-700 mb-1">מספר חטיבה (ספרות בלבד)</label>
+          <input name="brigade" defaultValue={battalion.brigade ?? ""} placeholder="401"
+            inputMode="numeric" pattern="\d*"
+            onInput={(e) => { e.currentTarget.value = e.currentTarget.value.replace(/\D/g, ""); }}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">מפקד הגדוד</label>
@@ -47,6 +50,26 @@ export default function ProfileForm({ battalion }: { battalion: B }) {
         <label className="block text-sm font-medium text-slate-700 mb-1">הערות</label>
         <textarea name="notes" defaultValue={battalion.notes ?? ""} rows={3}
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+      </div>
+
+      {/* הגדרות תפעוליות */}
+      <div className="border-t border-slate-200 pt-4 mt-4">
+        <h3 className="text-sm font-bold text-slate-700 mb-3">הגדרות תפעוליות</h3>
+        <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg hover:bg-slate-50 border border-slate-200">
+          <input
+            type="checkbox"
+            name="requirePersonalIdOnHandover"
+            defaultChecked={battalion.requirePersonalIdOnHandover}
+            className="mt-0.5"
+          />
+          <div>
+            <div className="font-medium text-sm text-slate-800">חיוב מספר אישי בכל מסירה</div>
+            <div className="text-xs text-slate-500 mt-0.5">
+              כשמופעל — המערכת תחייב הזנת מספר אישי של מקבל המסירה בכל פעולת ניפוק/החתמה (חייל, פלוגה, חטיבה).
+              מומלץ ליחידות עם רגישות בטחונית גבוהה. ברירת המחדל: לא מחייב.
+            </div>
+          </div>
+        </label>
       </div>
       <div className="flex items-center justify-end gap-3">
         {state.ok && <span className="text-sm text-emerald-600">נשמר ✓</span>}

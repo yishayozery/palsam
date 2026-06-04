@@ -30,6 +30,10 @@ export async function createBattalion(formData: FormData) {
   const mafamPhone = String(formData.get("mafamPhone") || "").trim() || null;
   if (!name || !code || !mafamUser || !mafamName) return;
 
+  // ולידציה: מספר גדוד ומספר חטיבה — ספרות בלבד
+  if (!/^\d+$/.test(code)) throw new Error("מספר גדוד חייב להכיל ספרות בלבד");
+  if (brigade && !/^\d+$/.test(brigade)) throw new Error("מספר חטיבה חייב להכיל ספרות בלבד");
+
   const exists = await prisma.battalion.findUnique({ where: { code } });
   if (exists) return;
 

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 import { adjustQuantity, defaultStatusId } from "@/lib/inventory";
+import { extractPersonalId } from "@/lib/handover";
 
 function cell(v: ExcelJS.CellValue): string {
   if (v === null || v === undefined) return "";
@@ -47,6 +48,7 @@ export async function declareQty(formData: FormData) {
   const statusId = String(formData.get("statusId") || "") || (await defaultStatusId(prisma, bId));
   const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
   const externalContact = String(formData.get("externalContact") || "").trim() || null;
+  const recipientPersonalId = await extractPersonalId(bId, formData);
 
   const wh = await pickWarehouse(bId, itemTypeId);
   if (!wh) return;
@@ -57,14 +59,14 @@ export async function declareQty(formData: FormData) {
       data: {
         battalionId: bId, type: "INTAKE", status: "COMPLETED",
         toHolderId: wh.id, reason: "הוספת מלאי",
-        externalUnit, externalContact,
+        externalUnit, externalContact, recipientPersonalId,
         createdById: user.id, approvedById: user.id, approvedAt: new Date(),
         lines: { create: { itemTypeId, quantity, statusId } },
       },
     });
   });
 
-  await audit(user.id, "ADD_QTY", "ItemType", itemTypeId, { quantity, statusId, externalUnit, externalContact });
+  await audit(user.id, "ADD_QTY", "ItemType", itemTypeId, { quantity, statusId, externalUnit, externalContact, recipientPersonalId });
   revalidateAll();
 }
 
@@ -77,6 +79,7 @@ export async function declareSerials(formData: FormData) {
   const statusId = String(formData.get("statusId") || "") || (await defaultStatusId(prisma, bId));
   const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
   const externalContact = String(formData.get("externalContact") || "").trim() || null;
+  const recipientPersonalId = await extractPersonalId(bId, formData);
 
   const serials = serialsRaw.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
   if (serials.length === 0) return;
@@ -87,7 +90,7 @@ export async function declareSerials(formData: FormData) {
   let created = 0;
   await prisma.$transaction(async (tx) => {
     const transfer = await tx.transfer.create({
-      data: { battalionId: bId, type: "INTAKE", status: "COMPLETED", toHolderId: wh.id, reason: "הזנת סריאליים ידני", externalUnit, externalContact, createdById: user.id, approvedById: user.id, approvedAt: new Date() },
+      data: { battalionId: bId, type: "INTAKE", status: "COMPLETED", toHolderId: wh.id, reason: "הזנת סריאליים ידני", externalUnit, externalContact, recipientPersonalId, createdById: user.id, approvedById: user.id, approvedAt: new Date() },
     });
     for (const sn of serials) {
       try {
@@ -150,6 +153,7 @@ export async function declareLot(formData: FormData) {
   const statusId = String(formData.get("statusId") || "") || (await defaultStatusId(prisma, bId));
   const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
   const externalContact = String(formData.get("externalContact") || "").trim() || null;
+  const recipientPersonalId = await extractPersonalId(bId, formData);
   if (!lotNumber || quantity < 1) return;
 
   const wh = await pickWarehouse(bId, itemTypeId);
@@ -159,7 +163,7 @@ export async function declareLot(formData: FormData) {
     await prisma.$transaction(async (tx) => {
       await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: lotNumber, lotQuantity: quantity, statusId, currentHolderId: wh.id } });
       await tx.transfer.create({
-        data: { battalionId: bId, type: "INTAKE", status: "COMPLETED", toHolderId: wh.id, reason: "הוספת אצווה", externalUnit, externalContact, createdById: user.id, approvedById: user.id, approvedAt: new Date(),
+        data: { battalionId: bId, type: "INTAKE", status: "COMPLETED", toHolderId: wh.id, reason: "הוספת אצווה", externalUnit, externalContact, recipientPersonalId, createdById: user.id, approvedById: user.id, approvedAt: new Date(),
           lines: { create: { itemTypeId, quantity, statusId } } },
       });
     });
@@ -177,6 +181,7 @@ export async function withdrawQty(formData: FormData) {
   const statusId = String(formData.get("statusId") || "") || (await defaultStatusId(prisma, bId));
   const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
   const externalContact = String(formData.get("externalContact") || "").trim() || null;
+  const recipientPersonalId = await extractPersonalId(bId, formData);
   const allowNegative = formData.get("allowNegative") === "on";
 
   const wh = await pickWarehouse(bId, itemTypeId);
@@ -197,7 +202,7 @@ export async function withdrawQty(formData: FormData) {
       data: {
         battalionId: bId, type: "WRITE_OFF", status: "COMPLETED",
         fromHolderId: wh.id, reason: isOverdraft ? "הורדת מלאי — חוב לחטיבה" : "הורדת מלאי",
-        externalUnit, externalContact, notes: isOverdraft ? `חוסר ${quantity - current} יחידות (זיכוי יתר)` : null,
+        externalUnit, externalContact, recipientPersonalId, notes: isOverdraft ? `חוסר ${quantity - current} יחידות (זיכוי יתר)` : null,
         createdById: user.id, approvedById: user.id, approvedAt: new Date(),
         lines: { create: { itemTypeId, quantity, statusId } },
       },
@@ -216,12 +221,13 @@ export async function withdrawSerials(formData: FormData) {
   const serialIds = formData.getAll("serialId").map(String).filter(Boolean);
   const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
   const externalContact = String(formData.get("externalContact") || "").trim() || null;
+  const recipientPersonalId = await extractPersonalId(bId, formData);
   if (serialIds.length === 0) return;
 
   await prisma.$transaction(async (tx) => {
     const transfer = await tx.transfer.create({
       data: { battalionId: bId, type: "WRITE_OFF", status: "COMPLETED", reason: "הורדת מלאי סריאלי",
-        externalUnit, externalContact,
+        externalUnit, externalContact, recipientPersonalId,
         createdById: user.id, approvedById: user.id, approvedAt: new Date() },
     });
     for (const sid of serialIds) {

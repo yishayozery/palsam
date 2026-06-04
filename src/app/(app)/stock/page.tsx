@@ -55,10 +55,12 @@ export default async function StockPage({
     },
   });
 
-  const [categories, statuses] = await Promise.all([
+  const [categories, statuses, battalion] = await Promise.all([
     prisma.category.findMany({ where: { battalionId: bId }, orderBy: { name: "asc" } }),
     prisma.itemStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.battalion.findUnique({ where: { id: bId }, select: { requirePersonalIdOnHandover: true } }),
   ]);
+  const requirePersonalId = !!battalion?.requirePersonalIdOnHandover;
 
   return (
     <div>
@@ -71,11 +73,13 @@ export default async function StockPage({
           <div className="flex gap-2">
             <StockEntryModal
               currentUserName={user.fullName}
+              requirePersonalId={requirePersonalId}
               items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod, unit: i.unit, association: ASSOC[i.association] }))}
               statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
             />
             <StockWithdrawModal
               currentUserName={user.fullName}
+              requirePersonalId={requirePersonalId}
               items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod, unit: i.unit }))}
               statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
               stocks={items.flatMap((i) => i.stockBalances.map((b) => ({ itemTypeId: i.id, statusId: b.statusId, statusName: b.status.name, quantity: b.quantity })))}

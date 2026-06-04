@@ -18,12 +18,14 @@ export async function updateProfile(
   const commander = String(formData.get("commander") || "").trim() || null;
   const motto = String(formData.get("motto") || "").trim() || null;
   const notes = String(formData.get("notes") || "").trim() || null;
+  const requirePersonalIdOnHandover = formData.get("requirePersonalIdOnHandover") === "on";
   const rawLogo = String(formData.get("logoData") || "");
   const logoData = rawLogo === "__CLEAR__" ? null : rawLogo.startsWith("data:image") ? rawLogo : undefined;
 
   if (!name) return { error: "שם הגדוד חובה" };
+  if (brigade && !/^\d+$/.test(brigade)) return { error: "מספר חטיבה חייב להכיל ספרות בלבד" };
 
-  const data: Record<string, unknown> = { name, brigade, commander, motto, notes };
+  const data: Record<string, unknown> = { name, brigade, commander, motto, notes, requirePersonalIdOnHandover };
   if (logoData !== undefined) data.logoData = logoData;
 
   try {

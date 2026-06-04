@@ -12,7 +12,7 @@ type Item = {
 };
 type Status = { id: string; name: string; isDefault: boolean };
 
-export default function StockEntryModal({ items, statuses, currentUserName }: { items: Item[]; statuses: Status[]; currentUserName: string }) {
+export default function StockEntryModal({ items, statuses, currentUserName, requirePersonalId }: { items: Item[]; statuses: Status[]; currentUserName: string; requirePersonalId: boolean }) {
   const [open, setOpen] = useState(false);
   const [itemQuery, setItemQuery] = useState("");
   const [itemId, setItemId] = useState("");
@@ -23,6 +23,7 @@ export default function StockEntryModal({ items, statuses, currentUserName }: { 
   const [statusId, setStatusId] = useState(defaultStatus);
   const [externalUnit, setExternalUnit] = useState("חטיבה");
   const [externalContact, setExternalContact] = useState("");
+  const [recipientPersonalId, setRecipientPersonalId] = useState("");
 
   const selected = items.find((i) => i.id === itemId);
   const filteredItems = useMemo(() => {
@@ -183,6 +184,22 @@ export default function StockEntryModal({ items, statuses, currentUserName }: { 
                       </div>
                     </div>
                     <p className="text-xs text-slate-500">המקבל: <span className="font-medium text-slate-700">{currentUserName}</span> (אתה)</p>
+                    {requirePersonalId && (
+                      <div className="bg-white border border-amber-300 rounded-lg p-2 mt-2">
+                        <label className="block text-xs font-bold text-amber-900 mb-1">
+                          🔒 מספר אישי של המנפק (חובה לפי הגדרות הגדוד)
+                        </label>
+                        <input
+                          value={recipientPersonalId}
+                          onChange={(e) => setRecipientPersonalId(e.target.value.replace(/\D/g, ""))}
+                          placeholder="לדוגמה: 1234567"
+                          inputMode="numeric"
+                          pattern="\d*"
+                          required
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* כפתורי שליחה */}
@@ -196,6 +213,7 @@ export default function StockEntryModal({ items, statuses, currentUserName }: { 
                         <input type="hidden" name="statusId" value={statusId} />
                         <input type="hidden" name="externalUnit" value={externalUnit} />
                         <input type="hidden" name="externalContact" value={externalContact} />
+                        <input type="hidden" name="recipientPersonalId" value={recipientPersonalId} />
                         <button disabled={qty < 1} className="bg-emerald-600 text-white rounded-lg px-5 py-2 text-sm hover:bg-emerald-700 disabled:opacity-50">
                           הוסף +{qty}
                         </button>
@@ -209,6 +227,7 @@ export default function StockEntryModal({ items, statuses, currentUserName }: { 
                         <input type="hidden" name="statusId" value={statusId} />
                         <input type="hidden" name="externalUnit" value={externalUnit} />
                         <input type="hidden" name="externalContact" value={externalContact} />
+                        <input type="hidden" name="recipientPersonalId" value={recipientPersonalId} />
                         <button disabled={!lotNumber || qty < 1}
                           className="bg-emerald-600 text-white rounded-lg px-5 py-2 text-sm hover:bg-emerald-700 disabled:opacity-50">
                           הוסף אצווה ({qty})
@@ -222,6 +241,7 @@ export default function StockEntryModal({ items, statuses, currentUserName }: { 
                         <input type="hidden" name="statusId" value={statusId} />
                         <input type="hidden" name="externalUnit" value={externalUnit} />
                         <input type="hidden" name="externalContact" value={externalContact} />
+                        <input type="hidden" name="recipientPersonalId" value={recipientPersonalId} />
                         <button disabled={serials.filter((s) => s.trim()).length === 0}
                           className="bg-emerald-600 text-white rounded-lg px-5 py-2 text-sm hover:bg-emerald-700 disabled:opacity-50">
                           הוסף {serials.filter((s) => s.trim()).length} יחידות
@@ -248,6 +268,7 @@ export default function StockEntryModal({ items, statuses, currentUserName }: { 
                         <input type="hidden" name="statusId" value={statusId} />
                         <input type="hidden" name="externalUnit" value={externalUnit} />
                         <input type="hidden" name="externalContact" value={externalContact} />
+                        <input type="hidden" name="recipientPersonalId" value={recipientPersonalId} />
                         <input type="file" name="file" accept=".xlsx,.xls" required
                           className="text-sm flex-1" />
                         <button className="bg-slate-700 text-white rounded-lg px-4 py-1.5 text-sm hover:bg-slate-800">

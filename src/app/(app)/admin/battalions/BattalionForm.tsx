@@ -24,13 +24,17 @@ export default function BattalionForm() {
                   <input name="name" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">קוד (אנגלית)</label>
-                  <input name="code" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
+                  <label className="block text-xs text-slate-500 mb-1">מספר גדוד (ספרות בלבד)</label>
+                  <input name="code" required inputMode="numeric" pattern="\d+" placeholder="7032"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"
+                    onInput={(e) => { e.currentTarget.value = e.currentTarget.value.replace(/\D/g, ""); }} />
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-slate-500 mb-1">חטיבה (לשרשור שמות משתמש)</label>
-                <input name="brigade" placeholder="כרמלי" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <label className="block text-xs text-slate-500 mb-1">מספר חטיבה (ספרות בלבד)</label>
+                <input name="brigade" inputMode="numeric" pattern="\d*" placeholder="401"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"
+                  onInput={(e) => { e.currentTarget.value = e.currentTarget.value.replace(/\D/g, ""); }} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

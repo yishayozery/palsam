@@ -14,10 +14,10 @@ type Stock = { itemTypeId: string; statusId: string; statusName: string; quantit
 type SerialUnit = { id: string; itemTypeId: string; serialNumber: string; lotQuantity: number | null; statusName: string };
 
 export default function StockWithdrawModal({
-  items, statuses, currentUserName, stocks, units,
+  items, statuses, currentUserName, stocks, units, requirePersonalId,
 }: {
   items: Item[]; statuses: Status[]; currentUserName: string;
-  stocks: Stock[]; units: SerialUnit[];
+  stocks: Stock[]; units: SerialUnit[]; requirePersonalId: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [itemQuery, setItemQuery] = useState("");
@@ -27,6 +27,7 @@ export default function StockWithdrawModal({
   const [statusId, setStatusId] = useState(defaultStatus);
   const [externalUnit, setExternalUnit] = useState("חטיבה");
   const [externalContact, setExternalContact] = useState("");
+  const [recipientPersonalId, setRecipientPersonalId] = useState("");
   const [selectedSerials, setSelectedSerials] = useState<string[]>([]);
   const [allowNegative, setAllowNegative] = useState(false);
 
@@ -187,6 +188,22 @@ export default function StockWithdrawModal({
                           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
                       </div>
                     </div>
+                    {requirePersonalId && (
+                      <div className="bg-white border border-rose-300 rounded-lg p-2 mt-2">
+                        <label className="block text-xs font-bold text-rose-900 mb-1">
+                          🔒 מספר אישי של המקבל (חובה לפי הגדרות הגדוד)
+                        </label>
+                        <input
+                          value={recipientPersonalId}
+                          onChange={(e) => setRecipientPersonalId(e.target.value.replace(/\D/g, ""))}
+                          placeholder="לדוגמה: 1234567"
+                          inputMode="numeric"
+                          pattern="\d*"
+                          required
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* כפתורי שליחה */}
@@ -200,6 +217,7 @@ export default function StockWithdrawModal({
                         <input type="hidden" name="statusId" value={statusId} />
                         <input type="hidden" name="externalUnit" value={externalUnit} />
                         <input type="hidden" name="externalContact" value={externalContact} />
+                        <input type="hidden" name="recipientPersonalId" value={recipientPersonalId} />
                         {allowNegative && <input type="hidden" name="allowNegative" value="on" />}
                         <button disabled={qty < 1 || (isOverdraft && !allowNegative)}
                           className="bg-rose-600 text-white rounded-lg px-5 py-2 text-sm hover:bg-rose-700 disabled:opacity-50">
@@ -213,6 +231,7 @@ export default function StockWithdrawModal({
                         {selectedSerials.map((id) => <input key={id} type="hidden" name="serialId" value={id} />)}
                         <input type="hidden" name="externalUnit" value={externalUnit} />
                         <input type="hidden" name="externalContact" value={externalContact} />
+                        <input type="hidden" name="recipientPersonalId" value={recipientPersonalId} />
                         <button disabled={selectedSerials.length === 0}
                           className="bg-rose-600 text-white rounded-lg px-5 py-2 text-sm hover:bg-rose-700 disabled:opacity-50">
                           הורד {selectedSerials.length} יחידות

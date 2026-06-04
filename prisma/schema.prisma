@@ -110,6 +110,8 @@ model Battalion {
   notes     String?
   logoData  String? // סמל הגדוד (data-URL)
   active    Boolean  @default(true)
+  // הגדרות גדוד
+  requirePersonalIdOnHandover Boolean @default(false) // לחייב מספר אישי בכל מסירה
   createdAt DateTime @default(now())
 
   users         AppUser[]
@@ -535,6 +537,8 @@ model Transfer {
   // עבור העברות מול גורם חיצוני (חטיבה / יחידה אחרת)
   externalUnit    String?
   externalContact String?
+  // מספר אישי של מקבל המסירה (אם הגדוד דורש זאת)
+  recipientPersonalId String?
 
   createdById  String
   createdBy    AppUser  @relation("TransferCreatedBy", fields: [createdById], references: [id])
@@ -587,6 +591,8 @@ model Signature {
   token         String          @unique
   tokenExpires  DateTime?
   signatureData String?
+  // מספר אישי של החותם (אם הגדוד דורש זאת)
+  signerPersonalId String?
   signedAt      DateTime?
   createdAt     DateTime        @default(now())
 
