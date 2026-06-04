@@ -1,0 +1,226 @@
+"use client";
+
+import { useState } from "react";
+import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
+import { TRACKING_METHOD } from "@/lib/labels";
+import { WAREHOUSE_TYPE_SHORT } from "@/lib/rbac";
+import { declareQty, declareSerials, declareLot, importSerials, importLots } from "./actions";
+
+type Item = {
+  id: string; name: string; sku: string | null; unit: string;
+  trackingMethod: "QUANTITY" | "SERIAL" | "LOT" | "KIT";
+  association: string;
+  category: string | null;
+  categoryId: string | null;
+  warehouseType: "EQUIPMENT" | "COMMS" | "AMMO" | "ARMORY" | "VEHICLES" | "MEDICAL" | "GENERAL" | null;
+  total: number;
+  transit: number;
+};
+type Cat = { id: string; name: string; warehouseType: string };
+type Status = { id: string; name: string; isDefault: boolean };
+
+const WH_OPTS = ["EQUIPMENT","COMMS","AMMO","ARMORY","VEHICLES","MEDICAL","GENERAL"] as const;
+
+function ExpandedRow({ item, statuses }: { item: Item; statuses: Status[] }) {
+  const defaultStatus = statuses.find((s) => s.isDefault)?.id ?? statuses[0]?.id ?? "";
+
+  if (item.trackingMethod === "QUANTITY") {
+    return (
+      <form action={declareQty} className="bg-slate-50 p-3 space-y-2 border-t border-slate-200">
+        <input type="hidden" name="itemTypeId" value={item.id} />
+        <div className="flex items-end gap-2 flex-wrap">
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">סטטוס תקינות</label>
+            <select name="statusId" defaultValue={defaultStatus}
+              className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+              {statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">סך הכל יחידות</label>
+            <input name="quantity" type="number" min="0" defaultValue={item.total - item.transit}
+              className="w-28 rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+          </div>
+          <button className="bg-emerald-600 text-white rounded-lg px-4 py-1.5 text-sm hover:bg-emerald-700">עדכן</button>
+        </div>
+      </form>
+    );
+  }
+
+  if (item.trackingMethod === "SERIAL") {
+    return (
+      <div className="bg-slate-50 p-3 space-y-3 border-t border-slate-200">
+        <form action={declareSerials} className="space-y-2">
+          <input type="hidden" name="itemTypeId" value={item.id} />
+          <div className="flex items-end gap-2 flex-wrap">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">סטטוס</label>
+              <select name="statusId" defaultValue={defaultStatus} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                {statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="flex-1 min-w-64">
+              <label className="block text-xs text-slate-500 mb-1">מספרי סריאל (אחד בשורה או מופרדים בפסיק)</label>
+              <textarea name="serials" rows={2} placeholder="M4-1001&#10;M4-1002"
+                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-mono" />
+            </div>
+            <button className="bg-emerald-600 text-white rounded-lg px-4 py-1.5 text-sm hover:bg-emerald-700">הוסף</button>
+          </div>
+        </form>
+        <form action={importSerials} className="flex items-end gap-2 flex-wrap">
+          <input type="hidden" name="itemTypeId" value={item.id} />
+          <select name="statusId" defaultValue={defaultStatus} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+            {statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <input type="file" name="file" accept=".xlsx,.xls" required className="text-sm" />
+          <button className="bg-slate-700 text-white rounded-lg px-3 py-1.5 text-sm">⬆ טען מקובץ</button>
+          <a href="/stock/serials-template" className="text-xs text-blue-600 hover:underline">⬇ תבנית לדוגמה</a>
+        </form>
+      </div>
+    );
+  }
+
+  if (item.trackingMethod === "LOT") {
+    return (
+      <div className="bg-slate-50 p-3 space-y-3 border-t border-slate-200">
+        <form action={declareLot} className="flex items-end gap-2 flex-wrap">
+          <input type="hidden" name="itemTypeId" value={item.id} />
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">סטטוס</label>
+            <select name="statusId" defaultValue={defaultStatus} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+              {statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">מספר אצווה</label>
+            <input name="lotNumber" required placeholder="GREN-2026-A"
+              className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-mono w-40" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">כמות באצווה</label>
+            <input name="quantity" type="number" min="1" defaultValue="1"
+              className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+          </div>
+          <button className="bg-emerald-600 text-white rounded-lg px-4 py-1.5 text-sm hover:bg-emerald-700">הוסף אצווה</button>
+        </form>
+        <form action={importLots} className="flex items-end gap-2 flex-wrap">
+          <input type="hidden" name="itemTypeId" value={item.id} />
+          <select name="statusId" defaultValue={defaultStatus} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+            {statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <input type="file" name="file" accept=".xlsx,.xls" required className="text-sm" />
+          <button className="bg-slate-700 text-white rounded-lg px-3 py-1.5 text-sm">⬆ טען מקובץ</button>
+          <a href="/stock/lots-template" className="text-xs text-blue-600 hover:underline">⬇ תבנית לדוגמה</a>
+        </form>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+export default function StockTable({
+  items, categories, statuses, initialQ, initialCategory, initialWarehouse,
+}: {
+  items: Item[]; categories: Cat[]; statuses: Status[];
+  initialQ: string; initialCategory: string; initialWarehouse: string;
+}) {
+  const [search, setSearch] = useState(initialQ);
+  const [cat, setCat] = useState(initialCategory);
+  const [wh, setWh] = useState(initialWarehouse);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const filtered = items.filter((i) => {
+    if (search.trim()) {
+      const s = search.toLowerCase();
+      if (!i.name.toLowerCase().includes(s) && !(i.sku || "").toLowerCase().includes(s)) return false;
+    }
+    if (cat && i.categoryId !== cat) return false;
+    if (wh && i.warehouseType !== wh) return false;
+    return true;
+  });
+  // אם נבחר מחסן — הצג רק קטגוריות של אותו מחסן
+  const visibleCats = wh ? categories.filter((c) => c.warehouseType === wh) : categories;
+
+  return (
+    <>
+      <div className="mb-3 flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-48">
+          <label className="block text-xs text-slate-500 mb-1">חיפוש (שם / מק״ט)</label>
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="הקלד..."
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">מחסן</label>
+          <select value={wh} onChange={(e) => { setWh(e.target.value); setCat(""); }}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="">כל המחסנים</option>
+            {WH_OPTS.map((v) => <option key={v} value={v}>{WAREHOUSE_TYPE_SHORT[v]}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">קטגוריה</label>
+          <select value={cat} onChange={(e) => setCat(e.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="">הכל</option>
+            {visibleCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        {(search || cat || wh) && (
+          <button onClick={() => { setSearch(""); setCat(""); setWh(""); }}
+            className="text-sm text-slate-500 hover:text-slate-800 self-end pb-2">נקה</button>
+        )}
+        <span className="text-xs text-slate-500 self-end pb-2">{filtered.length} פריטים</span>
+      </div>
+
+      <Card>
+        {filtered.length === 0 ? (
+          <EmptyState>אין פריטים תואמים. הקם פריטים בהגדרות פריטים.</EmptyState>
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <Th>פריט</Th><Th>מק״ט</Th><Th>קטגוריה</Th><Th>שיטה</Th>
+                <Th>שייכות</Th><Th>במלאי</Th><Th></Th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((i) => (
+                <>
+                  <tr key={i.id} className={expanded === i.id ? "bg-slate-50" : ""}>
+                    <Td className="font-medium">{i.name}</Td>
+                    <Td className="font-mono text-xs text-slate-500">{i.sku ?? "—"}</Td>
+                    <Td>{i.category ?? "—"}</Td>
+                    <Td><Badge>{TRACKING_METHOD[i.trackingMethod]}</Badge></Td>
+                    <Td>
+                      <Badge className={i.association === "צבאי" ? "bg-slate-100 text-slate-600" : "bg-purple-100 text-purple-700"}>
+                        {i.association}
+                      </Badge>
+                    </Td>
+                    <Td className="font-bold text-slate-800">
+                      {i.total} <span className="text-xs text-slate-400 font-normal">{i.unit}</span>
+                      {i.transit > 0 && <div className="text-[10px] text-amber-600 font-normal">כולל {i.transit} במעבר</div>}
+                    </Td>
+                    <Td>
+                      <button onClick={() => setExpanded(expanded === i.id ? null : i.id)}
+                        className="text-xs bg-slate-800 text-white rounded-md px-3 py-1 hover:bg-slate-900">
+                        {expanded === i.id ? "סגור" : "עדכן / הוסף"}
+                      </button>
+                    </Td>
+                  </tr>
+                  {expanded === i.id && (
+                    <tr key={i.id + "-exp"}>
+                      <td colSpan={7} className="p-0">
+                        <ExpandedRow item={i} statuses={statuses} />
+                      </td>
+                    </tr>
+                  )}
+                </>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Card>
+    </>
+  );
+}

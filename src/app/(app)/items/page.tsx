@@ -12,7 +12,7 @@ import {
   saveCategory, deleteCategory, saveStatus, deleteStatus, saveFrequency, deleteFrequency,
 } from "../dictionaries/actions";
 import ItemsFilters from "./ItemsFilters";
-import StockTable from "./StockTable";
+import CategoriesFilters from "./CategoriesFilters";
 
 export const dynamic = "force-dynamic";
 
@@ -25,16 +25,15 @@ const ASSOC: Record<string, { label: string; cls: string }> = {
 export default async function ItemsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; q?: string; category?: string }>;
+  searchParams: Promise<{ tab?: string; q?: string; category?: string; warehouse?: string; catQ?: string; catWh?: string }>;
 }) {
   const user = await requireCapability("catalog.manage");
   const bId = user.battalionId!;
-  const { tab, q = "", category = "" } = await searchParams;
+  const { tab, q = "", category = "", warehouse = "", catQ = "", catWh = "" } = await searchParams;
   const active = tab || "items";
 
   const tabs = [
     { key: "items", label: "פריטים (מק״טים)", href: "/items?tab=items" },
-    { key: "stock", label: "מלאי הגדוד", href: "/items?tab=stock" },
     { key: "categories", label: "קטגוריות", href: "/items?tab=categories" },
     { key: "statuses", label: "סטטוסים", href: "/items?tab=statuses" },
     { key: "frequencies", label: "תדירויות ספירה", href: "/items?tab=frequencies" },
@@ -48,37 +47,25 @@ export default async function ItemsPage({
       { sku: { contains: search, mode: "insensitive" as const } },
     ] } : {}),
     ...(category ? { categoryId: category } : {}),
+    ...(warehouse ? { category: { warehouseType: warehouse as "EQUIPMENT" | "COMMS" | "AMMO" | "ARMORY" | "VEHICLES" | "MEDICAL" | "GENERAL" } } : {}),
   };
 
-  // קווי העברה במצב PENDING (ISSUE/RETURN) — נחשבים כ"מלאי במעבר" בתוך הגדוד
-  const transitLines = await prisma.transferLine.findMany({
-    where: { transfer: { battalionId: bId, status: "PENDING", type: { in: ["ISSUE", "RETURN"] } } },
-    select: { itemTypeId: true, quantity: true, serialUnitId: true },
-  });
-  const transitByItem = new Map<string, number>();
-  for (const l of transitLines) {
-    // לסריאלי לא מוסיפים — היחידה נספרת כי serialUnit עדיין קיים (currentHolderId=null)
-    if (!l.serialUnitId) {
-      transitByItem.set(l.itemTypeId, (transitByItem.get(l.itemTypeId) ?? 0) + l.quantity);
-    }
-  }
+  // סינון קטגוריות (טאב 'קטגוריות')
+  const catSearch = catQ.trim();
+  const categoryWhere = {
+    battalionId: bId,
+    ...(catSearch ? { name: { contains: catSearch, mode: "insensitive" as const } } : {}),
+    ...(catWh ? { warehouseType: catWh as "EQUIPMENT" | "COMMS" | "AMMO" | "ARMORY" | "VEHICLES" | "MEDICAL" | "GENERAL" } : {}),
+  };
 
-  const [allItems, items, categories, statuses, frequencies] = await Promise.all([
-    prisma.itemType.findMany({
-      where: { battalionId: bId },
-      orderBy: { name: "asc" },
-      include: {
-        category: true,
-        _count: { select: { serialUnits: true, stockBalances: true } },
-        stockBalances: { select: { quantity: true } },
-        serialUnits: { select: { lotQuantity: true } },
-      },
-    }),
+  const allCategories = await prisma.category.findMany({ where: { battalionId: bId }, orderBy: { name: "asc" } });
+
+  const [items, categories, statuses, frequencies] = await Promise.all([
     prisma.itemType.findMany({
       where: itemWhere, orderBy: { name: "asc" },
       include: { category: true, _count: { select: { serialUnits: true, stockBalances: true } } },
     }),
-    prisma.category.findMany({ where: { battalionId: bId }, orderBy: { sortOrder: "asc" }, include: { _count: { select: { itemTypes: true } } } }),
+    prisma.category.findMany({ where: categoryWhere, orderBy: { sortOrder: "asc" }, include: { _count: { select: { itemTypes: true } } } }),
     prisma.itemStatus.findMany({ where: { battalionId: bId }, orderBy: { sortOrder: "asc" } }),
     prisma.countFrequency.findMany({ where: { battalionId: bId }, orderBy: { intervalDays: "asc" } }),
   ]);
@@ -104,7 +91,8 @@ export default async function ItemsPage({
           <ItemsFilters
             initialQ={q}
             initialCategory={category}
-            categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+            initialWarehouse={warehouse}
+            categories={allCategories.map((c) => ({ id: c.id, name: c.name, warehouseType: c.warehouseType }))}
           />
           <Card>
             <Table>
@@ -143,25 +131,9 @@ export default async function ItemsPage({
         </>
       )}
 
-      {active === "stock" && (
-        <StockTable
-          items={allItems.map((i) => ({
-            id: i.id,
-            name: i.name,
-            sku: i.sku,
-            unit: i.unit,
-            trackingMethod: i.trackingMethod,
-            category: i.category?.name ?? null,
-            // סך הכמות בגדוד: stockBalances + serialUnits (כולל "במעבר" עם currentHolder=null) + transit כמותי
-            total: i.stockBalances.reduce((s, b) => s + b.quantity, 0)
-                 + i.serialUnits.reduce((s, u) => s + (u.lotQuantity ?? 1), 0)
-                 + (transitByItem.get(i.id) ?? 0),
-            transit: transitByItem.get(i.id) ?? 0,
-          }))}
-        />
-      )}
-
       {active === "categories" && (
+        <>
+        <CategoriesFilters initialQ={catQ} initialWarehouse={catWh} />
         <CrudSection
           title="קטגוריות ציוד (לפי מחסן)" addLabel="קטגוריה"
           fields={[{ name: "name", label: "שם הקטגוריה" }, { name: "warehouseType", label: "מחסן", type: "select", default: "EQUIPMENT", options: whOptions }]}
@@ -171,6 +143,7 @@ export default async function ItemsPage({
             display: (<span className="flex items-center gap-1.5">{c.name}<Badge className="bg-slate-100 text-slate-600">{WAREHOUSE_TYPE_SHORT[c.warehouseType]}</Badge>{c._count.itemTypes > 0 && <Badge>{c._count.itemTypes} מק״טים</Badge>}</span>),
           }))}
         />
+        </>
       )}
 
       {active === "statuses" && (
