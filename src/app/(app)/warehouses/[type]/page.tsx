@@ -34,6 +34,8 @@ export default async function WarehouseDetailPage({
 
   // קצין מחסן רשאי רק למחסנים המשויכים לו
   if (user.role === "WAREHOUSE_MANAGER" && !user.holderIds.includes(warehouse.id)) redirect("/warehouses");
+  // משתמשי פלוגה לא רואים את מחסני הגדוד (רק את המחסן הפלוגתי שלהם)
+  if (user.role === "COMPANY_REP" || (user.role === "VIEWER" && user.holderIds.length > 0)) redirect("/warehouses");
 
   const isManager = can(user.role, "warehouse.operate") && user.holderIds.includes(warehouse.id);
 
