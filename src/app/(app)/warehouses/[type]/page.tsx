@@ -32,10 +32,10 @@ export default async function WarehouseDetailPage({
   });
   if (!warehouse) notFound();
 
-  // מנהל מחסן רשאי רק למחסן שלו
-  if (user.role === "WAREHOUSE_MANAGER" && user.holderId !== warehouse.id) redirect("/warehouses");
+  // קצין מחסן רשאי רק למחסנים המשויכים לו
+  if (user.role === "WAREHOUSE_MANAGER" && !user.holderIds.includes(warehouse.id)) redirect("/warehouses");
 
-  const isManager = can(user.role, "warehouse.operate") && user.holderId === warehouse.id;
+  const isManager = can(user.role, "warehouse.operate") && user.holderIds.includes(warehouse.id);
 
   // פלוגות שהמחסן עובד מולן
   const links = await prisma.warehouseCompany.findMany({

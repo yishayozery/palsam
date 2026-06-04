@@ -21,9 +21,14 @@ export async function importSerials(formData: FormData): Promise<void> {
   const file = formData.get("file") as File | null;
   if (!itemTypeId || !file || file.size === 0) return;
 
-  const item = await prisma.itemType.findUnique({ where: { id: itemTypeId } });
+  const item = await prisma.itemType.findUnique({ where: { id: itemTypeId }, include: { category: true } });
   if (!item || item.trackingMethod !== "SERIAL") return;
-  const warehouseId = user.holderId;
+  // המחסן התואם לטיפוס הפריט מבין מחסני המשתמש
+  const wtype = item.category?.warehouseType;
+  const wh = wtype
+    ? await prisma.holder.findFirst({ where: { battalionId: bId, kind: "WAREHOUSE", warehouseType: wtype, ...(user.holderIds.length ? { id: { in: user.holderIds } } : {}) } })
+    : null;
+  const warehouseId = wh?.id ?? user.holderId;
   if (!warehouseId) return;
 
   const wb = new ExcelJS.Workbook();

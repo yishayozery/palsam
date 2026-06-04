@@ -20,16 +20,11 @@ export default async function InventoryPage({
   const { holder: holderFilter } = await searchParams;
   const canManage = can(user.role, "warehouse.operate");
 
-  // המחזיק של המשתמש (מחסן/פלוגה) — לקביעת היקף הצפייה והקליטה
-  const myHolder = user.holderId
-    ? await prisma.holder.findUnique({ where: { id: user.holderId } })
-    : null;
-
-  // בידוד: קצין מחסן/רס"פ/צופה-פלוגתי רואים רק את המחזיק שלהם. מפמ/אדמין/צופה-גדודי — הכל.
+  // בידוד: קצין מחסן/רס"פ/צופה-פלוגתי רואים רק את המחזיקים המשויכים. מפמ/אדמין/צופה-גדודי — הכל.
   const scopedToOwn =
     (user.role === "WAREHOUSE_MANAGER" || user.role === "COMPANY_REP" || user.role === "VIEWER") &&
-    !!user.holderId;
-  const scopeIds: string[] | null = scopedToOwn ? [user.holderId!] : null;
+    user.holderIds.length > 0;
+  const scopeIds: string[] | null = scopedToOwn ? user.holderIds : null;
 
   const holders = await prisma.holder.findMany({
     where: { battalionId: bId, active: true, ...(scopeIds ? { id: { in: scopeIds } } : {}) },
@@ -40,10 +35,11 @@ export default async function InventoryPage({
   const reqHolder = holderFilter && (!scopeIds || scopeIds.includes(holderFilter)) ? holderFilter : undefined;
   const holderWhere = reqHolder ? { in: [reqHolder] } : scopeIds ? { in: scopeIds } : undefined;
 
-  // קליטה: קצין מחסן יכול לקלוט רק פריטים מטיפוס המחסן שלו
+  // קליטה: קצין מחסן יכול לקלוט רק פריטים מטיפוסי המחסנים שלו
+  const myWarehouseTypes = holders.filter((h) => h.kind === "WAREHOUSE" && h.warehouseType).map((h) => h.warehouseType!);
   const itemWhere =
-    myHolder?.kind === "WAREHOUSE" && myHolder.warehouseType
-      ? { battalionId: bId, active: true, category: { warehouseType: myHolder.warehouseType } }
+    user.role === "WAREHOUSE_MANAGER" && myWarehouseTypes.length > 0
+      ? { battalionId: bId, active: true, category: { warehouseType: { in: myWarehouseTypes } } }
       : { battalionId: bId, active: true };
 
   const [balances, serialUnits, items, statuses] = await Promise.all([

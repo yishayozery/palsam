@@ -143,9 +143,11 @@ model AppUser {
   inviteToken  String?    @unique
   battalionId  String? // null עבור SUPER_ADMIN
   battalion    Battalion? @relation(fields: [battalionId], references: [id])
-  // המחזיק שעליו אחראי: מחסן (WAREHOUSE_MANAGER) או פלוגה (COMPANY_REP)
+  // המחזיק הראשי: פלוגה (COMPANY_REP) או מחסן ראשי (WAREHOUSE_MANAGER)
   holderId     String?
   holder       Holder?    @relation("HolderUsers", fields: [holderId], references: [id])
+  // שיוך לכמה מחסנים (קצין שמנהל יותר ממחסן אחד)
+  assignedHolders UserHolder[]
   active       Boolean    @default(true)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -174,6 +176,17 @@ model CustomRole {
   @@unique([battalionId, name])
 }
 
+// שיוך משתמש למחסן (תמיכה בכמה מחסנים לקצין אחד)
+model UserHolder {
+  id       String  @id @default(cuid())
+  userId   String
+  user     AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  holderId String
+  holder   Holder  @relation(fields: [holderId], references: [id])
+
+  @@unique([userId, holderId])
+}
+
 // ===================== מחזיקים: מחסנים ופלוגות =====================
 
 model Holder {
@@ -188,6 +201,7 @@ model Holder {
   createdAt     DateTime       @default(now())
 
   users            AppUser[]          @relation("HolderUsers")
+  assignedUsers    UserHolder[]
   soldiers         Soldier[]
   storageLocations StorageLocation[]
   stockBalances    StockBalance[]

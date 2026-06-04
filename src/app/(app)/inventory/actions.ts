@@ -6,17 +6,23 @@ import { requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 import { adjustQuantity } from "@/lib/inventory";
 
-/** המחסן שמנהל המחסן אחראי עליו (holderId), או מחסן לפי טיפוס הפריט */
-async function warehouseForItem(battalionId: string, itemTypeId: string, fallbackHolderId: string | null) {
-  if (fallbackHolderId) return fallbackHolderId;
+/** בוחר את המחסן הנכון לקליטת הפריט: מבין מחסני המשתמש, זה שתואם לטיפוס הפריט */
+async function warehouseForItem(battalionId: string, itemTypeId: string, userHolderIds: string[]) {
   const item = await prisma.itemType.findUnique({ where: { id: itemTypeId }, include: { category: true } });
   if (!item) return null;
-  // פריט תרומה / ללא קטגוריה — שייך לבעלים שלו (פלוגה/מחסן)
-  if (!item.category) return item.ownerHolderId ?? null;
-  const wh = await prisma.holder.findFirst({
-    where: { battalionId, kind: "WAREHOUSE", warehouseType: item.category.warehouseType },
-  });
-  return wh?.id ?? null;
+  // פריט תרומה / ללא קטגוריה — שייך לבעלים שלו
+  if (!item.category) return item.ownerHolderId ?? userHolderIds[0] ?? null;
+  const wtype = item.category.warehouseType;
+  // מבין מחסני המשתמש — זה שמטיפוס הפריט
+  if (userHolderIds.length > 0) {
+    const mine = await prisma.holder.findFirst({
+      where: { battalionId, kind: "WAREHOUSE", warehouseType: wtype, id: { in: userHolderIds } },
+    });
+    if (mine) return mine.id;
+  }
+  // אחרת (מפמ/אדמין) — כל מחסן מהטיפוס בגדוד
+  const any = await prisma.holder.findFirst({ where: { battalionId, kind: "WAREHOUSE", warehouseType: wtype } });
+  return any?.id ?? null;
 }
 
 /** קליטת מלאי חדש מהחטיבה למחסן */
@@ -29,7 +35,7 @@ export async function intakeStock(formData: FormData) {
 
   const item = await prisma.itemType.findUnique({ where: { id: itemTypeId } });
   if (!item) return;
-  const warehouseId = await warehouseForItem(bId, itemTypeId, user.holderId);
+  const warehouseId = await warehouseForItem(bId, itemTypeId, user.holderIds);
   if (!warehouseId) return;
 
   await prisma.$transaction(async (tx) => {
@@ -72,7 +78,7 @@ export async function writeOffStock(formData: FormData) {
 
   const item = await prisma.itemType.findUnique({ where: { id: itemTypeId } });
   if (!item) return;
-  const warehouseId = await warehouseForItem(bId, itemTypeId, user.holderId);
+  const warehouseId = await warehouseForItem(bId, itemTypeId, user.holderIds);
   if (!warehouseId) return;
 
   await prisma.$transaction(async (tx) => {

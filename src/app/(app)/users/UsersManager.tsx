@@ -9,7 +9,7 @@ type CustomRole = { id: string; name: string; template: string };
 type User = {
   id: string; fullName: string; username: string; phone: string | null;
   role: string; customRoleId: string | null; roleLabel: string;
-  holderId: string | null; holderName: string | null;
+  holderId: string | null; holderNames: string[];
   active: boolean; passwordSet: boolean; inviteToken: string | null;
 };
 
@@ -71,7 +71,7 @@ export default function UsersManager({ users, holders, customRoles, baseUrl }: {
                 <tr key={u.id} className={u.active ? "" : "opacity-50"}>
                   <Td><span className="font-medium">{u.fullName}</span> <span className="text-xs text-slate-400 font-mono">@{u.username}</span></Td>
                   <Td><Badge className="bg-slate-200 text-slate-700">{u.roleLabel}</Badge></Td>
-                  <Td>{u.holderName ?? "—"}</Td>
+                  <Td>{u.holderNames.length > 0 ? u.holderNames.join(", ") : "—"}</Td>
                   <Td className="text-xs text-slate-500">{u.phone ?? "—"}</Td>
                   <Td><InviteCell user={u} baseUrl={baseUrl} /></Td>
                   <Td>
@@ -125,10 +125,21 @@ export default function UsersManager({ users, holders, customRoles, baseUrl }: {
                 </div>
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">{holderLabel}</label>
-                  <select name="holderId" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    {effectiveTemplate === "VIEWER" && <option value="">כל הגדוד</option>}
-                    {holderOpts.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-                  </select>
+                  {effectiveTemplate === "WAREHOUSE_MANAGER" ? (
+                    <div className="rounded-lg border border-slate-300 p-2 space-y-1 max-h-32 overflow-y-auto">
+                      {holderOpts.map((h) => (
+                        <label key={h.id} className="flex items-center gap-2 text-sm">
+                          <input type="checkbox" name="holderId" value={h.id} className="w-4 h-4" /> {h.name}
+                        </label>
+                      ))}
+                      <p className="text-[11px] text-slate-400">ניתן לבחור כמה מחסנים</p>
+                    </div>
+                  ) : (
+                    <select name="holderId" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                      {effectiveTemplate === "VIEWER" && <option value="">כל הגדוד</option>}
+                      {holderOpts.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                    </select>
+                  )}
                 </div>
               </div>
               <p className="text-xs text-slate-400">ייווצר קישור הזמנה — שלח אותו למשתמש; הוא יגדיר סיסמה בכניסה הראשונה.</p>

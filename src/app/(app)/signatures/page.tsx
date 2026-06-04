@@ -14,8 +14,14 @@ export default async function SignaturesPage() {
   const bId = user.battalionId!;
   const canSign = can(user.role, "signatures.manage");
 
-  // היקף: מנהל מחסן/נציג רואים את תחומם; מפמ/צופה רואים הכל
-  const scopeHolder = user.holderId || undefined;
+  // היקף: קצין מחסן/נציג רואים את המחזיקים שלהם; מפמ/צופה רואים הכל
+  const scopedToOwn =
+    (user.role === "WAREHOUSE_MANAGER" || user.role === "COMPANY_REP" || user.role === "VIEWER") &&
+    user.holderIds.length > 0;
+  const holderFilter = scopedToOwn ? { currentHolderId: { in: user.holderIds } } : {};
+  // חיילים: נציג פלוגה רואה את חיילי הפלוגה; אחרת כל חיילי הגדוד
+  const isCompanyRep = user.role === "COMPANY_REP" && !!user.holderId;
+  const soldierWhere = { battalionId: bId, active: true, ...(isCompanyRep ? { companyId: user.holderId! } : {}) };
 
   const [pending, signedUnits, soldiers, availableUnits, statuses] = await Promise.all([
     prisma.signature.findMany({
@@ -24,24 +30,13 @@ export default async function SignaturesPage() {
       orderBy: { createdAt: "desc" },
     }),
     prisma.serialUnit.findMany({
-      where: {
-        battalionId: bId,
-        signedSoldierId: { not: null },
-        ...(scopeHolder ? { currentHolderId: scopeHolder } : {}),
-      },
+      where: { battalionId: bId, signedSoldierId: { not: null }, ...holderFilter },
       include: { itemType: true, status: true, signedSoldier: true, currentHolder: true },
       orderBy: { signedSoldier: { fullName: "asc" } },
     }),
-    prisma.soldier.findMany({
-      where: { battalionId: bId, active: true, ...(scopeHolder ? { companyId: scopeHolder } : {}) },
-      orderBy: { fullName: "asc" },
-    }),
+    prisma.soldier.findMany({ where: soldierWhere, orderBy: { fullName: "asc" } }),
     prisma.serialUnit.findMany({
-      where: {
-        battalionId: bId,
-        signedSoldierId: null,
-        ...(scopeHolder ? { currentHolderId: scopeHolder } : {}),
-      },
+      where: { battalionId: bId, signedSoldierId: null, ...holderFilter },
       include: { itemType: true, status: true, currentHolder: true },
       orderBy: { itemType: { name: "asc" } },
     }),

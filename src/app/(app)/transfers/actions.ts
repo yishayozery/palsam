@@ -25,7 +25,9 @@ export async function createIssue(formData: FormData) {
   const user = await requireUser();
   if (!can(user.role, "warehouse.operate")) redirect("/");
   const bId = user.battalionId!;
-  const fromHolderId = user.holderId || String(formData.get("fromHolderId") || "");
+  // מקור: המחסן שנבחר (חייב להיות מבין מחסני המשתמש), אחרת הראשי
+  const reqFrom = String(formData.get("fromHolderId") || "");
+  const fromHolderId = (reqFrom && user.holderIds.includes(reqFrom) ? reqFrom : null) || user.holderId || user.holderIds[0] || "";
   const toHolderId = String(formData.get("toHolderId") || "");
   const notes = String(formData.get("notes") || "").trim() || null;
   if (!fromHolderId || !toHolderId) return;

@@ -13,15 +13,16 @@ export default async function WarehousesPage() {
   if (user.role === "SUPER_ADMIN") redirect("/admin/battalions");
   const bId = user.battalionId!;
 
+  // קצין מחסן רואה רק את המחסנים המשויכים לו; מפמ/צופה — הכל
+  const onlyMine = user.role === "WAREHOUSE_MANAGER" && user.holderIds.length > 0;
   const warehouses = await prisma.holder.findMany({
-    where: { battalionId: bId, kind: "WAREHOUSE" },
+    where: { battalionId: bId, kind: "WAREHOUSE", ...(onlyMine ? { id: { in: user.holderIds } } : {}) },
     orderBy: { warehouseType: "asc" },
   });
 
-  // מנהל מחסן — ישר למחסן שלו
-  if (user.role === "WAREHOUSE_MANAGER" && user.holderId) {
-    const mine = warehouses.find((w) => w.id === user.holderId);
-    if (mine?.warehouseType) redirect(`/warehouses/${mine.warehouseType}`);
+  // אם יש מחסן יחיד — ישר אליו
+  if (onlyMine && warehouses.length === 1 && warehouses[0].warehouseType) {
+    redirect(`/warehouses/${warehouses[0].warehouseType}`);
   }
 
   const stats = await Promise.all(

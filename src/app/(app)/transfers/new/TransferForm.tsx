@@ -11,12 +11,14 @@ type Ref = { id: string; name: string };
 
 export default function TransferForm({
   isReturn,
+  fromHolderId,
   balances,
   serialUnits,
   targets,
   statuses,
 }: {
   isReturn: boolean;
+  fromHolderId?: string;
   balances: Balance[];
   serialUnits: Serial[];
   targets: Ref[];
@@ -26,6 +28,7 @@ export default function TransferForm({
 
   return (
     <form action={action} className="space-y-6">
+      {fromHolderId && <input type="hidden" name="fromHolderId" value={fromHolderId} />}
       <Card className="p-5">
         <div className="grid md:grid-cols-2 gap-4">
           {!isReturn && (

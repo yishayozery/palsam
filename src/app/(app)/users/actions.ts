@@ -29,20 +29,32 @@ export async function saveUser(formData: FormData) {
     role = roleRaw as Role;
   }
 
-  let holderId = String(formData.get("holderId") || "") || null;
-  if (role !== "WAREHOUSE_MANAGER" && role !== "COMPANY_REP" && role !== "VIEWER") holderId = null;
+  // קצין מחסן יכול להיות משויך לכמה מחסנים (getAll). שאר התפקידים — מחזיק יחיד.
+  let holderIds = formData.getAll("holderId").map(String).filter(Boolean);
+  if (role !== "WAREHOUSE_MANAGER" && role !== "COMPANY_REP" && role !== "VIEWER") holderIds = [];
+  if (role !== "WAREHOUSE_MANAGER") holderIds = holderIds.slice(0, 1); // יחיד לרס"פ/צופה
+  const holderId = holderIds[0] || null;
 
   if (!username || !fullName) return;
 
+  const syncHolders = async (userId: string) => {
+    await prisma.userHolder.deleteMany({ where: { userId } });
+    for (const hId of holderIds) {
+      await prisma.userHolder.create({ data: { userId, holderId: hId } });
+    }
+  };
+
   if (id) {
     await prisma.appUser.update({ where: { id }, data: { username, fullName, phone, role, customRoleId, holderId } });
+    await syncHolders(id);
     await audit(admin.id, "UPDATE", "AppUser", id);
   } else {
     const inviteToken = nanoid(28);
     const randomHash = await hashPassword(nanoid(32));
-    await prisma.appUser.create({
+    const created = await prisma.appUser.create({
       data: { username, fullName, phone, role, customRoleId, holderId, battalionId, passwordHash: randomHash, passwordSet: false, inviteToken },
     });
+    await syncHolders(created.id);
     await audit(admin.id, "CREATE", "AppUser", username, { invited: true });
   }
   revalidatePath("/users");

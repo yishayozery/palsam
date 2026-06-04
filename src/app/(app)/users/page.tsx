@@ -15,7 +15,7 @@ export default async function UsersPage() {
     prisma.appUser.findMany({
       where: { battalionId: bId, role: { in: ["WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"] } },
       orderBy: { createdAt: "asc" },
-      include: { holder: true, customRole: true },
+      include: { holder: true, customRole: true, assignedHolders: { include: { holder: true } } },
     }),
     prisma.holder.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" } }),
     prisma.customRole.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" } }),
@@ -38,7 +38,12 @@ export default async function UsersPage() {
           id: u.id, fullName: u.fullName, username: u.username, phone: u.phone,
           role: u.role, customRoleId: u.customRoleId,
           roleLabel: u.customRole?.name ?? ROLE_LABELS[u.role],
-          holderId: u.holderId, holderName: u.holder?.name ?? null,
+          holderId: u.holderId,
+          holderNames: (() => {
+            const names = u.assignedHolders.map((a) => a.holder.name);
+            if (u.holder && !names.includes(u.holder.name)) names.unshift(u.holder.name);
+            return names;
+          })(),
           active: u.active, passwordSet: u.passwordSet, inviteToken: u.inviteToken,
         }))}
       />

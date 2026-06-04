@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
@@ -10,17 +11,24 @@ export const dynamic = "force-dynamic";
 export default async function NewTransferPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string }>;
+  searchParams: Promise<{ type?: string; from?: string }>;
 }) {
   const user = await requireUser();
   const bId = user.battalionId!;
-  const { type } = await searchParams;
+  const { type, from } = await searchParams;
   const isReturn = type === "RETURN";
 
   if (isReturn && !can(user.role, "company.manage")) redirect("/transfers");
   if (!isReturn && !can(user.role, "warehouse.operate")) redirect("/transfers");
 
-  const sourceId = user.holderId!;
+  // מקור: מבין מחסני המשתמש (לקצין עם כמה מחסנים — בורר)
+  const myWarehouses = isReturn
+    ? []
+    : await prisma.holder.findMany({ where: { id: { in: user.holderIds }, kind: "WAREHOUSE" }, orderBy: { name: "asc" } });
+  const sourceId =
+    (from && user.holderIds.includes(from) ? from : null) ||
+    (myWarehouses[0]?.id) ||
+    user.holderId!;
 
   const [balances, serialUnits, targets, statuses] = await Promise.all([
     prisma.stockBalance.findMany({
@@ -47,8 +55,20 @@ export default async function NewTransferPage({
           ? "דיווח סטטוס הציוד המוחזר — ייכנס לאישור קצין הלוגיסטיקה"
           : "הציוד יוגדר 'מלאי במעבר' עד אישור הקבלה ביעד"}
       />
+      {!isReturn && myWarehouses.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          <span className="text-sm text-slate-500 self-center">מחסן מקור:</span>
+          {myWarehouses.map((w) => (
+            <Link key={w.id} href={`/transfers/new?type=ISSUE&from=${w.id}`}
+              className={`text-sm rounded-lg px-3 py-1.5 ${sourceId === w.id ? "bg-slate-800 text-white" : "bg-white border border-slate-300 text-slate-600"}`}>
+              {w.name}
+            </Link>
+          ))}
+        </div>
+      )}
       <TransferForm
         isReturn={isReturn}
+        fromHolderId={sourceId}
         balances={balances.map((b) => ({
           itemTypeId: b.itemTypeId, statusId: b.statusId,
           name: b.itemType.name, unit: b.itemType.unit, status: b.status.name, quantity: b.quantity,
