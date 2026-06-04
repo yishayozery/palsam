@@ -11,12 +11,13 @@ export async function GET() {
     { header: "שם מלא", key: "name", width: 22 },
     { header: "מספר אישי", key: "pn", width: 16 },
     { header: "טלפון", key: "phone", width: 16 },
+    { header: "מחלקה", key: "platoon", width: 12 },
     { header: "פלוגה", key: "company", width: 18 },
   ];
   ws.getRow(1).font = { bold: true };
   ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2E8F0" } };
-  ws.addRow({ name: "דני כהן", pn: "8000001", phone: "0501234567", company: "מפקדה/אגם" });
-  ws.addRow({ name: "אבי לוי", pn: "8000002", phone: "0507654321", company: "פלהק" });
+  ws.addRow({ name: "דני כהן", pn: "8000001", phone: "0501234567", platoon: "מחלקה 1", company: "מפקדה/אגם" });
+  ws.addRow({ name: "אבי לוי", pn: "8000002", phone: "0507654321", platoon: "מחלקה 2", company: "פלהק" });
 
   const note = wb.addWorksheet("הוראות", { views: [{ rightToLeft: true }] });
   note.getCell("A1").value = "מלא שורה לכל חייל. עמודת 'פלוגה' נדרשת רק אם אינך משויך לפלוגה ספציפית.";

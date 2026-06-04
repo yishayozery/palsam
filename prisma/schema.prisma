@@ -227,6 +227,7 @@ model Soldier {
   fullName       String
   personalNumber String
   phone          String?
+  platoon        String? // מחלקה בתוך הפלוגה
   companyId      String?
   company        Holder?   @relation(fields: [companyId], references: [id])
   active         Boolean   @default(true)

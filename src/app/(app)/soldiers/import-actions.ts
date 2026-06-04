@@ -31,16 +31,17 @@ export async function importSoldiers(formData: FormData): Promise<void> {
   const byName = new Map(companies.map((c) => [c.name.trim(), c.id]));
 
   let created = 0;
-  const rows: { fullName: string; personalNumber: string; phone: string | null; companyId: string | null }[] = [];
+  const rows: { fullName: string; personalNumber: string; phone: string | null; platoon: string | null; companyId: string | null }[] = [];
   ws.eachRow((row, idx) => {
     if (idx === 1) return; // כותרת
     const fullName = cell(row.getCell(1).value);
     const personalNumber = cell(row.getCell(2).value);
     const phone = cell(row.getCell(3).value) || null;
-    const companyName = cell(row.getCell(4).value);
+    const platoon = cell(row.getCell(4).value) || null;
+    const companyName = cell(row.getCell(5).value);
     if (!fullName || !personalNumber) return;
     const companyId = user.holderId || byName.get(companyName) || null;
-    rows.push({ fullName, personalNumber, phone, companyId });
+    rows.push({ fullName, personalNumber, phone, platoon, companyId });
   });
 
   for (const r of rows) {
@@ -48,7 +49,7 @@ export async function importSoldiers(formData: FormData): Promise<void> {
       await prisma.soldier.upsert({
         where: { battalionId_personalNumber: { battalionId: bId, personalNumber: r.personalNumber } },
         create: { battalionId: bId, ...r },
-        update: { fullName: r.fullName, phone: r.phone, ...(r.companyId ? { companyId: r.companyId } : {}) },
+        update: { fullName: r.fullName, phone: r.phone, platoon: r.platoon, ...(r.companyId ? { companyId: r.companyId } : {}) },
       });
       created++;
     } catch {
