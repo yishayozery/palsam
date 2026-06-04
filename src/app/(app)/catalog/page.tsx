@@ -14,7 +14,7 @@ export default async function CatalogPage() {
 
   const [items, categories] = await Promise.all([
     prisma.itemType.findMany({
-      where: { battalionId: bId },
+      where: { battalionId: bId, isDonated: false },
       orderBy: { sku: "asc" },
       include: {
         category: true,
@@ -79,7 +79,7 @@ export default async function CatalogPage() {
                     </div>
                   )}
                 </Td>
-                <Td>{i.category.name}</Td>
+                <Td>{i.category?.name ?? <Badge className="bg-purple-100 text-purple-700">תרומה</Badge>}</Td>
                 <Td>
                   <Badge className={methodColors[i.trackingMethod]}>
                     {TRACKING_METHOD[i.trackingMethod]}
@@ -102,7 +102,7 @@ export default async function CatalogPage() {
                       id: i.id,
                       sku: i.sku,
                       name: i.name,
-                      categoryId: i.categoryId,
+                      categoryId: i.categoryId ?? "",
                       trackingMethod: i.trackingMethod,
                       unit: i.unit,
                       isSensitive: i.isSensitive,

@@ -11,6 +11,8 @@ async function warehouseForItem(battalionId: string, itemTypeId: string, fallbac
   if (fallbackHolderId) return fallbackHolderId;
   const item = await prisma.itemType.findUnique({ where: { id: itemTypeId }, include: { category: true } });
   if (!item) return null;
+  // פריט תרומה / ללא קטגוריה — שייך לבעלים שלו (פלוגה/מחסן)
+  if (!item.category) return item.ownerHolderId ?? null;
   const wh = await prisma.holder.findFirst({
     where: { battalionId, kind: "WAREHOUSE", warehouseType: item.category.warehouseType },
   });

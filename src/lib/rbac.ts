@@ -4,6 +4,7 @@ import type { Role, WarehouseType } from "@/generated/prisma";
 export type Capability =
   | "battalions.manage" // אדמין-על: הקמת גדודים + מפמ
   | "users.manage" // ניהול משתמשים (מפמ: מנהלי מחסן/צופים; אדמין-על: מפמ)
+  | "org.manage" // מפמ: הקמת מחסנים ופלוגות
   | "battalion.profile" // פרופיל הגדוד
   | "warehouse.operate" // ניפוק/קליטה/גריעה/החזרה במחסן
   | "catalog.manage" // אפיון פריטים + מיקום סופי
@@ -12,6 +13,7 @@ export type Capability =
   | "locations.manage" // מידוף (מחסן/עמודה/שורה)
   | "reps.manage" // הגדרת נציגי פלוגה מול המחסן
   | "company.manage" // נציג פלוגה: חיילים + מחסן פלוגתי
+  | "donations.manage" // מלאי תרומה / ציוד לא-צבאי
   | "transfer.approve" // אישור קבלה (לחיצת יד)
   | "signatures.manage" // החתמות וזיכוי
   | "counts.manage" // הגדרות ספירה
@@ -24,6 +26,7 @@ const MATRIX: Record<Role, Capability[]> = {
   SUPER_ADMIN: ["battalions.manage", "users.manage", "reports.view", "audit.view"],
   BATTALION_ADMIN: [
     "users.manage",
+    "org.manage",
     "battalion.profile",
     "gaps.resolve",
     "reports.view",
@@ -36,6 +39,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "dictionaries.manage",
     "locations.manage",
     "reps.manage",
+    "donations.manage",
     "transfer.approve",
     "signatures.manage",
     "counts.manage",
@@ -47,6 +51,7 @@ const MATRIX: Record<Role, Capability[]> = {
   COMPANY_REP: [
     "company.manage",
     "locations.manage",
+    "donations.manage",
     "transfer.approve",
     "signatures.manage",
     "counts.execute",
@@ -66,8 +71,8 @@ export function capabilitiesOf(role: Role): Capability[] {
 export const ROLE_LABELS: Record<Role, string> = {
   SUPER_ADMIN: "אדמין-על",
   BATTALION_ADMIN: 'מפמ (אחראי מערכת)',
-  WAREHOUSE_MANAGER: "מנהל מחסן",
-  COMPANY_REP: "נציג פלוגה",
+  WAREHOUSE_MANAGER: "קצין מחסן",
+  COMPANY_REP: 'רס"פ פלוגתי',
   VIEWER: "צופה",
 };
 

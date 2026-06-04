@@ -5,7 +5,12 @@ import { prisma } from "@/lib/prisma";
 import { requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 
-export async function updateProfile(formData: FormData) {
+export type ProfileState = { ok?: boolean; error?: string };
+
+export async function updateProfile(
+  _prev: ProfileState,
+  formData: FormData,
+): Promise<ProfileState> {
   const user = await requireCapability("battalion.profile");
   const bId = user.battalionId!;
   const name = String(formData.get("name") || "").trim();
@@ -15,15 +20,18 @@ export async function updateProfile(formData: FormData) {
   const rawLogo = String(formData.get("logoData") || "");
   const logoData = rawLogo === "__CLEAR__" ? null : rawLogo.startsWith("data:image") ? rawLogo : undefined;
 
-  const data: Record<string, unknown> = {};
-  if (name) data.name = name;
-  data.commander = commander;
-  data.motto = motto;
-  data.notes = notes;
+  if (!name) return { error: "שם הגדוד חובה" };
+
+  const data: Record<string, unknown> = { name, commander, motto, notes };
   if (logoData !== undefined) data.logoData = logoData;
 
-  await prisma.battalion.update({ where: { id: bId }, data });
+  try {
+    await prisma.battalion.update({ where: { id: bId }, data });
+  } catch {
+    return { error: "שמירה נכשלה — ייתכן שהתמונה גדולה מדי" };
+  }
   await audit(user.id, "UPDATE", "Battalion", bId);
   revalidatePath("/profile");
   revalidatePath("/", "layout");
+  return { ok: true };
 }

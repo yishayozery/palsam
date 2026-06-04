@@ -26,7 +26,7 @@ export async function GET() {
   });
   for (const b of balances) {
     qSheet.addRow({
-      item: b.itemType.name, sku: b.itemType.sku, cat: b.itemType.category.name,
+      item: b.itemType.name, sku: b.itemType.sku, cat: b.itemType.category?.name ?? "תרומה",
       holder: b.holder.name, status: b.status.name, qty: b.quantity,
     });
   }
@@ -49,7 +49,7 @@ export async function GET() {
   });
   for (const u of units) {
     sSheet.addRow({
-      item: u.itemType.name, sn: u.serialNumber, cat: u.itemType.category.name,
+      item: u.itemType.name, sn: u.serialNumber, cat: u.itemType.category?.name ?? "תרומה",
       status: u.status.name, holder: u.currentHolder?.name ?? "במעבר",
       signed: u.signedSoldier?.fullName ?? "", phys: u.physicalLocation ?? "",
     });

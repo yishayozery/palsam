@@ -181,6 +181,7 @@ model Holder {
   // קשרי מחסן↔פלוגה (איזה פלוגות המחסן עובד מולן)
   warehouseLinks   WarehouseCompany[] @relation("WarehouseSide")
   companyLinks     WarehouseCompany[] @relation("CompanySide")
+  ownedDonations   ItemType[]         @relation("ItemOwnerHolder")
 
   @@index([battalionId])
   @@index([kind])
@@ -295,12 +296,17 @@ model ItemType {
   battalion      Battalion        @relation(fields: [battalionId], references: [id])
   sku            String
   name           String
-  categoryId     String
-  category       Category         @relation(fields: [categoryId], references: [id])
+  categoryId     String? // אופציונלי — פריטי תרומה ללא קטגוריה צבאית
+  category       Category?        @relation(fields: [categoryId], references: [id])
   trackingMethod TrackingMethod
   unit           String           @default("יח'")
   isSensitive    Boolean          @default(false)
   trackLocation  Boolean          @default(false)
+  // תרומה / ציוד לא-צבאי
+  isDonated      Boolean          @default(false)
+  signable       Boolean          @default(true) // האם ניתן להחתים חיילים על הפריט
+  ownerHolderId  String? // הבעלים של מלאי התרומה (פלוגה); null = רמת גדוד
+  ownerHolder    Holder?          @relation("ItemOwnerHolder", fields: [ownerHolderId], references: [id])
   imageData      String?
   // מיקום במחסן הסופי (כאשר מסתיימת הפעילות)
   homeLocationId String?

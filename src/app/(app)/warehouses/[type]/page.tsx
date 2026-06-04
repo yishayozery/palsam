@@ -40,7 +40,7 @@ export default async function WarehouseDetailPage({
   // פלוגות שהמחסן עובד מולן
   const links = await prisma.warehouseCompany.findMany({
     where: { warehouseId: warehouse.id },
-    include: { company: true },
+    include: { company: true, repUser: true },
   });
   const companies = links.map((l) => l.company);
 
@@ -71,19 +71,25 @@ export default async function WarehouseDetailPage({
   ]);
 
   const actions = [
-    { href: "/transfers", label: "העברת מלאי", icon: "🔄", show: true },
-    { href: "/users", label: "משתמשים", icon: "👤", show: can(user.role, "users.manage") },
+    { href: "/inventory", label: "קליטת מלאי", icon: "📥", show: can(user.role, "warehouse.operate") },
+    { href: "/transfers", label: "ניפוק / העברה", icon: "🔄", show: can(user.role, "warehouse.operate") },
+    { href: `/warehouses/${wtype}?tab=users`, label: "משתמשי המחסן", icon: "👤", show: true },
     { href: "/signatures", label: "החתמות", icon: "✍️", show: can(user.role, "signatures.manage") },
     { href: `/warehouses/${wtype}?tab=wear`, label: "ציוד בלאי", icon: "🛠️", show: true },
     { href: "/reports", label: "דוחות", icon: "📈", show: true },
   ].filter((a) => a.show);
 
   const isWearTab = activeTab === "wear";
+  const isUsersTab = activeTab === "users";
   const wearUnits = isWearTab
     ? await prisma.serialUnit.findMany({
         where: { battalionId: bId, itemType: { category: { warehouseType: wtype } }, status: { OR: [{ isWear: true }, { isLoss: true }] } },
         include: { itemType: true, status: true, currentHolder: true },
       })
+    : [];
+  // משתמשי המחסן: קציני המחסן + נציגי הפלוגות שהמחסן עובד מולן
+  const warehouseUsers = isUsersTab
+    ? await prisma.appUser.findMany({ where: { holderId: warehouse.id, role: "WAREHOUSE_MANAGER" } })
     : [];
 
   return (
@@ -119,7 +125,33 @@ export default async function WarehouseDetailPage({
         ))}
       </div>
 
-      {isWearTab ? (
+      {isUsersTab ? (
+        <Card>
+          <div className="p-3 font-semibold text-slate-700">משתמשי המחסן</div>
+          <Table>
+            <thead><tr><Th>שם</Th><Th>תפקיד</Th><Th>שיוך</Th></tr></thead>
+            <tbody>
+              {warehouseUsers.map((u) => (
+                <tr key={u.id}>
+                  <Td className="font-medium">{u.fullName} <span className="text-xs text-slate-400 font-mono">@{u.username}</span></Td>
+                  <Td><Badge className="bg-blue-100 text-blue-700">קצין מחסן</Badge></Td>
+                  <Td>{warehouse.name}</Td>
+                </tr>
+              ))}
+              {links.map((l) => (
+                <tr key={l.id}>
+                  <Td className="font-medium">{l.repUser?.fullName ?? <span className="text-slate-400">— ללא נציג —</span>}</Td>
+                  <Td><Badge className="bg-slate-200 text-slate-700">רס״פ פלוגתי</Badge></Td>
+                  <Td>{l.company.name}</Td>
+                </tr>
+              ))}
+              {warehouseUsers.length === 0 && links.length === 0 && (
+                <tr><Td><span className="text-slate-400 py-4 block">אין משתמשים משויכים</span></Td></tr>
+              )}
+            </tbody>
+          </Table>
+        </Card>
+      ) : isWearTab ? (
         <Card>
           <div className="p-3 font-semibold text-slate-700">ציוד בלאי / אובדן — {WAREHOUSE_TYPE_LABELS[wtype]}</div>
           {wearUnits.length === 0 ? <EmptyState>אין ציוד בבלאי</EmptyState> : (
