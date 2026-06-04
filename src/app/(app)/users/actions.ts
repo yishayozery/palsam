@@ -15,8 +15,10 @@ export async function saveUser(formData: FormData) {
   const role = String(formData.get("role") || "VIEWER") as Role;
   const password = String(formData.get("password") || "");
   let holderId = String(formData.get("holderId") || "") || null;
-  // תפקידים תחומיים מחייבים שיוך
-  if (role !== "COMPANY_SP" && role !== "ARMORY") holderId = null;
+  // רק תפקידים תחומיים מקבלים שיוך מחזיק
+  if (role !== "WAREHOUSE_MANAGER" && role !== "COMPANY_REP") holderId = null;
+  // מפמ פותח משתמשים בגדוד שלו בלבד
+  const battalionId = admin.role === "SUPER_ADMIN" ? (String(formData.get("battalionId") || "") || null) : admin.battalionId;
 
   if (!username || !fullName) return;
 
@@ -26,7 +28,7 @@ export async function saveUser(formData: FormData) {
     await prisma.appUser.update({ where: { id }, data });
   } else {
     await prisma.appUser.create({
-      data: { username, fullName, role, holderId, passwordHash: await hashPassword(password || "123456") },
+      data: { username, fullName, role, holderId, battalionId, passwordHash: await hashPassword(password || "123456") },
     });
   }
   await audit(admin.id, id ? "UPDATE" : "CREATE", "AppUser", id || username);
@@ -36,7 +38,7 @@ export async function saveUser(formData: FormData) {
 export async function toggleUser(formData: FormData) {
   const admin = await requireCapability("users.manage");
   const id = String(formData.get("id") || "");
-  if (id === admin.id) return; // לא משביתים את עצמך
+  if (id === admin.id) return;
   const u = await prisma.appUser.findUnique({ where: { id } });
   if (!u) return;
   await prisma.appUser.update({ where: { id }, data: { active: !u.active } });

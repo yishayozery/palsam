@@ -17,6 +17,7 @@ export type SessionUser = {
   fullName: string;
   role: Role;
   holderId: string | null;
+  battalionId: string | null;
 };
 
 export async function hashPassword(pw: string): Promise<string> {
@@ -61,6 +62,7 @@ export async function getSession(): Promise<SessionUser | null> {
       fullName: payload.fullName as string,
       role: payload.role as Role,
       holderId: (payload.holderId as string) ?? null,
+      battalionId: (payload.battalionId as string) ?? null,
     };
   } catch {
     return null;
@@ -82,5 +84,6 @@ export async function authenticate(
     fullName: user.fullName,
     role: user.role,
     holderId: user.holderId,
+    battalionId: user.battalionId,
   };
 }

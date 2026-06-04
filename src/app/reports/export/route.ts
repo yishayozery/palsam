@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   const user = await getSession();
-  if (!user) return new Response("Unauthorized", { status: 401 });
+  if (!user || !user.battalionId) return new Response("Unauthorized", { status: 401 });
+  const bId = user.battalionId;
 
   const wb = new ExcelJS.Workbook();
   wb.creator = "מערכת ניהול מלאי גדודי";
@@ -20,7 +21,7 @@ export async function GET() {
     { header: "כמות", key: "qty", width: 10 },
   ];
   const balances = await prisma.stockBalance.findMany({
-    where: { quantity: { gt: 0 } },
+    where: { battalionId: bId, quantity: { gt: 0 } },
     include: { itemType: { include: { category: true } }, holder: true, status: true },
   });
   for (const b of balances) {
@@ -42,6 +43,7 @@ export async function GET() {
     { header: "מיקום פיזי", key: "phys", width: 18 },
   ];
   const units = await prisma.serialUnit.findMany({
+    where: { battalionId: bId },
     include: { itemType: { include: { category: true } }, status: true, currentHolder: true, signedSoldier: true },
     orderBy: [{ itemType: { name: "asc" } }, { serialNumber: "asc" }],
   });

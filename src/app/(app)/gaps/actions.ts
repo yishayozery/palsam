@@ -19,10 +19,10 @@ export async function resolveDiscrepancy(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     if (adjust && d.holderId) {
       // יישור יתרת המלאי הכמותי לכמות שנספרה בפועל
-      const status = await tx.itemStatus.findFirst({ where: { isDefault: true } })
-        ?? await tx.itemStatus.findFirst({});
+      const status = await tx.itemStatus.findFirst({ where: { battalionId: d.battalionId, isDefault: true } })
+        ?? await tx.itemStatus.findFirst({ where: { battalionId: d.battalionId } });
       if (status) {
-        await adjustQuantity(tx, d.itemTypeId, d.holderId, status.id, d.diff);
+        await adjustQuantity(tx, d.battalionId, d.itemTypeId, d.holderId, status.id, d.diff);
       }
     }
     await tx.discrepancy.update({

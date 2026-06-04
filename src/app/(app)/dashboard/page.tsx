@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { Card, PageHeader, StatCard, Badge } from "@/components/ui";
@@ -7,6 +8,8 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  if (user.role === "SUPER_ADMIN") redirect("/admin/battalions");
+  const bId = user.battalionId!;
 
   const [
     pendingTransfers,
@@ -18,14 +21,14 @@ export default async function DashboardPage() {
     companies,
     quantityStock,
   ] = await Promise.all([
-    prisma.transfer.count({ where: { status: "PENDING" } }),
-    prisma.discrepancy.count({ where: { status: "OPEN" } }),
-    prisma.serialUnit.count({ where: { status: { isWear: true } } }),
-    prisma.serialUnit.count({ where: { status: { isLoss: true } } }),
-    prisma.serialUnit.count(),
-    prisma.serialUnit.count({ where: { signedSoldierId: { not: null } } }),
-    prisma.holder.findMany({ where: { type: "COMPANY", active: true } }),
-    prisma.stockBalance.aggregate({ _sum: { quantity: true } }),
+    prisma.transfer.count({ where: { battalionId: bId, status: "PENDING" } }),
+    prisma.discrepancy.count({ where: { battalionId: bId, status: "OPEN" } }),
+    prisma.serialUnit.count({ where: { battalionId: bId, status: { isWear: true } } }),
+    prisma.serialUnit.count({ where: { battalionId: bId, status: { isLoss: true } } }),
+    prisma.serialUnit.count({ where: { battalionId: bId } }),
+    prisma.serialUnit.count({ where: { battalionId: bId, signedSoldierId: { not: null } } }),
+    prisma.holder.findMany({ where: { battalionId: bId, kind: "COMPANY", active: true } }),
+    prisma.stockBalance.aggregate({ _sum: { quantity: true }, where: { battalionId: bId } }),
   ]);
 
   // תמונת מצב פלוגתית: סריאלי לכל פלוגה — מוקצה / חתום / פנוי
@@ -48,6 +51,7 @@ export default async function DashboardPage() {
       : Math.max(0, Math.round((1 - openGaps / serialTotal) * 100));
 
   const recentTransfers = await prisma.transfer.findMany({
+    where: { battalionId: bId },
     take: 6,
     orderBy: { createdAt: "desc" },
     include: { fromHolder: true, toHolder: true, toSoldier: true },

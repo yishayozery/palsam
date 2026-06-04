@@ -13,33 +13,30 @@ export default async function NewTransferPage({
   searchParams: Promise<{ type?: string }>;
 }) {
   const user = await requireUser();
+  const bId = user.battalionId!;
   const { type } = await searchParams;
   const isReturn = type === "RETURN";
 
-  if (isReturn && !(can(user.role, "company.manage") || can(user.role, "armory.manage"))) {
-    redirect("/transfers");
-  }
-  if (!isReturn && !can(user.role, "warehouse.manage")) {
-    redirect("/transfers");
-  }
+  if (isReturn && !can(user.role, "company.manage")) redirect("/transfers");
+  if (!isReturn && !can(user.role, "warehouse.operate")) redirect("/transfers");
 
-  const warehouse = await prisma.holder.findFirst({ where: { type: "WAREHOUSE" } });
-  const sourceId = isReturn ? user.holderId! : warehouse!.id;
+  const sourceId = user.holderId!;
 
   const [balances, serialUnits, targets, statuses] = await Promise.all([
     prisma.stockBalance.findMany({
-      where: { holderId: sourceId, quantity: { gt: 0 } },
+      where: { battalionId: bId, holderId: sourceId, quantity: { gt: 0 } },
       include: { itemType: true, status: true },
     }),
     prisma.serialUnit.findMany({
-      where: { currentHolderId: sourceId },
+      where: { battalionId: bId, currentHolderId: sourceId },
       include: { itemType: true, status: true },
       orderBy: { itemType: { name: "asc" } },
     }),
     prisma.holder.findMany({
-      where: isReturn ? { type: "WAREHOUSE" } : { type: { in: ["COMPANY", "ARMORY"] }, active: true },
+      where: { battalionId: bId, active: true, kind: isReturn ? "WAREHOUSE" : "COMPANY" },
+      orderBy: { name: "asc" },
     }),
-    prisma.itemStatus.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.itemStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" } }),
   ]);
 
   return (

@@ -10,8 +10,13 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const user = await requireUser();
-  const items = NAV.filter((n) => !n.cap || can(user.role, n.cap));
-  const unitName = process.env.UNIT_NAME || "גדוד";
+  const items = NAV.filter(
+    (n) =>
+      (!n.cap || can(user.role, n.cap)) &&
+      (!n.roles || n.roles.includes(user.role)),
+  );
+  const unitName =
+    user.role === "SUPER_ADMIN" ? "ניהול-על" : process.env.UNIT_NAME || "גדוד";
 
   return (
     <div className="flex h-screen overflow-hidden">

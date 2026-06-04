@@ -1,6 +1,5 @@
 // תוויות עברית ל-enums מבניים (לא דיקשנרי)
 import type {
-  HolderType,
   TrackingMethod,
   TransferType,
   TransferStatus,
@@ -11,12 +10,6 @@ import type {
   DiscrepancyKind,
   DiscrepancyStatus,
 } from "@/generated/prisma";
-
-export const HOLDER_TYPE: Record<HolderType, string> = {
-  WAREHOUSE: "מחסן גדודי",
-  COMPANY: "פלוגה",
-  ARMORY: "נשקייה",
-};
 
 export const TRACKING_METHOD: Record<TrackingMethod, string> = {
   QUANTITY: "כמותי",

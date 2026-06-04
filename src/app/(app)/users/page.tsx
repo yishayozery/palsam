@@ -8,11 +8,16 @@ import { saveUser, toggleUser } from "./actions";
 export const dynamic = "force-dynamic";
 
 export default async function UsersPage() {
-  await requireCapability("users.manage");
+  const admin = await requireCapability("users.manage");
+  const bId = admin.battalionId!;
 
   const [users, holders] = await Promise.all([
-    prisma.appUser.findMany({ orderBy: { createdAt: "asc" }, include: { holder: true } }),
-    prisma.holder.findMany({ where: { active: true, type: { in: ["COMPANY", "ARMORY"] } } }),
+    prisma.appUser.findMany({
+      where: { battalionId: bId, role: { in: ["WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"] } },
+      orderBy: { createdAt: "asc" },
+      include: { holder: true },
+    }),
+    prisma.holder.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" } }),
   ]);
 
   return (
@@ -26,11 +31,11 @@ export default async function UsersPage() {
           { name: "username", label: "שם משתמש" },
           { name: "password", label: "סיסמה (ריק = ללא שינוי)" },
           {
-            name: "role", label: "תפקיד", type: "select", default: "VIEWER",
-            options: (Object.keys(ROLE_LABELS) as (keyof typeof ROLE_LABELS)[]).map((r) => ({ value: r, label: ROLE_LABELS[r] })),
+            name: "role", label: "תפקיד", type: "select", default: "WAREHOUSE_MANAGER",
+            options: (["WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"] as const).map((r) => ({ value: r, label: ROLE_LABELS[r] })),
           },
           {
-            name: "holderId", label: "שיוך (רס\"פ/ארמון)", type: "select",
+            name: "holderId", label: "שיוך (מחסן/פלוגה)", type: "select",
             options: [{ value: "", label: "—" }, ...holders.map((h) => ({ value: h.id, label: h.name }))],
           },
         ]}

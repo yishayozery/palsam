@@ -28,7 +28,7 @@ export async function saveItemType(formData: FormData) {
   if (id) {
     await prisma.itemType.update({ where: { id }, data });
   } else {
-    await prisma.itemType.create({ data });
+    await prisma.itemType.create({ data: { ...data, battalionId: user.battalionId! } });
   }
   await audit(user.id, id ? "UPDATE" : "CREATE", "ItemType", id || sku);
   revalidatePath("/catalog");

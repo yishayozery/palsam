@@ -10,12 +10,13 @@ export const dynamic = "force-dynamic";
 
 export default async function TransfersPage() {
   const user = await requireUser();
-  const canIssue = can(user.role, "warehouse.manage");
-  const canReturn = can(user.role, "company.manage") || can(user.role, "armory.manage");
+  const bId = user.battalionId!;
+  const canIssue = can(user.role, "warehouse.operate");
+  const canReturn = can(user.role, "company.manage");
   const canApprove = can(user.role, "transfer.approve");
 
   const transfers = await prisma.transfer.findMany({
-    where: { type: { in: ["ISSUE", "RETURN", "INTAKE", "WRITE_OFF"] } },
+    where: { battalionId: bId, type: { in: ["ISSUE", "RETURN", "INTAKE", "WRITE_OFF"] } },
     orderBy: { createdAt: "desc" },
     take: 100,
     include: {

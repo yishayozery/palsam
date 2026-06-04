@@ -1,8 +1,8 @@
 import { requireCapability } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge } from "@/components/ui";
+import { WAREHOUSE_TYPE_SHORT } from "@/lib/rbac";
 import CrudSection from "@/components/CrudSection";
-import { HOLDER_TYPE } from "@/lib/labels";
 import {
   saveCategory,
   deleteCategory,
@@ -10,49 +10,49 @@ import {
   deleteStatus,
   saveFrequency,
   deleteFrequency,
-  saveHolder,
-  toggleHolder,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function DictionariesPage() {
-  await requireCapability("dictionaries.manage");
+  const user = await requireCapability("dictionaries.manage");
+  const bId = user.battalionId!;
 
-  const [categories, statuses, frequencies, holders] = await Promise.all([
-    prisma.category.findMany({
-      orderBy: { sortOrder: "asc" },
-      include: { _count: { select: { itemTypes: true } } },
-    }),
-    prisma.itemStatus.findMany({ orderBy: { sortOrder: "asc" } }),
-    prisma.countFrequency.findMany({ orderBy: { intervalDays: "asc" } }),
-    prisma.holder.findMany({ orderBy: { type: "asc" } }),
+  const [categories, statuses, frequencies] = await Promise.all([
+    prisma.category.findMany({ where: { battalionId: bId }, orderBy: { sortOrder: "asc" }, include: { _count: { select: { itemTypes: true } } } }),
+    prisma.itemStatus.findMany({ where: { battalionId: bId }, orderBy: { sortOrder: "asc" } }),
+    prisma.countFrequency.findMany({ where: { battalionId: bId }, orderBy: { intervalDays: "asc" } }),
   ]);
+
+  const whOptions = [
+    { value: "EQUIPMENT", label: WAREHOUSE_TYPE_SHORT.EQUIPMENT },
+    { value: "COMMS", label: WAREHOUSE_TYPE_SHORT.COMMS },
+    { value: "AMMO", label: WAREHOUSE_TYPE_SHORT.AMMO },
+    { value: "ARMORY", label: WAREHOUSE_TYPE_SHORT.ARMORY },
+  ];
 
   return (
     <div>
-      <PageHeader
-        title="ניהול מילונים"
-        subtitle="הגדרות המערכת — ללא Hardcoding. נוהל על ידי מנהל המערכת."
-      />
-
+      <PageHeader title="ניהול מילונים" subtitle="הגדרות הגדוד — ללא Hardcoding" />
       <div className="grid lg:grid-cols-2 gap-6">
         <CrudSection
-          title="קטגוריות ציוד"
+          title="קטגוריות ציוד (לפי מחסן)"
           addLabel="קטגוריה"
-          fields={[{ name: "name", label: "שם הקטגוריה" }]}
+          fields={[
+            { name: "name", label: "שם הקטגוריה" },
+            { name: "warehouseType", label: "מחסן", type: "select", default: "EQUIPMENT", options: whOptions },
+          ]}
           saveAction={saveCategory}
           deleteAction={deleteCategory}
           rows={categories.map((c) => ({
             id: c.id,
-            values: { name: c.name },
+            values: { name: c.name, warehouseType: c.warehouseType },
             locked: c._count.itemTypes > 0,
             display: (
-              <span>
-                {c.name}{" "}
-                {c._count.itemTypes > 0 && (
-                  <Badge>{c._count.itemTypes} מק״טים</Badge>
-                )}
+              <span className="flex items-center gap-1.5">
+                {c.name}
+                <Badge className="bg-slate-100 text-slate-600">{WAREHOUSE_TYPE_SHORT[c.warehouseType]}</Badge>
+                {c._count.itemTypes > 0 && <Badge>{c._count.itemTypes} מק״טים</Badge>}
               </span>
             ),
           }))}
@@ -72,13 +72,7 @@ export default async function DictionariesPage() {
           deleteAction={deleteStatus}
           rows={statuses.map((s) => ({
             id: s.id,
-            values: {
-              name: s.name,
-              isDefault: s.isDefault,
-              isWear: s.isWear,
-              isLoss: s.isLoss,
-              isConsumed: s.isConsumed,
-            },
+            values: { name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss, isConsumed: s.isConsumed },
             display: (
               <span className="flex items-center gap-1.5">
                 {s.name}
@@ -103,44 +97,7 @@ export default async function DictionariesPage() {
           rows={frequencies.map((f) => ({
             id: f.id,
             values: { name: f.name, intervalDays: String(f.intervalDays) },
-            display: (
-              <span>
-                {f.name} <Badge>כל {f.intervalDays} ימים</Badge>
-              </span>
-            ),
-          }))}
-        />
-
-        <CrudSection
-          title="מבנה ארגוני (מחזיקים)"
-          addLabel="יחידה"
-          fields={[
-            { name: "name", label: "שם" },
-            { name: "code", label: "קוד" },
-            {
-              name: "type",
-              label: "סוג",
-              type: "select",
-              default: "COMPANY",
-              options: [
-                { value: "COMPANY", label: "פלוגה" },
-                { value: "ARMORY", label: "נשקייה" },
-                { value: "WAREHOUSE", label: "מחסן גדודי" },
-              ],
-            },
-          ]}
-          saveAction={saveHolder}
-          deleteAction={toggleHolder}
-          rows={holders.map((h) => ({
-            id: h.id,
-            values: { name: h.name, code: h.code ?? "", type: h.type },
-            display: (
-              <span className="flex items-center gap-1.5">
-                {h.name}
-                <Badge>{HOLDER_TYPE[h.type]}</Badge>
-                {!h.active && <Badge className="bg-rose-100 text-rose-700">לא פעיל</Badge>}
-              </span>
-            ),
+            display: (<span>{f.name} <Badge>כל {f.intervalDays} ימים</Badge></span>),
           }))}
         />
       </div>

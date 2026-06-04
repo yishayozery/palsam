@@ -25,9 +25,10 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 export default async function AuditPage() {
-  await requireCapability("audit.view");
+  const user = await requireCapability("audit.view");
 
   const logs = await prisma.auditLog.findMany({
+    where: user.role === "SUPER_ADMIN" ? {} : { battalionId: user.battalionId },
     orderBy: { createdAt: "desc" },
     take: 200,
     include: { user: true },

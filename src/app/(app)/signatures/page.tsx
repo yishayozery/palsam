@@ -11,22 +11,21 @@ export const dynamic = "force-dynamic";
 
 export default async function SignaturesPage() {
   const user = await requireUser();
-  const canSign =
-    can(user.role, "company.manage") ||
-    can(user.role, "armory.manage") ||
-    can(user.role, "warehouse.manage");
+  const bId = user.battalionId!;
+  const canSign = can(user.role, "signatures.manage");
 
-  // היקף: רס"פ/ארמון רואים את תחומם; admin/קל"ג רואים הכל
+  // היקף: מנהל מחסן/נציג רואים את תחומם; מפמ/צופה רואים הכל
   const scopeHolder = user.holderId || undefined;
 
   const [pending, signedUnits, soldiers, availableUnits, statuses] = await Promise.all([
     prisma.signature.findMany({
-      where: { status: "PENDING" },
+      where: { battalionId: bId, status: "PENDING" },
       include: { soldier: true, transfer: { include: { lines: true } } },
       orderBy: { createdAt: "desc" },
     }),
     prisma.serialUnit.findMany({
       where: {
+        battalionId: bId,
         signedSoldierId: { not: null },
         ...(scopeHolder ? { currentHolderId: scopeHolder } : {}),
       },
@@ -34,18 +33,19 @@ export default async function SignaturesPage() {
       orderBy: { signedSoldier: { fullName: "asc" } },
     }),
     prisma.soldier.findMany({
-      where: { active: true, ...(scopeHolder ? { companyId: scopeHolder } : {}) },
+      where: { battalionId: bId, active: true, ...(scopeHolder ? { companyId: scopeHolder } : {}) },
       orderBy: { fullName: "asc" },
     }),
     prisma.serialUnit.findMany({
       where: {
+        battalionId: bId,
         signedSoldierId: null,
-        currentHolderId: scopeHolder ? scopeHolder : { not: null },
+        ...(scopeHolder ? { currentHolderId: scopeHolder } : {}),
       },
       include: { itemType: true, status: true, currentHolder: true },
       orderBy: { itemType: { name: "asc" } },
     }),
-    prisma.itemStatus.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.itemStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" } }),
   ]);
 
   return (

@@ -12,13 +12,14 @@ export default async function ReportsPage({
 }: {
   searchParams: Promise<{ item?: string }>;
 }) {
-  await requireCapability("reports.view");
+  const user = await requireCapability("reports.view");
+  const bId = user.battalionId!;
   const { item: itemId } = await searchParams;
 
   const [items, categories, holders] = await Promise.all([
-    prisma.itemType.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
-    prisma.category.findMany({ where: { active: true } }),
-    prisma.holder.findMany({ where: { active: true } }),
+    prisma.itemType.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" } }),
+    prisma.category.findMany({ where: { battalionId: bId, active: true } }),
+    prisma.holder.findMany({ where: { battalionId: bId, active: true } }),
   ]);
 
   // חתך פריט סריאלי נבחר — "איפה נמצא ציוד X בכל הרמות"

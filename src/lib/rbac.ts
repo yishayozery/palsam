@@ -1,57 +1,54 @@
-import type { Role } from "@/generated/prisma";
+import type { Role, WarehouseType } from "@/generated/prisma";
 
 /** יכולות המערכת — בקרת גישה מבוססת-תפקיד (RBAC) */
 export type Capability =
-  | "dictionaries.manage" // ניהול מילונים (Admin)
-  | "users.manage" // ניהול משתמשים
-  | "catalog.manage" // ניהול קטלוג מק"טים / קיטים
-  | "warehouse.manage" // קליטה/גריעה/שיגור מהמחסן הגדודי
-  | "company.manage" // ניהול מלאי פלוגתי + החתמות
-  | "armory.manage" // ניהול נשקייה + החתמות
-  | "transfer.approve" // אישור לחיצת יד / קבלת ציוד
-  | "soldiers.manage" // ניהול חיילים
-  | "counts.manage" // ניהול הגדרות ספירה
+  | "battalions.manage" // אדמין-על: הקמת גדודים + מפמ
+  | "users.manage" // ניהול משתמשים (מפמ: מנהלי מחסן/צופים; אדמין-על: מפמ)
+  | "battalion.profile" // פרופיל הגדוד
+  | "warehouse.operate" // ניפוק/קליטה/גריעה/החזרה במחסן
+  | "catalog.manage" // אפיון פריטים + מיקום סופי
+  | "kits.manage" // הקמת קיטים
+  | "dictionaries.manage" // קטגוריות/סטטוסים/תדירויות
+  | "locations.manage" // מידוף (מחסן/עמודה/שורה)
+  | "reps.manage" // הגדרת נציגי פלוגה מול המחסן
+  | "company.manage" // נציג פלוגה: חיילים + מחסן פלוגתי
+  | "transfer.approve" // אישור קבלה (לחיצת יד)
+  | "signatures.manage" // החתמות וזיכוי
+  | "counts.manage" // הגדרות ספירה
   | "counts.execute" // ביצוע ספירה
   | "gaps.resolve" // אישור/סגירת פערים
-  | "reports.view" // צפייה בדוחות ודשבורד
-  | "audit.view"; // צפייה ביומן פעולות
+  | "reports.view" // דשבורד ודוחות
+  | "audit.view"; // יומן פעולות
 
 const MATRIX: Record<Role, Capability[]> = {
-  ADMIN: [
-    "dictionaries.manage",
+  SUPER_ADMIN: ["battalions.manage", "users.manage", "reports.view", "audit.view"],
+  BATTALION_ADMIN: [
     "users.manage",
+    "battalion.profile",
+    "gaps.resolve",
+    "reports.view",
+    "audit.view",
+  ],
+  WAREHOUSE_MANAGER: [
+    "warehouse.operate",
     "catalog.manage",
-    "warehouse.manage",
-    "company.manage",
-    "armory.manage",
+    "kits.manage",
+    "dictionaries.manage",
+    "locations.manage",
+    "reps.manage",
     "transfer.approve",
-    "soldiers.manage",
+    "signatures.manage",
     "counts.manage",
     "counts.execute",
     "gaps.resolve",
     "reports.view",
     "audit.view",
   ],
-  LOGISTICS: [
-    "warehouse.manage",
-    "catalog.manage",
-    "transfer.approve",
-    "soldiers.manage",
-    "counts.execute",
-    "reports.view",
-    "audit.view",
-  ],
-  COMPANY_SP: [
+  COMPANY_REP: [
     "company.manage",
+    "locations.manage",
     "transfer.approve",
-    "soldiers.manage",
-    "counts.execute",
-    "reports.view",
-  ],
-  ARMORY: [
-    "armory.manage",
-    "transfer.approve",
-    "soldiers.manage",
+    "signatures.manage",
     "counts.execute",
     "reports.view",
   ],
@@ -67,9 +64,38 @@ export function capabilitiesOf(role: Role): Capability[] {
 }
 
 export const ROLE_LABELS: Record<Role, string> = {
-  ADMIN: "מנהל מערכת",
-  LOGISTICS: "אחראי לוגיסטיקה (קל\"ג)",
-  COMPANY_SP: "רס\"פ פלוגתי",
-  ARMORY: "אחראי נשקייה",
-  VIEWER: "צופה / מבקר",
+  SUPER_ADMIN: "אדמין-על",
+  BATTALION_ADMIN: 'מפמ (אחראי מערכת)',
+  WAREHOUSE_MANAGER: "מנהל מחסן",
+  COMPANY_REP: "נציג פלוגה",
+  VIEWER: "צופה",
+};
+
+export const WAREHOUSE_TYPE_LABELS: Record<WarehouseType, string> = {
+  EQUIPMENT: 'ציוד (קל"ג)',
+  COMMS: 'תקשוב (קשר"ג)',
+  AMMO: "חמידה / תחמושת (בונקר)",
+  ARMORY: "ארמון",
+};
+
+export const WAREHOUSE_TYPE_SHORT: Record<WarehouseType, string> = {
+  EQUIPMENT: "ציוד",
+  COMMS: "תקשוב",
+  AMMO: "חמידה",
+  ARMORY: "ארמון",
+};
+
+export const WAREHOUSE_TYPE_ICON: Record<WarehouseType, string> = {
+  EQUIPMENT: "🎒",
+  COMMS: "📡",
+  AMMO: "💥",
+  ARMORY: "🔫",
+};
+
+/** תפקיד מנהל המחסן לפי טיפוס (לתיוג בלבד) */
+export const WAREHOUSE_MANAGER_TITLE: Record<WarehouseType, string> = {
+  EQUIPMENT: 'קל"ג',
+  COMMS: 'קשר"ג',
+  AMMO: "אחראי בונקר",
+  ARMORY: "אחראי ארמון",
 };

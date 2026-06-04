@@ -9,16 +9,17 @@ export const dynamic = "force-dynamic";
 
 export default async function GapsPage() {
   const user = await requireUser();
+  const bId = user.battalionId!;
   const canResolve = can(user.role, "gaps.resolve");
 
   const [open, resolved] = await Promise.all([
     prisma.discrepancy.findMany({
-      where: { status: "OPEN" },
+      where: { battalionId: bId, status: "OPEN" },
       include: { itemType: true, holder: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.discrepancy.findMany({
-      where: { status: "RESOLVED" },
+      where: { battalionId: bId, status: "RESOLVED" },
       include: { itemType: true, holder: true, resolvedBy: true },
       orderBy: { resolvedAt: "desc" },
       take: 20,

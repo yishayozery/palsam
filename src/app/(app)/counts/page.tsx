@@ -15,16 +15,18 @@ export const dynamic = "force-dynamic";
 
 export default async function CountsPage() {
   const user = await requireUser();
+  const bId = user.battalionId!;
   const canManage = can(user.role, "counts.manage");
   const canExecute = can(user.role, "counts.execute");
 
   const [definitions, sessions, frequencies, holders] = await Promise.all([
     prisma.countDefinition.findMany({
-      where: { active: true },
+      where: { battalionId: bId, active: true },
       include: { frequency: true, scopeHolder: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.countSession.findMany({
+      where: { battalionId: bId },
       orderBy: { startedAt: "desc" },
       take: 15,
       include: {
@@ -32,8 +34,8 @@ export default async function CountsPage() {
         _count: { select: { lines: true, discrepancies: true } },
       },
     }),
-    prisma.countFrequency.findMany({ where: { active: true } }),
-    prisma.holder.findMany({ where: { active: true, type: { in: ["COMPANY", "ARMORY"] } } }),
+    prisma.countFrequency.findMany({ where: { battalionId: bId, active: true } }),
+    prisma.holder.findMany({ where: { battalionId: bId, active: true, kind: "COMPANY" } }),
   ]);
 
   return (

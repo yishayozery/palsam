@@ -7,6 +7,7 @@ import type { Prisma } from "@/generated/prisma";
  */
 export async function adjustQuantity(
   tx: Prisma.TransactionClient,
+  battalionId: string,
   itemTypeId: string,
   holderId: string,
   statusId: string,
@@ -23,7 +24,7 @@ export async function adjustQuantity(
     });
   } else if (delta > 0) {
     await tx.stockBalance.create({
-      data: { itemTypeId, holderId, statusId, quantity: next },
+      data: { battalionId, itemTypeId, holderId, statusId, quantity: next },
     });
   }
 }
@@ -31,12 +32,13 @@ export async function adjustQuantity(
 /** ברירת מחדל לסטטוס "תקין" (או הראשון הפעיל) */
 export async function defaultStatusId(
   tx: Prisma.TransactionClient,
+  battalionId: string,
 ): Promise<string> {
   const def = await tx.itemStatus.findFirst({
-    where: { isDefault: true, active: true },
+    where: { battalionId, isDefault: true, active: true },
   });
   if (def) return def.id;
-  const first = await tx.itemStatus.findFirst({ where: { active: true } });
+  const first = await tx.itemStatus.findFirst({ where: { battalionId, active: true } });
   if (!first) throw new Error("לא הוגדרו סטטוסי ציוד");
   return first.id;
 }

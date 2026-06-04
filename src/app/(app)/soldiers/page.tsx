@@ -7,10 +7,11 @@ import { saveSoldier, toggleSoldier } from "./actions";
 export const dynamic = "force-dynamic";
 
 export default async function SoldiersPage() {
-  const user = await requireCapability("soldiers.manage");
+  const user = await requireCapability("company.manage");
+  const bId = user.battalionId!;
 
-  // רס"פ/ארמון רואים רק את חיילי תחומם
-  const where = user.holderId ? { companyId: user.holderId } : {};
+  // נציג פלוגה רואה רק את חיילי הפלוגה שלו
+  const where = { battalionId: bId, ...(user.holderId ? { companyId: user.holderId } : {}) };
   const [soldiers, companies] = await Promise.all([
     prisma.soldier.findMany({
       where,
@@ -20,7 +21,7 @@ export default async function SoldiersPage() {
         _count: { select: { signedSerialUnits: true, signedKitInstances: true } },
       },
     }),
-    prisma.holder.findMany({ where: { type: "COMPANY", active: true }, orderBy: { name: "asc" } }),
+    prisma.holder.findMany({ where: { battalionId: bId, kind: "COMPANY", active: true }, orderBy: { name: "asc" } }),
   ]);
 
   const fields = [

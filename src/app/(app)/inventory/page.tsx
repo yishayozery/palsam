@@ -15,31 +15,32 @@ export default async function InventoryPage({
   searchParams: Promise<{ holder?: string }>;
 }) {
   const user = await requireUser();
+  const bId = user.battalionId!;
   const { holder: holderFilter } = await searchParams;
-  const canManage = can(user.role, "warehouse.manage");
+  const canManage = can(user.role, "warehouse.operate");
 
   const holders = await prisma.holder.findMany({
-    where: { active: true },
-    orderBy: { type: "asc" },
+    where: { battalionId: bId, active: true },
+    orderBy: { name: "asc" },
   });
 
-  // אם המשתמש משויך למחזיק (רס"פ/ארמון) — ברירת מחדל לתחום שלו
+  // אם המשתמש משויך למחזיק (מנהל מחסן/נציג) — ברירת מחדל לתחום שלו
   const effectiveHolder = holderFilter || user.holderId || undefined;
 
   const [balances, serialUnits, items, statuses] = await Promise.all([
     prisma.stockBalance.findMany({
-      where: { quantity: { gt: 0 }, ...(effectiveHolder ? { holderId: effectiveHolder } : {}) },
+      where: { battalionId: bId, quantity: { gt: 0 }, ...(effectiveHolder ? { holderId: effectiveHolder } : {}) },
       include: { itemType: true, holder: true, status: true },
       orderBy: { itemType: { name: "asc" } },
     }),
     prisma.serialUnit.findMany({
-      where: effectiveHolder ? { currentHolderId: effectiveHolder } : {},
+      where: { battalionId: bId, ...(effectiveHolder ? { currentHolderId: effectiveHolder } : {}) },
       include: { itemType: true, status: true, currentHolder: true, signedSoldier: true },
       orderBy: [{ itemType: { name: "asc" } }, { serialNumber: "asc" }],
       take: 500,
     }),
-    prisma.itemType.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
-    prisma.itemStatus.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.itemType.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" } }),
+    prisma.itemStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" } }),
   ]);
 
   return (

@@ -7,10 +7,12 @@ import CatalogManager from "./CatalogManager";
 export const dynamic = "force-dynamic";
 
 export default async function CatalogPage() {
-  await requireCapability("catalog.manage");
+  const user = await requireCapability("catalog.manage");
+  const bId = user.battalionId!;
 
   const [items, categories] = await Promise.all([
     prisma.itemType.findMany({
+      where: { battalionId: bId },
       orderBy: { sku: "asc" },
       include: {
         category: true,
@@ -18,7 +20,7 @@ export default async function CatalogPage() {
         _count: { select: { serialUnits: true, stockBalances: true } },
       },
     }),
-    prisma.category.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
+    prisma.category.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" } }),
   ]);
 
   const methodColors: Record<string, string> = {

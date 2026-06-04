@@ -6,13 +6,13 @@ import { requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 
 export async function saveSoldier(formData: FormData) {
-  const user = await requireCapability("soldiers.manage");
+  const user = await requireCapability("company.manage");
+  const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
   const fullName = String(formData.get("fullName") || "").trim();
   const personalNumber = String(formData.get("personalNumber") || "").trim();
   const phone = String(formData.get("phone") || "").trim() || null;
   let companyId = String(formData.get("companyId") || "") || null;
-  // רס"פ/ארמון משייכים אוטומטית לתחומם
   if (user.holderId && !companyId) companyId = user.holderId;
   if (!fullName || !personalNumber) return;
 
@@ -20,14 +20,14 @@ export async function saveSoldier(formData: FormData) {
   if (id) {
     await prisma.soldier.update({ where: { id }, data });
   } else {
-    await prisma.soldier.create({ data });
+    await prisma.soldier.create({ data: { ...data, battalionId: bId } });
   }
   await audit(user.id, id ? "UPDATE" : "CREATE", "Soldier", id || personalNumber);
   revalidatePath("/soldiers");
 }
 
 export async function toggleSoldier(formData: FormData) {
-  const user = await requireCapability("soldiers.manage");
+  const user = await requireCapability("company.manage");
   const id = String(formData.get("id") || "");
   const s = await prisma.soldier.findUnique({ where: { id } });
   if (!s) return;
