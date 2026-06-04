@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card } from "@/components/ui";
 import StockTable from "./StockTable";
 import StockEntryModal from "./StockEntryModal";
+import StockWithdrawModal from "./StockWithdrawModal";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export default async function StockPage({
     include: {
       category: true,
       stockBalances: { include: { status: true } },
-      serialUnits: { select: { lotQuantity: true, statusId: true } },
+      serialUnits: { include: { status: true } },
     },
   });
 
@@ -50,10 +51,20 @@ export default async function StockPage({
         title="מלאי הגדוד"
         subtitle="הצהרת הכמויות שהגדוד חתום עליהן מול החטיבה — לפי מק״ט, סטטוס ושייכות"
         action={
-          <StockEntryModal
-            items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod, unit: i.unit, association: ASSOC[i.association] }))}
-            statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
-          />
+          <div className="flex gap-2">
+            <StockEntryModal
+              currentUserName={user.fullName}
+              items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod, unit: i.unit, association: ASSOC[i.association] }))}
+              statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
+            />
+            <StockWithdrawModal
+              currentUserName={user.fullName}
+              items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod, unit: i.unit }))}
+              statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
+              stocks={items.flatMap((i) => i.stockBalances.map((b) => ({ itemTypeId: i.id, statusId: b.statusId, statusName: b.status.name, quantity: b.quantity })))}
+              units={items.flatMap((i) => i.serialUnits.map((u) => ({ id: u.id, itemTypeId: i.id, serialNumber: u.serialNumber, lotQuantity: u.lotQuantity, statusName: u.status.name })))}
+            />
+          </div>
         }
       />
       <Card className="p-4 mb-4 bg-blue-50 border-blue-200">

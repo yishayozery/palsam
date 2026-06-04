@@ -23,34 +23,33 @@ async function pickWarehouse(bId: string, itemTypeId: string) {
   return wh;
 }
 
-/** הצהרת מלאי כמותי — מעדכן את היתרה לכמות החדשה */
+/** הוספת מלאי כמותי — מוסיף לכמות הקיימת (לא מחליף) */
 export async function declareQty(formData: FormData) {
   const user = await requireCapability("warehouse.operate");
   const bId = user.battalionId!;
   const itemTypeId = String(formData.get("itemTypeId") || "");
-  const quantity = Math.max(0, parseInt(String(formData.get("quantity") || "0"), 10) || 0);
+  const quantity = Math.max(1, parseInt(String(formData.get("quantity") || "0"), 10) || 0);
   const statusId = String(formData.get("statusId") || "") || (await defaultStatusId(prisma, bId));
+  const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
+  const externalContact = String(formData.get("externalContact") || "").trim() || null;
 
   const wh = await pickWarehouse(bId, itemTypeId);
   if (!wh) return;
 
   await prisma.$transaction(async (tx) => {
-    const current = await tx.stockBalance.findFirst({ where: { itemTypeId, holderId: wh.id, statusId } });
-    const delta = quantity - (current?.quantity ?? 0);
-    if (delta !== 0) {
-      await adjustQuantity(tx, bId, itemTypeId, wh.id, statusId, delta);
-      await tx.transfer.create({
-        data: {
-          battalionId: bId, type: delta > 0 ? "INTAKE" : "WRITE_OFF", status: "COMPLETED",
-          toHolderId: delta > 0 ? wh.id : null, fromHolderId: delta < 0 ? wh.id : null,
-          reason: "עדכון מלאי גדודי", createdById: user.id, approvedById: user.id, approvedAt: new Date(),
-          lines: { create: { itemTypeId, quantity: Math.abs(delta), statusId } },
-        },
-      });
-    }
+    await adjustQuantity(tx, bId, itemTypeId, wh.id, statusId, quantity);
+    await tx.transfer.create({
+      data: {
+        battalionId: bId, type: "INTAKE", status: "COMPLETED",
+        toHolderId: wh.id, reason: "הוספת מלאי",
+        externalUnit, externalContact,
+        createdById: user.id, approvedById: user.id, approvedAt: new Date(),
+        lines: { create: { itemTypeId, quantity, statusId } },
+      },
+    });
   });
 
-  await audit(user.id, "DECLARE_QTY", "ItemType", itemTypeId, { quantity, statusId });
+  await audit(user.id, "ADD_QTY", "ItemType", itemTypeId, { quantity, statusId, externalUnit, externalContact });
   revalidatePath("/stock");
 }
 
@@ -61,6 +60,8 @@ export async function declareSerials(formData: FormData) {
   const itemTypeId = String(formData.get("itemTypeId") || "");
   const serialsRaw = String(formData.get("serials") || "");
   const statusId = String(formData.get("statusId") || "") || (await defaultStatusId(prisma, bId));
+  const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
+  const externalContact = String(formData.get("externalContact") || "").trim() || null;
 
   const serials = serialsRaw.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
   if (serials.length === 0) return;
@@ -71,7 +72,7 @@ export async function declareSerials(formData: FormData) {
   let created = 0;
   await prisma.$transaction(async (tx) => {
     const transfer = await tx.transfer.create({
-      data: { battalionId: bId, type: "INTAKE", status: "COMPLETED", toHolderId: wh.id, reason: "הזנת סריאליים ידני", createdById: user.id, approvedById: user.id, approvedAt: new Date() },
+      data: { battalionId: bId, type: "INTAKE", status: "COMPLETED", toHolderId: wh.id, reason: "הזנת סריאליים ידני", externalUnit, externalContact, createdById: user.id, approvedById: user.id, approvedAt: new Date() },
     });
     for (const sn of serials) {
       try {
@@ -132,6 +133,8 @@ export async function declareLot(formData: FormData) {
   const lotNumber = String(formData.get("lotNumber") || "").trim();
   const quantity = Math.max(1, parseInt(String(formData.get("quantity") || "0"), 10) || 0);
   const statusId = String(formData.get("statusId") || "") || (await defaultStatusId(prisma, bId));
+  const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
+  const externalContact = String(formData.get("externalContact") || "").trim() || null;
   if (!lotNumber || quantity < 1) return;
 
   const wh = await pickWarehouse(bId, itemTypeId);
@@ -141,12 +144,80 @@ export async function declareLot(formData: FormData) {
     await prisma.$transaction(async (tx) => {
       await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: lotNumber, lotQuantity: quantity, statusId, currentHolderId: wh.id } });
       await tx.transfer.create({
-        data: { battalionId: bId, type: "INTAKE", status: "COMPLETED", toHolderId: wh.id, reason: "הוספת אצווה", createdById: user.id, approvedById: user.id, approvedAt: new Date(),
+        data: { battalionId: bId, type: "INTAKE", status: "COMPLETED", toHolderId: wh.id, reason: "הוספת אצווה", externalUnit, externalContact, createdById: user.id, approvedById: user.id, approvedAt: new Date(),
           lines: { create: { itemTypeId, quantity, statusId } } },
       });
     });
   } catch { /* כפילות מספר אצווה */ }
   await audit(user.id, "DECLARE_LOT", "ItemType", itemTypeId, { lot: lotNumber, quantity });
+  revalidatePath("/stock");
+}
+
+/** הורדת מלאי כמותי — העברה מחוץ לגדוד. מאפשר ירידה למינוס. */
+export async function withdrawQty(formData: FormData) {
+  const user = await requireCapability("warehouse.operate");
+  const bId = user.battalionId!;
+  const itemTypeId = String(formData.get("itemTypeId") || "");
+  const quantity = Math.max(1, parseInt(String(formData.get("quantity") || "0"), 10) || 0);
+  const statusId = String(formData.get("statusId") || "") || (await defaultStatusId(prisma, bId));
+  const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
+  const externalContact = String(formData.get("externalContact") || "").trim() || null;
+  const allowNegative = formData.get("allowNegative") === "on";
+
+  const wh = await pickWarehouse(bId, itemTypeId);
+  if (!wh) return;
+
+  await prisma.$transaction(async (tx) => {
+    // עקיפת המגבלה של adjustQuantity (לא יורד מתחת ל-0) — לאפשר מינוס במפורש
+    const existing = await tx.stockBalance.findFirst({ where: { itemTypeId, holderId: wh.id, statusId } });
+    const current = existing?.quantity ?? 0;
+    const next = allowNegative ? current - quantity : Math.max(0, current - quantity);
+    if (existing) {
+      await tx.stockBalance.update({ where: { id: existing.id }, data: { quantity: next } });
+    } else if (allowNegative) {
+      await tx.stockBalance.create({ data: { battalionId: bId, itemTypeId, holderId: wh.id, statusId, quantity: next } });
+    }
+    const isOverdraft = next < 0 || (current < quantity && allowNegative);
+    await tx.transfer.create({
+      data: {
+        battalionId: bId, type: "WRITE_OFF", status: "COMPLETED",
+        fromHolderId: wh.id, reason: isOverdraft ? "הורדת מלאי — חוב לחטיבה" : "הורדת מלאי",
+        externalUnit, externalContact, notes: isOverdraft ? `חוסר ${quantity - current} יחידות (זיכוי יתר)` : null,
+        createdById: user.id, approvedById: user.id, approvedAt: new Date(),
+        lines: { create: { itemTypeId, quantity, statusId } },
+      },
+    });
+  });
+
+  await audit(user.id, "WITHDRAW_QTY", "ItemType", itemTypeId, { quantity, statusId, externalUnit, allowNegative });
+  revalidatePath("/stock");
+}
+
+/** הורדת יחידות סריאליות לפי מספרי סריאל שנבחרו */
+export async function withdrawSerials(formData: FormData) {
+  const user = await requireCapability("warehouse.operate");
+  const bId = user.battalionId!;
+  const itemTypeId = String(formData.get("itemTypeId") || "");
+  const serialIds = formData.getAll("serialId").map(String).filter(Boolean);
+  const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
+  const externalContact = String(formData.get("externalContact") || "").trim() || null;
+  if (serialIds.length === 0) return;
+
+  await prisma.$transaction(async (tx) => {
+    const transfer = await tx.transfer.create({
+      data: { battalionId: bId, type: "WRITE_OFF", status: "COMPLETED", reason: "הורדת מלאי סריאלי",
+        externalUnit, externalContact,
+        createdById: user.id, approvedById: user.id, approvedAt: new Date() },
+    });
+    for (const sid of serialIds) {
+      const su = await tx.serialUnit.findUnique({ where: { id: sid } });
+      if (!su) continue;
+      await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: su.statusId } });
+      await tx.serialUnit.delete({ where: { id: sid } });
+    }
+  });
+
+  await audit(user.id, "WITHDRAW_SERIALS", "ItemType", itemTypeId, { count: serialIds.length });
   revalidatePath("/stock");
 }
 

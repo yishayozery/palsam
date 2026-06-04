@@ -18,10 +18,9 @@ export const NAV: NavItem[] = [
   // --- הקמה / הגדרות (מפמ) ---
   { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "הקמה והגדרות", cap: "battalion.profile" },
   { href: "/items", label: "הגדרות פריטים", icon: "🏷️", group: "הקמה והגדרות", cap: "catalog.manage" },
+  { href: "/stock", label: "מלאי הגדוד", icon: "📋", group: "הקמה והגדרות", cap: "warehouse.operate" },
 
   // --- תפעול שוטף ---
-  // מלאי הגדוד = השלב הראשון בתפעול
-  { href: "/stock", label: "מלאי הגדוד", icon: "📋", group: "תפעול שוטף", cap: "warehouse.operate" },
   { href: "/warehouses", label: "מחסנים", icon: "🏪", group: "תפעול שוטף", cap: "reports.view" },
   { href: "/inventory", label: "תצוגת מלאי", icon: "📦", group: "תפעול שוטף", cap: "reports.view" },
   { href: "/transfers", label: "העברות והחתמות", icon: "🔄", group: "תפעול שוטף", cap: "reports.view" },

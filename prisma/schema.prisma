@@ -532,6 +532,9 @@ model Transfer {
 
   reason String?
   notes  String?
+  // עבור העברות מול גורם חיצוני (חטיבה / יחידה אחרת)
+  externalUnit    String?
+  externalContact String?
 
   createdById  String
   createdBy    AppUser  @relation("TransferCreatedBy", fields: [createdById], references: [id])

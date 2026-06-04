@@ -28,20 +28,25 @@ function ExpandedRow({ item, statuses }: { item: Item; statuses: Status[] }) {
     return (
       <form action={declareQty} className="bg-slate-50 p-3 space-y-2 border-t border-slate-200">
         <input type="hidden" name="itemTypeId" value={item.id} />
+        <p className="text-xs text-slate-600 mb-1">הוספת כמות נוספת (יתווסף לסך הקיים).</p>
         <div className="flex items-end gap-2 flex-wrap">
           <div>
-            <label className="block text-xs text-slate-500 mb-1">סטטוס תקינות</label>
+            <label className="block text-xs text-slate-500 mb-1">סטטוס</label>
             <select name="statusId" defaultValue={defaultStatus}
               className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
               {statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-1">סך הכל יחידות</label>
-            <input name="quantity" type="number" min="0" defaultValue={item.total - item.transit}
+            <label className="block text-xs text-slate-500 mb-1">כמות להוסיף</label>
+            <input name="quantity" type="number" min="1" defaultValue="1"
               className="w-28 rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
           </div>
-          <button className="bg-emerald-600 text-white rounded-lg px-4 py-1.5 text-sm hover:bg-emerald-700">עדכן</button>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">מנפק</label>
+            <input name="externalUnit" defaultValue="חטיבה" className="w-32 rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+          </div>
+          <button className="bg-emerald-600 text-white rounded-lg px-4 py-1.5 text-sm hover:bg-emerald-700">+ הוסף</button>
         </div>
       </form>
     );
