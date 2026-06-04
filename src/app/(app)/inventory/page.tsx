@@ -13,11 +13,12 @@ export const dynamic = "force-dynamic";
 export default async function InventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ holder?: string }>;
+  searchParams: Promise<{ holder?: string; defective?: string }>;
 }) {
   const user = await requireUser();
   const bId = user.battalionId!;
-  const { holder: holderFilter } = await searchParams;
+  const { holder: holderFilter, defective } = await searchParams;
+  const onlyDefective = defective === "1";
   const canManage = can(user.role, "warehouse.operate");
 
   // בידוד: קצין מחסן/רס"פ/צופה-פלוגתי רואים רק את המחזיקים המשויכים. מפמ/אדמין/צופה-גדודי — הכל.
@@ -44,12 +45,20 @@ export default async function InventoryPage({
 
   const [balances, serialUnits, items, statuses] = await Promise.all([
     prisma.stockBalance.findMany({
-      where: { battalionId: bId, quantity: { gt: 0 }, ...(holderWhere ? { holderId: holderWhere } : {}) },
+      where: {
+        battalionId: bId, quantity: { gt: 0 },
+        ...(holderWhere ? { holderId: holderWhere } : {}),
+        ...(onlyDefective ? { status: { OR: [{ isWear: true }, { isLoss: true }] } } : {}),
+      },
       include: { itemType: true, holder: true, status: true },
       orderBy: { itemType: { name: "asc" } },
     }),
     prisma.serialUnit.findMany({
-      where: { battalionId: bId, ...(holderWhere ? { currentHolderId: holderWhere } : {}) },
+      where: {
+        battalionId: bId,
+        ...(holderWhere ? { currentHolderId: holderWhere } : {}),
+        ...(onlyDefective ? { status: { OR: [{ isWear: true }, { isLoss: true }] } } : {}),
+      },
       include: { itemType: true, status: true, currentHolder: true, signedSoldier: true },
       orderBy: [{ itemType: { name: "asc" } }, { serialNumber: "asc" }],
       take: 500,
@@ -61,8 +70,8 @@ export default async function InventoryPage({
   return (
     <div>
       <PageHeader
-        title="מלאי"
-        subtitle="תמונת מלאי לפי מחזיק — כמותי, פרטני ואצווה"
+        title={onlyDefective ? "מלאי — תקולים בלבד" : "מלאי"}
+        subtitle={onlyDefective ? "פריטים בסטטוס בלאי / אבוד — דרושה החלטה (תיקון / החזרה לחטיבה / גריעה)" : "תמונת מלאי לפי מחזיק — כמותי, פרטני ואצווה"}
         action={
           canManage ? (
             <div className="flex gap-2 flex-wrap">
