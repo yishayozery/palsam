@@ -45,3 +45,4 @@ next-env.d.ts
 
 # generated PDF transfer documents
 /storage
+_m.txt
