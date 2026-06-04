@@ -5,16 +5,19 @@ import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { requireCapability } from "@/lib/guard";
 import { hashPassword } from "@/lib/auth";
+import { resolveUniqueUsername } from "@/lib/usernames";
 import { audit } from "@/lib/audit";
 import type { Role } from "@/generated/prisma";
 
 export async function saveUser(formData: FormData) {
   const admin = await requireCapability("users.manage");
   const id = String(formData.get("id") || "");
-  const username = String(formData.get("username") || "").trim();
+  const enteredUsername = String(formData.get("username") || "").trim();
   const fullName = String(formData.get("fullName") || "").trim();
   const phone = String(formData.get("phone") || "").trim() || null;
   const battalionId = admin.role === "SUPER_ADMIN" ? (String(formData.get("battalionId") || "") || null) : admin.battalionId;
+  const battalion = battalionId ? await prisma.battalion.findUnique({ where: { id: battalionId } }) : null;
+  const suffix = battalion?.brigade || battalion?.code || null;
 
   // תפקיד: בנוי-מראש (enum) או מותאם ("custom:<id>" → פרופיל ההרשאות מהתבנית)
   const roleRaw = String(formData.get("role") || "VIEWER");
@@ -35,7 +38,7 @@ export async function saveUser(formData: FormData) {
   if (role !== "WAREHOUSE_MANAGER") holderIds = holderIds.slice(0, 1); // יחיד לרס"פ/צופה
   const holderId = holderIds[0] || null;
 
-  if (!username || !fullName) return;
+  if (!enteredUsername || !fullName) return;
 
   const syncHolders = async (userId: string) => {
     await prisma.userHolder.deleteMany({ where: { userId } });
@@ -44,18 +47,24 @@ export async function saveUser(formData: FormData) {
     }
   };
 
-  if (id) {
-    await prisma.appUser.update({ where: { id }, data: { username, fullName, phone, role, customRoleId, holderId } });
-    await syncHolders(id);
-    await audit(admin.id, "UPDATE", "AppUser", id);
-  } else {
-    const inviteToken = nanoid(28);
-    const randomHash = await hashPassword(nanoid(32));
-    const created = await prisma.appUser.create({
-      data: { username, fullName, phone, role, customRoleId, holderId, battalionId, passwordHash: randomHash, passwordSet: false, inviteToken },
-    });
-    await syncHolders(created.id);
-    await audit(admin.id, "CREATE", "AppUser", username, { invited: true });
+  try {
+    if (id) {
+      const username = await resolveUniqueUsername(enteredUsername, suffix, id);
+      await prisma.appUser.update({ where: { id }, data: { username, fullName, phone, role, customRoleId, holderId } });
+      await syncHolders(id);
+      await audit(admin.id, "UPDATE", "AppUser", id);
+    } else {
+      const username = await resolveUniqueUsername(enteredUsername, suffix);
+      const inviteToken = nanoid(28);
+      const randomHash = await hashPassword(nanoid(32));
+      const created = await prisma.appUser.create({
+        data: { username, fullName, phone, role, customRoleId, holderId, battalionId, passwordHash: randomHash, passwordSet: false, inviteToken },
+      });
+      await syncHolders(created.id);
+      await audit(admin.id, "CREATE", "AppUser", username, { invited: true });
+    }
+  } catch {
+    // לא מקריסים את המערכת על שגיאת יצירה
   }
   revalidatePath("/users");
 }

@@ -16,7 +16,7 @@ export default async function ProfilePage() {
       <Card className="p-6 max-w-xl">
         <ProfileForm
           battalion={{
-            name: battalion.name, code: battalion.code, commander: battalion.commander,
+            name: battalion.name, code: battalion.code, brigade: battalion.brigade, commander: battalion.commander,
             motto: battalion.motto, notes: battalion.notes, logoData: battalion.logoData,
           }}
         />

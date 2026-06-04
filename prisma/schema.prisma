@@ -101,6 +101,7 @@ model Battalion {
   id        String   @id @default(cuid())
   name      String
   code      String   @unique
+  brigade   String? // חטיבה (לשרשור שמות משתמש)
   commander String? // מפקד הגדוד (פרופיל)
   motto     String? // משפט/סיסמת הגדוד (לדוגמה: "לנצח בכל מחיר")
   notes     String?

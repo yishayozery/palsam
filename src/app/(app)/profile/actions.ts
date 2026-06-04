@@ -14,6 +14,7 @@ export async function updateProfile(
   const user = await requireCapability("battalion.profile");
   const bId = user.battalionId!;
   const name = String(formData.get("name") || "").trim();
+  const brigade = String(formData.get("brigade") || "").trim() || null;
   const commander = String(formData.get("commander") || "").trim() || null;
   const motto = String(formData.get("motto") || "").trim() || null;
   const notes = String(formData.get("notes") || "").trim() || null;
@@ -22,7 +23,7 @@ export async function updateProfile(
 
   if (!name) return { error: "שם הגדוד חובה" };
 
-  const data: Record<string, unknown> = { name, commander, motto, notes };
+  const data: Record<string, unknown> = { name, brigade, commander, motto, notes };
   if (logoData !== undefined) data.logoData = logoData;
 
   try {

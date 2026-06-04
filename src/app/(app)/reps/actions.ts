@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { requireCapability } from "@/lib/guard";
 import { hashPassword } from "@/lib/auth";
+import { resolveUniqueUsername } from "@/lib/usernames";
 import { audit } from "@/lib/audit";
 
 /** קצין מחסן מזמין רס"פ חדש לפלוגה + מקשר אותו למחסן שלו (אונבורדינג בהזמנה) */
@@ -14,12 +15,12 @@ export async function inviteRep(formData: FormData) {
   if (!user.holderId) return;
   const companyId = String(formData.get("companyId") || "");
   const fullName = String(formData.get("fullName") || "").trim();
-  const username = String(formData.get("username") || "").trim();
+  const enteredUsername = String(formData.get("username") || "").trim();
   const phone = String(formData.get("phone") || "").trim() || null;
-  if (!companyId || !fullName || !username) return;
+  if (!companyId || !fullName || !enteredUsername) return;
 
-  const exists = await prisma.appUser.findUnique({ where: { username } });
-  if (exists) return;
+  const battalion = await prisma.battalion.findUnique({ where: { id: bId } });
+  const username = await resolveUniqueUsername(enteredUsername, battalion?.brigade || battalion?.code || null);
 
   const rep = await prisma.appUser.create({
     data: {
