@@ -12,6 +12,7 @@ export type EditData = {
   trackingMethod: string;
   unit: string;
   association: string;
+  signMode: string;
   imageData: string | null;
 };
 
@@ -102,14 +103,24 @@ export default function CatalogManager({ categories, edit }: { categories: Cat[]
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">שייכות הפריט</label>
-                <select name="association" defaultValue={edit?.association || "MILITARY"}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                  <option value="MILITARY">צבאי</option>
-                  <option value="DONATION_COMPANY">תרומה — פלוגתי</option>
-                  <option value="DONATION_BATTALION">תרומה — גדודי</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">שייכות</label>
+                  <select name="association" defaultValue={edit?.association || "MILITARY"}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <option value="MILITARY">צבאי</option>
+                    <option value="DONATION_COMPANY">תרומה — פלוגתי</option>
+                    <option value="DONATION_BATTALION">תרומה — גדודי</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">מי חותם?</label>
+                  <select name="signMode" defaultValue={edit?.signMode || "COMPANY"}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <option value="COMPANY">הפלוגה (מפ/רס״פ)</option>
+                    <option value="SOLDIER">חייל ישירות (נשק)</option>
+                  </select>
+                </div>
               </div>
 
               <div>

@@ -113,9 +113,10 @@ export default async function ItemsPage({
                     <Td><Badge className={ASSOC[i.association].cls}>{ASSOC[i.association].label}</Badge></Td>
                     <Td className="text-center">{i._count.serialUnits + i._count.stockBalances > 0 ? "✓" : "—"}</Td>
                     <Td>
+                      <a href={`/items/${i.id}/history`} className="text-xs text-blue-600 hover:underline ml-2">היסטוריה</a>
                       <CatalogManager
                         categories={categories.map((c) => ({ id: c.id, name: c.name }))}
-                        edit={{ id: i.id, sku: i.sku ?? "", name: i.name, categoryId: i.categoryId ?? "", trackingMethod: i.trackingMethod, unit: i.unit, association: i.association, imageData: i.imageData }}
+                        edit={{ id: i.id, sku: i.sku ?? "", name: i.name, categoryId: i.categoryId ?? "", trackingMethod: i.trackingMethod, unit: i.unit, association: i.association, signMode: i.signMode, imageData: i.imageData }}
                       />
                     </Td>
                   </tr>

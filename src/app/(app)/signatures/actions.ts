@@ -69,17 +69,19 @@ export async function completeSignature(token: string, signatureData: string) {
     return { ok: false, error: "פג תוקף הקישור" };
   }
 
+  if (!sig.soldierId) return { ok: false, error: "סוג חתימה לא תואם" };
+  const soldierId = sig.soldierId;
   await prisma.$transaction(async (tx) => {
     for (const line of sig.transfer!.lines) {
       if (line.serialUnitId) {
-        await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { signedSoldierId: sig.soldierId } });
+        await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { signedSoldierId: soldierId } });
       }
     }
     await tx.signature.update({ where: { token }, data: { status: "SIGNED", signatureData, signedAt: new Date() } });
     await tx.transfer.update({ where: { id: sig.transferId! }, data: { status: "COMPLETED", approvedAt: new Date() } });
   });
 
-  await audit(null, "SIGN", "Signature", sig.id, { soldierId: sig.soldierId });
+  await audit(null, "SIGN", "Signature", sig.id, { soldierId });
   revalidatePath("/signatures");
   return { ok: true };
 }

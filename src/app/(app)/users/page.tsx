@@ -12,6 +12,8 @@ export default async function UsersPage() {
   const admin = await requireCapability("users.manage");
   const bId = admin.battalionId!;
 
+  const battalion = await prisma.battalion.findUnique({ where: { id: bId } });
+
   const [users, holders, customRoles] = await Promise.all([
     prisma.appUser.findMany({
       where: { battalionId: bId, role: { in: ["WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"] } },
@@ -34,6 +36,8 @@ export default async function UsersPage() {
       <SettingsTabs active="users" />
       <UsersManager
         baseUrl={baseUrl}
+        brigade={battalion?.brigade ?? ""}
+        battalionCode={battalion?.code ?? ""}
         holders={holders.map((h) => ({ id: h.id, name: h.name, kind: h.kind }))}
         customRoles={customRoles.map((r) => ({ id: r.id, name: r.name, template: r.template }))}
         users={users.map((u) => ({

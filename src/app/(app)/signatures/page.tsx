@@ -5,7 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card, Table, Th, Td, EmptyState } from "@/components/ui";
 import { SIGNATURE_METHOD, SIGNATURE_STATUS } from "@/lib/labels";
 import SignoutModal from "./SignoutModal";
+import CompanySignModal from "./CompanySignModal";
 import CheckinControls from "./CheckinControls";
+import { ROLE_LABELS } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +32,22 @@ export default async function SignaturesPage() {
         orderBy: { name: "asc" },
       })
     : [];
+  // פלוגות + אנשי הקשר שלהן (כל משתמש פלוגתי = נמען אפשרי)
+  const companiesForSign = user.holderId
+    ? await prisma.holder.findMany({
+        where: { battalionId: bId, kind: "COMPANY", active: true },
+        include: { users: { where: { active: true } } },
+        orderBy: { name: "asc" },
+      })
+    : [];
+  // מלאי כמותי וסריאלי במחסן של הקצין (להחתמת פלוגה)
+  const warehouseBalances = user.holderId
+    ? await prisma.stockBalance.findMany({
+        where: { holderId: user.holderId, quantity: { gt: 0 } },
+        include: { itemType: true, status: true },
+      })
+    : [];
+
   // רכבים שמשויכים לפלוגה/מחסן הנוכחיים (לבחירה כמיקום פיזי)
   const vehicles = user.holderId
     ? await prisma.serialUnit.findMany({
@@ -45,7 +63,7 @@ export default async function SignaturesPage() {
   const [pending, signedUnits, soldiers, availableUnits, statuses] = await Promise.all([
     prisma.signature.findMany({
       where: { battalionId: bId, status: "PENDING" },
-      include: { soldier: true, transfer: { include: { lines: true } } },
+      include: { soldier: true, signerUser: true, transfer: { include: { lines: true } } },
       orderBy: { createdAt: "desc" },
     }),
     prisma.serialUnit.findMany({
@@ -69,18 +87,29 @@ export default async function SignaturesPage() {
         subtitle="החתמה דיגיטלית (QR/וואטסאפ/שרבוט) וזיכוי מהיר"
         action={
           canSign ? (
-            <SignoutModal
-              soldiers={soldiers.map((s) => ({ id: s.id, name: s.fullName, pn: s.personalNumber }))}
-              units={availableUnits.map((u) => ({
-                id: u.id, name: u.itemType.name, serial: u.serialNumber,
-                holder: u.currentHolder?.name ?? "", status: u.status.name,
-              }))}
-              kits={kits.map((k) => ({
-                id: k.id, name: k.name,
-                lines: k.lines.map((l) => ({ name: l.itemType.name, qty: l.quantity })),
-              }))}
-              vehicles={vehicles.map((v) => ({ id: v.id, name: v.itemType.name, plate: v.serialNumber }))}
-            />
+            <div className="flex gap-2">
+              <CompanySignModal
+                companies={companiesForSign.map((c) => ({
+                  id: c.id, name: c.name,
+                  members: c.users.map((u) => ({ id: u.id, name: u.fullName, role: ROLE_LABELS[u.role] })),
+                }))}
+                units={availableUnits.map((u) => ({ id: u.id, name: u.itemType.name, serial: u.serialNumber, status: u.status.name, statusId: u.statusId }))}
+                balances={warehouseBalances.map((b) => ({
+                  itemTypeId: b.itemTypeId, statusId: b.statusId,
+                  name: b.itemType.name, unit: b.itemType.unit,
+                  status: b.status.name, quantity: b.quantity,
+                }))}
+              />
+              <SignoutModal
+                soldiers={soldiers.map((s) => ({ id: s.id, name: s.fullName, pn: s.personalNumber }))}
+                units={availableUnits.map((u) => ({
+                  id: u.id, name: u.itemType.name, serial: u.serialNumber,
+                  holder: u.currentHolder?.name ?? "", status: u.status.name,
+                }))}
+                kits={kits.map((k) => ({ id: k.id, name: k.name, lines: k.lines.map((l) => ({ name: l.itemType.name, qty: l.quantity })) }))}
+                vehicles={vehicles.map((v) => ({ id: v.id, name: v.itemType.name, plate: v.serialNumber }))}
+              />
+            </div>
           ) : undefined
         }
       />
@@ -98,7 +127,7 @@ export default async function SignaturesPage() {
             <tbody>
               {pending.map((s) => (
                 <tr key={s.id}>
-                  <Td className="font-medium">{s.soldier.fullName}</Td>
+                  <Td className="font-medium">{s.soldier?.fullName ?? s.signerUser?.fullName ?? ""}</Td>
                   <Td className="text-center">{s.transfer?.lines.length ?? 0}</Td>
                   <Td><Badge>{SIGNATURE_METHOD[s.method]}</Badge></Td>
                   <Td><Badge className="bg-amber-100 text-amber-800">{SIGNATURE_STATUS[s.status]}</Badge></Td>

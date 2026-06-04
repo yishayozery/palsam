@@ -158,6 +158,8 @@ model AppUser {
 
   createdTransfers  Transfer[]         @relation("TransferCreatedBy")
   approvedTransfers Transfer[]         @relation("TransferApprovedBy")
+  recipientTransfers Transfer[]        @relation("TransferToUser")
+  signedAsUser      Signature[]        @relation("SignerUser")
   startedCounts     CountSession[]     @relation("CountStartedBy")
   resolvedGaps      Discrepancy[]      @relation("DiscrepancyResolvedBy")
   auditLogs         AuditLog[]
@@ -360,6 +362,12 @@ enum ItemAssociation {
   DONATION_BATTALION
 }
 
+// מצב החתמה: מי חותם — מפקד הפלוגה (אופייני לציוד כללי כקסדות/אפודים), או חייל ישירות (נשק מהארמון)
+enum SignMode {
+  COMPANY
+  SOLDIER
+}
+
 model ItemType {
   id             String           @id @default(cuid())
   battalionId    String
@@ -371,6 +379,7 @@ model ItemType {
   trackingMethod TrackingMethod
   unit           String           @default("יח'")
   association    ItemAssociation  @default(MILITARY) // צבאי / תרומה פלוגתי / תרומה גדודי
+  signMode       SignMode         @default(COMPANY) // החתמת פלוגה (ברירת מחדל) או חייל ישיר (נשק)
   isSensitive    Boolean          @default(false)
   trackLocation  Boolean          @default(false)
   // תרומה / ציוד לא-צבאי (נגזר מ-association לתאימות)
@@ -517,6 +526,9 @@ model Transfer {
   toHolder     Holder?  @relation("TransferTo", fields: [toHolderId], references: [id])
   toSoldierId  String?
   toSoldier    Soldier? @relation("TransferToSoldier", fields: [toSoldierId], references: [id])
+  // נמען-משתמש (החתמת פלוגה: מפ/רס"פ חותם בשם הפלוגה)
+  toUserId     String?
+  toUser       AppUser? @relation("TransferToUser", fields: [toUserId], references: [id])
 
   reason String?
   notes  String?
@@ -560,8 +572,11 @@ model Signature {
   id            String          @id @default(cuid())
   battalionId   String
   battalion     Battalion       @relation(fields: [battalionId], references: [id])
-  soldierId     String
-  soldier       Soldier         @relation(fields: [soldierId], references: [id])
+  // החתימה היא של חייל (soldierId) או של משתמש פלוגתי (signerUserId — לדוגמה מפ/רס"פ)
+  soldierId     String?
+  soldier       Soldier?        @relation(fields: [soldierId], references: [id])
+  signerUserId  String?
+  signerUser    AppUser?        @relation("SignerUser", fields: [signerUserId], references: [id])
   transferId    String?
   transfer      Transfer?       @relation(fields: [transferId], references: [id])
   method        SignatureMethod

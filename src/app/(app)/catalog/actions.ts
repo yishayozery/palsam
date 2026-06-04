@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
-import type { TrackingMethod, ItemAssociation } from "@/generated/prisma";
+import type { TrackingMethod, ItemAssociation, SignMode } from "@/generated/prisma";
 
 export async function saveItemType(formData: FormData) {
   const user = await requireCapability("catalog.manage");
@@ -18,6 +18,7 @@ export async function saveItemType(formData: FormData) {
   if (trackingMethod === "KIT") trackingMethod = "QUANTITY";
   const unit = String(formData.get("unit") || "יח'").trim() || "יח'";
   const association = String(formData.get("association") || "MILITARY") as ItemAssociation;
+  const signMode = String(formData.get("signMode") || "COMPANY") as SignMode;
   const isDonated = association !== "MILITARY";
   // תמונת מוצר (data-URL, אופציונלי). "__CLEAR__" = הסרת תמונה קיימת.
   const rawImage = String(formData.get("imageData") || "");
@@ -26,7 +27,7 @@ export async function saveItemType(formData: FormData) {
 
   if (!name) return;
 
-  const base = { sku, name, categoryId, trackingMethod, unit, association, isDonated };
+  const base = { sku, name, categoryId, trackingMethod, unit, association, signMode, isDonated };
   const data = imageData !== undefined ? { ...base, imageData } : base;
   if (id) {
     await prisma.itemType.update({ where: { id }, data });

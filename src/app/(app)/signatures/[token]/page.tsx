@@ -20,6 +20,7 @@ export default async function SignatureTokenPage({
     where: { token },
     include: {
       soldier: true,
+      signerUser: true,
       transfer: { include: { lines: { include: { itemType: true, serialUnit: true } } } },
     },
   });
@@ -30,10 +31,11 @@ export default async function SignatureTokenPage({
   const qrDataUrl = await QRCode.toDataURL(signUrl, { width: 280, margin: 1 });
 
   const waText = encodeURIComponent(
-    `שלום ${sig.soldier.fullName}, נדרשת חתימתך על ציוד. קישור להחתמה: ${signUrl}`,
+    `שלום ${sig.soldier?.fullName ?? sig.signerUser?.fullName ?? ""}, נדרשת חתימתך על ציוד. קישור להחתמה: ${signUrl}`,
   );
-  const waUrl = sig.soldier.phone
-    ? `https://wa.me/${sig.soldier.phone.replace(/\D/g, "").replace(/^0/, "972")}?text=${waText}`
+  const phone = sig.soldier?.phone ?? sig.signerUser?.phone ?? null;
+  const waUrl = phone
+    ? `https://wa.me/${phone.replace(/\D/g, "").replace(/^0/, "972")}?text=${waText}`
     : null;
 
   const signed = sig.status === "SIGNED";
@@ -42,7 +44,7 @@ export default async function SignatureTokenPage({
     <div>
       <PageHeader
         title="החתמת חייל"
-        subtitle={`${sig.soldier.fullName} · ${sig.soldier.personalNumber}`}
+        subtitle={`${sig.soldier?.fullName ?? sig.signerUser?.fullName ?? ""} · ${sig.soldier?.personalNumber ?? sig.signerUser?.username ?? ""}`}
         action={<Link href="/signatures" className="text-sm text-slate-500 hover:text-slate-800">→ חזרה</Link>}
       />
 

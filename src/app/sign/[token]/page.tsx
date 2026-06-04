@@ -15,18 +15,27 @@ export default async function PublicSignPage({
     include: {
       battalion: true,
       soldier: true,
+      signerUser: { include: { holder: true } },
       transfer: { include: { lines: { include: { itemType: true, serialUnit: true } } } },
     },
   });
 
   const unitName = sig?.battalion?.name || "גדוד";
   const logo = sig?.battalion?.logoData;
+  // הנמען: חייל או משתמש (החתמת פלוגה)
+  const signerName = sig?.soldier?.fullName ?? sig?.signerUser?.fullName ?? "";
+  const signerSubtitle = sig?.soldier
+    ? sig.soldier.personalNumber
+    : sig?.signerUser
+      ? `${sig.signerUser.username}${sig.signerUser.holder ? ` · ${sig.signerUser.holder.name}` : ""}`
+      : "";
+  const isCompanySign = !!sig?.signerUserId;
 
   if (!sig) {
     return <Centered title="קישור לא תקין" text="ההחתמה אינה קיימת." />;
   }
   if (sig.status === "SIGNED") {
-    return <Centered title="✅ נחתם בהצלחה" text={`תודה, ${sig.soldier.fullName}. החתימה נקלטה במערכת.`} tone="ok" />;
+    return <Centered title="✅ נחתם בהצלחה" text={`תודה, ${signerName}. החתימה נקלטה במערכת.`} tone="ok" />;
   }
   if (sig.status === "EXPIRED" || (sig.tokenExpires && sig.tokenExpires < new Date())) {
     return <Centered title="פג תוקף" text="הקישור אינו בתוקף. פנה לאחראי." />;
@@ -43,9 +52,9 @@ export default async function PublicSignPage({
           <div>
             <div className="text-xs text-slate-300">KALAG · {unitName}</div>
             {sig.battalion?.motto && <div className="text-[11px] text-amber-300/80 italic">״{sig.battalion.motto}״</div>}
-            <h1 className="text-lg font-bold">אישור וחתימה על ציוד</h1>
+            <h1 className="text-lg font-bold">{isCompanySign ? "החתמת פלוגה" : "אישור וחתימה על ציוד"}</h1>
             <p className="text-sm text-slate-300 mt-1">
-              {sig.soldier.fullName} · {sig.soldier.personalNumber}
+              {signerName} {signerSubtitle && <span>· {signerSubtitle}</span>}
             </p>
           </div>
         </div>
@@ -63,7 +72,7 @@ export default async function PublicSignPage({
             ))}
           </div>
 
-          <SignaturePad token={token} soldierName={sig.soldier.fullName} />
+          <SignaturePad token={token} soldierName={signerName} isCompanySign={isCompanySign} />
         </div>
       </div>
     </div>

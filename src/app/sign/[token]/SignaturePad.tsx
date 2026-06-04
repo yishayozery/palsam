@@ -2,13 +2,16 @@
 
 import { useRef, useState, useEffect } from "react";
 import { completeSignature } from "@/app/(app)/signatures/actions";
+import { completeCompanySignature } from "@/app/(app)/signatures/company-actions";
 
 export default function SignaturePad({
   token,
   soldierName,
+  isCompanySign = false,
 }: {
   token: string;
   soldierName: string;
+  isCompanySign?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
@@ -71,7 +74,9 @@ export default function SignaturePad({
     setError("");
     setSubmitting(true);
     const data = canvasRef.current!.toDataURL("image/png");
-    const res = await completeSignature(token, data);
+    const res = isCompanySign
+      ? await completeCompanySignature(token, data)
+      : await completeSignature(token, data);
     setSubmitting(false);
     if (res.ok) setDone(true);
     else setError(res.error || "שגיאה");

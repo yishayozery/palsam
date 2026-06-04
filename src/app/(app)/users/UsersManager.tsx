@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
 import { saveUser, regenerateInvite, toggleUser } from "./actions";
+import UsernameSuggest from "./UsernameSuggest";
 
 type Holder = { id: string; name: string; kind: string };
 type CustomRole = { id: string; name: string; template: string };
@@ -42,7 +43,7 @@ function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
   );
 }
 
-export default function UsersManager({ users, holders, customRoles, baseUrl }: { users: User[]; holders: Holder[]; customRoles: CustomRole[]; baseUrl: string }) {
+export default function UsersManager({ users, holders, customRoles, baseUrl, brigade, battalionCode }: { users: User[]; holders: Holder[]; customRoles: CustomRole[]; baseUrl: string; brigade: string; battalionCode: string }) {
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<string>("WAREHOUSE_MANAGER");
 
@@ -95,16 +96,11 @@ export default function UsersManager({ users, holders, customRoles, baseUrl }: {
               <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700">✕</button>
             </div>
             <form action={async (fd) => { await saveUser(fd); setOpen(false); }} className="p-5 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">שם מלא</label>
-                  <input name="fullName" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">שם משתמש</label>
-                  <input name="username" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
-                </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">שם מלא</label>
+                <input name="fullName" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               </div>
+              <UsernameSuggest brigade={brigade} code={battalionCode} />
               <div>
                 <label className="block text-xs text-slate-500 mb-1">טלפון (לשליחת הזמנה בוואטסאפ)</label>
                 <input name="phone" placeholder="05X-XXXXXXX" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
