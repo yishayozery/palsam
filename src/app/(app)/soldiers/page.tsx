@@ -1,8 +1,10 @@
 import { requireCapability } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
-import { PageHeader, Badge, Card } from "@/components/ui";
+import { PageHeader, Badge } from "@/components/ui";
 import CrudSection from "@/components/CrudSection";
+import ImportExcel from "@/components/ImportExcel";
 import { saveSoldier, toggleSoldier } from "./actions";
+import { importSoldiers } from "./import-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +42,11 @@ export default async function SoldiersPage() {
 
   return (
     <div>
-      <PageHeader title="חיילים" subtitle="משתמשי קצה — ללא יוזרים במערכת" />
+      <PageHeader
+        title="חיילים"
+        subtitle="משתמשי קצה — ללא יוזרים במערכת"
+        action={<ImportExcel action={importSoldiers} templateHref="/soldiers/template" label="ייבוא חיילים" />}
+      />
       <CrudSection
         title="רשימת חיילים"
         addLabel="חייל"

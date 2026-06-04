@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card, Table, Th, Td } from "@/components/ui";
 import { TRACKING_METHOD } from "@/lib/labels";
 import CatalogManager from "./CatalogManager";
+import ImportExcel from "@/components/ImportExcel";
+import { importItems } from "./import-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +37,12 @@ export default async function CatalogPage() {
       <PageHeader
         title='קטלוג מק"טים'
         subtitle="עץ מוצר דינמי — 4 שיטות ניהול מלאי"
-        action={<CatalogManager categories={categories} items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku }))} />}
+        action={
+          <div className="flex items-center gap-2">
+            <ImportExcel action={importItems} templateHref="/catalog/template" label="ייבוא פריטים" />
+            <CatalogManager categories={categories} items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku }))} />
+          </div>
+        }
       />
 
       <Card>
