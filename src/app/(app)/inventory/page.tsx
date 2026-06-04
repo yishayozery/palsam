@@ -6,6 +6,7 @@ import { PageHeader, Badge, Card, Table, Th, Td, EmptyState } from "@/components
 import { TRACKING_METHOD } from "@/lib/labels";
 import InventoryActions from "./InventoryActions";
 import OcrIntake from "./OcrIntake";
+import SerialImport from "./SerialImport";
 
 export const dynamic = "force-dynamic";
 
@@ -19,27 +20,45 @@ export default async function InventoryPage({
   const { holder: holderFilter } = await searchParams;
   const canManage = can(user.role, "warehouse.operate");
 
+  // המחזיק של המשתמש (מחסן/פלוגה) — לקביעת היקף הצפייה והקליטה
+  const myHolder = user.holderId
+    ? await prisma.holder.findUnique({ where: { id: user.holderId } })
+    : null;
+
+  // בידוד: קצין מחסן/רס"פ/צופה-פלוגתי רואים רק את המחזיק שלהם. מפמ/אדמין/צופה-גדודי — הכל.
+  const scopedToOwn =
+    (user.role === "WAREHOUSE_MANAGER" || user.role === "COMPANY_REP" || user.role === "VIEWER") &&
+    !!user.holderId;
+  const scopeIds: string[] | null = scopedToOwn ? [user.holderId!] : null;
+
   const holders = await prisma.holder.findMany({
-    where: { battalionId: bId, active: true },
+    where: { battalionId: bId, active: true, ...(scopeIds ? { id: { in: scopeIds } } : {}) },
     orderBy: { name: "asc" },
   });
 
-  // אם המשתמש משויך למחזיק (מנהל מחסן/נציג) — ברירת מחדל לתחום שלו
-  const effectiveHolder = holderFilter || user.holderId || undefined;
+  // המחזיק האפקטיבי חייב להיות בתוך ההיקף המורשה
+  const reqHolder = holderFilter && (!scopeIds || scopeIds.includes(holderFilter)) ? holderFilter : undefined;
+  const holderWhere = reqHolder ? { in: [reqHolder] } : scopeIds ? { in: scopeIds } : undefined;
+
+  // קליטה: קצין מחסן יכול לקלוט רק פריטים מטיפוס המחסן שלו
+  const itemWhere =
+    myHolder?.kind === "WAREHOUSE" && myHolder.warehouseType
+      ? { battalionId: bId, active: true, category: { warehouseType: myHolder.warehouseType } }
+      : { battalionId: bId, active: true };
 
   const [balances, serialUnits, items, statuses] = await Promise.all([
     prisma.stockBalance.findMany({
-      where: { battalionId: bId, quantity: { gt: 0 }, ...(effectiveHolder ? { holderId: effectiveHolder } : {}) },
+      where: { battalionId: bId, quantity: { gt: 0 }, ...(holderWhere ? { holderId: holderWhere } : {}) },
       include: { itemType: true, holder: true, status: true },
       orderBy: { itemType: { name: "asc" } },
     }),
     prisma.serialUnit.findMany({
-      where: { battalionId: bId, ...(effectiveHolder ? { currentHolderId: effectiveHolder } : {}) },
+      where: { battalionId: bId, ...(holderWhere ? { currentHolderId: holderWhere } : {}) },
       include: { itemType: true, status: true, currentHolder: true, signedSoldier: true },
       orderBy: [{ itemType: { name: "asc" } }, { serialNumber: "asc" }],
       take: 500,
     }),
-    prisma.itemType.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" } }),
+    prisma.itemType.findMany({ where: itemWhere, orderBy: { name: "asc" } }),
     prisma.itemStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" } }),
   ]);
 
@@ -50,9 +69,13 @@ export default async function InventoryPage({
         subtitle="תמונת מלאי לפי מחזיק — כמותי, פרטני ואצווה"
         action={
           canManage ? (
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <OcrIntake
                 items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod }))}
+                statuses={statuses.map((s) => ({ id: s.id, name: s.name }))}
+              />
+              <SerialImport
+                items={items.filter((i) => i.trackingMethod === "SERIAL").map((i) => ({ id: i.id, name: i.name, sku: i.sku }))}
                 statuses={statuses.map((s) => ({ id: s.id, name: s.name }))}
               />
               <InventoryActions
@@ -64,19 +87,24 @@ export default async function InventoryPage({
         }
       />
 
-      {/* סינון לפי מחזיק */}
-      <div className="flex flex-wrap gap-2 mb-5">
-        <Link href="/inventory"
-          className={`text-sm rounded-lg px-3 py-1.5 ${!holderFilter ? "bg-slate-800 text-white" : "bg-white border border-slate-300 text-slate-600"}`}>
-          הכל
-        </Link>
-        {holders.map((h) => (
-          <Link key={h.id} href={`/inventory?holder=${h.id}`}
-            className={`text-sm rounded-lg px-3 py-1.5 ${holderFilter === h.id ? "bg-slate-800 text-white" : "bg-white border border-slate-300 text-slate-600"}`}>
-            {h.name}
+      {/* סינון לפי מחזיק — רק כשיש יותר ממחזיק אחד בהיקף */}
+      {holders.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-5">
+          <Link href="/inventory"
+            className={`text-sm rounded-lg px-3 py-1.5 ${!holderFilter ? "bg-slate-800 text-white" : "bg-white border border-slate-300 text-slate-600"}`}>
+            הכל
           </Link>
-        ))}
-      </div>
+          {holders.map((h) => (
+            <Link key={h.id} href={`/inventory?holder=${h.id}`}
+              className={`text-sm rounded-lg px-3 py-1.5 ${holderFilter === h.id ? "bg-slate-800 text-white" : "bg-white border border-slate-300 text-slate-600"}`}>
+              {h.name}
+            </Link>
+          ))}
+        </div>
+      )}
+      {holders.length === 1 && (
+        <div className="mb-5 text-sm text-slate-500">מחסן: <span className="font-medium text-slate-700">{holders[0].name}</span></div>
+      )}
 
       {/* מלאי כמותי */}
       <h2 className="font-bold text-slate-700 mb-2">מלאי כמותי</h2>

@@ -109,32 +109,37 @@ export default function CatalogManager({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">קטגוריה</label>
-                  <select name="categoryId" defaultValue={edit?.categoryId}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
+                  {categories.length === 0 ? (
+                    <p className="text-xs text-amber-600 bg-amber-50 rounded-lg p-2">אין קטגוריות. צור קטגוריות במסך <b>מילונים</b> תחילה.</p>
+                  ) : (
+                    <select name="categoryId" defaultValue={edit?.categoryId}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  )}
+                  <p className="text-[11px] text-slate-400 mt-0.5">מנוהלות במסך מילונים</p>
                 </div>
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">שיטת ניהול</label>
                   <select name="trackingMethod" value={method} onChange={(e) => setMethod(e.target.value)}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    <option value="QUANTITY">כמותי</option>
-                    <option value="SERIAL">פרטני (מס״ד)</option>
-                    <option value="LOT">אצווה (Lot)</option>
-                    <option value="KIT">ערכה</option>
+                    <option value="QUANTITY">כמותי — ספירה לפי כמות (קסדות)</option>
+                    <option value="SERIAL">פרטני — מס״ד לכל יחידה (נשק)</option>
+                    <option value="LOT">אצווה — מספר אצווה + כמות (חבלה)</option>
+                    <option value="KIT">ערכה — איגוד פריטים</option>
                   </select>
                 </div>
               </div>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-1.5 text-sm">
-                  <input type="checkbox" name="isSensitive" defaultChecked={edit?.isSensitive} className="w-4 h-4" />
-                  ציוד רגיש
+              <div className="space-y-2 bg-slate-50 rounded-lg p-3">
+                <label className="flex items-start gap-2 text-sm">
+                  <input type="checkbox" name="isSensitive" defaultChecked={edit?.isSensitive} className="w-4 h-4 mt-0.5" />
+                  <span>ציוד רגיש — <span className="text-slate-400">מפריד בין החתום משפטית למיקום הפיזי (נשק/תקשוב)</span></span>
                 </label>
-                <label className="flex items-center gap-1.5 text-sm">
-                  <input type="checkbox" name="trackLocation" defaultChecked={edit?.trackLocation} className="w-4 h-4" />
-                  מעקב מיקום פיזי
+                <label className="flex items-start gap-2 text-sm">
+                  <input type="checkbox" name="trackLocation" defaultChecked={edit?.trackLocation} className="w-4 h-4 mt-0.5" />
+                  <span>מעקב מיקום פיזי — <span className="text-slate-400">מאפשר לרשום מיקום חופשי (למשל &quot;רכב צ-12345&quot;)</span></span>
                 </label>
               </div>
 
