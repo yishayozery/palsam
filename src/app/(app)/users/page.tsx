@@ -14,9 +14,10 @@ export default async function UsersPage() {
 
   const battalion = await prisma.battalion.findUnique({ where: { id: bId } });
 
+  // מציג רק את "מטה הגדוד" — מפ"מ + צופים. קציני מחסן ורס"פ מנוהלים תחת /org accordion.
   const [users, holders, customRoles] = await Promise.all([
     prisma.appUser.findMany({
-      where: { battalionId: bId, role: { in: ["WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"] } },
+      where: { battalionId: bId, role: { in: ["BATTALION_ADMIN", "VIEWER"] } },
       orderBy: { createdAt: "asc" },
       include: { holder: true, customRole: true, assignedHolders: { include: { holder: true } } },
     }),
@@ -34,6 +35,10 @@ export default async function UsersPage() {
         action={<Link href="/roles" className="text-sm bg-white border border-slate-300 rounded-lg px-4 py-2 hover:bg-slate-50">ניהול תפקידים</Link>}
       />
       <SettingsTabs active="users" />
+      <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 mb-4">
+        ⓘ מסך זה מציג רק <b>משתמשי מטה הגדוד</b> (מפ״מ, צופים).
+        קציני מחסן ורס״פים נוספים — נוהל ב<a href="/org" className="underline font-medium">מבנה ארגוני</a> (לחץ על המחסן/הפלוגה ופתח אותה).
+      </div>
       <UsersManager
         baseUrl={baseUrl}
         brigade={battalion?.brigade ?? ""}

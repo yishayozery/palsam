@@ -14,9 +14,9 @@ type User = {
   active: boolean; passwordSet: boolean; inviteToken: string | null;
 };
 
-const ROLE_OPTS = ["WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"] as const;
+const ROLE_OPTS = ["BATTALION_ADMIN", "VIEWER"] as const;
 const BUILTIN_LABELS: Record<string, string> = {
-  WAREHOUSE_MANAGER: "קצין מחסן", COMPANY_REP: 'רס"פ פלוגתי', VIEWER: "צופה",
+  BATTALION_ADMIN: 'מפ״מ (הכל)', VIEWER: "צופה (קריאה בלבד)",
 };
 
 function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
@@ -45,7 +45,7 @@ function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
 
 export default function UsersManager({ users, holders, customRoles, baseUrl, brigade, battalionCode }: { users: User[]; holders: Holder[]; customRoles: CustomRole[]; baseUrl: string; brigade: string; battalionCode: string }) {
   const [open, setOpen] = useState(false);
-  const [role, setRole] = useState<string>("WAREHOUSE_MANAGER");
+  const [role, setRole] = useState<string>("BATTALION_ADMIN");
 
   // התבנית האפקטיבית של הבחירה (תפקיד מותאם → תבנית הבסיס שלו)
   const effectiveTemplate = role.startsWith("custom:")

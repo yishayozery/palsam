@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { Card, PageHeader, StatCard, Badge } from "@/components/ui";
 import { TRANSFER_TYPE } from "@/lib/labels";
 import { WAREHOUSE_TYPE_SHORT, WAREHOUSE_TYPE_ICON } from "@/lib/rbac";
+import CompanyRepDashboard from "./CompanyRepDashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,11 @@ export default async function DashboardPage({
   if (user.role === "SUPER_ADMIN") redirect("/admin/battalions");
   const bId = user.battalionId!;
   const { warehouse: selectedWh = "" } = await searchParams;
+
+  // ====== דשבורד רס"פ פלוגה — תצוגה ייעודית ======
+  if (user.role === "COMPANY_REP" && user.holderId) {
+    return <CompanyRepDashboard userName={user.fullName} bId={bId} companyId={user.holderId} />;
+  }
 
   // === סקופ מחסנים ===
   // קצין מחסן רואה אוטומטית רק את המחסנים שלו; מפ"מ רואה הכל עם אפשרות סינון.

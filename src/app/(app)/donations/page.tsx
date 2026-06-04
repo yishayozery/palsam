@@ -14,6 +14,13 @@ export default async function DonationsPage() {
   }
 
   const holder = await prisma.holder.findUnique({ where: { id: user.holderId } });
+  const isCompanyRep = user.role === "COMPANY_REP";
+  const titleSuffix = isCompanyRep
+    ? `תרומות פלוגתיות — ${holder?.name ?? ""}`
+    : `מלאי תרומה — ${holder?.name ?? ""}`;
+  const subtitle = isCompanyRep
+    ? `ציוד שהתקבל מתורמים ייעודית לפלוגה (לא חלק ממלאי הגדוד). שייכות אוטומטית: תרומה פלוגתית.`
+    : `ציוד שאינו צבאי — ${holder?.name ?? ""}. ניתן לנפק, ולבחור אם להחתים חיילים.`;
   const items = await prisma.itemType.findMany({
     where: { battalionId: bId, isDonated: true, ownerHolderId: user.holderId },
     orderBy: { name: "asc" },
@@ -23,8 +30,8 @@ export default async function DonationsPage() {
   return (
     <div>
       <PageHeader
-        title="מלאי תרומה / לא-צבאי"
-        subtitle={`ציוד שאינו צבאי — ${holder?.name ?? ""}. ניתן לנפק, ולבחור אם להחתים חיילים.`}
+        title={titleSuffix}
+        subtitle={subtitle}
         action={<DonationForm />}
       />
       <Card>

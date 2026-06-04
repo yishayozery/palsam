@@ -24,6 +24,17 @@ export const NAV: NavItem[] = [
   { href: "/counts", label: "ספירות מלאי", icon: "🔢", group: "פלסם", cap: "battalion.profile" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "פלסם", cap: "battalion.profile" },
 
+  // ===== הפלוגה שלי (רס"פ פלוגה — תפעול ברמת פלוגה) =====
+  // סדר העבודה: זיכוי → תרומות → החתמה → חיילים → ספירה → מידוף → פערים
+  // (דשבורד מופיע ב"ראשי" — תצוגה משתנה אוטומטית לפי תפקיד)
+  { href: "/return", label: "זיכוי לגדוד", icon: "↩️", group: "הפלוגה שלי", cap: "company.manage" },
+  { href: "/donations", label: "תרומות פלוגתיות", icon: "🎁", group: "הפלוגה שלי", cap: "donations.manage" },
+  { href: "/signatures", label: "החתמת חיילים", icon: "✍️", group: "הפלוגה שלי", cap: "signatures.manage" },
+  { href: "/soldiers", label: "חיילי הפלוגה", icon: "🪖", group: "הפלוגה שלי", cap: "company.manage" },
+  { href: "/counts", label: "ספירת מלאי", icon: "🔢", group: "הפלוגה שלי", cap: "counts.execute" },
+  { href: "/locations", label: "מידוף", icon: "🗄️", group: "הפלוגה שלי", cap: "locations.manage" },
+  { href: "/gaps", label: "פערים", icon: "⚠️", group: "הפלוגה שלי", cap: "company.manage" },
+
   // ===== המחסנים שלי (קצין מחסן — תפעול שוטף) =====
   // סדר לפי שלבי העבודה: נציגים → פריטים → מלאי → ערכות → מידוף → החתמות → ספירות → פערים
   { href: "/reps", label: "נציגי פלוגות", icon: "🤝", group: "המחסנים שלי", cap: "reps.manage" },

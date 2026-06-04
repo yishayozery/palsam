@@ -11,11 +11,19 @@ export default async function AppLayout({
 }) {
   const user = await requireUser();
 
-  const items = NAV.filter((n) => {
+  const filtered = NAV.filter((n) => {
     if (n.roles && !n.roles.includes(user.role)) return false;
     // אדמין-על: רק פריטים שמיועדים לו (ניהול גדודים)
     if (user.role === "SUPER_ADMIN") return n.roles?.includes("SUPER_ADMIN") ?? false;
     if (n.cap && !can(user.role, n.cap)) return false;
+    return true;
+  });
+  // דה-דופ לפי href — אם פריט מופיע בכמה קבוצות, מציגים רק את הראשונה.
+  // הסדר בקובץ nav.ts קובע איזו קבוצה "מנצחת" (לכן הצבנו את "הפלוגה שלי" לפני "המחסנים שלי" לרס"פ).
+  const seen = new Set<string>();
+  const items = filtered.filter((n) => {
+    if (seen.has(n.href)) return false;
+    seen.add(n.href);
     return true;
   });
 
