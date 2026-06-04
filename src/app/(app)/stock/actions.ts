@@ -17,10 +17,25 @@ async function pickWarehouse(bId: string, itemTypeId: string) {
   const item = await prisma.itemType.findUnique({ where: { id: itemTypeId }, include: { category: true } });
   if (!item) return null;
   const wtype = item.category?.warehouseType;
-  const wh = wtype
-    ? await prisma.holder.findFirst({ where: { battalionId: bId, kind: "WAREHOUSE", warehouseType: wtype } })
-    : await prisma.holder.findFirst({ where: { battalionId: bId, kind: "WAREHOUSE" } });
-  return wh;
+  // 1) מחסן תואם לקטגוריה (M4 → ARMORY)
+  if (wtype) {
+    const exact = await prisma.holder.findFirst({ where: { battalionId: bId, kind: "WAREHOUSE", warehouseType: wtype } });
+    if (exact) return exact;
+  }
+  // 2) פריט תרומה — בעלים
+  if (item.ownerHolderId) {
+    const owner = await prisma.holder.findUnique({ where: { id: item.ownerHolderId } });
+    if (owner) return owner;
+  }
+  // 3) fallback — מחסן ראשון בגדוד (כללי)
+  return prisma.holder.findFirst({ where: { battalionId: bId, kind: "WAREHOUSE" }, orderBy: { createdAt: "asc" } });
+}
+
+function revalidateAll() {
+  revalidatePath("/stock");
+  revalidatePath("/items");
+  revalidatePath("/inventory");
+  revalidatePath("/warehouses");
 }
 
 /** הוספת מלאי כמותי — מוסיף לכמות הקיימת (לא מחליף) */
@@ -50,7 +65,7 @@ export async function declareQty(formData: FormData) {
   });
 
   await audit(user.id, "ADD_QTY", "ItemType", itemTypeId, { quantity, statusId, externalUnit, externalContact });
-  revalidatePath("/stock");
+  revalidateAll();
 }
 
 /** הוספת יחידות סריאליות לפי מספרים שהוקלדו (אחת בשורה / בפסיק) */
@@ -83,7 +98,7 @@ export async function declareSerials(formData: FormData) {
     }
   });
   await audit(user.id, "DECLARE_SERIALS", "ItemType", itemTypeId, { count: created });
-  revalidatePath("/stock");
+  revalidateAll();
 }
 
 /** טעינת סריאליים מקובץ אקסל */
@@ -122,7 +137,7 @@ export async function importSerials(formData: FormData) {
     }
   });
   await audit(user.id, "IMPORT_SERIALS", "ItemType", itemTypeId, { count: created });
-  revalidatePath("/stock");
+  revalidateAll();
 }
 
 /** הוספת אצווה (מספר אצווה + כמות). אפשר כמה אצוות לאותו פריט. */
@@ -150,7 +165,7 @@ export async function declareLot(formData: FormData) {
     });
   } catch { /* כפילות מספר אצווה */ }
   await audit(user.id, "DECLARE_LOT", "ItemType", itemTypeId, { lot: lotNumber, quantity });
-  revalidatePath("/stock");
+  revalidateAll();
 }
 
 /** הורדת מלאי כמותי — העברה מחוץ לגדוד. מאפשר ירידה למינוס. */
@@ -190,7 +205,7 @@ export async function withdrawQty(formData: FormData) {
   });
 
   await audit(user.id, "WITHDRAW_QTY", "ItemType", itemTypeId, { quantity, statusId, externalUnit, allowNegative });
-  revalidatePath("/stock");
+  revalidateAll();
 }
 
 /** הורדת יחידות סריאליות לפי מספרי סריאל שנבחרו */
@@ -218,7 +233,7 @@ export async function withdrawSerials(formData: FormData) {
   });
 
   await audit(user.id, "WITHDRAW_SERIALS", "ItemType", itemTypeId, { count: serialIds.length });
-  revalidatePath("/stock");
+  revalidateAll();
 }
 
 /** טעינת אצוות מקובץ אקסל (עמודה 1: מספר אצווה, עמודה 2: כמות) */
@@ -262,5 +277,5 @@ export async function importLots(formData: FormData) {
     }
   });
   await audit(user.id, "IMPORT_LOTS", "ItemType", itemTypeId, { count: created });
-  revalidatePath("/stock");
+  revalidateAll();
 }

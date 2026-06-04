@@ -36,8 +36,8 @@ export default async function TransfersPage() {
   return (
     <div>
       <PageHeader
-        title="העברות ולחיצות יד"
-        subtitle="מעקב מלאי במעבר ואישורי קבלה דו-צדדיים"
+        title="העברות (גדוד ↔ חטיבה / גדודים)"
+        subtitle="קליטות וגריעות מול החטיבה, היסטוריה ולחיצות יד. החתמת פלוגה/חייל — במסך 'החתמות חיילים'."
         action={
           <div className="flex gap-2">
             {canIssue && (

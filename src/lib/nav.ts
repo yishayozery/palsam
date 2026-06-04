@@ -5,35 +5,35 @@ export type NavItem = {
   href: string;
   label: string;
   icon: string;
-  group: string; // קבוצה לכותרת בתפריט
-  cap?: Capability; // יכולת נדרשת
-  roles?: Role[]; // הגבלה לתפקידים מסוימים
+  group: string;
+  cap?: Capability;
+  roles?: Role[];
 };
 
-// סדר לפי שלבי העבודה: הגדרות גדוד → הקמת מבנה ומשתמשים → פריטים → תפעול שוטף
 export const NAV: NavItem[] = [
+  // ===== ראשי =====
   { href: "/admin/battalions", label: "ניהול גדודים", icon: "🏛️", group: "ראשי", roles: ["SUPER_ADMIN"] },
   { href: "/dashboard", label: "דשבורד", icon: "📊", group: "ראשי", cap: "reports.view" },
 
-  // --- הקמה / הגדרות (מפמ) ---
-  { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "הקמה והגדרות", cap: "battalion.profile" },
-  { href: "/items", label: "הגדרות פריטים", icon: "🏷️", group: "הקמה והגדרות", cap: "catalog.manage" },
-  { href: "/stock", label: "מלאי הגדוד", icon: "📋", group: "הקמה והגדרות", cap: "warehouse.operate" },
+  // ===== פלסם (מפ"מ — אחראי מערכת בגדוד) =====
+  { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "פלסם", cap: "battalion.profile" },
+  { href: "/items", label: "הגדרות פריטים", icon: "🏷️", group: "פלסם", cap: "catalog.manage" },
+  { href: "/stock", label: "מלאי הגדוד", icon: "📋", group: "פלסם", cap: "warehouse.operate" },
+  { href: "/transfers", label: "העברות (גדוד/חטיבה)", icon: "🔄", group: "פלסם", cap: "reports.view" },
+  { href: "/warehouses", label: "מחסני הגדוד", icon: "🏪", group: "פלסם", cap: "reports.view" },
+  { href: "/counts", label: "ספירות מלאי", icon: "🔢", group: "פלסם", cap: "reports.view" },
+  { href: "/gaps", label: "פערים", icon: "⚠️", group: "פלסם", cap: "reports.view" },
 
-  // --- תפעול שוטף ---
-  { href: "/warehouses", label: "מחסנים", icon: "🏪", group: "תפעול שוטף", cap: "reports.view" },
-  { href: "/inventory", label: "תצוגת מלאי", icon: "📦", group: "תפעול שוטף", cap: "reports.view" },
-  { href: "/transfers", label: "העברות והחתמות", icon: "🔄", group: "תפעול שוטף", cap: "reports.view" },
-  { href: "/signatures", label: "חתימות חיילים", icon: "✍️", group: "תפעול שוטף", cap: "reports.view" },
-  { href: "/kits", label: "ערכות החתמה", icon: "📦", group: "תפעול שוטף", cap: "signatures.manage" },
-  { href: "/soldiers", label: "חיילים", icon: "🪖", group: "תפעול שוטף", cap: "company.manage" },
-  { href: "/reps", label: "נציגי פלוגות", icon: "🤝", group: "תפעול שוטף", cap: "reps.manage" },
-  { href: "/locations", label: "מידוף", icon: "🗄️", group: "תפעול שוטף", cap: "locations.manage" },
-  { href: "/donations", label: "מלאי תרומה", icon: "🎁", group: "תפעול שוטף", cap: "donations.manage" },
-  { href: "/counts", label: "ספירות מלאי", icon: "🔢", group: "תפעול שוטף", cap: "reports.view" },
-  { href: "/gaps", label: "פערים", icon: "⚠️", group: "תפעול שוטף", cap: "reports.view" },
+  // ===== המחסנים שלי (קצין מחסן — תפעול שוטף במחסן) =====
+  { href: "/inventory", label: "מלאי המחסן", icon: "📦", group: "המחסנים שלי", cap: "warehouse.operate" },
+  { href: "/donations", label: "מלאי תרומה", icon: "🎁", group: "המחסנים שלי", cap: "donations.manage" },
+  { href: "/signatures", label: "החתמות חיילים", icon: "✍️", group: "המחסנים שלי", cap: "signatures.manage" },
+  { href: "/soldiers", label: "חיילים", icon: "🪖", group: "המחסנים שלי", cap: "company.manage" },
+  { href: "/reps", label: "נציגי פלוגות", icon: "🤝", group: "המחסנים שלי", cap: "reps.manage" },
+  { href: "/locations", label: "מידוף", icon: "🗄️", group: "המחסנים שלי", cap: "locations.manage" },
+  { href: "/kits", label: "ערכות החתמה", icon: "📦", group: "המחסנים שלי", cap: "signatures.manage" },
 
-  // --- דוחות ובקרה ---
+  // ===== דוחות ובקרה =====
   { href: "/reports", label: "דוחות", icon: "📈", group: "דוחות ובקרה", cap: "reports.view" },
   { href: "/audit", label: "יומן פעולות", icon: "🧾", group: "דוחות ובקרה", cap: "audit.view" },
 ];
