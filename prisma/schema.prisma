@@ -178,6 +178,29 @@ model CustomRole {
   @@unique([battalionId, name])
 }
 
+// ערכת החתמה — מוגדרת ברמת מחזיק (פלוגה/מחסן) ומשמשת בהחתמת חייל
+model SignableKit {
+  id          String            @id @default(cuid())
+  battalionId String
+  holderId    String // הפלוגה/מחסן שהקים את הערכה
+  holder      Holder            @relation("SignableKitHolder", fields: [holderId], references: [id])
+  name        String
+  active      Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  lines       SignableKitLine[]
+
+  @@unique([holderId, name])
+}
+
+model SignableKitLine {
+  id         String      @id @default(cuid())
+  kitId      String
+  kit        SignableKit @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  itemTypeId String
+  itemType   ItemType    @relation("KitLineItem", fields: [itemTypeId], references: [id])
+  quantity   Int         @default(1)
+}
+
 // שיוך משתמש למחסן (תמיכה בכמה מחסנים לקצין אחד)
 model UserHolder {
   id       String  @id @default(cuid())
@@ -218,6 +241,7 @@ model Holder {
   warehouseLinks   WarehouseCompany[] @relation("WarehouseSide")
   companyLinks     WarehouseCompany[] @relation("CompanySide")
   ownedDonations   ItemType[]         @relation("ItemOwnerHolder")
+  signableKits     SignableKit[]      @relation("SignableKitHolder")
 
   @@index([battalionId])
   @@index([kind])
@@ -367,6 +391,7 @@ model ItemType {
   kitComponents KitComponent[] @relation("KitParent")
   usedInKits    KitComponent[] @relation("KitChild")
   kitInstances  KitInstance[]
+  inSignableKits SignableKitLine[] @relation("KitLineItem")
 
   @@unique([battalionId, sku])
   @@index([categoryId])
@@ -422,6 +447,10 @@ model SerialUnit {
   signedSoldierId  String?
   signedSoldier    Soldier?         @relation("SerialUnitSignedSoldier", fields: [signedSoldierId], references: [id])
   physicalLocation String?
+  // אם הפריט נמצא ברכב — שיוך לרכב (SerialUnit מטיפוס רכב)
+  vehicleId        String?
+  vehicle          SerialUnit?      @relation("SerialUnitVehicle", fields: [vehicleId], references: [id])
+  storedItems      SerialUnit[]     @relation("SerialUnitVehicle")
   locationId       String?
   location         StorageLocation? @relation(fields: [locationId], references: [id])
 

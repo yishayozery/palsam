@@ -24,6 +24,7 @@ export const NAV: NavItem[] = [
   { href: "/inventory", label: "מלאי", icon: "📦", group: "תפעול שוטף", cap: "reports.view" },
   { href: "/transfers", label: "העברות והחתמות", icon: "🔄", group: "תפעול שוטף", cap: "reports.view" },
   { href: "/signatures", label: "חתימות חיילים", icon: "✍️", group: "תפעול שוטף", cap: "reports.view" },
+  { href: "/kits", label: "ערכות החתמה", icon: "📦", group: "תפעול שוטף", cap: "signatures.manage" },
   { href: "/soldiers", label: "חיילים", icon: "🪖", group: "תפעול שוטף", cap: "company.manage" },
   { href: "/reps", label: "נציגי פלוגות", icon: "🤝", group: "תפעול שוטף", cap: "reps.manage" },
   { href: "/locations", label: "מידוף", icon: "🗄️", group: "תפעול שוטף", cap: "locations.manage" },

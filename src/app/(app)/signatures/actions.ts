@@ -17,19 +17,38 @@ export async function createSignout(formData: FormData) {
   const soldierId = String(formData.get("soldierId") || "");
   const method = String(formData.get("method") || "QR") as SignatureMethod;
   const serialIds = formData.getAll("serial").map(String).filter(Boolean);
-  if (!soldierId || serialIds.length === 0) return;
+  const vehicleId = String(formData.get("vehicleId") || "") || null;
+  const kitId = String(formData.get("kitId") || "") || null;
+  if (!soldierId || (serialIds.length === 0 && !kitId)) return;
+
+  // אם נבחרה ערכה — נוסיף את הפריטים הכמותיים שלה כשורות העברה
+  const kitLines = kitId
+    ? await prisma.signableKitLine.findMany({ where: { kitId }, include: { itemType: true } })
+    : [];
 
   const token = nanoid(24);
   let transferId = "";
   await prisma.$transaction(async (tx) => {
     const transfer = await tx.transfer.create({
-      data: { battalionId: bId, type: "SIGNOUT", status: "PENDING", toSoldierId: soldierId, fromHolderId: user.holderId, createdById: user.id },
+      data: { battalionId: bId, type: "SIGNOUT", status: "PENDING", toSoldierId: soldierId, fromHolderId: user.holderId, createdById: user.id, notes: kitId ? "החתמה על ערכה" : null },
     });
     transferId = transfer.id;
+    // יחידות סריאליות שנבחרו ידנית
     for (const sid of serialIds) {
       const su = await tx.serialUnit.findUnique({ where: { id: sid } });
       if (!su) continue;
       await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: su.statusId } });
+      // עדכון מיקום ברכב (אם נבחר)
+      if (vehicleId) {
+        await tx.serialUnit.update({ where: { id: sid }, data: { vehicleId } });
+      }
+    }
+    // פריטים מהערכה (כמותיים)
+    for (const l of kitLines) {
+      if (l.itemType.trackingMethod === "QUANTITY") {
+        const status = await tx.itemStatus.findFirst({ where: { battalionId: bId, isDefault: true } });
+        await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: l.itemTypeId, quantity: l.quantity, statusId: status?.id } });
+      }
     }
     await tx.signature.create({
       data: { battalionId: bId, soldierId, transferId: transfer.id, method, status: "PENDING", token, tokenExpires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7) },

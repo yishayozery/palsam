@@ -5,15 +5,17 @@ import { createSignout } from "./actions";
 
 type Soldier = { id: string; name: string; pn: string };
 type Unit = { id: string; name: string; serial: string; holder: string; status: string };
+type Kit = { id: string; name: string; lines: { name: string; qty: number }[] };
+type Vehicle = { id: string; name: string; plate: string };
 
 export default function SignoutModal({
-  soldiers,
-  units,
+  soldiers, units, kits, vehicles,
 }: {
-  soldiers: Soldier[];
-  units: Unit[];
+  soldiers: Soldier[]; units: Unit[]; kits: Kit[]; vehicles: Vehicle[];
 }) {
   const [open, setOpen] = useState(false);
+  const [kitId, setKitId] = useState("");
+  const selectedKit = kits.find((k) => k.id === kitId);
 
   return (
     <>
@@ -32,10 +34,7 @@ export default function SignoutModal({
               <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700">✕</button>
             </div>
 
-            <form
-              action={async (fd) => { await createSignout(fd); setOpen(false); }}
-              className="p-5 space-y-4"
-            >
+            <form action={async (fd) => { await createSignout(fd); setOpen(false); }} className="p-5 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">חייל</label>
                 <select name="soldierId" required
@@ -50,25 +49,46 @@ export default function SignoutModal({
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">אופן החתמה</label>
                 <div className="flex gap-3 text-sm">
-                  <label className="flex items-center gap-1.5">
-                    <input type="radio" name="method" value="QR" defaultChecked /> קוד QR
-                  </label>
-                  <label className="flex items-center gap-1.5">
-                    <input type="radio" name="method" value="LINK" /> קישור וואטסאפ
-                  </label>
-                  <label className="flex items-center gap-1.5">
-                    <input type="radio" name="method" value="ONSITE" /> שרבוט במקום
-                  </label>
+                  <label className="flex items-center gap-1.5"><input type="radio" name="method" value="QR" defaultChecked /> קוד QR</label>
+                  <label className="flex items-center gap-1.5"><input type="radio" name="method" value="LINK" /> וואטסאפ</label>
+                  <label className="flex items-center gap-1.5"><input type="radio" name="method" value="ONSITE" /> שרבוט</label>
                 </div>
               </div>
 
+              {kits.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">ערכת החתמה (אופציונלי)</label>
+                  <select name="kitId" value={kitId} onChange={(e) => setKitId(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <option value="">— ללא ערכה —</option>
+                    {kits.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+                  </select>
+                  {selectedKit && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      תכולה: {selectedKit.lines.map((l) => `${l.name}×${l.qty}`).join(", ")}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {vehicles.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">מיקום ברכב (אופציונלי)</label>
+                  <select name="vehicleId"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <option value="">— ללא רכב —</option>
+                    {vehicles.map((v) => <option key={v.id} value={v.id}>{v.name} {v.plate}</option>)}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  פריטים להחתמה ({units.length} זמינים)
+                  פריטים פרטניים להחתמה ({units.length} זמינים)
                 </label>
-                <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+                <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
                   {units.length === 0 && (
-                    <p className="text-sm text-slate-400 p-3">אין פריטים זמינים להחתמה בתחומך</p>
+                    <p className="text-sm text-slate-400 p-3">אין פריטים זמינים</p>
                   )}
                   {units.map((u) => (
                     <label key={u.id} className="flex items-center gap-2 text-sm px-3 py-2 hover:bg-slate-50 cursor-pointer">

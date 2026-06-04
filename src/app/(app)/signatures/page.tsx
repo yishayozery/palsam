@@ -23,6 +23,25 @@ export default async function SignaturesPage() {
   const isCompanyRep = user.role === "COMPANY_REP" && !!user.holderId;
   const soldierWhere = { battalionId: bId, active: true, ...(isCompanyRep ? { companyId: user.holderId! } : {}) };
 
+  const kits = user.holderId
+    ? await prisma.signableKit.findMany({
+        where: { holderId: user.holderId, active: true },
+        include: { lines: { include: { itemType: true } } },
+        orderBy: { name: "asc" },
+      })
+    : [];
+  // רכבים שמשויכים לפלוגה/מחסן הנוכחיים (לבחירה כמיקום פיזי)
+  const vehicles = user.holderId
+    ? await prisma.serialUnit.findMany({
+        where: {
+          battalionId: bId,
+          currentHolderId: user.holderId,
+          itemType: { category: { warehouseType: "VEHICLES" } },
+        },
+        include: { itemType: true },
+      })
+    : [];
+
   const [pending, signedUnits, soldiers, availableUnits, statuses] = await Promise.all([
     prisma.signature.findMany({
       where: { battalionId: bId, status: "PENDING" },
@@ -56,6 +75,11 @@ export default async function SignaturesPage() {
                 id: u.id, name: u.itemType.name, serial: u.serialNumber,
                 holder: u.currentHolder?.name ?? "", status: u.status.name,
               }))}
+              kits={kits.map((k) => ({
+                id: k.id, name: k.name,
+                lines: k.lines.map((l) => ({ name: l.itemType.name, qty: l.quantity })),
+              }))}
+              vehicles={vehicles.map((v) => ({ id: v.id, name: v.itemType.name, plate: v.serialNumber }))}
             />
           ) : undefined
         }
