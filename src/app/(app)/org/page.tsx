@@ -2,6 +2,7 @@ import { requireCapability } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge } from "@/components/ui";
 import { WAREHOUSE_TYPE_SHORT } from "@/lib/rbac";
+import SettingsTabs from "@/components/SettingsTabs";
 import CrudSection from "@/components/CrudSection";
 import { createWarehouse, createCompany, renameHolder, toggleHolder } from "./actions";
 
@@ -45,7 +46,8 @@ export default async function OrgPage() {
 
   return (
     <div>
-      <PageHeader title="מבנה ארגוני" subtitle="הקמת מחסנים ופלוגות בגדוד" />
+      <PageHeader title="הגדרות גדוד" subtitle="פרופיל, מבנה ארגוני ומשתמשים" />
+      <SettingsTabs active="org" />
       <div className="grid lg:grid-cols-2 gap-6">
         <CrudSection
           title="מחסנים"

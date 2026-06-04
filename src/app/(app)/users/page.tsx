@@ -3,6 +3,7 @@ import { requireCapability } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui";
 import { ROLE_LABELS } from "@/lib/rbac";
+import SettingsTabs from "@/components/SettingsTabs";
 import UsersManager from "./UsersManager";
 
 export const dynamic = "force-dynamic";
@@ -26,10 +27,11 @@ export default async function UsersPage() {
   return (
     <div>
       <PageHeader
-        title="ניהול משתמשים"
-        subtitle="הזמנה בקישור — המשתמש מגדיר סיסמה בכניסה ראשונה"
+        title="הגדרות גדוד"
+        subtitle="פרופיל, מבנה ארגוני ומשתמשים"
         action={<Link href="/roles" className="text-sm bg-white border border-slate-300 rounded-lg px-4 py-2 hover:bg-slate-50">ניהול תפקידים</Link>}
       />
+      <SettingsTabs active="users" />
       <UsersManager
         baseUrl={baseUrl}
         holders={holders.map((h) => ({ id: h.id, name: h.name, kind: h.kind }))}

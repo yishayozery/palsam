@@ -67,15 +67,15 @@ export default async function InventoryPage({
           canManage ? (
             <div className="flex gap-2 flex-wrap">
               <OcrIntake
-                items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod }))}
+                items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku ?? "", trackingMethod: i.trackingMethod }))}
                 statuses={statuses.map((s) => ({ id: s.id, name: s.name }))}
               />
               <SerialImport
-                items={items.filter((i) => i.trackingMethod === "SERIAL").map((i) => ({ id: i.id, name: i.name, sku: i.sku }))}
+                items={items.filter((i) => i.trackingMethod === "SERIAL").map((i) => ({ id: i.id, name: i.name, sku: i.sku ?? "" }))}
                 statuses={statuses.map((s) => ({ id: s.id, name: s.name }))}
               />
               <InventoryActions
-                items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod }))}
+                items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku ?? "", trackingMethod: i.trackingMethod }))}
                 statuses={statuses.map((s) => ({ id: s.id, name: s.name }))}
               />
             </div>

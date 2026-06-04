@@ -4,33 +4,37 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
-import type { TrackingMethod } from "@/generated/prisma";
+import type { TrackingMethod, ItemAssociation } from "@/generated/prisma";
 
 export async function saveItemType(formData: FormData) {
   const user = await requireCapability("catalog.manage");
+  const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
-  const sku = String(formData.get("sku") || "").trim();
+  const sku = String(formData.get("sku") || "").trim() || null; // אופציונלי
   const name = String(formData.get("name") || "").trim();
-  const categoryId = String(formData.get("categoryId") || "");
-  const trackingMethod = String(formData.get("trackingMethod") || "QUANTITY") as TrackingMethod;
+  const categoryId = String(formData.get("categoryId") || "") || null;
+  // שיטות ניהול: כמותי/פרטני/אצווה (ללא ערכה)
+  let trackingMethod = String(formData.get("trackingMethod") || "QUANTITY") as TrackingMethod;
+  if (trackingMethod === "KIT") trackingMethod = "QUANTITY";
   const unit = String(formData.get("unit") || "יח'").trim() || "יח'";
-  const isSensitive = formData.get("isSensitive") === "on";
-  const trackLocation = formData.get("trackLocation") === "on";
+  const association = String(formData.get("association") || "MILITARY") as ItemAssociation;
+  const isDonated = association !== "MILITARY";
   // תמונת מוצר (data-URL, אופציונלי). "__CLEAR__" = הסרת תמונה קיימת.
   const rawImage = String(formData.get("imageData") || "");
   const imageData =
     rawImage === "__CLEAR__" ? null : rawImage.startsWith("data:image") ? rawImage : undefined;
 
-  if (!sku || !name || !categoryId) return;
+  if (!name) return;
 
-  const base = { sku, name, categoryId, trackingMethod, unit, isSensitive, trackLocation };
+  const base = { sku, name, categoryId, trackingMethod, unit, association, isDonated };
   const data = imageData !== undefined ? { ...base, imageData } : base;
   if (id) {
     await prisma.itemType.update({ where: { id }, data });
   } else {
-    await prisma.itemType.create({ data: { ...data, battalionId: user.battalionId! } });
+    await prisma.itemType.create({ data: { ...data, battalionId: bId } });
   }
-  await audit(user.id, id ? "UPDATE" : "CREATE", "ItemType", id || sku);
+  await audit(user.id, id ? "UPDATE" : "CREATE", "ItemType", id || name);
+  revalidatePath("/items");
   revalidatePath("/catalog");
 }
 

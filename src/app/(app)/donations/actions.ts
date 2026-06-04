@@ -18,11 +18,15 @@ export async function addDonation(formData: FormData) {
   const signable = formData.get("signable") === "on";
   if (!name) return;
 
+  // שייכות לפי סוג המחזיק של המשתמש (פלוגה → פלוגתי, מחסן/גדוד → גדודי)
+  const ownerHolder = await prisma.holder.findUnique({ where: { id: user.holderId } });
+  const association = ownerHolder?.kind === "COMPANY" ? "DONATION_COMPANY" : "DONATION_BATTALION";
+
   await prisma.$transaction(async (tx) => {
     const item = await tx.itemType.create({
       data: {
         battalionId: bId, sku: `DON-${nanoid(6).toUpperCase()}`, name,
-        trackingMethod: "QUANTITY", unit, isDonated: true, signable,
+        trackingMethod: "QUANTITY", unit, isDonated: true, association, signable,
         ownerHolderId: user.holderId,
       },
     });

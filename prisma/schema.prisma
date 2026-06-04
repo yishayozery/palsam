@@ -326,19 +326,27 @@ model CountFrequency {
 
 // ===================== קטלוג פריטים =====================
 
+// שייכות הפריט: צבאי / תרומה פלוגתי / תרומה גדודי
+enum ItemAssociation {
+  MILITARY
+  DONATION_COMPANY
+  DONATION_BATTALION
+}
+
 model ItemType {
   id             String           @id @default(cuid())
   battalionId    String
   battalion      Battalion        @relation(fields: [battalionId], references: [id])
-  sku            String
+  sku            String? // מק"ט — אופציונלי
   name           String
-  categoryId     String? // אופציונלי — פריטי תרומה ללא קטגוריה צבאית
+  categoryId     String?
   category       Category?        @relation(fields: [categoryId], references: [id])
   trackingMethod TrackingMethod
   unit           String           @default("יח'")
+  association    ItemAssociation  @default(MILITARY) // צבאי / תרומה פלוגתי / תרומה גדודי
   isSensitive    Boolean          @default(false)
   trackLocation  Boolean          @default(false)
-  // תרומה / ציוד לא-צבאי
+  // תרומה / ציוד לא-צבאי (נגזר מ-association לתאימות)
   isDonated      Boolean          @default(false)
   signable       Boolean          @default(true) // האם ניתן להחתים חיילים על הפריט
   ownerHolderId  String? // הבעלים של מלאי התרומה (פלוגה); null = רמת גדוד

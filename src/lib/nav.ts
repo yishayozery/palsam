@@ -16,11 +16,8 @@ export const NAV: NavItem[] = [
   { href: "/dashboard", label: "דשבורד", icon: "📊", group: "ראשי", cap: "reports.view" },
 
   // --- הקמה / הגדרות (מפמ) ---
-  { href: "/profile", label: "פרופיל גדוד", icon: "🏷️", group: "הקמה והגדרות", cap: "battalion.profile" },
-  { href: "/org", label: "מבנה ארגוני", icon: "🏗️", group: "הקמה והגדרות", cap: "org.manage" },
-  { href: "/users", label: "משתמשים ותפקידים", icon: "👤", group: "הקמה והגדרות", cap: "users.manage" },
-  { href: "/dictionaries", label: "מילונים", icon: "📚", group: "הקמה והגדרות", cap: "dictionaries.manage" },
-  { href: "/catalog", label: 'קטלוג מק"טים (פריטים)', icon: "🏷️", group: "הקמה והגדרות", cap: "catalog.manage" },
+  { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "הקמה והגדרות", cap: "battalion.profile" },
+  { href: "/items", label: "הגדרות פריטים", icon: "🏷️", group: "הקמה והגדרות", cap: "catalog.manage" },
 
   // --- תפעול שוטף ---
   { href: "/warehouses", label: "מחסנים", icon: "🏪", group: "תפעול שוטף", cap: "reports.view" },

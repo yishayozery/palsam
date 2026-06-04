@@ -1,6 +1,7 @@
 import { requireCapability } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card } from "@/components/ui";
+import SettingsTabs from "@/components/SettingsTabs";
 import ProfileForm from "./ProfileForm";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,8 @@ export default async function ProfilePage() {
 
   return (
     <div>
-      <PageHeader title="פרופיל הגדוד" subtitle="פרטי הגדוד וסמל היחידה" />
+      <PageHeader title="הגדרות גדוד" subtitle="פרופיל, מבנה ארגוני ומשתמשים" />
+      <SettingsTabs active="profile" />
       <Card className="p-6 max-w-xl">
         <ProfileForm
           battalion={{
