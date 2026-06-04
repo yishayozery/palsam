@@ -109,6 +109,7 @@ model Battalion {
   createdAt DateTime @default(now())
 
   users         AppUser[]
+  customRoles   CustomRole[]
   holders       Holder[]
   soldiers      Soldier[]
   categories    Category[]
@@ -134,7 +135,10 @@ model AppUser {
   passwordHash String
   fullName     String
   phone        String? // לשליחת הזמנה בוואטסאפ
-  role         Role
+  role         Role // פרופיל ההרשאות בפועל (תבנית)
+  // תפקיד מותאם (שם תצוגה) שמשתמש בפרופיל ההרשאות של role
+  customRoleId String?
+  customRole   CustomRole? @relation(fields: [customRoleId], references: [id])
   passwordSet  Boolean    @default(true) // false עד הגדרת סיסמה דרך קישור ההזמנה
   inviteToken  String?    @unique
   battalionId  String? // null עבור SUPER_ADMIN
@@ -152,6 +156,22 @@ model AppUser {
   resolvedGaps      Discrepancy[]      @relation("DiscrepancyResolvedBy")
   auditLogs         AuditLog[]
   repOfCompanies    WarehouseCompany[] @relation("RepUser")
+}
+
+// ===================== תפקידים מותאמים (admin-driven) =====================
+// תפקיד עם שם חופשי שמשתמש בפרופיל הרשאות קיים (template). מוגדר ע"י המפמ לכל גדוד.
+model CustomRole {
+  id          String    @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation(fields: [battalionId], references: [id])
+  name        String
+  template    Role // פרופיל ההרשאות שעליו התפקיד מבוסס
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  users AppUser[]
+
+  @@unique([battalionId, name])
 }
 
 // ===================== מחזיקים: מחסנים ופלוגות =====================

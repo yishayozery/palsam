@@ -4,6 +4,7 @@ import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
 import type { Role } from "@/generated/prisma";
+import { ROLE_LABELS } from "./rbac";
 
 const SECRET = new TextEncoder().encode(
   process.env.AUTH_SECRET || "dev-secret-change-me-please-32-characters",
@@ -15,7 +16,8 @@ export type SessionUser = {
   id: string;
   username: string;
   fullName: string;
-  role: Role;
+  role: Role; // פרופיל ההרשאות בפועל
+  roleLabel: string; // שם התצוגה (תפקיד מותאם או ברירת מחדל)
   holderId: string | null;
   battalionId: string | null;
 };
@@ -61,6 +63,7 @@ export async function getSession(): Promise<SessionUser | null> {
       username: payload.username as string,
       fullName: payload.fullName as string,
       role: payload.role as Role,
+      roleLabel: (payload.roleLabel as string) ?? ROLE_LABELS[payload.role as Role],
       holderId: (payload.holderId as string) ?? null,
       battalionId: (payload.battalionId as string) ?? null,
     };
@@ -71,12 +74,14 @@ export async function getSession(): Promise<SessionUser | null> {
 
 function toSession(user: {
   id: string; username: string; fullName: string; role: Role; holderId: string | null; battalionId: string | null;
+  customRole?: { name: string } | null;
 }): SessionUser {
   return {
     id: user.id,
     username: user.username,
     fullName: user.fullName,
     role: user.role,
+    roleLabel: user.customRole?.name ?? ROLE_LABELS[user.role],
     holderId: user.holderId,
     battalionId: user.battalionId,
   };
@@ -87,7 +92,7 @@ export async function authenticate(
   username: string,
   password: string,
 ): Promise<SessionUser | null> {
-  const user = await prisma.appUser.findUnique({ where: { username } });
+  const user = await prisma.appUser.findUnique({ where: { username }, include: { customRole: true } });
   if (!user || !user.active || !user.passwordSet) return null;
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) return null;
@@ -105,6 +110,7 @@ export async function setPasswordByInvite(
   const updated = await prisma.appUser.update({
     where: { id: user.id },
     data: { passwordHash: hash, passwordSet: true, inviteToken: null },
+    include: { customRole: true },
   });
   return toSession(updated);
 }

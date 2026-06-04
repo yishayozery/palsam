@@ -1,18 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { ROLE_LABELS } from "@/lib/rbac";
 import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
 import { saveUser, regenerateInvite, toggleUser } from "./actions";
 
 type Holder = { id: string; name: string; kind: string };
+type CustomRole = { id: string; name: string; template: string };
 type User = {
   id: string; fullName: string; username: string; phone: string | null;
-  role: string; holderId: string | null; holderName: string | null;
+  role: string; customRoleId: string | null; roleLabel: string;
+  holderId: string | null; holderName: string | null;
   active: boolean; passwordSet: boolean; inviteToken: string | null;
 };
 
 const ROLE_OPTS = ["WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"] as const;
+const BUILTIN_LABELS: Record<string, string> = {
+  WAREHOUSE_MANAGER: "קצין מחסן", COMPANY_REP: 'רס"פ פלוגתי', VIEWER: "צופה",
+};
 
 function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
   const [copied, setCopied] = useState(false);
@@ -38,14 +42,19 @@ function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
   );
 }
 
-export default function UsersManager({ users, holders, baseUrl }: { users: User[]; holders: Holder[]; baseUrl: string }) {
+export default function UsersManager({ users, holders, customRoles, baseUrl }: { users: User[]; holders: Holder[]; customRoles: CustomRole[]; baseUrl: string }) {
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<string>("WAREHOUSE_MANAGER");
 
+  // התבנית האפקטיבית של הבחירה (תפקיד מותאם → תבנית הבסיס שלו)
+  const effectiveTemplate = role.startsWith("custom:")
+    ? customRoles.find((c) => c.id === role.slice(7))?.template ?? "VIEWER"
+    : role;
+
   const warehouses = holders.filter((h) => h.kind === "WAREHOUSE");
   const companies = holders.filter((h) => h.kind === "COMPANY");
-  const holderOpts = role === "WAREHOUSE_MANAGER" ? warehouses : companies;
-  const holderLabel = role === "WAREHOUSE_MANAGER" ? "מחסן" : role === "COMPANY_REP" ? "פלוגה" : "פלוגה (לצופה פלוגתי — אופציונלי)";
+  const holderOpts = effectiveTemplate === "WAREHOUSE_MANAGER" ? warehouses : companies;
+  const holderLabel = effectiveTemplate === "WAREHOUSE_MANAGER" ? "מחסן" : effectiveTemplate === "COMPANY_REP" ? "פלוגה" : "פלוגה (לצופה פלוגתי — אופציונלי)";
 
   return (
     <div>
@@ -61,7 +70,7 @@ export default function UsersManager({ users, holders, baseUrl }: { users: User[
               {users.map((u) => (
                 <tr key={u.id} className={u.active ? "" : "opacity-50"}>
                   <Td><span className="font-medium">{u.fullName}</span> <span className="text-xs text-slate-400 font-mono">@{u.username}</span></Td>
-                  <Td><Badge className="bg-slate-200 text-slate-700">{ROLE_LABELS[u.role as keyof typeof ROLE_LABELS]}</Badge></Td>
+                  <Td><Badge className="bg-slate-200 text-slate-700">{u.roleLabel}</Badge></Td>
                   <Td>{u.holderName ?? "—"}</Td>
                   <Td className="text-xs text-slate-500">{u.phone ?? "—"}</Td>
                   <Td><InviteCell user={u} baseUrl={baseUrl} /></Td>
@@ -104,13 +113,20 @@ export default function UsersManager({ users, holders, baseUrl }: { users: User[
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">תפקיד</label>
                   <select name="role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    {ROLE_OPTS.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+                    <optgroup label="תפקידי בסיס">
+                      {ROLE_OPTS.map((r) => <option key={r} value={r}>{BUILTIN_LABELS[r]}</option>)}
+                    </optgroup>
+                    {customRoles.length > 0 && (
+                      <optgroup label="תפקידים מותאמים">
+                        {customRoles.map((c) => <option key={c.id} value={`custom:${c.id}`}>{c.name}</option>)}
+                      </optgroup>
+                    )}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">{holderLabel}</label>
                   <select name="holderId" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    {role === "VIEWER" && <option value="">כל הגדוד</option>}
+                    {effectiveTemplate === "VIEWER" && <option value="">כל הגדוד</option>}
                     {holderOpts.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
                   </select>
                 </div>

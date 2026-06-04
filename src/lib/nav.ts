@@ -26,6 +26,7 @@ export const NAV: NavItem[] = [
   { href: "/dictionaries", label: "מילונים", icon: "📚", cap: "dictionaries.manage" },
   { href: "/org", label: "מבנה ארגוני", icon: "🏗️", cap: "org.manage" },
   { href: "/users", label: "משתמשים", icon: "👤", cap: "users.manage" },
+  { href: "/roles", label: "תפקידים", icon: "🎖️", cap: "users.manage" },
   { href: "/profile", label: "פרופיל גדוד", icon: "🏷️", cap: "battalion.profile" },
   { href: "/reports", label: "דוחות", icon: "📈", cap: "reports.view" },
   { href: "/audit", label: "יומן פעולות", icon: "🧾", cap: "audit.view" },
