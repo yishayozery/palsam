@@ -7,11 +7,12 @@ import ImportExcel from "@/components/ImportExcel";
 import { WAREHOUSE_TYPE_SHORT } from "@/lib/rbac";
 import { TRACKING_METHOD } from "@/lib/labels";
 import CatalogManager from "../catalog/CatalogManager";
-import { deleteItemType } from "../catalog/actions";
 import { importItems } from "../catalog/import-actions";
 import {
   saveCategory, deleteCategory, saveStatus, deleteStatus, saveFrequency, deleteFrequency,
 } from "../dictionaries/actions";
+import ItemsFilters from "./ItemsFilters";
+import StockTable from "./StockTable";
 
 export const dynamic = "force-dynamic";
 
@@ -21,21 +22,49 @@ const ASSOC: Record<string, { label: string; cls: string }> = {
   DONATION_BATTALION: { label: "תרומה גדודי", cls: "bg-purple-100 text-purple-700" },
 };
 
-export default async function ItemsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+export default async function ItemsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; q?: string; category?: string }>;
+}) {
   const user = await requireCapability("catalog.manage");
   const bId = user.battalionId!;
-  const { tab } = await searchParams;
+  const { tab, q = "", category = "" } = await searchParams;
   const active = tab || "items";
 
   const tabs = [
     { key: "items", label: "פריטים (מק״טים)", href: "/items?tab=items" },
+    { key: "stock", label: "מלאי הגדוד", href: "/items?tab=stock" },
     { key: "categories", label: "קטגוריות", href: "/items?tab=categories" },
     { key: "statuses", label: "סטטוסים", href: "/items?tab=statuses" },
     { key: "frequencies", label: "תדירויות ספירה", href: "/items?tab=frequencies" },
   ];
 
-  const [items, categories, statuses, frequencies] = await Promise.all([
-    prisma.itemType.findMany({ where: { battalionId: bId }, orderBy: { name: "asc" }, include: { category: true, _count: { select: { serialUnits: true, stockBalances: true } } } }),
+  const search = q.trim();
+  const itemWhere = {
+    battalionId: bId,
+    ...(search ? { OR: [
+      { name: { contains: search, mode: "insensitive" as const } },
+      { sku: { contains: search, mode: "insensitive" as const } },
+    ] } : {}),
+    ...(category ? { categoryId: category } : {}),
+  };
+
+  const [allItems, items, categories, statuses, frequencies] = await Promise.all([
+    prisma.itemType.findMany({
+      where: { battalionId: bId },
+      orderBy: { name: "asc" },
+      include: {
+        category: true,
+        _count: { select: { serialUnits: true, stockBalances: true } },
+        stockBalances: { select: { quantity: true } },
+        serialUnits: { select: { lotQuantity: true } },
+      },
+    }),
+    prisma.itemType.findMany({
+      where: itemWhere, orderBy: { name: "asc" },
+      include: { category: true, _count: { select: { serialUnits: true, stockBalances: true } } },
+    }),
     prisma.category.findMany({ where: { battalionId: bId }, orderBy: { sortOrder: "asc" }, include: { _count: { select: { itemTypes: true } } } }),
     prisma.itemStatus.findMany({ where: { battalionId: bId }, orderBy: { sortOrder: "asc" } }),
     prisma.countFrequency.findMany({ where: { battalionId: bId }, orderBy: { intervalDays: "asc" } }),
@@ -47,7 +76,7 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
     <div>
       <PageHeader
         title="הגדרות פריטים"
-        subtitle="מק״טים, קטגוריות, סטטוסים ותדירויות"
+        subtitle="מק״טים, מלאי גדודי, קטגוריות, סטטוסים ותדירויות"
         action={active === "items" ? (
           <div className="flex items-center gap-2">
             <ImportExcel action={importItems} templateHref="/catalog/template" label="ייבוא פריטים" />
@@ -58,36 +87,63 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
       <TabNav tabs={tabs} active={active} />
 
       {active === "items" && (
-        <Card>
-          <Table>
-            <thead><tr><Th></Th><Th>שם</Th><Th>מק״ט</Th><Th>קטגוריה</Th><Th>שיטה</Th><Th>שייכות</Th><Th>במלאי</Th><Th></Th></tr></thead>
-            <tbody>
-              {items.map((i) => (
-                <tr key={i.id} className={i.active ? "" : "opacity-50"}>
-                  <Td>
-                    {i.imageData ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={i.imageData} alt={i.name} className="w-9 h-9 object-cover rounded-md border border-slate-200" />
-                    ) : <div className="w-9 h-9 rounded-md bg-slate-100 flex items-center justify-center text-slate-300">📦</div>}
-                  </Td>
-                  <Td className="font-medium">{i.name}</Td>
-                  <Td className="font-mono text-xs text-slate-500">{i.sku ?? "—"}</Td>
-                  <Td>{i.category?.name ?? "—"}</Td>
-                  <Td><Badge>{TRACKING_METHOD[i.trackingMethod]}</Badge></Td>
-                  <Td><Badge className={ASSOC[i.association].cls}>{ASSOC[i.association].label}</Badge></Td>
-                  <Td className="text-center">{i._count.serialUnits + i._count.stockBalances > 0 ? "✓" : "—"}</Td>
-                  <Td>
-                    <CatalogManager
-                      categories={categories.map((c) => ({ id: c.id, name: c.name }))}
-                      edit={{ id: i.id, sku: i.sku ?? "", name: i.name, categoryId: i.categoryId ?? "", trackingMethod: i.trackingMethod, unit: i.unit, association: i.association, imageData: i.imageData }}
-                    />
-                  </Td>
-                </tr>
-              ))}
-              {items.length === 0 && <tr><Td><span className="block py-6 text-slate-400 text-center">אין פריטים. הוסף פריט ראשון.</span></Td></tr>}
-            </tbody>
-          </Table>
-        </Card>
+        <>
+          <ItemsFilters
+            initialQ={q}
+            initialCategory={category}
+            categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+          />
+          <Card>
+            <Table>
+              <thead><tr><Th></Th><Th>שם</Th><Th>מק״ט</Th><Th>קטגוריה</Th><Th>שיטה</Th><Th>שייכות</Th><Th>במלאי</Th><Th></Th></tr></thead>
+              <tbody>
+                {items.map((i) => (
+                  <tr key={i.id} className={i.active ? "" : "opacity-50"}>
+                    <Td>
+                      {i.imageData ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={i.imageData} alt={i.name} className="w-9 h-9 object-cover rounded-md border border-slate-200" />
+                      ) : <div className="w-9 h-9 rounded-md bg-slate-100 flex items-center justify-center text-slate-300">📦</div>}
+                    </Td>
+                    <Td className="font-medium">{i.name}</Td>
+                    <Td className="font-mono text-xs text-slate-500">{i.sku ?? "—"}</Td>
+                    <Td>{i.category?.name ?? "—"}</Td>
+                    <Td><Badge>{TRACKING_METHOD[i.trackingMethod]}</Badge></Td>
+                    <Td><Badge className={ASSOC[i.association].cls}>{ASSOC[i.association].label}</Badge></Td>
+                    <Td className="text-center">{i._count.serialUnits + i._count.stockBalances > 0 ? "✓" : "—"}</Td>
+                    <Td>
+                      <CatalogManager
+                        categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+                        edit={{ id: i.id, sku: i.sku ?? "", name: i.name, categoryId: i.categoryId ?? "", trackingMethod: i.trackingMethod, unit: i.unit, association: i.association, imageData: i.imageData }}
+                      />
+                    </Td>
+                  </tr>
+                ))}
+                {items.length === 0 && (
+                  <tr><Td><span className="block py-6 text-slate-400 text-center">
+                    {q || category ? "אין פריטים מתאימים לחיפוש" : "אין פריטים. הוסף פריט ראשון."}
+                  </span></Td></tr>
+                )}
+              </tbody>
+            </Table>
+          </Card>
+        </>
+      )}
+
+      {active === "stock" && (
+        <StockTable
+          items={allItems.map((i) => ({
+            id: i.id,
+            name: i.name,
+            sku: i.sku,
+            unit: i.unit,
+            trackingMethod: i.trackingMethod,
+            category: i.category?.name ?? null,
+            // סך הכמות בגדוד: סכום stockBalances + סכום lotQuantities של serial/lot
+            total: i.stockBalances.reduce((s, b) => s + b.quantity, 0)
+                 + i.serialUnits.reduce((s, u) => s + (u.lotQuantity ?? 1), 0),
+          }))}
+        />
       )}
 
       {active === "categories" && (
