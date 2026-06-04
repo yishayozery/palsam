@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { requireCapability } from "@/lib/guard";
 import { hashPassword } from "@/lib/auth";
@@ -12,26 +13,37 @@ export async function saveUser(formData: FormData) {
   const id = String(formData.get("id") || "");
   const username = String(formData.get("username") || "").trim();
   const fullName = String(formData.get("fullName") || "").trim();
+  const phone = String(formData.get("phone") || "").trim() || null;
   const role = String(formData.get("role") || "VIEWER") as Role;
-  const password = String(formData.get("password") || "");
   let holderId = String(formData.get("holderId") || "") || null;
-  // רק תפקידים תחומיים מקבלים שיוך מחזיק
-  if (role !== "WAREHOUSE_MANAGER" && role !== "COMPANY_REP") holderId = null;
-  // מפמ פותח משתמשים בגדוד שלו בלבד
+  // מנהל מחסן/נציג/צופה — יכולים להיות משויכים למחזיק (צופה פלוגתי = ממוקד לפלוגה)
+  if (role !== "WAREHOUSE_MANAGER" && role !== "COMPANY_REP" && role !== "VIEWER") holderId = null;
   const battalionId = admin.role === "SUPER_ADMIN" ? (String(formData.get("battalionId") || "") || null) : admin.battalionId;
 
   if (!username || !fullName) return;
 
   if (id) {
-    const data: Record<string, unknown> = { username, fullName, role, holderId };
-    if (password) data.passwordHash = await hashPassword(password);
-    await prisma.appUser.update({ where: { id }, data });
+    await prisma.appUser.update({ where: { id }, data: { username, fullName, phone, role, holderId } });
+    await audit(admin.id, "UPDATE", "AppUser", id);
   } else {
+    // אונבורדינג: יצירה ללא סיסמה — קישור הזמנה, המשתמש יגדיר סיסמה בכניסה ראשונה
+    const inviteToken = nanoid(28);
+    const randomHash = await hashPassword(nanoid(32));
     await prisma.appUser.create({
-      data: { username, fullName, role, holderId, battalionId, passwordHash: await hashPassword(password || "123456") },
+      data: { username, fullName, phone, role, holderId, battalionId, passwordHash: randomHash, passwordSet: false, inviteToken },
     });
+    await audit(admin.id, "CREATE", "AppUser", username, { invited: true });
   }
-  await audit(admin.id, id ? "UPDATE" : "CREATE", "AppUser", id || username);
+  revalidatePath("/users");
+}
+
+/** יצירת קישור הזמנה מחדש (איפוס סיסמה דרך הזמנה) */
+export async function regenerateInvite(formData: FormData) {
+  const admin = await requireCapability("users.manage");
+  const id = String(formData.get("id") || "");
+  const inviteToken = nanoid(28);
+  await prisma.appUser.update({ where: { id }, data: { inviteToken, passwordSet: false } });
+  await audit(admin.id, "REGEN_INVITE", "AppUser", id);
   revalidatePath("/users");
 }
 

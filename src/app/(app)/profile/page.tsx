@@ -35,6 +35,11 @@ export default async function ProfilePage() {
             </div>
           </div>
           <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">משפט הגדוד</label>
+            <input name="motto" defaultValue={battalion.motto ?? ""} placeholder="לנצח בכל מחיר"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          </div>
+          <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">הערות</label>
             <textarea name="notes" defaultValue={battalion.notes ?? ""} rows={3}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />

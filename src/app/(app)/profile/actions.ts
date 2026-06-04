@@ -10,6 +10,7 @@ export async function updateProfile(formData: FormData) {
   const bId = user.battalionId!;
   const name = String(formData.get("name") || "").trim();
   const commander = String(formData.get("commander") || "").trim() || null;
+  const motto = String(formData.get("motto") || "").trim() || null;
   const notes = String(formData.get("notes") || "").trim() || null;
   const rawLogo = String(formData.get("logoData") || "");
   const logoData = rawLogo === "__CLEAR__" ? null : rawLogo.startsWith("data:image") ? rawLogo : undefined;
@@ -17,6 +18,7 @@ export async function updateProfile(formData: FormData) {
   const data: Record<string, unknown> = {};
   if (name) data.name = name;
   data.commander = commander;
+  data.motto = motto;
   data.notes = notes;
   if (logoData !== undefined) data.logoData = logoData;
 

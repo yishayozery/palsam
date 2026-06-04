@@ -28,9 +28,15 @@ export default function BattalionForm() {
                   <input name="code" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
                 </div>
               </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">מפקד הגדוד (אופציונלי)</label>
-                <input name="commander" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">מפקד הגדוד (אופציונלי)</label>
+                  <input name="commander" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">משפט הגדוד (אופציונלי)</label>
+                  <input name="motto" placeholder="לנצח בכל מחיר" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                </div>
               </div>
               <div className="border-t border-slate-200 pt-3">
                 <div className="text-sm font-semibold text-slate-700 mb-2">משתמש מפמ (אחראי מערכת)</div>
@@ -45,11 +51,11 @@ export default function BattalionForm() {
                   </div>
                 </div>
                 <div className="mt-2">
-                  <label className="block text-xs text-slate-500 mb-1">סיסמה (ברירת מחדל 123456)</label>
-                  <input name="mafamPass" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                  <label className="block text-xs text-slate-500 mb-1">טלפון (לשליחת הזמנה)</label>
+                  <input name="mafamPhone" placeholder="05X-XXXXXXX" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
                 </div>
               </div>
-              <p className="text-xs text-slate-400">הגדוד ייווצר עם 4 מחסנים (ציוד/תקשוב/חמידה/ארמון) וסטטוסי בסיס.</p>
+              <p className="text-xs text-slate-400">הגדוד ייווצר עם 4 מחסנים + סטטוסי בסיס. למפמ ייווצר קישור הזמנה (יגדיר סיסמה בכניסה ראשונה).</p>
               <div className="flex justify-end gap-2 pt-1">
                 <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
                 <button className="bg-slate-800 text-white rounded-lg px-4 py-2 text-sm">הקמה</button>

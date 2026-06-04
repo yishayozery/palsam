@@ -69,15 +69,9 @@ export async function getSession(): Promise<SessionUser | null> {
   }
 }
 
-/** מאמת שם משתמש + סיסמה מול ה-DB ומחזיר SessionUser או null */
-export async function authenticate(
-  username: string,
-  password: string,
-): Promise<SessionUser | null> {
-  const user = await prisma.appUser.findUnique({ where: { username } });
-  if (!user || !user.active) return null;
-  const ok = await verifyPassword(password, user.passwordHash);
-  if (!ok) return null;
+function toSession(user: {
+  id: string; username: string; fullName: string; role: Role; holderId: string | null; battalionId: string | null;
+}): SessionUser {
   return {
     id: user.id,
     username: user.username,
@@ -86,4 +80,31 @@ export async function authenticate(
     holderId: user.holderId,
     battalionId: user.battalionId,
   };
+}
+
+/** מאמת שם משתמש + סיסמה מול ה-DB ומחזיר SessionUser או null */
+export async function authenticate(
+  username: string,
+  password: string,
+): Promise<SessionUser | null> {
+  const user = await prisma.appUser.findUnique({ where: { username } });
+  if (!user || !user.active || !user.passwordSet) return null;
+  const ok = await verifyPassword(password, user.passwordHash);
+  if (!ok) return null;
+  return toSession(user);
+}
+
+/** הגדרת סיסמה ראשונה דרך קישור הזמנה — מחזיר SessionUser או null */
+export async function setPasswordByInvite(
+  token: string,
+  password: string,
+): Promise<SessionUser | null> {
+  const user = await prisma.appUser.findUnique({ where: { inviteToken: token } });
+  if (!user || !user.active) return null;
+  const hash = await hashPassword(password);
+  const updated = await prisma.appUser.update({
+    where: { id: user.id },
+    data: { passwordHash: hash, passwordSet: true, inviteToken: null },
+  });
+  return toSession(updated);
 }

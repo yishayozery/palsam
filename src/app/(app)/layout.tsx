@@ -20,7 +20,7 @@ export default async function AppLayout({
   });
 
   const battalion = user.battalionId
-    ? await prisma.battalion.findUnique({ where: { id: user.battalionId }, select: { name: true, logoData: true } })
+    ? await prisma.battalion.findUnique({ where: { id: user.battalionId }, select: { name: true, logoData: true, motto: true } })
     : null;
   const unitName = user.role === "SUPER_ADMIN" ? "ניהול-על" : battalion?.name || "גדוד";
 
@@ -28,16 +28,19 @@ export default async function AppLayout({
     <div className="flex h-screen overflow-hidden">
       <aside className="w-60 bg-slate-900 text-white flex flex-col shrink-0 print:hidden">
         <div className="px-4 py-4 border-b border-slate-700">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             {battalion?.logoData ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={battalion.logoData} alt="סמל הגדוד" className="w-9 h-9 object-contain rounded" />
+              <img src={battalion.logoData} alt="סמל הגדוד" className="w-10 h-10 object-contain rounded shrink-0" />
             ) : (
-              <span className="text-2xl">🛡️</span>
+              <span className="text-2xl shrink-0">🛡️</span>
             )}
-            <div>
-              <div className="font-bold text-base tracking-wide">KALAG</div>
-              <div className="text-xs text-slate-400">{unitName}</div>
+            <div className="min-w-0">
+              <div className="font-bold text-base leading-tight truncate">{unitName}</div>
+              <div className="text-xs text-slate-400 tracking-wide">KALAG · ניהול מלאי</div>
+              {battalion?.motto && (
+                <div className="text-[11px] text-amber-300/80 italic truncate mt-0.5">״{battalion.motto}״</div>
+              )}
             </div>
           </div>
         </div>

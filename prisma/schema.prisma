@@ -102,6 +102,7 @@ model Battalion {
   name      String
   code      String   @unique
   commander String? // מפקד הגדוד (פרופיל)
+  motto     String? // משפט/סיסמת הגדוד (לדוגמה: "לנצח בכל מחיר")
   notes     String?
   logoData  String? // סמל הגדוד (data-URL)
   active    Boolean  @default(true)
@@ -132,7 +133,10 @@ model AppUser {
   username     String     @unique
   passwordHash String
   fullName     String
+  phone        String? // לשליחת הזמנה בוואטסאפ
   role         Role
+  passwordSet  Boolean    @default(true) // false עד הגדרת סיסמה דרך קישור ההזמנה
+  inviteToken  String?    @unique
   battalionId  String? // null עבור SUPER_ADMIN
   battalion    Battalion? @relation(fields: [battalionId], references: [id])
   // המחזיק שעליו אחראי: מחסן (WAREHOUSE_MANAGER) או פלוגה (COMPANY_REP)

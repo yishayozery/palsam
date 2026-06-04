@@ -42,6 +42,7 @@ export default async function PublicSignPage({
           )}
           <div>
             <div className="text-xs text-slate-300">KALAG · {unitName}</div>
+            {sig.battalion?.motto && <div className="text-[11px] text-amber-300/80 italic">״{sig.battalion.motto}״</div>}
             <h1 className="text-lg font-bold">אישור וחתימה על ציוד</h1>
             <p className="text-sm text-slate-300 mt-1">
               {sig.soldier.fullName} · {sig.soldier.personalNumber}

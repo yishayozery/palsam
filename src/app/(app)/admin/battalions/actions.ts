@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { nanoid } from "nanoid";
 import { requireSuperAdmin } from "@/lib/guard";
 import { hashPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
@@ -20,19 +21,24 @@ export async function createBattalion(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
   const code = String(formData.get("code") || "").trim().toUpperCase();
   const commander = String(formData.get("commander") || "").trim() || null;
+  const motto = String(formData.get("motto") || "").trim() || null;
   const mafamUser = String(formData.get("mafamUser") || "").trim();
   const mafamName = String(formData.get("mafamName") || "").trim();
-  const mafamPass = String(formData.get("mafamPass") || "").trim() || "123456";
+  const mafamPhone = String(formData.get("mafamPhone") || "").trim() || null;
   if (!name || !code || !mafamUser || !mafamName) return;
 
   const exists = await prisma.battalion.findUnique({ where: { code } });
   if (exists) return;
 
   await prisma.$transaction(async (tx) => {
-    const bat = await tx.battalion.create({ data: { name, code, commander } });
-    // מפמ
+    const bat = await tx.battalion.create({ data: { name, code, commander, motto } });
+    // מפמ — באמצעות הזמנה (יגדיר סיסמה בכניסה ראשונה)
     await tx.appUser.create({
-      data: { username: mafamUser, fullName: mafamName, role: "BATTALION_ADMIN", battalionId: bat.id, passwordHash: await hashPassword(mafamPass) },
+      data: {
+        username: mafamUser, fullName: mafamName, phone: mafamPhone, role: "BATTALION_ADMIN",
+        battalionId: bat.id, passwordHash: await hashPassword(nanoid(32)),
+        passwordSet: false, inviteToken: nanoid(28),
+      },
     });
     // 4 מחסנים
     for (const w of WH_DEFS) {

@@ -55,6 +55,7 @@ export default async function TransferDocumentPage({
           <div className="text-left text-sm flex items-center gap-3">
             <div>
               <div className="font-bold">{unitName}</div>
+              {t.battalion?.motto && <div className="text-xs text-slate-500 italic">״{t.battalion.motto}״</div>}
               <div className="text-slate-500">מס׳ תעודה: {docNumber}</div>
               <div className="text-slate-500">{t.createdAt.toLocaleDateString("he-IL")} {t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}</div>
             </div>

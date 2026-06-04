@@ -1,0 +1,129 @@
+"use client";
+
+import { useState } from "react";
+import { ROLE_LABELS } from "@/lib/rbac";
+import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
+import { saveUser, regenerateInvite, toggleUser } from "./actions";
+
+type Holder = { id: string; name: string; kind: string };
+type User = {
+  id: string; fullName: string; username: string; phone: string | null;
+  role: string; holderId: string | null; holderName: string | null;
+  active: boolean; passwordSet: boolean; inviteToken: string | null;
+};
+
+const ROLE_OPTS = ["WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"] as const;
+
+function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
+  const [copied, setCopied] = useState(false);
+  if (user.passwordSet) {
+    return (
+      <form action={regenerateInvite}>
+        <input type="hidden" name="id" value={user.id} />
+        <button className="text-xs text-slate-400 hover:text-slate-700">איפוס סיסמה (הזמנה)</button>
+      </form>
+    );
+  }
+  const link = `${baseUrl}/invite/${user.inviteToken}`;
+  const wa = user.phone
+    ? `https://wa.me/${user.phone.replace(/\D/g, "").replace(/^0/, "972")}?text=${encodeURIComponent(`הוזמנת למערכת KALAG. קישור להגדרת סיסמה: ${link}`)}`
+    : `https://wa.me/?text=${encodeURIComponent(`הוזמנת למערכת KALAG. קישור להגדרת סיסמה: ${link}`)}`;
+  return (
+    <div className="flex items-center gap-2">
+      <Badge className="bg-amber-100 text-amber-700">ממתין להפעלה</Badge>
+      <button onClick={() => { navigator.clipboard?.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+        className="text-xs text-slate-500 hover:text-slate-800">{copied ? "הועתק ✓" : "העתק קישור"}</button>
+      <a href={wa} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 hover:underline">וואטסאפ</a>
+    </div>
+  );
+}
+
+export default function UsersManager({ users, holders, baseUrl }: { users: User[]; holders: Holder[]; baseUrl: string }) {
+  const [open, setOpen] = useState(false);
+  const [role, setRole] = useState<string>("WAREHOUSE_MANAGER");
+
+  const warehouses = holders.filter((h) => h.kind === "WAREHOUSE");
+  const companies = holders.filter((h) => h.kind === "COMPANY");
+  const holderOpts = role === "WAREHOUSE_MANAGER" ? warehouses : companies;
+  const holderLabel = role === "WAREHOUSE_MANAGER" ? "מחסן" : role === "COMPANY_REP" ? "פלוגה" : "פלוגה (לצופה פלוגתי — אופציונלי)";
+
+  return (
+    <div>
+      <div className="flex justify-end mb-4">
+        <button onClick={() => setOpen(true)} className="bg-slate-800 text-white rounded-lg px-4 py-2 text-sm hover:bg-slate-900">+ הזמנת משתמש</button>
+      </div>
+
+      <Card>
+        {users.length === 0 ? <EmptyState>אין משתמשים. הזמן משתמש ראשון.</EmptyState> : (
+          <Table>
+            <thead><tr><Th>שם</Th><Th>תפקיד</Th><Th>שיוך</Th><Th>טלפון</Th><Th>הזמנה / סטטוס</Th><Th></Th></tr></thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id} className={u.active ? "" : "opacity-50"}>
+                  <Td><span className="font-medium">{u.fullName}</span> <span className="text-xs text-slate-400 font-mono">@{u.username}</span></Td>
+                  <Td><Badge className="bg-slate-200 text-slate-700">{ROLE_LABELS[u.role as keyof typeof ROLE_LABELS]}</Badge></Td>
+                  <Td>{u.holderName ?? "—"}</Td>
+                  <Td className="text-xs text-slate-500">{u.phone ?? "—"}</Td>
+                  <Td><InviteCell user={u} baseUrl={baseUrl} /></Td>
+                  <Td>
+                    <form action={toggleUser}>
+                      <input type="hidden" name="id" value={u.id} />
+                      <button className="text-xs text-rose-500 hover:text-rose-700">{u.active ? "השבתה" : "הפעלה"}</button>
+                    </form>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Card>
+
+      {open && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-slate-200">
+              <h3 className="font-bold text-slate-800">הזמנת משתמש חדש</h3>
+              <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700">✕</button>
+            </div>
+            <form action={async (fd) => { await saveUser(fd); setOpen(false); }} className="p-5 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">שם מלא</label>
+                  <input name="fullName" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">שם משתמש</label>
+                  <input name="username" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">טלפון (לשליחת הזמנה בוואטסאפ)</label>
+                <input name="phone" placeholder="05X-XXXXXXX" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">תפקיד</label>
+                  <select name="role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    {ROLE_OPTS.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">{holderLabel}</label>
+                  <select name="holderId" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    {role === "VIEWER" && <option value="">כל הגדוד</option>}
+                    {holderOpts.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <p className="text-xs text-slate-400">ייווצר קישור הזמנה — שלח אותו למשתמש; הוא יגדיר סיסמה בכניסה הראשונה.</p>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
+                <button className="bg-slate-800 text-white rounded-lg px-4 py-2 text-sm">יצירת הזמנה</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

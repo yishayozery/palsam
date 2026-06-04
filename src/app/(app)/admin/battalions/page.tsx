@@ -1,6 +1,7 @@
 import { requireSuperAdmin } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card, Table, Th, Td, EmptyState } from "@/components/ui";
+import InviteLink from "@/components/InviteLink";
 import BattalionForm from "./BattalionForm";
 import { toggleBattalion } from "./actions";
 
@@ -8,12 +9,13 @@ export const dynamic = "force-dynamic";
 
 export default async function BattalionsPage() {
   await requireSuperAdmin();
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
 
   const battalions = await prisma.battalion.findMany({
     orderBy: { createdAt: "asc" },
     include: {
       _count: { select: { users: true, soldiers: true, itemTypes: true, holders: true } },
-      users: { where: { role: "BATTALION_ADMIN" }, select: { username: true, fullName: true } },
+      users: { where: { role: "BATTALION_ADMIN" }, select: { username: true, fullName: true, phone: true, passwordSet: true, inviteToken: true } },
     },
   });
 
@@ -37,7 +39,17 @@ export default async function BattalionsPage() {
                 <tr key={b.id}>
                   <Td className="font-medium">{b.name}</Td>
                   <Td className="font-mono text-xs">{b.code}</Td>
-                  <Td className="text-xs">{b.users.map((u) => `${u.fullName} (@${u.username})`).join(", ") || "—"}</Td>
+                  <Td className="text-xs">
+                    {b.users.map((u) => (
+                      <div key={u.username} className="flex items-center gap-2">
+                        <span>{u.fullName} (@{u.username})</span>
+                        {!u.passwordSet && u.inviteToken && (
+                          <InviteLink token={u.inviteToken} phone={u.phone} baseUrl={baseUrl} />
+                        )}
+                      </div>
+                    ))}
+                    {b.users.length === 0 && "—"}
+                  </Td>
                   <Td className="text-center">{b._count.users}</Td>
                   <Td className="text-center">{b._count.soldiers}</Td>
                   <Td className="text-center">{b._count.itemTypes}</Td>
