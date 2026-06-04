@@ -41,7 +41,7 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
     prisma.countFrequency.findMany({ where: { battalionId: bId }, orderBy: { intervalDays: "asc" } }),
   ]);
 
-  const whOptions = (["EQUIPMENT", "COMMS", "AMMO", "ARMORY"] as const).map((v) => ({ value: v, label: WAREHOUSE_TYPE_SHORT[v] }));
+  const whOptions = (["EQUIPMENT", "COMMS", "AMMO", "ARMORY", "VEHICLES"] as const).map((v) => ({ value: v, label: WAREHOUSE_TYPE_SHORT[v] }));
 
   return (
     <div>

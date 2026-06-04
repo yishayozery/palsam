@@ -14,6 +14,7 @@ const WH_DEFS: { type: WarehouseType; name: string }[] = [
   { type: "COMMS", name: "מחסן תקשוב" },
   { type: "AMMO", name: "בונקר חמידה" },
   { type: "ARMORY", name: "ארמון" },
+  { type: "VEHICLES", name: "מחסן רכבים" },
 ];
 
 /** הקמת גדוד חדש + משתמש מפמ + 4 מחסנים + מילוני בסיס */
