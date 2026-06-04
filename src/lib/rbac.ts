@@ -85,6 +85,8 @@ export const WAREHOUSE_TYPE_LABELS: Record<WarehouseType, string> = {
   AMMO: "חמידה / תחמושת (בונקר)",
   ARMORY: "ארמון",
   VEHICLES: "רכבים (קצין רכב)",
+  MEDICAL: "רפואה",
+  GENERAL: "כללי",
 };
 
 export const WAREHOUSE_TYPE_SHORT: Record<WarehouseType, string> = {
@@ -93,6 +95,8 @@ export const WAREHOUSE_TYPE_SHORT: Record<WarehouseType, string> = {
   AMMO: "חמידה",
   ARMORY: "ארמון",
   VEHICLES: "רכבים",
+  MEDICAL: "רפואה",
+  GENERAL: "כללי",
 };
 
 export const WAREHOUSE_TYPE_ICON: Record<WarehouseType, string> = {
@@ -101,6 +105,8 @@ export const WAREHOUSE_TYPE_ICON: Record<WarehouseType, string> = {
   AMMO: "💥",
   ARMORY: "🔫",
   VEHICLES: "🚙",
+  MEDICAL: "⚕️",
+  GENERAL: "📦",
 };
 
 /** תפקיד מנהל המחסן לפי טיפוס (לתיוג בלבד) */
@@ -110,4 +116,6 @@ export const WAREHOUSE_MANAGER_TITLE: Record<WarehouseType, string> = {
   AMMO: "אחראי בונקר",
   ARMORY: "אחראי ארמון",
   VEHICLES: "קצין רכב",
+  MEDICAL: "קצין רפואה",
+  GENERAL: "אחראי כללי",
 };

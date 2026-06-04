@@ -25,7 +25,7 @@ export default async function OrgPage() {
     }),
   ]);
 
-  const whOptions = (["EQUIPMENT", "COMMS", "AMMO", "ARMORY", "VEHICLES"] as const).map((v) => ({ value: v, label: WAREHOUSE_TYPE_SHORT[v] }));
+  const whOptions = (["EQUIPMENT", "COMMS", "AMMO", "ARMORY", "VEHICLES", "MEDICAL", "GENERAL"] as const).map((v) => ({ value: v, label: WAREHOUSE_TYPE_SHORT[v] }));
 
   // CrudSection מצפה ל-saveAction אחד; נשתמש בעטיפה לפי קיום id (שינוי שם) או יצירה
   const saveWarehouse = async (fd: FormData) => {

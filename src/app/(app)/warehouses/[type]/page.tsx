@@ -10,7 +10,7 @@ import type { WarehouseType } from "@/generated/prisma";
 
 export const dynamic = "force-dynamic";
 
-const VALID: WarehouseType[] = ["EQUIPMENT", "COMMS", "AMMO", "ARMORY", "VEHICLES"];
+const VALID: WarehouseType[] = ["EQUIPMENT", "COMMS", "AMMO", "ARMORY", "VEHICLES", "MEDICAL", "GENERAL"];
 
 export default async function WarehouseDetailPage({
   params,

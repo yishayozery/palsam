@@ -33,6 +33,8 @@ enum WarehouseType {
   AMMO // חמידה / תחמושת (בונקר)
   ARMORY // ארמון
   VEHICLES // רכבים (קצין רכב)
+  MEDICAL // רפואה
+  GENERAL // כללי
 }
 
 enum TrackingMethod {
