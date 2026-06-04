@@ -2,6 +2,7 @@ import { requireCapability } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card } from "@/components/ui";
 import StockTable from "./StockTable";
+import StockEntryModal from "./StockEntryModal";
 
 export const dynamic = "force-dynamic";
 
@@ -48,12 +49,19 @@ export default async function StockPage({
       <PageHeader
         title="מלאי הגדוד"
         subtitle="הצהרת הכמויות שהגדוד חתום עליהן מול החטיבה — לפי מק״ט, סטטוס ושייכות"
+        action={
+          <StockEntryModal
+            items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod, unit: i.unit, association: ASSOC[i.association] }))}
+            statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
+          />
+        }
       />
       <Card className="p-4 mb-4 bg-blue-50 border-blue-200">
         <p className="text-sm text-blue-900">
-          לכל פריט: בחר <b>סטטוס</b> (ברירת מחדל: תקין), הזן את הכמות, ולחץ עדכן.
+          לחץ על <b>+ הוספת מלאי</b> למעלה להזנת פריטים חדשים. ניתן לחפש לפי שם/מק״ט,
+          להזין סטטוס (ברירת מחדל: תקין), ולהוסיף ידנית או לטעון מאקסל.
           <span className="block text-xs mt-1 text-blue-800">
-            פרטני — מספרי סריאל ידני / טעינה מקובץ · אצווה — מספר אצווה + כמות (כמה אצוות לאותו פריט)
+            לחץ על "עדכן / הוסף" בכל שורה לעדכון מהיר, או "היסטוריה" לפירוט תנועות וייצוא לאקסל.
           </span>
         </p>
       </Card>
