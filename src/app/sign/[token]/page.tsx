@@ -13,12 +13,14 @@ export default async function PublicSignPage({
   const sig = await prisma.signature.findUnique({
     where: { token },
     include: {
+      battalion: true,
       soldier: true,
       transfer: { include: { lines: { include: { itemType: true, serialUnit: true } } } },
     },
   });
 
-  const unitName = process.env.UNIT_NAME || "גדוד";
+  const unitName = sig?.battalion?.name || "גדוד";
+  const logo = sig?.battalion?.logoData;
 
   if (!sig) {
     return <Centered title="קישור לא תקין" text="ההחתמה אינה קיימת." />;
@@ -33,12 +35,18 @@ export default async function PublicSignPage({
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg overflow-hidden">
-        <div className="bg-slate-800 text-white p-5">
-          <div className="text-xs text-slate-300">{unitName}</div>
-          <h1 className="text-lg font-bold">אישור וחתימה על ציוד</h1>
-          <p className="text-sm text-slate-300 mt-1">
-            {sig.soldier.fullName} · {sig.soldier.personalNumber}
-          </p>
+        <div className="bg-slate-800 text-white p-5 flex items-center gap-3">
+          {logo && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logo} alt="סמל הגדוד" className="w-12 h-12 object-contain bg-white/10 rounded p-1" />
+          )}
+          <div>
+            <div className="text-xs text-slate-300">KALAG · {unitName}</div>
+            <h1 className="text-lg font-bold">אישור וחתימה על ציוד</h1>
+            <p className="text-sm text-slate-300 mt-1">
+              {sig.soldier.fullName} · {sig.soldier.personalNumber}
+            </p>
+          </div>
         </div>
 
         <div className="p-5">

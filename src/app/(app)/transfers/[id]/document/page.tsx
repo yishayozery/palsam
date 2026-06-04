@@ -18,6 +18,7 @@ export default async function TransferDocumentPage({
   const t = await prisma.transfer.findUnique({
     where: { id },
     include: {
+      battalion: true,
       fromHolder: true,
       toHolder: true,
       toSoldier: true,
@@ -28,7 +29,7 @@ export default async function TransferDocumentPage({
   });
   if (!t) notFound();
 
-  const unitName = process.env.UNIT_NAME || "גדוד";
+  const unitName = t.battalion?.name || "גדוד";
   const docNumber = t.id.slice(-8).toUpperCase();
 
   return (
@@ -41,14 +42,23 @@ export default async function TransferDocumentPage({
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 max-w-3xl mx-auto print:shadow-none print:border-0">
         {/* כותרת */}
         <div className="flex justify-between items-start border-b-2 border-slate-800 pb-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">תעודת העברת ציוד</h1>
-            <p className="text-sm text-slate-500 mt-1">{TRANSFER_TYPE[t.type]}</p>
+          <div className="flex items-center gap-3">
+            {t.battalion?.logoData && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={t.battalion.logoData} alt="סמל הגדוד" className="w-14 h-14 object-contain" />
+            )}
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800">תעודת העברת ציוד</h1>
+              <p className="text-sm text-slate-500 mt-1">{TRANSFER_TYPE[t.type]}</p>
+            </div>
           </div>
-          <div className="text-left text-sm">
-            <div className="font-bold">{unitName}</div>
-            <div className="text-slate-500">מס׳ תעודה: {docNumber}</div>
-            <div className="text-slate-500">{t.createdAt.toLocaleDateString("he-IL")} {t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}</div>
+          <div className="text-left text-sm flex items-center gap-3">
+            <div>
+              <div className="font-bold">{unitName}</div>
+              <div className="text-slate-500">מס׳ תעודה: {docNumber}</div>
+              <div className="text-slate-500">{t.createdAt.toLocaleDateString("he-IL")} {t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}</div>
+            </div>
+            <div className="text-3xl">🛡️</div>
           </div>
         </div>
 

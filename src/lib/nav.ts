@@ -20,8 +20,11 @@ export const NAV: NavItem[] = [
   { href: "/counts", label: "ספירות מלאי", icon: "🔢", cap: "reports.view" },
   { href: "/gaps", label: "פערים", icon: "⚠️", cap: "reports.view" },
   { href: "/soldiers", label: "חיילים", icon: "🪖", cap: "company.manage" },
+  { href: "/locations", label: "מידוף", icon: "🗄️", cap: "locations.manage" },
+  { href: "/reps", label: "נציגי פלוגות", icon: "🤝", cap: "reps.manage" },
   { href: "/dictionaries", label: "מילונים", icon: "📚", cap: "dictionaries.manage" },
   { href: "/users", label: "משתמשים", icon: "👤", cap: "users.manage" },
+  { href: "/profile", label: "פרופיל גדוד", icon: "🏷️", cap: "battalion.profile" },
   { href: "/reports", label: "דוחות", icon: "📈", cap: "reports.view" },
   { href: "/audit", label: "יומן פעולות", icon: "🧾", cap: "audit.view" },
 ];

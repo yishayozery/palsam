@@ -103,6 +103,7 @@ model Battalion {
   code      String   @unique
   commander String? // מפקד הגדוד (פרופיל)
   notes     String?
+  logoData  String? // סמל הגדוד (data-URL)
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
