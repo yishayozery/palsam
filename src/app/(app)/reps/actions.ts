@@ -14,9 +14,21 @@ export async function inviteRep(formData: FormData) {
   const bId = user.battalionId!;
   if (!user.holderId) return;
   const companyId = String(formData.get("companyId") || "");
-  const fullName = String(formData.get("fullName") || "").trim();
+  let fullName = String(formData.get("fullName") || "").trim();
   const enteredUsername = String(formData.get("username") || "").trim();
-  const phone = String(formData.get("phone") || "").trim() || null;
+  let phone: string | null = String(formData.get("phone") || "").trim() || null;
+  // אם נבחר חייל מהרוסטר — שאיבת השם והנייד ממנו (מקור אמת)
+  const soldierId = String(formData.get("soldierId") || "").trim() || null;
+  if (soldierId) {
+    const soldier = await prisma.soldier.findUnique({ where: { id: soldierId } });
+    if (soldier && soldier.battalionId === bId) {
+      fullName = soldier.fullName;
+      phone = soldier.phone ?? phone;
+      // ודא שלא מקושר למשתמש אחר
+      const linked = await prisma.appUser.findUnique({ where: { soldierId } });
+      if (linked) throw new Error(`החייל ${soldier.fullName} כבר מקושר למשתמש @${linked.username}`);
+    }
+  }
   if (!companyId || !fullName || !enteredUsername) return;
 
   // הגנה: כבר יש רס"פ פעיל לאותה פלוגה במחסן הזה?
@@ -41,6 +53,7 @@ export async function inviteRep(formData: FormData) {
   const rep = await prisma.appUser.create({
     data: {
       username, fullName, phone, role: "COMPANY_REP", battalionId: bId, holderId: companyId,
+      ...(soldierId ? { soldierId } : {}),
       passwordHash: await hashPassword(nanoid(32)), passwordSet: false, inviteToken: nanoid(28),
     },
   });

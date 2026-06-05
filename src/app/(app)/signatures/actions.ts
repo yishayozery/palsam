@@ -48,11 +48,33 @@ export async function createSignout(formData: FormData) {
         await tx.serialUnit.update({ where: { id: sid }, data: { vehicleId } });
       }
     }
-    // פריטים מהערכה (כמותיים)
+    // פריטים מהערכה — תמיכה בכמותי וסריאלי
     for (const l of kitLines) {
-      if (l.itemType.trackingMethod === "QUANTITY") {
+      if (l.itemType.trackingMethod === "QUANTITY" || l.itemType.trackingMethod === "LOT") {
         const status = await tx.itemStatus.findFirst({ where: { battalionId: bId, isDefault: true } });
-        await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: l.itemTypeId, quantity: l.quantity, statusId: status?.id } });
+        await tx.transferLine.create({
+          data: { transferId: transfer.id, itemTypeId: l.itemTypeId, quantity: l.quantity, statusId: status?.id },
+        });
+      } else if (l.itemType.trackingMethod === "SERIAL") {
+        // משיכת SN פנוי (לא חתום) מהמחסן של המשתמש
+        const available = await tx.serialUnit.findMany({
+          where: {
+            battalionId: bId, itemTypeId: l.itemTypeId, signedSoldierId: null,
+            ...(user.holderId ? { currentHolderId: user.holderId } : {}),
+          },
+          take: l.quantity,
+        });
+        if (available.length < l.quantity) {
+          throw new Error(`אין מספיק יחידות סריאליות פנויות של ${l.itemType.name} (נדרש: ${l.quantity}, זמין: ${available.length})`);
+        }
+        for (const su of available) {
+          await tx.transferLine.create({
+            data: { transferId: transfer.id, itemTypeId: l.itemTypeId, quantity: 1, serialUnitId: su.id, statusId: su.statusId },
+          });
+          if (vehicleId) {
+            await tx.serialUnit.update({ where: { id: su.id }, data: { vehicleId } });
+          }
+        }
       }
     }
     // פריטים כמותיים שנבחרו ידנית בעגלה
