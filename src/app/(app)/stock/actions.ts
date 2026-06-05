@@ -77,6 +77,7 @@ export async function declareSerialsForm(formData: FormData): Promise<void> {
 }
 
 export async function declareSerials(formData: FormData) {
+  try {
   const user = await requireCapability("warehouse.operate");
   const bId = user.battalionId!;
   const itemTypeId = String(formData.get("itemTypeId") || "");
@@ -84,7 +85,9 @@ export async function declareSerials(formData: FormData) {
   const statusId = String(formData.get("statusId") || "") || (await defaultStatusId(prisma, bId));
   const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
   const externalContact = String(formData.get("externalContact") || "").trim() || null;
-  const recipientPersonalId = await extractPersonalId(bId, formData);
+  let recipientPersonalId: string | null = null;
+  try { recipientPersonalId = await extractPersonalId(bId, formData); }
+  catch (e) { return { error: e instanceof Error ? e.message.replace(/^PERSONAL_ID_REQUIRED:\s*/, "") : "שגיאה במספר אישי" }; }
 
   const serials = serialsRaw.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
   if (serials.length === 0) {
@@ -130,6 +133,10 @@ export async function declareSerials(formData: FormData) {
   await audit(user.id, "DECLARE_SERIALS", "ItemType", itemTypeId, { count: created, failed });
   revalidateAll();
   return { ok: true as const, created };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { error: msg.replace(/^Error:\s*/, "") };
+  }
 }
 
 /** טעינת סריאליים מקובץ אקסל */
