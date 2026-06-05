@@ -15,6 +15,7 @@ export async function saveUser(formData: FormData) {
   const enteredUsername = String(formData.get("username") || "").trim();
   const fullName = String(formData.get("fullName") || "").trim();
   const phone = String(formData.get("phone") || "").trim() || null;
+  const title = String(formData.get("title") || "").trim() || null;
   const battalionId = admin.role === "SUPER_ADMIN" ? (String(formData.get("battalionId") || "") || null) : admin.battalionId;
   const battalion = battalionId ? await prisma.battalion.findUnique({ where: { id: battalionId } }) : null;
   const suffix = battalion?.brigade || battalion?.code || null;
@@ -50,7 +51,7 @@ export async function saveUser(formData: FormData) {
   try {
     if (id) {
       const username = await resolveUniqueUsername(enteredUsername, suffix, id);
-      await prisma.appUser.update({ where: { id }, data: { username, fullName, phone, role, customRoleId, holderId } });
+      await prisma.appUser.update({ where: { id }, data: { username, fullName, phone, title, role, customRoleId, holderId } });
       await syncHolders(id);
       await audit(admin.id, "UPDATE", "AppUser", id);
     } else {
@@ -58,7 +59,7 @@ export async function saveUser(formData: FormData) {
       const inviteToken = nanoid(28);
       const randomHash = await hashPassword(nanoid(32));
       const created = await prisma.appUser.create({
-        data: { username, fullName, phone, role, customRoleId, holderId, battalionId, passwordHash: randomHash, passwordSet: false, inviteToken },
+        data: { username, fullName, phone, title, role, customRoleId, holderId, battalionId, passwordHash: randomHash, passwordSet: false, inviteToken },
       });
       await syncHolders(created.id);
       await audit(admin.id, "CREATE", "AppUser", username, { invited: true });

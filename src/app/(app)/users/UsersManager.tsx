@@ -8,7 +8,7 @@ import UsernameSuggest from "./UsernameSuggest";
 type Holder = { id: string; name: string; kind: string };
 type CustomRole = { id: string; name: string; template: string };
 type User = {
-  id: string; fullName: string; username: string; phone: string | null;
+  id: string; fullName: string; username: string; phone: string | null; title?: string | null;
   role: string; customRoleId: string | null; roleLabel: string;
   holderId: string | null; holderNames: string[];
   active: boolean; passwordSet: boolean; inviteToken: string | null;
@@ -47,7 +47,7 @@ export default function UsersManager({ users, holders, customRoles, baseUrl, bri
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<string>("BATTALION_ADMIN");
 
-  // התבנית האפקטיבית של הבחירה (תפקיד מותאם → תבנית הבסיס שלו)
+  // התבנית האפקטיבית של הבחירה (הרשאות מותאם → תבנית הבסיס שלו)
   const effectiveTemplate = role.startsWith("custom:")
     ? customRoles.find((c) => c.id === role.slice(7))?.template ?? "VIEWER"
     : role;
@@ -66,12 +66,13 @@ export default function UsersManager({ users, holders, customRoles, baseUrl, bri
       <Card>
         {users.length === 0 ? <EmptyState>אין משתמשים. הזמן משתמש ראשון.</EmptyState> : (
           <Table>
-            <thead><tr><Th>שם</Th><Th>תפקיד</Th><Th>שיוך</Th><Th>טלפון</Th><Th>הזמנה / סטטוס</Th><Th></Th></tr></thead>
+            <thead><tr><Th>שם</Th><Th>תואר</Th><Th>הרשאות</Th><Th>שיוך</Th><Th>טלפון</Th><Th>הזמנה / סטטוס</Th><Th></Th></tr></thead>
             <tbody>
               {users.map((u) => (
                 <tr key={u.id} className={u.active ? "" : "opacity-50"}>
                   <Td><span className="font-medium">{u.fullName}</span> <span className="text-xs text-slate-400 font-mono">@{u.username}</span></Td>
-                  <Td><Badge className="bg-slate-200 text-slate-700">{u.roleLabel}</Badge></Td>
+                  <Td className="text-xs">{u.title ?? <span className="text-slate-300">—</span>}</Td>
+                  <Td><Badge className="bg-slate-200 text-slate-700">🔑 {u.roleLabel}</Badge></Td>
                   <Td>{u.holderNames.length > 0 ? u.holderNames.join(", ") : "—"}</Td>
                   <Td className="text-xs text-slate-500">{u.phone ?? "—"}</Td>
                   <Td><InviteCell user={u} baseUrl={baseUrl} /></Td>
@@ -96,9 +97,16 @@ export default function UsersManager({ users, holders, customRoles, baseUrl, bri
               <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700">✕</button>
             </div>
             <form action={async (fd) => { await saveUser(fd); setOpen(false); }} className="p-5 space-y-3">
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">שם מלא</label>
-                <input name="fullName" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">שם מלא</label>
+                  <input name="fullName" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">תואר / תפקיד (טקסט חופשי)</label>
+                  <input name="title" placeholder="מפ״מ, צופה, מטה..."
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                </div>
               </div>
               <UsernameSuggest brigade={brigade} code={battalionCode} />
               <div>
@@ -107,13 +115,13 @@ export default function UsersManager({ users, holders, customRoles, baseUrl, bri
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">תפקיד</label>
+                  <label className="block text-xs text-slate-500 mb-1">הרשאות</label>
                   <select name="role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    <optgroup label="תפקידי בסיס">
+                    <optgroup label="הרשאותי בסיס">
                       {ROLE_OPTS.map((r) => <option key={r} value={r}>{BUILTIN_LABELS[r]}</option>)}
                     </optgroup>
                     {customRoles.length > 0 && (
-                      <optgroup label="תפקידים מותאמים">
+                      <optgroup label="הרשאותים מותאמים">
                         {customRoles.map((c) => <option key={c.id} value={`custom:${c.id}`}>{c.name}</option>)}
                       </optgroup>
                     )}

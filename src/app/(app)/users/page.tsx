@@ -31,13 +31,14 @@ export default async function UsersPage() {
     <div>
       <PageHeader
         title="הגדרות גדוד"
-        subtitle="פרופיל, מבנה ארגוני ומשתמשים"
-        action={<Link href="/roles" className="text-sm bg-white border border-slate-300 rounded-lg px-4 py-2 hover:bg-slate-50">ניהול תפקידים</Link>}
+        subtitle="פרופיל, מבנה ארגוני ומטה גדוד"
+        action={<Link href="/roles" className="text-sm bg-white border border-slate-300 rounded-lg px-4 py-2 hover:bg-slate-50">ניהול הרשאות מותאמות</Link>}
       />
       <SettingsTabs active="users" />
       <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 mb-4">
         ⓘ מסך זה מציג רק <b>משתמשי מטה הגדוד</b> (מפ״מ, צופים).
-        קציני מחסן ורס״פים נוספים — נוהל ב<a href="/org" className="underline font-medium">מבנה ארגוני</a> (לחץ על המחסן/הפלוגה ופתח אותה).
+        קציני מחסן ורס״פים — נוהל ב<a href="/org" className="underline font-medium">מבנה ארגוני</a>.
+        לרשימת <b>כל המשתמשים במערכת</b> ושליחת הזמנות חוזרות — <a href="/users/all" className="underline font-medium">כל המשתמשים</a>.
       </div>
       <UsersManager
         baseUrl={baseUrl}
@@ -46,7 +47,7 @@ export default async function UsersPage() {
         holders={holders.map((h) => ({ id: h.id, name: h.name, kind: h.kind }))}
         customRoles={customRoles.map((r) => ({ id: r.id, name: r.name, template: r.template }))}
         users={users.map((u) => ({
-          id: u.id, fullName: u.fullName, username: u.username, phone: u.phone,
+          id: u.id, fullName: u.fullName, username: u.username, phone: u.phone, title: u.title,
           role: u.role, customRoleId: u.customRoleId,
           roleLabel: u.customRole?.name ?? ROLE_LABELS[u.role],
           holderId: u.holderId,

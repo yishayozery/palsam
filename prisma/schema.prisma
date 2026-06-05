@@ -152,6 +152,7 @@ model AppUser {
   passwordHash String
   fullName     String
   phone        String? // לשליחת הזמנה בוואטסאפ
+  title        String? // תואר/תפקיד טקסט חופשי (מפ, רס"פ, מפקד מחסן, אחראי, מפלג, וכו')
   role         Role // פרופיל ההרשאות בפועל (תבנית)
   // תפקיד מותאם (שם תצוגה) שמשתמש בפרופיל ההרשאות של role
   customRoleId String?
@@ -259,6 +260,7 @@ model Holder {
   countDefs        CountDefinition[] @relation("CountDefHolder")
   countTasks       CountTask[]
   countLines       CountLine[]
+  secondarySoldiers Soldier[]        @relation("SoldierSecondary")
   discrepancies    Discrepancy[]
   // קשרי מחסן↔פלוגה (איזה פלוגות המחסן עובד מולן)
   warehouseLinks   WarehouseCompany[] @relation("WarehouseSide")
@@ -315,6 +317,9 @@ model Soldier {
   platoon        String? // מחלקה בתוך הפלוגה
   companyId      String?
   company        Holder?   @relation(fields: [companyId], references: [id])
+  // שיוך משני — מחסן שהחייל גם משתייך אליו (למשל חייל ארמון שגם בפלוגה א')
+  secondaryHolderId String?
+  secondaryHolder   Holder? @relation("SoldierSecondary", fields: [secondaryHolderId], references: [id])
   active         Boolean   @default(true)
   // אישור שליש: חייל יכול לחתום על ציוד רק אם enlisted = true
   enlisted       Boolean   @default(false)

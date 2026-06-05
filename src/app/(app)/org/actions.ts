@@ -16,6 +16,7 @@ export async function inviteHolderUser(formData: FormData) {
   const holderId = String(formData.get("holderId") || "");
   const enteredUsername = String(formData.get("username") || "").trim().toLowerCase();
   const phoneIn = String(formData.get("phone") || "").trim() || null;
+  const title = String(formData.get("title") || "").trim() || null;
   let fullName = String(formData.get("fullName") || "").trim();
   let phone = phoneIn;
   // אופציונלי: קישור לחייל קיים ברוסטר — שואב את הפרטים אוטומטית
@@ -52,7 +53,7 @@ export async function inviteHolderUser(formData: FormData) {
 
   const newUser = await prisma.appUser.create({
     data: {
-      username, fullName, phone, role, battalionId: bId,
+      username, fullName, phone, title, role, battalionId: bId,
       holderId, soldierId, passwordHash: randomHash, passwordSet: false, inviteToken,
     },
   });
