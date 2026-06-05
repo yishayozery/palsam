@@ -139,7 +139,7 @@ export default async function StockPage({
             <h2 className="font-bold text-amber-900 flex items-center gap-2">
               ⏳ קבלות/החזרות ממתינות לאישור ({pendingApprovals.length})
             </h2>
-            <Link href="/transfers" className="text-xs text-amber-800 hover:underline">היסטוריה מלאה ←</Link>
+            <Link href="/transfers" className="text-xs text-amber-800 hover:underline">כל הקבלות וההחזרות ←</Link>
           </div>
           <div className="space-y-2">
             {pendingApprovals.map((t) => {

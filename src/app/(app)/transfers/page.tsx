@@ -11,8 +11,6 @@ export const dynamic = "force-dynamic";
 export default async function TransfersPage() {
   const user = await requireUser();
   const bId = user.battalionId!;
-  const canIssue = can(user.role, "warehouse.operate");
-  const canReturn = can(user.role, "company.manage");
   const canApprove = can(user.role, "transfer.approve");
 
   // סקופ לקצין מחסן: רק העברות שמערבות את המחסנים שלו
@@ -47,24 +45,8 @@ export default async function TransfersPage() {
   return (
     <div>
       <PageHeader
-        title="העברות (גדוד ↔ חטיבה / גדודים)"
-        subtitle="קליטות וגריעות מול החטיבה, היסטוריה ולחיצות יד. החתמת פלוגה/חייל — במסך 'החתמות חיילים'."
-        action={
-          <div className="flex gap-2">
-            {canIssue && (
-              <Link href="/transfers/new?type=ISSUE"
-                className="bg-slate-800 text-white rounded-lg px-4 py-2 text-sm hover:bg-slate-900">
-                + הקצאה לפלוגה
-              </Link>
-            )}
-            {canReturn && (
-              <Link href="/transfers/new?type=RETURN"
-                className="bg-white border border-slate-300 text-slate-700 rounded-lg px-4 py-2 text-sm hover:bg-slate-50">
-                החזרה למחסן
-              </Link>
-            )}
-          </div>
-        }
+        title="קבלות והחזרות (גדוד ↔ חטיבה)"
+        subtitle="היסטוריית קליטות מהחטיבה וזיכויים. הקצאה לפלוגה/חייל — דרך מסך 'החתמות'."
       />
 
       {myPending.length > 0 && (
