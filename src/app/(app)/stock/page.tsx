@@ -6,6 +6,7 @@ import { TRANSFER_TYPE } from "@/lib/labels";
 import StockTable from "./StockTable";
 import StockEntryModal from "./StockEntryModal";
 import StockWithdrawModal from "./StockWithdrawModal";
+import StatusChangeModal from "./StatusChangeModal";
 import { approveTransfer, rejectTransfer } from "../transfers/actions";
 
 export const dynamic = "force-dynamic";
@@ -103,6 +104,12 @@ export default async function StockPage({
               stocks={items.flatMap((i) => i.stockBalances.map((b) => ({ itemTypeId: i.id, statusId: b.statusId, statusName: b.status.name, quantity: b.quantity })))}
               units={items.flatMap((i) => i.serialUnits.map((u) => ({ id: u.id, itemTypeId: i.id, serialNumber: u.serialNumber, lotQuantity: u.lotQuantity, statusName: u.status.name })))}
             />
+            <StatusChangeModal
+              items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod, unit: i.unit }))}
+              statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss }))}
+              stocks={items.flatMap((i) => i.stockBalances.map((b) => ({ itemTypeId: i.id, statusId: b.statusId, statusName: b.status.name, quantity: b.quantity })))}
+              units={items.flatMap((i) => i.serialUnits.map((u) => ({ id: u.id, itemTypeId: i.id, serialNumber: u.serialNumber, lotQuantity: u.lotQuantity, statusId: u.statusId, statusName: u.status.name })))}
+            />
           </div>
         }
       />
@@ -191,6 +198,9 @@ export default async function StockPage({
             categoryId: i.categoryId ?? null,
             warehouseType: i.category?.warehouseType ?? null,
             total, transit: transitByItem.get(i.id) ?? 0,
+            units: i.serialUnits.map((u) => ({
+              id: u.id, serialNumber: u.serialNumber, lotQuantity: u.lotQuantity, statusName: u.status.name,
+            })),
           };
         })}
         categories={categories.map((c) => ({ id: c.id, name: c.name, warehouseType: c.warehouseType }))}

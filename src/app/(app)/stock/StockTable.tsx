@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
 import { TRACKING_METHOD } from "@/lib/labels";
 import { WAREHOUSE_TYPE_SHORT } from "@/lib/rbac";
-import { declareQty, declareSerials, declareLot, importSerials, importLots } from "./actions";
+import { declareQty, declareSerials, declareLot, importSerials, importLots, editSerialNumber } from "./actions";
 
 type Item = {
   id: string; name: string; sku: string | null; unit: string;
@@ -15,11 +15,54 @@ type Item = {
   warehouseType: "EQUIPMENT" | "COMMS" | "AMMO" | "ARMORY" | "VEHICLES" | "MEDICAL" | "GENERAL" | null;
   total: number;
   transit: number;
+  units?: { id: string; serialNumber: string; lotQuantity: number | null; statusName: string; signedTo?: string | null }[];
 };
 type Cat = { id: string; name: string; warehouseType: string };
 type Status = { id: string; name: string; isDefault: boolean };
 
 const WH_OPTS = ["EQUIPMENT","COMMS","AMMO","ARMORY","VEHICLES","MEDICAL","GENERAL"] as const;
+
+function UnitEditRow({ unit }: { unit: { id: string; serialNumber: string; lotQuantity: number | null; statusName: string; signedTo?: string | null } }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(unit.serialNumber);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(fd: FormData) {
+    setError(null);
+    try {
+      await editSerialNumber(fd);
+      setEditing(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-2 text-sm py-1 px-2 hover:bg-slate-50 rounded">
+        <span className="font-mono flex-1 truncate">{unit.serialNumber}</span>
+        {unit.lotQuantity && <span className="text-xs text-slate-500">×{unit.lotQuantity}</span>}
+        <span className="text-xs text-slate-500">[{unit.statusName}]</span>
+        {unit.signedTo && <span className="text-xs text-blue-600">חתום: {unit.signedTo}</span>}
+        <button type="button" onClick={() => { setValue(unit.serialNumber); setEditing(true); }}
+          className="text-xs text-slate-400 hover:text-slate-800 px-1.5 py-0.5"
+          title="ערוך מספר סריאל">
+          ✎
+        </button>
+      </div>
+    );
+  }
+  return (
+    <form action={save} className="flex items-center gap-2 py-1 px-2 bg-amber-50 rounded">
+      <input type="hidden" name="id" value={unit.id} />
+      <input name="newSerial" value={value} onChange={(e) => setValue(e.target.value)} autoFocus required
+        className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm font-mono" />
+      <button className="text-xs bg-emerald-600 text-white rounded px-2 py-1">שמור</button>
+      <button type="button" onClick={() => { setEditing(false); setError(null); }} className="text-xs text-slate-500">ביטול</button>
+      {error && <span className="text-xs text-rose-600">{error}</span>}
+    </form>
+  );
+}
 
 function ExpandedRow({ item, statuses }: { item: Item; statuses: Status[] }) {
   const defaultStatus = statuses.find((s) => s.isDefault)?.id ?? statuses[0]?.id ?? "";
@@ -55,6 +98,17 @@ function ExpandedRow({ item, statuses }: { item: Item; statuses: Status[] }) {
   if (item.trackingMethod === "SERIAL") {
     return (
       <div className="bg-slate-50 p-3 space-y-3 border-t border-slate-200">
+        {/* רשימת SNs קיימים — לעריכת מספר */}
+        {item.units && item.units.length > 0 && (
+          <div className="bg-white border border-slate-200 rounded-lg p-3">
+            <div className="text-xs font-semibold text-slate-600 mb-2">
+              יחידות קיימות ({item.units.length}) — לחץ ✎ לתיקון מספר סריאל שהוקלד בטעות
+            </div>
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {item.units.map((u) => <UnitEditRow key={u.id} unit={u} />)}
+            </div>
+          </div>
+        )}
         <form action={declareSerials} className="space-y-2">
           <input type="hidden" name="itemTypeId" value={item.id} />
           <div className="flex items-end gap-2 flex-wrap">

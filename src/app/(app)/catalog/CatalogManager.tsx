@@ -4,6 +4,7 @@ import { useState } from "react";
 import { saveItemType } from "./actions";
 
 type Cat = { id: string; name: string };
+type Loc = { id: string; label: string };
 export type EditData = {
   id: string;
   sku: string;
@@ -14,6 +15,7 @@ export type EditData = {
   association: string;
   signMode: string;
   imageData: string | null;
+  homeLocationId?: string | null;
 };
 
 function compressImage(file: File): Promise<string> {
@@ -39,7 +41,7 @@ function compressImage(file: File): Promise<string> {
   });
 }
 
-export default function CatalogManager({ categories, edit }: { categories: Cat[]; edit?: EditData }) {
+export default function CatalogManager({ categories, locations = [], edit }: { categories: Cat[]; locations?: Loc[]; edit?: EditData }) {
   const [open, setOpen] = useState(false);
   const [image, setImage] = useState<string | null>(edit?.imageData ?? null);
   const [busy, setBusy] = useState(false);
@@ -121,6 +123,18 @@ export default function CatalogManager({ categories, edit }: { categories: Cat[]
                     <option value="SOLDIER">חייל ישירות (נשק)</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">מיקום במחסן (מידוף — אופציונלי)</label>
+                <select name="homeLocationId" defaultValue={edit?.homeLocationId ?? ""}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                  <option value="">— ללא הגדרה —</option>
+                  {locations.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+                </select>
+                {locations.length === 0 && (
+                  <p className="text-[11px] text-slate-400 mt-1">אין מידופים מוגדרים. הגדר ב<a href="/locations" className="text-blue-600 hover:underline">מידוף מחסן</a>.</p>
+                )}
               </div>
 
               <div>

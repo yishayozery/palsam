@@ -263,6 +263,81 @@ export async function withdrawSerials(formData: FormData) {
   revalidateAll();
 }
 
+/** שינוי סטטוס ליחידות סריאליות (תקין → בלאי / פגום / אבוד וכו') */
+export async function changeUnitsStatus(formData: FormData) {
+  const user = await requireCapability("warehouse.operate");
+  const bId = user.battalionId!;
+  const unitIds = formData.getAll("unitId").map(String).filter(Boolean);
+  const newStatusId = String(formData.get("newStatusId") || "");
+  const reason = String(formData.get("reason") || "").trim() || null;
+  if (unitIds.length === 0) throw new Error("לא נבחרו יחידות לשינוי");
+  if (!newStatusId) throw new Error("חובה לבחור סטטוס חדש");
+
+  const status = await prisma.itemStatus.findUnique({ where: { id: newStatusId } });
+  if (!status || status.battalionId !== bId) throw new Error("סטטוס לא תקין");
+
+  let changed = 0;
+  await prisma.$transaction(async (tx) => {
+    for (const id of unitIds) {
+      const u = await tx.serialUnit.findUnique({ where: { id } });
+      if (!u || u.battalionId !== bId) continue;
+      if (u.statusId === newStatusId) continue;
+      await tx.serialUnit.update({ where: { id }, data: { statusId: newStatusId } });
+      changed++;
+    }
+  });
+  await audit(user.id, "CHANGE_STATUS", "SerialUnit", unitIds.join(","), { newStatusId, statusName: status.name, count: changed, reason });
+  revalidateAll();
+  return { changed };
+}
+
+/** שינוי סטטוס לכמות (מעביר qty מסטטוס אחד לאחר באותו פריט+מחזיק) */
+export async function changeQuantityStatus(formData: FormData) {
+  const user = await requireCapability("warehouse.operate");
+  const bId = user.battalionId!;
+  const itemTypeId = String(formData.get("itemTypeId") || "");
+  const fromStatusId = String(formData.get("fromStatusId") || "");
+  const newStatusId = String(formData.get("newStatusId") || "");
+  const quantity = Math.max(1, parseInt(String(formData.get("quantity") || "0"), 10) || 0);
+  const reason = String(formData.get("reason") || "").trim() || null;
+  if (!itemTypeId || !fromStatusId || !newStatusId || quantity < 1) throw new Error("חסרים פרטים");
+  if (fromStatusId === newStatusId) throw new Error("הסטטוס החדש זהה לקיים");
+
+  await prisma.$transaction(async (tx) => {
+    const wh = await pickWarehouse(bId, itemTypeId);
+    if (!wh) throw new Error("מחסן לא נמצא");
+    const existing = await tx.stockBalance.findFirst({ where: { itemTypeId, holderId: wh.id, statusId: fromStatusId } });
+    if (!existing || existing.quantity < quantity) throw new Error(`אין מספיק במלאי בסטטוס המקור (${existing?.quantity ?? 0} זמין)`);
+    await adjustQuantity(tx, bId, itemTypeId, wh.id, fromStatusId, -quantity);
+    await adjustQuantity(tx, bId, itemTypeId, wh.id, newStatusId, quantity);
+  });
+  await audit(user.id, "CHANGE_STATUS_QTY", "ItemType", itemTypeId, { from: fromStatusId, to: newStatusId, quantity, reason });
+  revalidateAll();
+}
+
+/** עריכת מספר סריאל (תיקון טעות הקלדה) */
+export async function editSerialNumber(formData: FormData) {
+  const user = await requireCapability("warehouse.operate");
+  const bId = user.battalionId!;
+  const id = String(formData.get("id") || "");
+  const newSerial = String(formData.get("newSerial") || "").trim();
+  if (!id || !newSerial) throw new Error("חסר מספר סריאל");
+
+  const unit = await prisma.serialUnit.findUnique({ where: { id } });
+  if (!unit || unit.battalionId !== bId) throw new Error("יחידה לא נמצאה");
+  if (unit.serialNumber === newSerial) return;
+
+  // בדיקת כפילות מול אותו פריט
+  const dup = await prisma.serialUnit.findFirst({
+    where: { battalionId: bId, itemTypeId: unit.itemTypeId, serialNumber: newSerial, id: { not: id } },
+  });
+  if (dup) throw new Error(`מספר ${newSerial} כבר קיים בפריט זה`);
+
+  await prisma.serialUnit.update({ where: { id }, data: { serialNumber: newSerial } });
+  await audit(user.id, "EDIT_SN", "SerialUnit", id, { from: unit.serialNumber, to: newSerial });
+  revalidateAll();
+}
+
 /** טעינת אצוות מקובץ אקסל (עמודה 1: מספר אצווה, עמודה 2: כמות) */
 export async function importLots(formData: FormData) {
   const user = await requireCapability("warehouse.operate");

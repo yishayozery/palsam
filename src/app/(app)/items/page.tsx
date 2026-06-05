@@ -76,15 +76,26 @@ export default async function ItemsPage({
 
   const allCategories = await prisma.category.findMany({ where: { battalionId: bId, ...categoryScopeFilter }, orderBy: { name: "asc" } });
 
-  const [items, categories, statuses, frequencies] = await Promise.all([
+  // מידופים זמינים — לקצין מחסן רק במחסניו, למפ"מ הכל
+  const locationWhere = scoped && user.holderIds?.length
+    ? { holder: { id: { in: user.holderIds }, kind: "WAREHOUSE" as const } }
+    : { holder: { battalionId: bId, kind: "WAREHOUSE" as const } };
+
+  const [items, categories, statuses, frequencies, locations] = await Promise.all([
     prisma.itemType.findMany({
       where: itemWhere, orderBy: { name: "asc" },
-      include: { category: true, _count: { select: { serialUnits: true, stockBalances: true } } },
+      include: { category: true, homeLocation: { include: { holder: true } }, _count: { select: { serialUnits: true, stockBalances: true } } },
     }),
     prisma.category.findMany({ where: categoryWhere, orderBy: { sortOrder: "asc" }, include: { _count: { select: { itemTypes: true } } } }),
     prisma.itemStatus.findMany({ where: { battalionId: bId }, orderBy: { sortOrder: "asc" } }),
     prisma.countFrequency.findMany({ where: { battalionId: bId }, orderBy: { intervalDays: "asc" } }),
+    prisma.storageLocation.findMany({ where: locationWhere, include: { holder: true }, orderBy: [{ holder: { name: "asc" } }, { column: "asc" }, { row: "asc" }] }),
   ]);
+
+  const locOptions = locations.map((l) => ({
+    id: l.id,
+    label: `${l.holder.name} · ${l.column}-${l.row}${l.label ? ` (${l.label})` : ""}`,
+  }));
 
   const whOptions = (["EQUIPMENT", "COMMS", "AMMO", "ARMORY", "VEHICLES", "MEDICAL", "GENERAL"] as const).map((v) => ({ value: v, label: WAREHOUSE_TYPE_SHORT[v] }));
 
@@ -96,7 +107,7 @@ export default async function ItemsPage({
         action={active === "items" ? (
           <div className="flex items-center gap-2">
             <ImportExcel action={importItems} templateHref="/catalog/template" label="ייבוא פריטים" />
-            <CatalogManager categories={categories.map((c) => ({ id: c.id, name: c.name }))} />
+            <CatalogManager categories={categories.map((c) => ({ id: c.id, name: c.name }))} locations={locOptions} />
           </div>
         ) : undefined}
       />
@@ -112,7 +123,7 @@ export default async function ItemsPage({
           />
           <Card>
             <Table>
-              <thead><tr><Th></Th><Th>שם</Th><Th>מק״ט</Th><Th>קטגוריה</Th><Th>שיטה</Th><Th>שייכות</Th><Th>במלאי</Th><Th></Th></tr></thead>
+              <thead><tr><Th></Th><Th>שם</Th><Th>מק״ט</Th><Th>קטגוריה</Th><Th>מיקום במחסן</Th><Th>שיטה</Th><Th>שייכות</Th><Th>במלאי</Th><Th></Th></tr></thead>
               <tbody>
                 {items.map((i) => (
                   <tr key={i.id} className={i.active ? "" : "opacity-50"}>
@@ -125,6 +136,11 @@ export default async function ItemsPage({
                     <Td className="font-medium">{i.name}</Td>
                     <Td className="font-mono text-xs text-slate-500">{i.sku ?? "—"}</Td>
                     <Td>{i.category?.name ?? "—"}</Td>
+                    <Td className="text-xs">
+                      {i.homeLocation
+                        ? <span><b>{i.homeLocation.holder.name}</b> · {i.homeLocation.column}-{i.homeLocation.row}</span>
+                        : <span className="text-slate-300">—</span>}
+                    </Td>
                     <Td><Badge>{TRACKING_METHOD[i.trackingMethod]}</Badge></Td>
                     <Td><Badge className={ASSOC[i.association].cls}>{ASSOC[i.association].label}</Badge></Td>
                     <Td className="text-center">{i._count.serialUnits + i._count.stockBalances > 0 ? "✓" : "—"}</Td>
@@ -132,7 +148,8 @@ export default async function ItemsPage({
                       <a href={`/items/${i.id}/history`} className="text-xs text-blue-600 hover:underline ml-2">היסטוריה</a>
                       <CatalogManager
                         categories={categories.map((c) => ({ id: c.id, name: c.name }))}
-                        edit={{ id: i.id, sku: i.sku ?? "", name: i.name, categoryId: i.categoryId ?? "", trackingMethod: i.trackingMethod, unit: i.unit, association: i.association, signMode: i.signMode, imageData: i.imageData }}
+                        locations={locOptions}
+                        edit={{ id: i.id, sku: i.sku ?? "", name: i.name, categoryId: i.categoryId ?? "", trackingMethod: i.trackingMethod, unit: i.unit, association: i.association, signMode: i.signMode, imageData: i.imageData, homeLocationId: i.homeLocationId }}
                       />
                     </Td>
                   </tr>
