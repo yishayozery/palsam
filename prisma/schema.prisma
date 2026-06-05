@@ -87,6 +87,15 @@ enum CountSessionStatus {
   CANCELED
 }
 
+enum CountTaskStatus {
+  SCHEDULED      // עתידי
+  PENDING        // פתוח, ממתין לדיווח
+  IN_PROGRESS    // התחיל לדווח
+  COMPLETED      // הושלם
+  OVERDUE        // עבר הזמן ולא דווח
+  CANCELED
+}
+
 enum DiscrepancyKind {
   LOSS
   SURPLUS
@@ -128,6 +137,8 @@ model Battalion {
   transfers     Transfer[]
   signatures    Signature[]
   countDefs     CountDefinition[]
+  countPlans    CountPlan[]
+  countTasks    CountTask[]
   countSessions CountSession[]
   discrepancies Discrepancy[]
   auditLogs     AuditLog[]
@@ -163,6 +174,8 @@ model AppUser {
   recipientTransfers Transfer[]        @relation("TransferToUser")
   signedAsUser      Signature[]        @relation("SignerUser")
   startedCounts     CountSession[]     @relation("CountStartedBy")
+  createdCountPlans CountPlan[]        @relation("CountPlanCreatedBy")
+  assignedCountTasks CountTask[]       @relation("CountTaskAssigned")
   resolvedGaps      Discrepancy[]      @relation("DiscrepancyResolvedBy")
   auditLogs         AuditLog[]
   repOfCompanies    WarehouseCompany[] @relation("RepUser")
@@ -240,7 +253,8 @@ model Holder {
   kitInstances     KitInstance[]      @relation("KitInstanceHolder")
   transfersFrom    Transfer[]         @relation("TransferFrom")
   transfersTo      Transfer[]         @relation("TransferTo")
-  countDefs        CountDefinition[]
+  countDefs        CountDefinition[] @relation("CountDefHolder")
+  countTasks       CountTask[]
   countLines       CountLine[]
   discrepancies    Discrepancy[]
   // קשרי מחסן↔פלוגה (איזה פלוגות המחסן עובד מולן)
@@ -602,6 +616,74 @@ model Signature {
 
 // ===================== ספירות ופערים =====================
 
+/**
+ * תכנית ספירה — המפ"מ מגדיר מה סופרים, איפה, מתי, וכל כמה זמן.
+ * מוליד CountTask לכל holder בהיקף, בכל זמן מתוזמן.
+ */
+model CountPlan {
+  id          String    @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation(fields: [battalionId], references: [id])
+  name        String
+  description String?
+
+  // היקף — אם ריק, חל על כל המחסנים+פלוגות הפעילים
+  scopeHolderIds   String[] @default([])
+  scopeCategoryIds String[] @default([])
+  scopeItemTypeIds String[] @default([])
+  trackingMethods  String[] @default([]) // ["SERIAL","QUANTITY","LOT","KIT"]
+
+  // תזמון
+  frequencyDays  Int      @default(1)   // 0 = חד-פעמי, 1 = יומי, 7 = שבועי
+  scheduledTimes String[] @default([])  // ["08:00","20:00"] — מספר פעמים ביום
+  daysOfWeek     Int[]    @default([])  // ריק = כל הימים; אחרת 0..6
+  graceMinutes   Int      @default(60)  // דקות עד OVERDUE
+
+  active      Boolean  @default(true)
+  createdById String
+  createdBy   AppUser  @relation("CountPlanCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  tasks CountTask[]
+
+  @@index([battalionId])
+}
+
+/**
+ * משימת ספירה — נוצרת אוטומטית מתכנית. אחת לכל holder בהיקף + לכל זמן מתוזמן.
+ * האחראי מדווח ומסיים, או מעביר ב-WhatsApp לאחר (shareToken).
+ */
+model CountTask {
+  id          String    @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation(fields: [battalionId], references: [id])
+  planId      String?
+  plan        CountPlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  holderId String
+  holder   Holder @relation(fields: [holderId], references: [id])
+  // אחראי דיווח. ברירת מחדל = משתמש "הראשי" של ה-holder. ניתן להחליף.
+  assignedUserId String?
+  assignedUser   AppUser? @relation("CountTaskAssigned", fields: [assignedUserId], references: [id])
+
+  scheduledAt DateTime
+  dueAt       DateTime                              // scheduledAt + graceMinutes
+  startedAt   DateTime?
+  completedAt DateTime?
+  status      CountTaskStatus @default(PENDING)
+
+  // לפתיחה ללא login (שיתוף ב-WhatsApp)
+  shareToken String @unique @default(cuid())
+  // קישור לסשן הספירה האמיתי
+  sessionId  String?  @unique
+  session    CountSession? @relation(fields: [sessionId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([battalionId, status])
+  @@index([assignedUserId, status])
+}
+
 model CountDefinition {
   id            String          @id @default(cuid())
   battalionId   String
@@ -611,7 +693,7 @@ model CountDefinition {
   frequencyId   String?
   frequency     CountFrequency? @relation(fields: [frequencyId], references: [id])
   scopeHolderId String?
-  scopeHolder   Holder?         @relation(fields: [scopeHolderId], references: [id])
+  scopeHolder   Holder?         @relation("CountDefHolder", fields: [scopeHolderId], references: [id])
   categoryIds   String[]
   daysOfWeek    Int[]
   active        Boolean         @default(true)
@@ -636,6 +718,7 @@ model CountSession {
 
   lines         CountLine[]
   discrepancies Discrepancy[]
+  task          CountTask?
 
   @@index([battalionId])
 }

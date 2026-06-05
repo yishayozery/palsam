@@ -6,10 +6,12 @@ import { PageHeader, Badge, Card, Table, Th, Td, EmptyState } from "@/components
 import { COUNT_TYPE, COUNT_STATUS } from "@/lib/labels";
 import CrudSection from "@/components/CrudSection";
 import StartCount from "./StartCount";
+import MyCountTasks from "./MyCountTasks";
 import {
   saveCountDefinition,
   deleteCountDefinition,
 } from "./actions";
+import { generatePendingTasks } from "@/lib/countScheduler";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +20,25 @@ export default async function CountsPage() {
   const bId = user.battalionId!;
   const canManage = can(user.role, "counts.manage");
   const canExecute = can(user.role, "counts.execute");
+  const isMafam = user.role === "BATTALION_ADMIN";
+
+  // best-effort: יצירת משימות שטרם נוצרו (בכל כניסה למסך)
+  try { await generatePendingTasks(); } catch { /* ignore */ }
+
+  // המשימות "שלי" — של המשתמש הזה לפי תפקיד
+  const myTasks = await prisma.countTask.findMany({
+    where: {
+      battalionId: bId,
+      status: { in: ["PENDING", "IN_PROGRESS", "OVERDUE"] },
+      ...(isMafam ? {} : { OR: [
+        { assignedUserId: user.id },
+        ...(user.holderIds && user.holderIds.length > 0 ? [{ holderId: { in: user.holderIds } }] : []),
+      ] }),
+    },
+    orderBy: [{ status: "asc" }, { dueAt: "asc" }],
+    take: 30,
+    include: { holder: true, plan: true, assignedUser: { select: { fullName: true } } },
+  });
 
   const [definitions, sessions, frequencies, holders] = await Promise.all([
     prisma.countDefinition.findMany({
@@ -42,9 +63,36 @@ export default async function CountsPage() {
     <div>
       <PageHeader
         title="ספירות מלאי"
-        subtitle="מנוע ספירה דינמי — מחסן / פלוגתי / רוחבי (הקפאת מצב)"
-        action={canExecute ? <StartCount holders={holders.map((h) => ({ id: h.id, name: h.name }))} definitions={definitions.map((d) => ({ id: d.id, name: d.name, type: d.type, scopeHolderId: d.scopeHolderId }))} /> : undefined}
+        subtitle="המשימות שלך + תכניות המפ״מ + ביצוע ספירה ידנית"
+        action={
+          <div className="flex gap-2">
+            {isMafam && (
+              <Link href="/counts/plans"
+                className="bg-white border border-slate-300 text-slate-700 rounded-lg px-4 py-2 text-sm hover:bg-slate-50">
+                📋 תכניות ספירה
+              </Link>
+            )}
+            {canExecute && <StartCount holders={holders.map((h) => ({ id: h.id, name: h.name }))} definitions={definitions.map((d) => ({ id: d.id, name: d.name, type: d.type, scopeHolderId: d.scopeHolderId }))} />}
+          </div>
+        }
       />
+
+      {/* המשימות שלי */}
+      {myTasks.length > 0 && (
+        <MyCountTasks
+          tasks={myTasks.map((t) => ({
+            id: t.id,
+            shareToken: t.shareToken,
+            holderName: t.holder.name,
+            planName: t.plan?.name ?? "ספירה ידנית",
+            status: t.status,
+            scheduledAt: t.scheduledAt.toISOString(),
+            dueAt: t.dueAt.toISOString(),
+            assignedUserName: t.assignedUser?.fullName ?? null,
+            sessionId: t.sessionId,
+          }))}
+        />
+      )}
 
       {canManage && (
         <div className="mb-6">

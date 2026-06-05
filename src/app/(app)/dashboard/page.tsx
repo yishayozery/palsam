@@ -108,6 +108,20 @@ export default async function DashboardPage({
 
   const accuracy = serialTotal === 0 ? 100 : Math.max(0, Math.round((1 - openGaps / serialTotal) * 100));
 
+  // ספירות באיחור — להתראה
+  const overdueTasks = await prisma.countTask.findMany({
+    where: {
+      battalionId: bId,
+      status: "OVERDUE",
+      ...(isWarehouseManager && scopedHolderIds.length > 0
+        ? { OR: [{ holderId: { in: scopedHolderIds } }, { assignedUserId: user.id }] }
+        : {}),
+    },
+    take: 10,
+    orderBy: { dueAt: "asc" },
+    include: { holder: true, plan: true, assignedUser: { select: { fullName: true } } },
+  });
+
   const recentTransfers = await prisma.transfer.findMany({
     where: {
       battalionId: bId,
@@ -183,6 +197,38 @@ export default async function DashboardPage({
           tone={wearUnits + lossUnits > 0 ? "amber" : "slate"}
         />
       </div>
+
+      {/* === התראה: ספירות באיחור === */}
+      {overdueTasks.length > 0 && (
+        <Card className="p-4 mb-6 border-rose-300 bg-rose-50">
+          <div className="flex items-start gap-3">
+            <span className="text-3xl">⏰</span>
+            <div className="flex-1">
+              <h2 className="font-bold text-rose-800 mb-2">
+                ספירות מלאי באיחור ({overdueTasks.length})
+              </h2>
+              <div className="space-y-1">
+                {overdueTasks.slice(0, 5).map((t) => (
+                  <div key={t.id} className="flex items-center justify-between text-sm bg-white rounded-lg px-3 py-1.5 border border-rose-200">
+                    <span>
+                      <b>{t.plan?.name ?? "ספירה"}</b>
+                      <span className="text-slate-500"> · {t.holder.name}</span>
+                      {t.assignedUser && <span className="text-xs text-slate-400 mr-2">אחראי: {t.assignedUser.fullName}</span>}
+                    </span>
+                    <span className="text-xs text-rose-600">איחור: {Math.round((Date.now() - t.dueAt.getTime()) / 60000)} דק׳</span>
+                  </div>
+                ))}
+                {overdueTasks.length > 5 && (
+                  <Link href="/counts" className="text-xs text-rose-700 hover:underline">+ עוד {overdueTasks.length - 5} ספירות באיחור</Link>
+                )}
+              </div>
+            </div>
+            <Link href="/counts" className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
+              לדוח ←
+            </Link>
+          </div>
+        </Card>
+      )}
 
       {/* === תקולים לפי מחסן === */}
       <Card className="p-5 mb-6">
