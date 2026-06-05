@@ -56,23 +56,34 @@ export default async function RosterPage({
         ניתן לסנן לפי פלוגה, חיפוש לפי שם/מ.א., וסטטוס.
       </Card>
 
-      {soldiers.length === 0 ? (
-        <Card><EmptyState>אין חיילים. הוסף חייל ראשון בכפתור למעלה.</EmptyState></Card>
-      ) : (
-        <RosterTable
-          soldiers={soldiers.map((s) => ({
-            id: s.id, firstName: s.firstName, lastName: s.lastName, fullName: s.fullName,
-            personalNumber: s.personalNumber, phone: s.phone,
-            companyId: s.companyId, companyName: s.company?.name ?? null,
-            platoon: s.platoon, enlisted: s.enlisted, active: s.active,
-            signedCount: s._count.signedSerialUnits + s._count.signedKitInstances,
-            enlistedAt: s.enlistedAt?.toISOString() ?? null,
-          }))}
-          companies={companies}
-          initialQ={q}
-          initialCompany={company}
-          initialStatus={status}
-        />
+      <RosterTable
+        soldiers={soldiers.map((s) => ({
+          id: s.id, firstName: s.firstName, lastName: s.lastName, fullName: s.fullName,
+          personalNumber: s.personalNumber, phone: s.phone,
+          companyId: s.companyId, companyName: s.company?.name ?? null,
+          platoon: s.platoon, enlisted: s.enlisted, active: s.active,
+          signedCount: s._count.signedSerialUnits + s._count.signedKitInstances,
+          enlistedAt: s.enlistedAt?.toISOString() ?? null,
+        }))}
+        companies={companies}
+        initialQ={q}
+        initialCompany={company}
+        initialStatus={status}
+      />
+      {soldiers.length === 0 && (
+        <Card className="mt-2">
+          <EmptyState>
+            <div className="space-y-3">
+              <div className="text-base">🪖 אין חיילים בגדוד עדיין</div>
+              <div className="text-xs">השתמש בכפתורים למעלה כדי להוסיף:</div>
+              <div className="flex justify-center gap-2 flex-wrap text-xs">
+                <span className="bg-emerald-100 text-emerald-800 rounded-full px-3 py-1">+ הוסף חייל בודד</span>
+                <span className="bg-amber-100 text-amber-800 rounded-full px-3 py-1">🌱 5 לכל פלוגה (בדיקה)</span>
+                <span className="bg-blue-100 text-blue-800 rounded-full px-3 py-1">⬇ הורד תבנית → ⬆ ייבוא Excel</span>
+              </div>
+            </div>
+          </EmptyState>
+        </Card>
       )}
     </div>
   );
