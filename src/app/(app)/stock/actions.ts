@@ -121,8 +121,8 @@ export async function declareSerials(formData: FormData) {
     });
     for (const sn of serials) {
       try {
-        await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: sn, statusId, currentHolderId: wh.id } });
-        await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity: 1, statusId } });
+        const su = await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: sn, statusId, currentHolderId: wh.id } });
+        await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity: 1, statusId, serialUnitId: su.id } });
         created++;
       } catch { failed.push(sn); }
     }
@@ -168,8 +168,8 @@ export async function importSerials(formData: FormData) {
     });
     for (const sn of serials) {
       try {
-        await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: sn, statusId, currentHolderId: wh.id } });
-        await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity: 1, statusId } });
+        const su = await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: sn, statusId, currentHolderId: wh.id } });
+        await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity: 1, statusId, serialUnitId: su.id } });
         created++;
       } catch { /* כפילות */ }
     }
