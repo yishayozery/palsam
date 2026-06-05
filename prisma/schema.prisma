@@ -179,6 +179,7 @@ model AppUser {
   signedAsUser      Signature[]        @relation("SignerUser")
   startedCounts     CountSession[]     @relation("CountStartedBy")
   createdCountPlans CountPlan[]        @relation("CountPlanCreatedBy")
+  responsibleCountPlans CountPlan[]    @relation("CountPlanResponsible")
   assignedCountTasks CountTask[]       @relation("CountTaskAssigned")
   resolvedGaps      Discrepancy[]      @relation("DiscrepancyResolvedBy")
   auditLogs         AuditLog[]
@@ -661,6 +662,9 @@ model CountPlan {
   active      Boolean  @default(true)
   createdById String
   createdBy   AppUser  @relation("CountPlanCreatedBy", fields: [createdById], references: [id])
+  // אחראי ספירה — רואה את התכנית, סטטוס כל המשימות, ומייצא דוח. ברירת מחדל = createdBy.
+  responsibleUserId String?
+  responsibleUser   AppUser? @relation("CountPlanResponsible", fields: [responsibleUserId], references: [id])
   createdAt   DateTime @default(now())
 
   tasks CountTask[]

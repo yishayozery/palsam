@@ -5,7 +5,11 @@ import { submitCount } from "../actions";
 import { Card } from "@/components/ui";
 
 type Line = {
-  id: string; item: string; holder: string; serial: string | null; expected: number; isSerial: boolean;
+  id: string; item: string; holder: string; serial: string | null;
+  serialUnitId?: string | null;
+  signedSoldier?: string | null;
+  physicalLocation?: string | null;
+  expected: number; isSerial: boolean;
 };
 
 export default function CountExecutor({
@@ -86,6 +90,13 @@ export default function CountExecutor({
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{l.item}</div>
                       {l.serial && <div className="font-mono text-xs text-slate-400 truncate">SN: {l.serial}</div>}
+                      {/* פרטים על יחידה סריאלית: חייל חתום + מיקום פיזי */}
+                      {l.isSerial && (l.signedSoldier || l.physicalLocation) && (
+                        <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                          {l.signedSoldier && <span className="text-blue-600">🪖 {l.signedSoldier}</span>}
+                          {l.physicalLocation && <span className="text-emerald-700">📍 {l.physicalLocation}</span>}
+                        </div>
+                      )}
                     </div>
                     <div className="text-xs text-slate-500 whitespace-nowrap">צפוי: <b>{l.expected}</b></div>
                     {l.isSerial ? (
@@ -119,6 +130,17 @@ export default function CountExecutor({
                           ✓ ספירה חוזרת בוצעה — הפער אמיתי
                         </span>
                       </label>
+                    </div>
+                  )}
+
+                  {/* עריכת מיקום פיזי — רק לסריאלי, לא לחתום על חייל */}
+                  {l.isSerial && l.serialUnitId && !l.signedSoldier && (
+                    <div className="mt-2 flex items-center gap-2 text-xs">
+                      <span className="text-slate-500">📍 מיקום:</span>
+                      <input type="text" name={`location:${l.serialUnitId}`}
+                        defaultValue={l.physicalLocation ?? ""}
+                        placeholder="ארון 3, מדף ב'..."
+                        className="flex-1 rounded border border-slate-300 px-2 py-1 text-xs" />
                     </div>
                   )}
                 </div>

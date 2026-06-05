@@ -32,6 +32,8 @@ export async function createCountPlan(formData: FormData) {
   const endDateRaw = String(formData.get("endDate") || "").trim();
   const startDate = startDateRaw ? new Date(startDateRaw) : null;
   const endDate = endDateRaw ? new Date(endDateRaw) : null;
+  // אחראי ספירה — אופציונלי
+  const responsibleUserId = String(formData.get("responsibleUserId") || "").trim() || null;
 
   const plan = await prisma.countPlan.create({
     data: {
@@ -40,6 +42,7 @@ export async function createCountPlan(formData: FormData) {
       frequencyDays, scheduledTimes, daysOfWeek, graceMinutes,
       startDate, endDate,
       createdById: user.id,
+      responsibleUserId: responsibleUserId ?? user.id,
     },
   });
   // יצירת משימה מיידית לבדיקה (אם הזמן הבא כבר עבר)

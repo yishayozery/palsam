@@ -13,7 +13,7 @@ export default async function CountPlansPage() {
   const user = await requireCapability("counts.manage");
   const bId = user.battalionId!;
 
-  const [plans, holders, categories, items] = await Promise.all([
+  const [plans, holders, categories, items, eligibleUsers] = await Promise.all([
     prisma.countPlan.findMany({
       where: { battalionId: bId },
       orderBy: [{ active: "desc" }, { createdAt: "desc" }],
@@ -29,6 +29,12 @@ export default async function CountPlansPage() {
     }),
     prisma.category.findMany({ where: { battalionId: bId }, orderBy: { name: "asc" }, select: { id: true, name: true, warehouseType: true } }),
     prisma.itemType.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, sku: true } }),
+    // אחראים אפשריים: כל קציני המחסן, רס"פ פלוגה ומפ"מ
+    prisma.appUser.findMany({
+      where: { battalionId: bId, active: true, role: { in: ["BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP"] } },
+      orderBy: [{ role: "asc" }, { fullName: "asc" }],
+      select: { id: true, fullName: true, role: true, holder: { select: { name: true } } },
+    }),
   ]);
 
   return (
@@ -41,6 +47,7 @@ export default async function CountPlansPage() {
             holders={holders.map((h) => ({ id: h.id, name: h.name, kind: h.kind, warehouseType: h.warehouseType }))}
             categories={categories}
             items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku }))}
+            users={eligibleUsers.map((u) => ({ id: u.id, name: u.fullName, role: u.role, holderName: u.holder?.name ?? null }))}
           />
         }
       />
@@ -98,7 +105,8 @@ export default async function CountPlansPage() {
                       </Badge>
                     </Td>
                     <Td>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <a href={`/counts/plans/${p.id}`} className="text-xs text-blue-600 hover:underline font-medium">📊 סטטוס</a>
                         <form action={toggleCountPlan}>
                           <input type="hidden" name="id" value={p.id} />
                           <button className="text-xs text-slate-500 hover:text-slate-800">{p.active ? "השבת" : "הפעל"}</button>

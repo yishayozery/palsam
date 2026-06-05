@@ -8,6 +8,7 @@ import { createCountPlan } from "./actions";
 type Holder = { id: string; name: string; kind: string; warehouseType: WarehouseType | null };
 type Ref = { id: string; name: string; sku?: string | null };
 type Category = { id: string; name: string; warehouseType?: WarehouseType | string | null };
+type UserOption = { id: string; name: string; role: string; holderName: string | null };
 
 const DOW = [
   { v: 0, l: "ראשון" }, { v: 1, l: "שני" }, { v: 2, l: "שלישי" },
@@ -22,9 +23,11 @@ const METHODS = [
   { v: "LOT", l: "אצוות" }, { v: "KIT", l: "ערכות" },
 ];
 
-export default function CountPlanForm({ holders, categories, items }: {
-  holders: Holder[]; categories: Category[]; items: Ref[];
+export default function CountPlanForm({ holders, categories, items, users = [] }: {
+  holders: Holder[]; categories: Category[]; items: Ref[]; users?: UserOption[];
 }) {
+  const [responsibleUserId, setResponsibleUserId] = useState("");
+  void setResponsibleUserId; // נשתמש למטה דרך onChange
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -89,6 +92,16 @@ export default function CountPlanForm({ holders, categories, items }: {
               placeholder="ספירה יומית - ארמון" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
           </div>
           <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">👤 אחראי ספירה (רואה סטטוס כל המשימות + מייצא דוח)</label>
+            <select value={responsibleUserId} onChange={(e) => setResponsibleUserId(e.target.value)} name="responsibleUserId"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white mb-3">
+              <option value="">— אני (ברירת מחדל) —</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} · {u.role === "BATTALION_ADMIN" ? "מפ״מ" : u.role === "WAREHOUSE_MANAGER" ? "קצין מחסן" : "רס״פ"}{u.holderName ? ` · ${u.holderName}` : ""}
+                </option>
+              ))}
+            </select>
             <label className="block text-sm font-semibold text-slate-700 mb-1.5">תיאור (אופציונלי)</label>
             <input value={description} onChange={(e) => setDescription(e.target.value)} name="description"
               placeholder="ספירת רובים יומית בארמון" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />

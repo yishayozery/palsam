@@ -19,7 +19,10 @@ export default async function CountSessionPage({
     where: { id },
     include: {
       lines: {
-        include: { itemType: true, holder: true, serialUnit: true },
+        include: {
+          itemType: true, holder: true,
+          serialUnit: { include: { signedSoldier: { select: { fullName: true, personalNumber: true } } } },
+        },
         orderBy: [{ holder: { name: "asc" } }, { itemType: { name: "asc" } }],
       },
     },
@@ -41,6 +44,11 @@ export default async function CountSessionPage({
           item: l.itemType.name,
           holder: l.holder?.name ?? "—",
           serial: l.serialUnit?.serialNumber ?? null,
+          serialUnitId: l.serialUnitId,
+          signedSoldier: l.serialUnit?.signedSoldier
+            ? `${l.serialUnit.signedSoldier.fullName}${l.serialUnit.signedSoldier.personalNumber ? ` (${l.serialUnit.signedSoldier.personalNumber})` : ""}`
+            : null,
+          physicalLocation: l.serialUnit?.physicalLocation ?? null,
           expected: l.expectedQty,
           isSerial: !!l.serialUnitId,
         }))}

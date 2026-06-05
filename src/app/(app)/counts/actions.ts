@@ -84,7 +84,24 @@ export async function submitCount(formData: FormData) {
   const session = await prisma.countSession.findUnique({ where: { id: sessionId }, include: { lines: true } });
   if (!session || session.status === "COMPLETED") return;
 
+  // איסוף עדכוני מיקום פיזי לכל יחידה סריאלית
+  const locationUpdates = new Map<string, string>();
+  for (const [key, val] of formData.entries()) {
+    if (key.startsWith("location:")) {
+      const serialUnitId = key.slice("location:".length);
+      const loc = String(val).trim();
+      if (serialUnitId) locationUpdates.set(serialUnitId, loc);
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
+    // עדכון מיקומים פיזיים
+    for (const [serialUnitId, loc] of locationUpdates) {
+      await tx.serialUnit.update({
+        where: { id: serialUnitId },
+        data: { physicalLocation: loc || null },
+      });
+    }
     for (const line of session.lines) {
       const raw = formData.get(`count:${line.id}`);
       if (raw === null || String(raw) === "") continue;
