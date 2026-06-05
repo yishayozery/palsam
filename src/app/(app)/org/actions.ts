@@ -9,14 +9,25 @@ import { resolveUniqueUsername } from "@/lib/usernames";
 import { audit } from "@/lib/audit";
 import type { WarehouseType, Role } from "@/generated/prisma";
 
-/** הזמנת משתמש לישות (מחסן / פלוגה) ישירות מהאקורדיון. */
+/** הזמנת משתמש לישות (מחסן / פלוגה) ישירות מהאקורדיון. אופציונלית מקושר לחייל ברוסטר. */
 export async function inviteHolderUser(formData: FormData) {
   const admin = await requireCapability("users.manage");
   const bId = admin.battalionId!;
   const holderId = String(formData.get("holderId") || "");
-  const fullName = String(formData.get("fullName") || "").trim();
   const enteredUsername = String(formData.get("username") || "").trim().toLowerCase();
-  const phone = String(formData.get("phone") || "").trim() || null;
+  const phoneIn = String(formData.get("phone") || "").trim() || null;
+  let fullName = String(formData.get("fullName") || "").trim();
+  let phone = phoneIn;
+  // אופציונלי: קישור לחייל קיים ברוסטר — שואב את הפרטים אוטומטית
+  const soldierId = String(formData.get("soldierId") || "") || null;
+  if (soldierId) {
+    const soldier = await prisma.soldier.findUnique({ where: { id: soldierId } });
+    if (!soldier || soldier.battalionId !== bId) throw new Error("חייל לא נמצא");
+    const linked = await prisma.appUser.findUnique({ where: { soldierId } });
+    if (linked) throw new Error(`החייל ${soldier.fullName} כבר מקושר למשתמש @${linked.username}`);
+    fullName = soldier.fullName;
+    phone = phone ?? soldier.phone;
+  }
   if (!holderId || !fullName || !enteredUsername) {
     throw new Error("חובה: שם, שם משתמש, ובחירת מחסן/פלוגה");
   }
@@ -42,7 +53,7 @@ export async function inviteHolderUser(formData: FormData) {
   const newUser = await prisma.appUser.create({
     data: {
       username, fullName, phone, role, battalionId: bId,
-      holderId, passwordHash: randomHash, passwordSet: false, inviteToken,
+      holderId, soldierId, passwordHash: randomHash, passwordSet: false, inviteToken,
     },
   });
   // ריבוי-הקצאה (UserHolder) — תמיכה בכמה מחסנים אם בעתיד תרצה

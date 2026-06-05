@@ -26,6 +26,8 @@ export type HolderRow = {
 
 const WH_OPTS: WarehouseType[] = ["EQUIPMENT", "COMMS", "AMMO", "ARMORY", "VEHICLES", "MEDICAL", "GENERAL"];
 
+type RosterSoldier = { id: string; fullName: string; pn: string | null; companyName: string | null };
+
 function InviteRow({ holderId, kind, onDone }: { holderId: string; kind: "WAREHOUSE" | "COMPANY"; onDone: () => void }) {
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
@@ -33,6 +35,11 @@ function InviteRow({ holderId, kind, onDone }: { holderId: string; kind: "WAREHO
   const [check, setCheck] = useState<{ available?: boolean; taken?: boolean; recommended?: string | null }>({});
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // קישור לחייל מהרוסטר
+  const [linkSoldier, setLinkSoldier] = useState(false);
+  const [soldierSearch, setSoldierSearch] = useState("");
+  const [soldierOptions, setSoldierOptions] = useState<RosterSoldier[]>([]);
+  const [selectedSoldier, setSelectedSoldier] = useState<RosterSoldier | null>(null);
 
   useEffect(() => {
     if (!username && fullName.trim()) {
@@ -57,6 +64,34 @@ function InviteRow({ holderId, kind, onDone }: { holderId: string; kind: "WAREHO
     }, 350);
     return () => clearTimeout(t);
   }, [username]);
+
+  // טעינת חיילים זמינים — debounced
+  useEffect(() => {
+    if (!linkSoldier) return;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/roster/available?q=${encodeURIComponent(soldierSearch)}`);
+        if (res.ok) setSoldierOptions(await res.json());
+      } catch { /* ignore */ }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [linkSoldier, soldierSearch]);
+
+  // כשבחרנו חייל — מילוי אוטומטי של שם וטלפון
+  function pickSoldier(s: RosterSoldier) {
+    setSelectedSoldier(s);
+    setFullName(s.fullName);
+    if (!username) {
+      // הצעת שם משתמש בסיסי לפי השם
+      const slug = s.fullName.trim().split(/\s+/).join(".").toLowerCase()
+        .replace(/[^\w.-֐-׿]+/g, "").slice(0, 24);
+      if (slug) setUsername(slug);
+    }
+  }
+  function clearSoldier() {
+    setSelectedSoldier(null);
+    setFullName(""); setUsername("");
+  }
 
   async function submit(fd: FormData) {
     setError(null);
@@ -88,14 +123,53 @@ function InviteRow({ holderId, kind, onDone }: { holderId: string; kind: "WAREHO
   return (
     <form action={submit} className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2 mt-2">
       <input type="hidden" name="holderId" value={holderId} />
-      <div className="flex items-center gap-2 mb-1">
+      {selectedSoldier && <input type="hidden" name="soldierId" value={selectedSoldier.id} />}
+      <div className="flex items-center justify-between mb-1">
         <span className="text-sm font-semibold text-blue-900">+ הזמנת {roleLabel} חדש</span>
+        <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+          <input type="checkbox" checked={linkSoldier} onChange={(e) => { setLinkSoldier(e.target.checked); if (!e.target.checked) clearSoldier(); }} />
+          🔗 קישור לחייל ברוסטר
+        </label>
       </div>
+
+      {linkSoldier && !selectedSoldier && (
+        <div className="bg-white border-2 border-blue-300 rounded-lg p-2">
+          <label className="block text-xs text-slate-600 mb-1">חפש חייל ברוסטר (שם / מ.א.)</label>
+          <input value={soldierSearch} onChange={(e) => setSoldierSearch(e.target.value)} autoFocus
+            placeholder="הקלד שם או מ.א..."
+            className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+          <div className="mt-1 max-h-40 overflow-y-auto border border-slate-100 rounded">
+            {soldierOptions.length === 0 ? (
+              <p className="text-xs text-slate-400 p-2 text-center">{soldierSearch ? "אין חיילים זמינים" : "מציג חיילים פנויים..."}</p>
+            ) : soldierOptions.map((s) => (
+              <button key={s.id} type="button" onClick={() => pickSoldier(s)}
+                className="w-full text-right px-2 py-1.5 hover:bg-blue-50 flex items-center justify-between text-sm border-b border-slate-100 last:border-0">
+                <span><b>{s.fullName}</b> {s.pn && <span className="font-mono text-xs text-slate-400">{s.pn}</span>}</span>
+                {s.companyName && <span className="text-xs text-slate-500">{s.companyName}</span>}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">לא מקושר עדיין? <a href="/roster" target="_blank" className="text-blue-600 underline">הקם חייל ברוסטר</a></p>
+        </div>
+      )}
+
+      {selectedSoldier && (
+        <div className="bg-emerald-50 border border-emerald-300 rounded-lg p-2 flex items-center justify-between">
+          <div className="text-sm">
+            🔗 מקושר ל-<b>{selectedSoldier.fullName}</b>
+            {selectedSoldier.pn && <span className="font-mono text-xs text-slate-500 mr-1">{selectedSoldier.pn}</span>}
+            {selectedSoldier.companyName && <span className="text-xs text-slate-500 mr-1">· {selectedSoldier.companyName}</span>}
+          </div>
+          <button type="button" onClick={clearSoldier} className="text-xs text-rose-500 hover:text-rose-700">בטל קישור</button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="block text-xs text-slate-600 mb-1">שם מלא</label>
           <input value={fullName} onChange={(e) => setFullName(e.target.value)} name="fullName" required
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+            readOnly={!!selectedSoldier}
+            className={`w-full rounded-lg border border-slate-300 px-3 py-2 text-sm ${selectedSoldier ? "bg-slate-100" : "bg-white"}`} />
         </div>
         <div>
           <label className="block text-xs text-slate-600 mb-1">שם משתמש {statusBadge}</label>

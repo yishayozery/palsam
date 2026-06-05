@@ -165,6 +165,9 @@ model AppUser {
   holder       Holder?    @relation("HolderUsers", fields: [holderId], references: [id])
   // שיוך לכמה מחסנים (קצין שמנהל יותר ממחסן אחד)
   assignedHolders UserHolder[]
+  // קישור לרוסטר השלישות — המשתמש הזה הוא גם חייל בגדוד
+  soldierId    String?    @unique
+  soldier      Soldier?   @relation("SoldierAsUser", fields: [soldierId], references: [id])
   active       Boolean    @default(true)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -323,6 +326,8 @@ model Soldier {
   signedKitInstances KitInstance[] @relation("KitInstanceSignedSoldier")
   transfersTo        Transfer[]    @relation("TransferToSoldier")
   signatures         Signature[]
+  // מקושר למשתמש מערכת (קצין/רס"פ)
+  appUser            AppUser?      @relation("SoldierAsUser")
 
   @@unique([battalionId, personalNumber])
   @@index([companyId])
