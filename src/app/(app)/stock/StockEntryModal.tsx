@@ -29,10 +29,15 @@ export default function StockEntryModal({ items, statuses, currentUserName, requ
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // helper להעטפת server-action — שגיאה מוצגת במקום ליפול בשקט
-  const safeRun = async (fn: () => Promise<void>) => {
+  // ⚠️ Server actions ב-production מסנסרות throw — אז actions מחזירות {error} במקום zריקה.
+  const safeRun = async (fn: () => Promise<void | { error?: string; ok?: boolean }>) => {
     setSubmitError(null);
     try {
-      await fn();
+      const res = await fn();
+      if (res && typeof res === "object" && "error" in res && res.error) {
+        setSubmitError(res.error);
+        return;
+      }
       reset(); setOpen(false);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

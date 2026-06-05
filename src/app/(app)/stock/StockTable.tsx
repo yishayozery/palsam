@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
 import { TRACKING_METHOD } from "@/lib/labels";
 import { WAREHOUSE_TYPE_SHORT } from "@/lib/rbac";
-import { declareQty, declareSerials, declareLot, importSerials, importLots, editSerialNumber } from "./actions";
+import { declareQty, declareSerialsForm, declareLot, importSerials, importLots, editSerialNumber } from "./actions";
 
 type Item = {
   id: string; name: string; sku: string | null; unit: string;
@@ -109,7 +109,7 @@ function ExpandedRow({ item, statuses }: { item: Item; statuses: Status[] }) {
             </div>
           </div>
         )}
-        <form action={declareSerials} className="space-y-2">
+        <form action={declareSerialsForm} className="space-y-2">
           <input type="hidden" name="itemTypeId" value={item.id} />
           <div className="flex items-end gap-2 flex-wrap">
             <div>

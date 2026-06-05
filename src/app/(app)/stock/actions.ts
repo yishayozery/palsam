@@ -71,6 +71,11 @@ export async function declareQty(formData: FormData) {
 }
 
 /** הוספת יחידות סריאליות לפי מספרים שהוקלדו (אחת בשורה / בפסיק) */
+/** עטיפה חסרת-החזרה — שימוש ב-<form action={...}> ב-Server Components (StockTable). */
+export async function declareSerialsForm(formData: FormData): Promise<void> {
+  await declareSerials(formData);
+}
+
 export async function declareSerials(formData: FormData) {
   const user = await requireCapability("warehouse.operate");
   const bId = user.battalionId!;
@@ -83,25 +88,25 @@ export async function declareSerials(formData: FormData) {
 
   const serials = serialsRaw.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
   if (serials.length === 0) {
-    throw new Error("חסרים מספרי סריאל — חובה להזין SN לכל יחידה");
+    return { error: "חסרים מספרי סריאל — חובה להזין SN לכל יחידה" };
   }
   // בדיקת ייחודיות גם ב-server (לא רק בקליינט)
   const uniq = new Set(serials);
   if (uniq.size !== serials.length) {
-    throw new Error("יש מספרי סריאל כפולים — כל SN חייב להיות ייחודי");
+    return { error: "יש מספרי סריאל כפולים — כל SN חייב להיות ייחודי" };
   }
 
   const wh = await pickWarehouse(bId, itemTypeId);
-  if (!wh) throw new Error("לא נמצא מחסן מתאים לפריט זה");
+  if (!wh) return { error: "לא נמצא מחסן מתאים לפריט זה" };
 
-  // בדיקה מקדימה: SN כפולים שכבר קיימים ב-DB
+  // בדיקה מקדימה: SN כפולים שכבר קיימים ב-DB (גם של אותו פריט וגם בכלל בגדוד)
   const existingDuplicates = await prisma.serialUnit.findMany({
-    where: { battalionId: bId, itemTypeId, serialNumber: { in: serials } },
-    select: { serialNumber: true },
+    where: { battalionId: bId, serialNumber: { in: serials } },
+    select: { serialNumber: true, itemType: { select: { name: true } } },
   });
   if (existingDuplicates.length > 0) {
-    const list = existingDuplicates.map((d) => d.serialNumber).join(", ");
-    throw new Error(`מספרי הסריאל הבאים כבר קיימים במלאי: ${list}`);
+    const list = existingDuplicates.map((d) => `${d.serialNumber} (${d.itemType.name})`).join(", ");
+    return { error: `מספרי הסריאל הבאים כבר קיימים במלאי: ${list}` };
   }
 
   let created = 0;
@@ -119,10 +124,11 @@ export async function declareSerials(formData: FormData) {
     }
   });
   if (created === 0) {
-    throw new Error(`לא נוצרה אף יחידה. נכשלו: ${failed.join(", ")}`);
+    return { error: `לא נוצרה אף יחידה. נכשלו: ${failed.join(", ")}` };
   }
   await audit(user.id, "DECLARE_SERIALS", "ItemType", itemTypeId, { count: created, failed });
   revalidateAll();
+  return { ok: true as const, created };
 }
 
 /** טעינת סריאליים מקובץ אקסל */
