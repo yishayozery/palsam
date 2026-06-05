@@ -58,12 +58,14 @@ async function main() {
     data: { username: "magad", passwordHash: pw, fullName: 'מג"ד (צופה)', role: "VIEWER", battalionId: bId },
   });
 
-  // ===== 4 מחסנים + מנהלים =====
+  // ===== 6 מחסנים + מנהלים =====
   const whDefs: { type: WarehouseType; name: string; user: string; manager: string }[] = [
     { type: "EQUIPMENT", name: "מחסן ציוד", user: "kalag", manager: 'קל"ג' },
     { type: "COMMS", name: "מחסן תקשוב", user: "kashrag", manager: 'קשר"ג' },
     { type: "AMMO", name: "בונקר חמידה", user: "bunker", manager: "אחראי בונקר" },
     { type: "ARMORY", name: "ארמון", user: "armory", manager: "אחראי ארמון" },
+    { type: "VEHICLES", name: "מחסן רכבים", user: "ktzinrechev", manager: "קצין רכב" },
+    { type: "MEDICAL", name: "מחסן רפואה", user: "krpg", manager: 'קרפ"ג' },
   ];
   const wh: Record<WarehouseType, string> = {} as Record<WarehouseType, string>;
   for (const w of whDefs) {
@@ -248,7 +250,7 @@ async function main() {
 
   console.log("✅ seed v2 הושלם — גדוד גדסם כרמלי.");
   console.log("   אדמין-על: admin | מפמ: mafam | צופה: magad");
-  console.log("   מנהלי מחסן: kalag(ציוד) kashrag(תקשוב) bunker(חמידה) armory(ארמון)");
+  console.log("   מנהלי מחסן: kalag(ציוד) kashrag(תקשוב) bunker(חמידה) armory(ארמון) ktzinrechev(רכב) krpg(רפואה)");
   console.log("   נציגי פלוגה: repa..repe | סיסמה לכולם: 123456");
 }
 

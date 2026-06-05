@@ -10,11 +10,12 @@ import { audit } from "@/lib/audit";
 import type { WarehouseType } from "@/generated/prisma";
 
 const WH_DEFS: { type: WarehouseType; name: string }[] = [
-  { type: "EQUIPMENT", name: "מחסן ציוד" },
-  { type: "COMMS", name: "מחסן תקשוב" },
-  { type: "AMMO", name: "בונקר חמידה" },
-  { type: "ARMORY", name: "ארמון" },
-  { type: "VEHICLES", name: "מחסן רכבים" },
+  { type: "EQUIPMENT", name: "מחסן ציוד" },           // קל"ג
+  { type: "COMMS", name: "מחסן תקשוב" },              // קשר"ג
+  { type: "AMMO", name: "בונקר חמידה" },              // אחראי בונקר
+  { type: "ARMORY", name: "ארמון" },                   // אחראי ארמון
+  { type: "VEHICLES", name: "מחסן רכבים" },           // קצין רכב
+  { type: "MEDICAL", name: "מחסן רפואה" },            // קרפ"ג
 ];
 
 /** הקמת גדוד חדש + משתמש מפמ + 4 מחסנים + מילוני בסיס */

@@ -122,6 +122,6 @@ export const WAREHOUSE_MANAGER_TITLE: Record<WarehouseType, string> = {
   AMMO: "אחראי בונקר",
   ARMORY: "אחראי ארמון",
   VEHICLES: "קצין רכב",
-  MEDICAL: "קצין רפואה",
+  MEDICAL: 'קרפ"ג',
   GENERAL: "אחראי כללי",
 };
