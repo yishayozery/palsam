@@ -99,14 +99,15 @@ export async function declareSerials(formData: FormData) {
   const wh = await pickWarehouse(bId, itemTypeId);
   if (!wh) return { error: "לא נמצא מחסן מתאים לפריט זה" };
 
-  // בדיקה מקדימה: SN כפולים שכבר קיימים ב-DB (גם של אותו פריט וגם בכלל בגדוד)
+  // בדיקה מקדימה: SN כפולים שכבר קיימים לאותו פריט (אותו SN לפריט אחר זה תקין —
+  // למשל מסגרת רובה ורכב יכולים לחלוק את אותו מספר)
   const existingDuplicates = await prisma.serialUnit.findMany({
-    where: { battalionId: bId, serialNumber: { in: serials } },
-    select: { serialNumber: true, itemType: { select: { name: true } } },
+    where: { battalionId: bId, itemTypeId, serialNumber: { in: serials } },
+    select: { serialNumber: true },
   });
   if (existingDuplicates.length > 0) {
-    const list = existingDuplicates.map((d) => `${d.serialNumber} (${d.itemType.name})`).join(", ");
-    return { error: `מספרי הסריאל הבאים כבר קיימים במלאי: ${list}` };
+    const list = existingDuplicates.map((d) => d.serialNumber).join(", ");
+    return { error: `מספרי הסריאל הבאים כבר קיימים במלאי לפריט זה: ${list}` };
   }
 
   let created = 0;
