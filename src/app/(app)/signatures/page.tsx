@@ -6,6 +6,7 @@ import { PageHeader, Badge, Card, Table, Th, Td, EmptyState } from "@/components
 import { SIGNATURE_METHOD, SIGNATURE_STATUS } from "@/lib/labels";
 import SignoutModal from "./SignoutModal";
 import CompanySignModal from "./CompanySignModal";
+import CheckinModal from "./CheckinModal";
 import CheckinControls from "./CheckinControls";
 import { ROLE_LABELS } from "@/lib/rbac";
 
@@ -22,10 +23,10 @@ export default async function SignaturesPage() {
     user.holderIds.length > 0;
   const holderFilter = scopedToOwn ? { currentHolderId: { in: user.holderIds } } : {};
   // חיילים: נציג פלוגה רואה את חיילי הפלוגה; אחרת כל חיילי הגדוד.
-  // ⚠️ רק חיילים שאושרו ע"י השליש (enlisted=true) זכאים לחתום על ציוד.
+  // מציגים את כל החיילים הפעילים כדי שתמיד תהיה רשימה. enlisted=false יסומן כתג ויחסם בצד שרת.
   const isCompanyRep = user.role === "COMPANY_REP" && !!user.holderId;
   const soldierWhere = {
-    battalionId: bId, active: true, enlisted: true,
+    battalionId: bId, active: true,
     ...(isCompanyRep ? { companyId: user.holderId! } : {}),
   };
   // פלוגות לסינון בהחתמת חייל (לקצין מחסן — כדי לסנן ארוכה לפי פלוגה)
@@ -54,11 +55,13 @@ export default async function SignaturesPage() {
       })
     : [];
   // מלאי כמותי וסריאלי להחתמה: קצין מחסן רואה רק את שלו; מפ"מ רואה את כל מלאי הגדוד
+  // ⚠️ פילטר signable !== false — פריטים שהוגדרו "ללא החתמה" לא יופיעו (כמו כסאות נח)
   const warehouseBalances = (user.holderId || isMafam)
     ? await prisma.stockBalance.findMany({
         where: {
           ...(isMafam ? { battalionId: bId } : { holderId: user.holderId! }),
           quantity: { gt: 0 },
+          itemType: { signable: true },
         },
         include: { itemType: true, status: true },
       })
@@ -91,7 +94,7 @@ export default async function SignaturesPage() {
     prisma.serialUnit.findMany({
       where: {
         battalionId: bId, signedSoldierId: null,
-        // מפ"מ: כל הגדוד; אחרים: רק המחסנים שלהם
+        itemType: { signable: true }, // ⚠️ רק פריטים שמיועדים להחתמה
         ...(isMafam ? {} : holderFilter),
       },
       include: { itemType: true, status: true, currentHolder: true },
@@ -125,7 +128,8 @@ export default async function SignaturesPage() {
         action={
           canSign ? (
             <div className="flex gap-2">
-              <CompanySignModal
+              {/* החתמת פלוגה — רק למפ"מ ולקצין מחסן (לא לרס"פ פלוגה) */}
+              {!isCompanyRep && <CompanySignModal
                 companies={companiesForSign.map((c) => ({
                   id: c.id, name: c.name,
                   members: c.users.map((u) => ({ id: u.id, name: u.fullName, role: ROLE_LABELS[u.role] })),
@@ -141,13 +145,23 @@ export default async function SignaturesPage() {
                   status: b.status.name, quantity: b.quantity,
                   signMode: b.itemType.signMode,
                 }))}
+              />}
+              <CheckinModal
+                signedUnits={signedUnits.map((u) => ({
+                  id: u.id, serial: u.serialNumber, itemName: u.itemType.name,
+                  soldierId: u.signedSoldierId!, soldierName: u.signedSoldier!.fullName,
+                  soldierPN: u.signedSoldier!.personalNumber, companyName: null,
+                  statusId: u.statusId, statusName: u.status.name,
+                  isWear: u.status.isWear, isLoss: u.status.isLoss,
+                }))}
+                statuses={statuses.map((s) => ({ id: s.id, name: s.name, isWear: s.isWear, isLoss: s.isLoss, isDefault: s.isDefault }))}
               />
               <SignoutModal
                 companies={companiesForFilter}
                 lockCompanyId={isCompanyRep ? user.holderId : null}
                 soldiers={soldiers.map((s) => {
                   const c = companiesForFilter.find((x) => x.id === s.companyId);
-                  return { id: s.id, name: s.fullName, pn: s.personalNumber, companyId: s.companyId, companyName: c?.name ?? null };
+                  return { id: s.id, name: s.fullName, pn: s.personalNumber, companyId: s.companyId, companyName: c?.name ?? null, enlisted: s.enlisted };
                 })}
                 units={availableUnits.map((u) => ({
                   id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber,

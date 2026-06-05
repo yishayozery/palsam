@@ -22,11 +22,22 @@ export async function addDonation(formData: FormData) {
   const ownerHolder = await prisma.holder.findUnique({ where: { id: user.holderId } });
   const association = ownerHolder?.kind === "COMPANY" ? "DONATION_COMPANY" : "DONATION_BATTALION";
 
+  // קטגוריית "תרומות" — נוצרת אוטומטית. שם דינמי לפי שם הפלוגה (לדוגמה: "תרומות טנא")
+  const categoryName = ownerHolder?.kind === "COMPANY"
+    ? `תרומות ${ownerHolder.name}`
+    : "תרומות גדודיות";
+  const category = await prisma.category.upsert({
+    where: { battalionId_name: { battalionId: bId, name: categoryName } },
+    create: { battalionId: bId, name: categoryName, warehouseType: "GENERAL" },
+    update: {},
+  });
+
   await prisma.$transaction(async (tx) => {
     const item = await tx.itemType.create({
       data: {
         battalionId: bId, sku: `DON-${nanoid(6).toUpperCase()}`, name,
         trackingMethod: "QUANTITY", unit, isDonated: true, association, signable,
+        categoryId: category.id,
         ownerHolderId: user.holderId,
       },
     });

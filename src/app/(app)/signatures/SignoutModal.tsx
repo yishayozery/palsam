@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { createSignout } from "./actions";
 
-type Soldier = { id: string; name: string; pn: string | null; companyId?: string | null; companyName?: string | null };
+type Soldier = { id: string; name: string; pn: string | null; companyId?: string | null; companyName?: string | null; enlisted?: boolean };
 type Company = { id: string; name: string };
 type Unit = { id: string; itemTypeId: string; itemName: string; serial: string; status: string; statusId: string };
 type Balance = { itemTypeId: string; itemName: string; unit: string; status: string; statusId: string; quantity: number };
@@ -119,7 +119,7 @@ export default function SignoutModal({
   if (!open) {
     return (
       <button onClick={() => setOpen(true)} className="bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-4 py-2 text-sm font-medium">
-        + החתמת חייל
+        ✍️ החתמת חייל
       </button>
     );
   }
@@ -161,13 +161,16 @@ export default function SignoutModal({
               <label className="block text-[11px] text-slate-600 mb-0.5">בחר חייל ({filteredSoldiers.length})</label>
               <select value={soldierId} onChange={(e) => setSoldierId(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white">
-                <option value="">— בחר —</option>
+                <option value="">— {filteredSoldiers.length === 0 ? "אין חיילים בפלוגה" : "בחר חייל"} —</option>
                 {filteredSoldiers.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name} ({s.pn}){s.companyName ? ` · ${s.companyName}` : ""}
+                    {s.name}{s.pn ? ` (${s.pn})` : ""}{s.companyName ? ` · ${s.companyName}` : ""}{s.enlisted === false ? " ⏳ לא מאושר" : ""}
                   </option>
                 ))}
               </select>
+              {filteredSoldiers.length === 0 && (
+                <p className="text-[10px] text-rose-600 mt-1">⚠️ אין חיילים. הקם חיילים ב<a href="/soldiers" className="underline">חיילי הפלוגה</a> או <a href="/roster" target="_blank" className="underline">רוסטר השלישות</a>.</p>
+              )}
             </div>
           </div>
           {selectedSoldier && (

@@ -42,7 +42,7 @@ export const NAV: NavItem[] = [
   { href: "/soldiers", label: "חיילי הפלוגה", icon: "🪖", group: "הפלוגה שלי", cap: "company.manage" },
   { href: "/donations", label: "תרומות פלוגתיות", icon: "🎁", group: "הפלוגה שלי", cap: "donations.manage" },
   { href: "/my-inventory", label: "מלאי הפלוגה", icon: "📦", group: "הפלוגה שלי", cap: "company.manage" },
-  { href: "/signatures", label: "החתמת חיילים", icon: "✍️", group: "הפלוגה שלי", cap: "signatures.manage" },
+  { href: "/signatures", label: "החתמת/זיכוי חייל", icon: "✍️", group: "הפלוגה שלי", cap: "signatures.manage" },
   { href: "/counts", label: "ספירת מלאי", icon: "🔢", group: "הפלוגה שלי", cap: "counts.execute" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "הפלוגה שלי", cap: "company.manage" },
   { href: "/locations", label: "מידוף מחסן", icon: "🗄️", group: "הפלוגה שלי", cap: "locations.manage" },
