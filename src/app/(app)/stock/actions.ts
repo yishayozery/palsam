@@ -82,12 +82,30 @@ export async function declareSerials(formData: FormData) {
   const recipientPersonalId = await extractPersonalId(bId, formData);
 
   const serials = serialsRaw.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
-  if (serials.length === 0) return;
+  if (serials.length === 0) {
+    throw new Error("חסרים מספרי סריאל — חובה להזין SN לכל יחידה");
+  }
+  // בדיקת ייחודיות גם ב-server (לא רק בקליינט)
+  const uniq = new Set(serials);
+  if (uniq.size !== serials.length) {
+    throw new Error("יש מספרי סריאל כפולים — כל SN חייב להיות ייחודי");
+  }
 
   const wh = await pickWarehouse(bId, itemTypeId);
-  if (!wh) return;
+  if (!wh) throw new Error("לא נמצא מחסן מתאים לפריט זה");
+
+  // בדיקה מקדימה: SN כפולים שכבר קיימים ב-DB
+  const existingDuplicates = await prisma.serialUnit.findMany({
+    where: { battalionId: bId, itemTypeId, serialNumber: { in: serials } },
+    select: { serialNumber: true },
+  });
+  if (existingDuplicates.length > 0) {
+    const list = existingDuplicates.map((d) => d.serialNumber).join(", ");
+    throw new Error(`מספרי הסריאל הבאים כבר קיימים במלאי: ${list}`);
+  }
 
   let created = 0;
+  const failed: string[] = [];
   await prisma.$transaction(async (tx) => {
     const transfer = await tx.transfer.create({
       data: { battalionId: bId, type: "INTAKE", status: "COMPLETED", toHolderId: wh.id, reason: "הזנת סריאליים ידני", externalUnit, externalContact, recipientPersonalId, createdById: user.id, approvedById: user.id, approvedAt: new Date() },
@@ -97,10 +115,13 @@ export async function declareSerials(formData: FormData) {
         await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: sn, statusId, currentHolderId: wh.id } });
         await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity: 1, statusId } });
         created++;
-      } catch { /* כפילות */ }
+      } catch { failed.push(sn); }
     }
   });
-  await audit(user.id, "DECLARE_SERIALS", "ItemType", itemTypeId, { count: created });
+  if (created === 0) {
+    throw new Error(`לא נוצרה אף יחידה. נכשלו: ${failed.join(", ")}`);
+  }
+  await audit(user.id, "DECLARE_SERIALS", "ItemType", itemTypeId, { count: created, failed });
   revalidateAll();
 }
 

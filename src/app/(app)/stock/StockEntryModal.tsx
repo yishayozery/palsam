@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { TRACKING_METHOD } from "@/lib/labels";
 import { declareQty, declareSerials, declareLot, importSerials, importLots } from "./actions";
 
@@ -24,6 +24,19 @@ export default function StockEntryModal({ items, statuses, currentUserName, requ
   const [externalUnit, setExternalUnit] = useState("חטיבה");
   const [externalContact, setExternalContact] = useState("");
   const [recipientPersonalId, setRecipientPersonalId] = useState("");
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // helper להעטפת server-action — שגיאה מוצגת במקום ליפול בשקט
+  const safeRun = async (fn: () => Promise<void>) => {
+    setSubmitError(null);
+    try {
+      await fn();
+      reset(); setOpen(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setSubmitError(msg.replace(/^Error:\s*/, ""));
+    }
+  };
 
   const selected = items.find((i) => i.id === itemId);
   const filteredItems = useMemo(() => {
@@ -44,6 +57,22 @@ export default function StockEntryModal({ items, statuses, currentUserName, requ
       });
     }
   };
+
+  // סנכרון אוטומטי: ברגע שנבחר פריט סריאלי (או qty משתנה), נוודא ש-serials.length === qty
+  // ⚠️ קריטי: בלי זה, qty=1 ב-mount אבל serials=[] → submit שולח 0 SNs → server מתעלם בלי שגיאה.
+  useEffect(() => {
+    if (selected?.trackingMethod === "SERIAL" && qty > 0) {
+      setSerials((prev) => {
+        if (prev.length === qty) return prev;
+        const next = [...prev];
+        if (qty > prev.length) for (let i = prev.length; i < qty; i++) next.push("");
+        else next.length = qty;
+        return next;
+      });
+    } else if (selected?.trackingMethod !== "SERIAL" && serials.length > 0) {
+      setSerials([]);
+    }
+  }, [selected?.id, selected?.trackingMethod, qty]);
 
   const reset = () => {
     setItemId(""); setItemQuery(""); setQty(1); setLotNumber("");
@@ -182,6 +211,12 @@ export default function StockEntryModal({ items, statuses, currentUserName, requ
                     );
                   })()}
 
+                  {submitError && (
+                    <div className="bg-rose-50 border-2 border-rose-300 rounded-lg p-3 text-sm text-rose-800 font-medium">
+                      ⚠️ {submitError}
+                    </div>
+                  )}
+
                   {/* מנפק / מקבל */}
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
                     <h4 className="text-sm font-semibold text-amber-900">פרטי ההעברה (מי מנפק / מי מקבל)</h4>
@@ -221,7 +256,7 @@ export default function StockEntryModal({ items, statuses, currentUserName, requ
                     <button type="button" onClick={() => setOpen(false)}
                       className="rounded-lg border border-slate-300 px-5 py-2 text-sm hover:bg-slate-50">ביטול</button>
                     {selected.trackingMethod === "QUANTITY" && (
-                      <form action={async (fd) => { await declareQty(fd); reset(); setOpen(false); }}>
+                      <form action={async (fd) => safeRun(() => declareQty(fd))}>
                         <input type="hidden" name="itemTypeId" value={itemId} />
                         <input type="hidden" name="quantity" value={qty} />
                         <input type="hidden" name="statusId" value={statusId} />
@@ -234,7 +269,7 @@ export default function StockEntryModal({ items, statuses, currentUserName, requ
                       </form>
                     )}
                     {selected.trackingMethod === "LOT" && (
-                      <form action={async (fd) => { await declareLot(fd); reset(); setOpen(false); }}>
+                      <form action={async (fd) => safeRun(() => declareLot(fd))}>
                         <input type="hidden" name="itemTypeId" value={itemId} />
                         <input type="hidden" name="lotNumber" value={lotNumber} />
                         <input type="hidden" name="quantity" value={qty} />
@@ -256,8 +291,8 @@ export default function StockEntryModal({ items, statuses, currentUserName, requ
                       const valid = allFilled && noDup;
                       return (
                       <form action={async (fd) => {
-                          if (!valid) return;
-                          await declareSerials(fd); reset(); setOpen(false);
+                          if (!valid) { setSubmitError("מלא את כל מספרי הסריאל ללא כפילויות"); return; }
+                          await safeRun(() => declareSerials(fd));
                         }}>
                         <input type="hidden" name="itemTypeId" value={itemId} />
                         <input type="hidden" name="serials" value={trimmed.join("\n")} />
