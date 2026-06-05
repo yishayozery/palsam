@@ -26,6 +26,7 @@ export const NAV: NavItem[] = [
 
   // ===== פלסם (מפ"מ — אחראי מערכת בגדוד) =====
   { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "פלסם", cap: "battalion.profile" },
+  { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "פלסם", cap: "soldiers.roster" },
   { href: "/items", label: "הגדרות פריטים", icon: "🏷️", group: "פלסם", cap: "battalion.profile" },
   { href: "/stock", label: "מלאי הגדוד", icon: "📋", group: "פלסם", cap: "battalion.profile" },
   { href: "/transfers", label: "העברות (גדוד/חטיבה)", icon: "🔄", group: "פלסם", cap: "battalion.profile" },

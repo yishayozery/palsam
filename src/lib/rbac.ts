@@ -13,6 +13,7 @@ export type Capability =
   | "locations.manage" // מידוף (מחסן/עמודה/שורה)
   | "reps.manage" // הגדרת נציגי פלוגה מול המחסן
   | "company.manage" // נציג פלוגה: חיילים + מחסן פלוגתי
+  | "soldiers.roster" // שליש: ניהול חיילים גדודי + אישור גיוס
   | "donations.manage" // מלאי תרומה / ציוד לא-צבאי
   | "transfer.approve" // אישור קבלה (לחיצת יד)
   | "signatures.manage" // החתמות וזיכוי
@@ -33,6 +34,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "kits.manage",
     "warehouse.operate", // הצהרת מלאי גדודי מול החטיבה
     "counts.manage", // תכניות ספירה
+    "soldiers.roster", // שלישות: ניהול חיילים גדודי
     "gaps.resolve",
     "reports.view",
     "audit.view",

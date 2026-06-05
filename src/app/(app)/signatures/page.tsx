@@ -21,9 +21,19 @@ export default async function SignaturesPage() {
     (user.role === "WAREHOUSE_MANAGER" || user.role === "COMPANY_REP" || user.role === "VIEWER") &&
     user.holderIds.length > 0;
   const holderFilter = scopedToOwn ? { currentHolderId: { in: user.holderIds } } : {};
-  // חיילים: נציג פלוגה רואה את חיילי הפלוגה; אחרת כל חיילי הגדוד
+  // חיילים: נציג פלוגה רואה את חיילי הפלוגה; אחרת כל חיילי הגדוד.
+  // ⚠️ רק חיילים שאושרו ע"י השליש (enlisted=true) זכאים לחתום על ציוד.
   const isCompanyRep = user.role === "COMPANY_REP" && !!user.holderId;
-  const soldierWhere = { battalionId: bId, active: true, ...(isCompanyRep ? { companyId: user.holderId! } : {}) };
+  const soldierWhere = {
+    battalionId: bId, active: true, enlisted: true,
+    ...(isCompanyRep ? { companyId: user.holderId! } : {}),
+  };
+  // פלוגות לסינון בהחתמת חייל (לקצין מחסן — כדי לסנן ארוכה לפי פלוגה)
+  const companiesForFilter = await prisma.holder.findMany({
+    where: { battalionId: bId, kind: "COMPANY", active: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
 
   const kits = user.holderId
     ? await prisma.signableKit.findMany({
@@ -101,7 +111,12 @@ export default async function SignaturesPage() {
                 }))}
               />
               <SignoutModal
-                soldiers={soldiers.map((s) => ({ id: s.id, name: s.fullName, pn: s.personalNumber }))}
+                companies={companiesForFilter}
+                lockCompanyId={isCompanyRep ? user.holderId : null}
+                soldiers={soldiers.map((s) => {
+                  const c = companiesForFilter.find((x) => x.id === s.companyId);
+                  return { id: s.id, name: s.fullName, pn: s.personalNumber, companyId: s.companyId, companyName: c?.name ?? null };
+                })}
                 units={availableUnits.map((u) => ({
                   id: u.id, name: u.itemType.name, serial: u.serialNumber,
                   holder: u.currentHolder?.name ?? "", status: u.status.name,

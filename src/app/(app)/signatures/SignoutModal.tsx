@@ -1,21 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createSignout } from "./actions";
 
-type Soldier = { id: string; name: string; pn: string };
+type Soldier = { id: string; name: string; pn: string; companyId?: string | null; companyName?: string | null };
+type Company = { id: string; name: string };
 type Unit = { id: string; name: string; serial: string; holder: string; status: string };
 type Kit = { id: string; name: string; lines: { name: string; qty: number }[] };
 type Vehicle = { id: string; name: string; plate: string };
 
 export default function SignoutModal({
-  soldiers, units, kits, vehicles,
+  soldiers, companies = [], units, kits, vehicles, lockCompanyId,
 }: {
-  soldiers: Soldier[]; units: Unit[]; kits: Kit[]; vehicles: Vehicle[];
+  soldiers: Soldier[]; companies?: Company[]; units: Unit[]; kits: Kit[]; vehicles: Vehicle[];
+  lockCompanyId?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [kitId, setKitId] = useState("");
+  const [companyFilter, setCompanyFilter] = useState(lockCompanyId ?? "");
+  const [search, setSearch] = useState("");
   const selectedKit = kits.find((k) => k.id === kitId);
+
+  const filteredSoldiers = useMemo(() => {
+    return soldiers.filter((s) => {
+      if (companyFilter && s.companyId !== companyFilter) return false;
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        return s.name.toLowerCase().includes(q) || s.pn.includes(q);
+      }
+      return true;
+    }).slice(0, 200);
+  }, [soldiers, companyFilter, search]);
 
   return (
     <>
@@ -35,15 +50,38 @@ export default function SignoutModal({
             </div>
 
             <form action={async (fd) => { await createSignout(fd); setOpen(false); }} className="p-5 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">חייל</label>
-                <select name="soldierId" required
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                  <option value="">בחר חייל...</option>
-                  {soldiers.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name} ({s.pn})</option>
-                  ))}
-                </select>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                <label className="block text-sm font-semibold text-slate-700">חייל לחתימה</label>
+                {!lockCompanyId && companies.length > 0 && (
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">סינון לפי פלוגה</label>
+                    <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
+                      <option value="">כל הפלוגות ({soldiers.length} חיילים)</option>
+                      {companies.map((c) => {
+                        const cnt = soldiers.filter((s) => s.companyId === c.id).length;
+                        return <option key={c.id} value={c.id}>{c.name} ({cnt})</option>;
+                      })}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">חיפוש לפי שם / מ.א.</label>
+                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="הקלד..."
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">בחר חייל ({filteredSoldiers.length} מתאימים)</label>
+                  <select name="soldierId" required size={Math.min(6, Math.max(3, filteredSoldiers.length))}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
+                    {filteredSoldiers.length === 0 && <option value="" disabled>אין חיילים מתאימים</option>}
+                    {filteredSoldiers.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.pn}){s.companyName ? ` · ${s.companyName}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>

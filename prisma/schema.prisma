@@ -304,13 +304,19 @@ model Soldier {
   id             String    @id @default(cuid())
   battalionId    String
   battalion      Battalion @relation(fields: [battalionId], references: [id])
-  fullName       String
+  fullName       String  // השדה הזה משמש לתאימות לאחור — אם יש first/last יוצרים מהם
+  firstName      String?
+  lastName       String?
   personalNumber String
   phone          String?
   platoon        String? // מחלקה בתוך הפלוגה
   companyId      String?
   company        Holder?   @relation(fields: [companyId], references: [id])
   active         Boolean   @default(true)
+  // אישור שליש: חייל יכול לחתום על ציוד רק אם enlisted = true
+  enlisted       Boolean   @default(false)
+  enlistedAt     DateTime?
+  enlistedById   String?
   createdAt      DateTime  @default(now())
 
   signedSerialUnits  SerialUnit[]  @relation("SerialUnitSignedSoldier")
