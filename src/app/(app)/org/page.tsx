@@ -32,6 +32,11 @@ export default async function OrgPage({ searchParams }: { searchParams: Promise<
           select: { id: true, fullName: true, username: true, role: true, phone: true, passwordSet: true, active: true },
           orderBy: { fullName: "asc" },
         },
+        soldiers: {
+          where: { active: true },
+          select: { id: true, fullName: true, personalNumber: true, enlisted: true },
+          orderBy: [{ enlisted: "asc" }, { lastName: "asc" }, { fullName: "asc" }],
+        },
         _count: { select: { soldiers: true } },
       },
     }),
@@ -44,6 +49,7 @@ export default async function OrgPage({ searchParams }: { searchParams: Promise<
   const companyRows: HolderRow[] = companies.map((c) => ({
     id: c.id, name: c.name, active: c.active,
     users: c.users.filter((u) => u.active || !u.passwordSet),
+    soldiers: c.soldiers.map((s) => ({ id: s.id, fullName: s.fullName, personalNumber: s.personalNumber, enlisted: s.enlisted })),
     extra: { soldierCount: c._count.soldiers },
   }));
 

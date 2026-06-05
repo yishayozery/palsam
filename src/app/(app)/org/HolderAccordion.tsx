@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui";
 import { ROLE_LABELS, WAREHOUSE_TYPE_SHORT, WAREHOUSE_TYPE_ICON } from "@/lib/rbac";
 import { inviteHolderUser, removeHolderUser, createWarehouse, createCompany, renameHolder, toggleHolder } from "./actions";
+import { createSoldier, enlistSoldier } from "../roster/actions";
 import type { WarehouseType } from "@/generated/prisma";
 
 type User = {
@@ -15,12 +16,16 @@ type User = {
   passwordSet: boolean;
   active: boolean;
 };
+export type SoldierRef = {
+  id: string; fullName: string; personalNumber: string | null; enlisted: boolean;
+};
 export type HolderRow = {
   id: string;
   name: string;
   active: boolean;
   warehouseType?: WarehouseType | null;
   users: User[];
+  soldiers?: SoldierRef[];
   extra?: { soldierCount?: number };
 };
 
@@ -195,9 +200,68 @@ function InviteRow({ holderId, kind, onDone }: { holderId: string; kind: "WAREHO
   );
 }
 
+function SoldierQuickAdd({ companyId, onDone }: { companyId: string; onDone: () => void }) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [personalNumber, setPersonalNumber] = useState("");
+  const [phone, setPhone] = useState("");
+  const [enlistNow, setEnlistNow] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(fd: FormData) {
+    setError(null); setBusy(true);
+    try {
+      await createSoldier(fd);
+      setFirstName(""); setLastName(""); setPersonalNumber(""); setPhone("");
+      // לא סוגרים — נשארים פתוחים להוספה רצופה
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <form action={submit} className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2 mt-2">
+      <input type="hidden" name="companyId" value={companyId} />
+      <input type="hidden" name="enlistNow" value={enlistNow ? "on" : ""} />
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-sm font-semibold text-emerald-900">+ הוספת חייל לפלוגה</span>
+        <a href="/roster" className="text-[11px] text-emerald-700 hover:underline">לרוסטר המלא ←</a>
+      </div>
+      {error && <div className="bg-rose-100 border border-rose-200 rounded p-2 text-xs text-rose-700">{error}</div>}
+      <div className="grid grid-cols-2 gap-2">
+        <input value={firstName} onChange={(e) => setFirstName(e.target.value)} name="firstName" required placeholder="שם פרטי *"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+        <input value={lastName} onChange={(e) => setLastName(e.target.value)} name="lastName" required placeholder="שם משפחה *"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <input value={personalNumber} name="personalNumber" inputMode="numeric" pattern="\d*"
+          onChange={(e) => setPersonalNumber(e.target.value.replace(/\D/g, ""))}
+          placeholder="מ.א. (אופציונלי)"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono" />
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} name="phone" placeholder="נייד (אופציונלי)"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+      </div>
+      <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+        <input type="checkbox" checked={enlistNow} onChange={(e) => setEnlistNow(e.target.checked)} />
+        ✓ אשר גיוס מיידי — יוכל לחתום על ציוד
+      </label>
+      <div className="flex justify-end gap-2 pt-1">
+        <button type="button" onClick={onDone} className="text-xs text-slate-500 hover:text-slate-800">סגור</button>
+        <button disabled={busy || !firstName || !lastName}
+          className="bg-emerald-600 text-white rounded-lg px-4 py-1.5 text-xs font-medium hover:bg-emerald-700 disabled:opacity-50">
+          {busy ? "מוסיף..." : "+ הוסף חייל"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function HolderItem({ row, kind, defaultOpen }: { row: HolderRow; kind: "WAREHOUSE" | "COMPANY"; defaultOpen: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [soldierAddOpen, setSoldierAddOpen] = useState(false);
   const [editName, setEditName] = useState(false);
 
   const icon = kind === "WAREHOUSE" && row.warehouseType ? WAREHOUSE_TYPE_ICON[row.warehouseType] : kind === "COMPANY" ? "🪖" : "📦";
@@ -287,14 +351,57 @@ function HolderItem({ row, kind, defaultOpen }: { row: HolderRow; kind: "WAREHOU
             </div>
           )}
 
-          {!inviteOpen ? (
-            <button type="button" onClick={() => setInviteOpen(true)}
-              className="mt-3 w-full border-2 border-dashed border-blue-300 text-blue-700 rounded-lg py-2 text-sm font-medium hover:bg-blue-50 hover:border-blue-400 transition">
-              + הוסף {kind === "WAREHOUSE" ? "קצין מחסן" : 'רס״פ פלוגה'}
-            </button>
-          ) : (
-            <InviteRow holderId={row.id} kind={kind} onDone={() => setInviteOpen(false)} />
+          {/* === חיילי הפלוגה — רק לפלוגות === */}
+          {kind === "COMPANY" && (
+            <div className="mt-4 pt-3 border-t border-slate-200">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-bold text-slate-700">🪖 חיילי הפלוגה ({row.soldiers?.length ?? 0})</h4>
+                <a href={`/roster?company=${row.id}`} className="text-xs text-blue-600 hover:underline">לרוסטר ←</a>
+              </div>
+              {row.soldiers && row.soldiers.length > 0 && (
+                <div className="max-h-40 overflow-y-auto space-y-1 mb-2">
+                  {row.soldiers.slice(0, 50).map((s) => (
+                    <div key={s.id} className="flex items-center gap-2 bg-emerald-50/40 rounded px-2 py-1 text-sm">
+                      <span className="text-base">🪖</span>
+                      <span className="flex-1 truncate">{s.fullName}</span>
+                      {s.personalNumber && <span className="font-mono text-xs text-slate-400">{s.personalNumber}</span>}
+                      {s.enlisted
+                        ? <Badge className="bg-emerald-100 text-emerald-700 text-[10px]">✓</Badge>
+                        : <Badge className="bg-amber-100 text-amber-700 text-[10px]">ממתין</Badge>}
+                    </div>
+                  ))}
+                  {row.soldiers.length > 50 && (
+                    <div className="text-[11px] text-slate-400 text-center pt-1">
+                      + עוד {row.soldiers.length - 50} — <a href={`/roster?company=${row.id}`} className="text-blue-600 underline">ראה הכל ברוסטר</a>
+                    </div>
+                  )}
+                </div>
+              )}
+              {!soldierAddOpen ? (
+                <button type="button" onClick={() => setSoldierAddOpen(true)}
+                  className="w-full border-2 border-dashed border-emerald-300 text-emerald-700 rounded-lg py-2 text-sm font-medium hover:bg-emerald-50 hover:border-emerald-400 transition">
+                  + הוסף חייל לפלוגה
+                </button>
+              ) : (
+                <SoldierQuickAdd companyId={row.id} onDone={() => setSoldierAddOpen(false)} />
+              )}
+            </div>
           )}
+
+          {/* === קציני מחסן / רס"פ === */}
+          <div className={kind === "COMPANY" ? "mt-4 pt-3 border-t border-slate-200" : ""}>
+            <h4 className="text-sm font-bold text-slate-700 mb-2">
+              {kind === "WAREHOUSE" ? "👮 קציני המחסן" : "🤝 רס״פים / בעלי תפקיד"}
+            </h4>
+            {!inviteOpen ? (
+              <button type="button" onClick={() => setInviteOpen(true)}
+                className="mt-1 w-full border-2 border-dashed border-blue-300 text-blue-700 rounded-lg py-2 text-sm font-medium hover:bg-blue-50 hover:border-blue-400 transition">
+                + הוסף {kind === "WAREHOUSE" ? "קצין מחסן" : 'רס״פ פלוגה'}
+              </button>
+            ) : (
+              <InviteRow holderId={row.id} kind={kind} onDone={() => setInviteOpen(false)} />
+            )}
+          </div>
         </div>
       )}
     </div>
