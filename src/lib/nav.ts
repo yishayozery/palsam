@@ -33,6 +33,7 @@ export const NAV: NavItem[] = [
   { href: "/warehouses", label: "מחסני הגדוד", icon: "🏪", group: "פלסם", cap: "battalion.profile" },
   { href: "/counts", label: "ספירות מלאי", icon: "🔢", group: "פלסם", cap: "battalion.profile" },
   { href: "/counts/plans", label: "תכניות ספירה", icon: "📋", group: "פלסם", cap: "counts.manage" },
+  { href: "/maintenance", label: "ציוד תקול / טנא", icon: "🔧", group: "פלסם", cap: "maintenance.manage" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "פלסם", cap: "battalion.profile" },
 
   // ===== הפלוגה שלי (רס"פ פלוגה — תפעול ברמת פלוגה) =====

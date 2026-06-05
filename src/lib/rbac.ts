@@ -20,6 +20,7 @@ export type Capability =
   | "counts.manage" // הגדרות ספירה
   | "counts.execute" // ביצוע ספירה
   | "gaps.resolve" // אישור/סגירת פערים
+  | "maintenance.manage" // טנא: ניהול ציוד תקול ותיקונים
   | "reports.view" // דשבורד ודוחות
   | "audit.view"; // יומן פעולות
 
@@ -39,6 +40,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "signatures.manage", // החתמות (פלוגה / חייל) — צפייה ויצירה
     "transfer.approve", // אישור לחיצת יד גם למפ"מ
     "gaps.resolve",
+    "maintenance.manage",
     "reports.view",
     "audit.view",
   ],

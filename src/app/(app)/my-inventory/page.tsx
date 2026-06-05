@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, Badge, EmptyState } from "@/components/ui";
 import { WAREHOUSE_TYPE_SHORT, WAREHOUSE_TYPE_ICON } from "@/lib/rbac";
 import ReturnModal from "./ReturnModal";
+import SendToTanaModal from "../maintenance/SendToTanaModal";
+import { findTanaHolder } from "@/lib/tana";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +93,20 @@ export default async function MyInventoryPage() {
         title="מלאי הפלוגה"
         subtitle={`${company?.name ?? ""} — כל הציוד שהפלוגה חתומה עליו מול הגדוד והמחסנים`}
         action={
+          <div className="flex gap-2">
+            {(await findTanaHolder(bId)) && companyId !== (await findTanaHolder(bId))!.id && (
+              <SendToTanaModal
+                serials={serialUnits.map((u) => ({
+                  id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber,
+                  statusName: u.status.name, category: u.itemType.category?.name ?? null,
+                }))}
+                balances={balances.map((b) => ({
+                  itemTypeId: b.itemTypeId, statusId: b.statusId, holderId: companyId,
+                  itemName: b.itemType.name, unit: b.itemType.unit, statusName: b.status.name,
+                  quantity: b.quantity, category: b.itemType.category?.name ?? null,
+                }))}
+              />
+            )}
           <ReturnModal
             serialUnits={serialUnits.map((u) => ({
               id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, sku: u.itemType.sku,
@@ -106,6 +122,7 @@ export default async function MyInventoryPage() {
             }))}
             statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss }))}
           />
+          </div>
         }
       />
 

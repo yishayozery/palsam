@@ -7,6 +7,8 @@ import StockTable from "./StockTable";
 import StockEntryModal from "./StockEntryModal";
 import StockWithdrawModal from "./StockWithdrawModal";
 import StatusChangeModal from "./StatusChangeModal";
+import SendToTanaModal from "../maintenance/SendToTanaModal";
+import { findTanaHolder } from "@/lib/tana";
 import { approveTransfer, rejectTransfer } from "../transfers/actions";
 
 export const dynamic = "force-dynamic";
@@ -123,6 +125,25 @@ export default async function StockPage({
               stocks={items.flatMap((i) => i.stockBalances.map((b) => ({ itemTypeId: i.id, statusId: b.statusId, statusName: b.status.name, quantity: b.quantity })))}
               units={items.flatMap((i) => i.serialUnits.map((u) => ({ id: u.id, itemTypeId: i.id, serialNumber: u.serialNumber, lotQuantity: u.lotQuantity, statusName: u.status.name })))}
             />
+            {await (async () => {
+              const tana = await findTanaHolder(bId);
+              if (!tana) return null;
+              // סריאליים במחסני הקצין (או כל הגדוד למפ"מ) שלא בטנא
+              const myUnits = items.flatMap((i) =>
+                i.serialUnits.filter((u) => u.currentHolderId !== tana.id).map((u) => ({
+                  id: u.id, itemTypeId: i.id, itemName: i.name, serial: u.serialNumber,
+                  statusName: u.status.name, category: i.category?.name ?? null,
+                }))
+              );
+              const myBalances = items.flatMap((i) =>
+                i.stockBalances.filter((b) => b.holderId !== tana.id).map((b) => ({
+                  itemTypeId: i.id, statusId: b.statusId, holderId: b.holderId,
+                  itemName: i.name, unit: i.unit, statusName: b.status.name,
+                  quantity: b.quantity, category: i.category?.name ?? null,
+                }))
+              );
+              return <SendToTanaModal serials={myUnits} balances={myBalances} />;
+            })()}
             <StatusChangeModal
               items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod, unit: i.unit }))}
               statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss }))}

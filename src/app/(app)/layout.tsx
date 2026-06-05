@@ -27,6 +27,14 @@ export default async function AppLayout({
     return true;
   });
 
+  // הזרקה דינמית: רס"פ של פלוגת הטנא רואה /maintenance גם בלי הרשאה מטריצה
+  if (user.role === "COMPANY_REP" && user.holderId) {
+    const holder = await prisma.holder.findUnique({ where: { id: user.holderId }, select: { name: true } });
+    if (holder?.name?.includes("טנא") && !items.some((n) => n.href === "/maintenance")) {
+      items.push({ href: "/maintenance", label: "ציוד תקול / טנא", icon: "🔧", group: "הפלוגה שלי" });
+    }
+  }
+
   const battalion = user.battalionId
     ? await prisma.battalion.findUnique({ where: { id: user.battalionId }, select: { name: true, logoData: true, motto: true } })
     : null;
