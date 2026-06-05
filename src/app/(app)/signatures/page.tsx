@@ -6,6 +6,7 @@ import { PageHeader, Badge, Card, Table, Th, Td, EmptyState } from "@/components
 import { SIGNATURE_METHOD, SIGNATURE_STATUS } from "@/lib/labels";
 import SignoutModal from "./SignoutModal";
 import CompanySignModal from "./CompanySignModal";
+import CompanyCheckinModal from "./CompanyCheckinModal";
 import CheckinModal from "./CheckinModal";
 import CheckinControls from "./CheckinControls";
 import { ROLE_LABELS } from "@/lib/rbac";
@@ -79,6 +80,28 @@ export default async function SignaturesPage() {
       })
     : [];
 
+  // ציוד פלוגתי שחתום (יחידות סריאליות שמיקומן בפלוגה ולא חתומות על חייל)
+  const companyHolderIds = companiesForSign.map((c) => c.id);
+  const companySerials = companyHolderIds.length === 0 ? [] : await prisma.serialUnit.findMany({
+    where: {
+      battalionId: bId,
+      currentHolderId: { in: companyHolderIds },
+      signedSoldierId: null,
+      itemType: { signable: true },
+    },
+    include: { itemType: true, status: true },
+    orderBy: { itemType: { name: "asc" } },
+  });
+  const companyBalances = companyHolderIds.length === 0 ? [] : await prisma.stockBalance.findMany({
+    where: {
+      battalionId: bId,
+      holderId: { in: companyHolderIds },
+      quantity: { gt: 0 },
+      itemType: { signable: true },
+    },
+    include: { itemType: true, status: true },
+  });
+
   const [pending, signedUnits, soldiers, availableUnits, statuses] = await Promise.all([
     prisma.signature.findMany({
       where: { battalionId: bId, status: "PENDING" },
@@ -146,6 +169,24 @@ export default async function SignaturesPage() {
                   signMode: b.itemType.signMode,
                 }))}
               />}
+              {!isCompanyRep && (
+                <CompanyCheckinModal
+                  companies={companiesForSign.map((c) => ({ id: c.id, name: c.name }))}
+                  serials={companySerials.map((u) => ({
+                    id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name,
+                    serial: u.serialNumber, companyId: u.currentHolderId!,
+                    statusId: u.statusId, statusName: u.status.name,
+                    isWear: u.status.isWear, isLoss: u.status.isLoss,
+                  }))}
+                  balances={companyBalances.map((b) => ({
+                    companyId: b.holderId, itemTypeId: b.itemTypeId, statusId: b.statusId,
+                    itemName: b.itemType.name, unit: b.itemType.unit,
+                    statusName: b.status.name, quantity: b.quantity,
+                    isWear: b.status.isWear, isLoss: b.status.isLoss,
+                  }))}
+                  statuses={statuses.map((s) => ({ id: s.id, name: s.name, isWear: s.isWear, isLoss: s.isLoss, isDefault: s.isDefault }))}
+                />
+              )}
               <CheckinModal
                 signedUnits={signedUnits.map((u) => ({
                   id: u.id, serial: u.serialNumber, itemName: u.itemType.name,
