@@ -19,7 +19,15 @@ export default async function CountPlansPage() {
       orderBy: [{ active: "desc" }, { createdAt: "desc" }],
       include: {
         createdBy: { select: { fullName: true } },
-        _count: { select: { tasks: true } },
+        responsibleUser: { select: { fullName: true } },
+        // טוענים את כל המשימות + holder לחישוב סטטוס וניםוח מי מאחר
+        tasks: {
+          include: {
+            holder: { select: { name: true, kind: true } },
+            assignedUser: { select: { fullName: true } },
+          },
+          orderBy: [{ status: "asc" }, { dueAt: "asc" }],
+        },
       },
     }),
     prisma.holder.findMany({
@@ -64,17 +72,11 @@ export default async function CountPlansPage() {
           <Table>
             <thead>
               <tr>
-                <Th>שם</Th><Th>היקף</Th><Th>תזמון</Th><Th>סה״כ משימות</Th><Th>סטטוס</Th><Th></Th>
+                <Th>שם</Th><Th>אחראי</Th><Th>תזמון</Th><Th>התקדמות (משימות)</Th><Th>מאחרים</Th><Th></Th>
               </tr>
             </thead>
             <tbody>
               {plans.map((p) => {
-                const scopeText = p.scopeHolderIds.length === 0
-                  ? "כל המחסנים והפלוגות"
-                  : `${p.scopeHolderIds.length} מחסנים/פלוגות`;
-                const trackingText = p.trackingMethods.length === 0
-                  ? "כל שיטות המעקב"
-                  : p.trackingMethods.join(", ");
                 const dowText = p.daysOfWeek.length === 0
                   ? "כל יום"
                   : p.daysOfWeek.sort().map((d) => DOW_LABELS[d]).join(",");
@@ -83,14 +85,28 @@ export default async function CountPlansPage() {
                   : p.frequencyDays === 7 ? "שבועי"
                   : p.frequencyDays === 30 ? "חודשי"
                   : `כל ${p.frequencyDays} ימים`;
+                // סטטיסטיקות משימות
+                const total = p.tasks.length;
+                const completed = p.tasks.filter((t) => t.status === "COMPLETED").length;
+                const inProgress = p.tasks.filter((t) => t.status === "IN_PROGRESS").length;
+                const pending = p.tasks.filter((t) => t.status === "PENDING").length;
+                const overdueTasks = p.tasks.filter((t) => t.status === "OVERDUE");
+                const overdue = overdueTasks.length;
+                const completedPct = total > 0 ? Math.round((completed / total) * 100) : 0;
                 return (
                   <tr key={p.id} className={p.active ? "" : "opacity-50"}>
                     <Td>
                       <div className="font-medium">{p.name}</div>
                       {p.description && <div className="text-xs text-slate-500">{p.description}</div>}
-                      <div className="text-xs text-slate-400 mt-0.5">{trackingText}</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        {p.scopeHolderIds.length === 0 ? "כל המחסנים+פלוגות" : `${p.scopeHolderIds.length} מחזיקים`}
+                        {p.trackingMethods.length > 0 && ` · ${p.trackingMethods.join(",")}`}
+                      </div>
                     </Td>
-                    <Td className="text-xs">{scopeText}</Td>
+                    <Td className="text-xs">
+                      {p.responsibleUser?.fullName ?? p.createdBy.fullName}
+                      {!p.active && <Badge className="bg-slate-100 text-slate-500 text-[9px] mr-1">מושבת</Badge>}
+                    </Td>
                     <Td className="text-xs">
                       <div>{freqText} · {dowText}</div>
                       <div className="text-slate-500">
@@ -98,15 +114,61 @@ export default async function CountPlansPage() {
                       </div>
                       <div className="text-slate-400">חסד: {p.graceMinutes} דק׳</div>
                     </Td>
-                    <Td className="text-center font-bold">{p._count.tasks}</Td>
+                    {/* התקדמות עם פסים צבעוניים */}
                     <Td>
-                      <Badge className={p.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}>
-                        {p.active ? "פעיל" : "מושבת"}
-                      </Badge>
+                      {total === 0 ? (
+                        <span className="text-xs text-slate-400">טרם נוצרו משימות</span>
+                      ) : (
+                        <div className="space-y-1.5 min-w-40">
+                          <div className="text-xs font-bold flex items-center gap-2">
+                            <span className="text-emerald-700">{completed}</span>
+                            <span className="text-slate-400">/</span>
+                            <span>{total}</span>
+                            <span className="text-slate-500 text-[10px]">({completedPct}%)</span>
+                          </div>
+                          {/* פס התקדמות */}
+                          <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-200">
+                            {completed > 0 && <div className="bg-emerald-500" style={{ width: `${(completed / total) * 100}%` }} />}
+                            {inProgress > 0 && <div className="bg-amber-400" style={{ width: `${(inProgress / total) * 100}%` }} />}
+                            {pending > 0 && <div className="bg-blue-400" style={{ width: `${(pending / total) * 100}%` }} />}
+                            {overdue > 0 && <div className="bg-rose-600" style={{ width: `${(overdue / total) * 100}%` }} />}
+                          </div>
+                          <div className="text-[10px] text-slate-500 flex gap-2 flex-wrap">
+                            {completed > 0 && <span className="text-emerald-700">✓ {completed}</span>}
+                            {inProgress > 0 && <span className="text-amber-700">⏳ {inProgress}</span>}
+                            {pending > 0 && <span className="text-blue-700">⏸ {pending}</span>}
+                            {overdue > 0 && <span className="text-rose-700">⏰ {overdue}</span>}
+                          </div>
+                        </div>
+                      )}
+                    </Td>
+                    {/* רשימת מי מאחר */}
+                    <Td className="text-xs">
+                      {overdue === 0 ? (
+                        <span className="text-emerald-600">✓ בזמן</span>
+                      ) : (
+                        <div className="space-y-0.5">
+                          {overdueTasks.slice(0, 3).map((t) => {
+                            const lateMin = Math.round((Date.now() - t.dueAt.getTime()) / 60000);
+                            const lateText = lateMin < 60 ? `${lateMin} דק׳` : lateMin < 1440 ? `${Math.floor(lateMin / 60)} שע׳` : `${Math.floor(lateMin / 1440)} ימים`;
+                            return (
+                              <div key={t.id} className="bg-rose-50 rounded px-1.5 py-0.5">
+                                <div className="font-medium text-rose-900">{t.holder.kind === "COMPANY" ? "🪖" : "🏪"} {t.holder.name}</div>
+                                <div className="text-[10px] text-rose-700">
+                                  {t.assignedUser?.fullName ?? "לא מוקצה"} · איחור: {lateText}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {overdue > 3 && (
+                            <div className="text-[10px] text-rose-600">+ עוד {overdue - 3} <a href={`/counts/plans/${p.id}`} className="underline">פרטים</a></div>
+                          )}
+                        </div>
+                      )}
                     </Td>
                     <Td>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <a href={`/counts/plans/${p.id}`} className="text-xs text-blue-600 hover:underline font-medium">📊 סטטוס</a>
+                        <a href={`/counts/plans/${p.id}`} className="text-xs text-blue-600 hover:underline font-medium">📊 פירוט</a>
                         <form action={toggleCountPlan}>
                           <input type="hidden" name="id" value={p.id} />
                           <button className="text-xs text-slate-500 hover:text-slate-800">{p.active ? "השבת" : "הפעל"}</button>
