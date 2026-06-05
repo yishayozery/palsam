@@ -29,6 +29,7 @@ export default function SignoutModal({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [kitId, setKitId] = useState("");
   const [vehicleId, setVehicleId] = useState("");
+  const [physicalLocation, setPhysicalLocation] = useState("");
   const [method, setMethod] = useState<"QR" | "LINK" | "ONSITE">("QR");
   const [error, setError] = useState<string | null>(null);
 
@@ -102,6 +103,7 @@ export default function SignoutModal({
     fd.append("method", method);
     if (kitId) fd.append("kitId", kitId);
     if (vehicleId) fd.append("vehicleId", vehicleId);
+    if (physicalLocation) fd.append("physicalLocation", physicalLocation);
     for (const c of cart) {
       if (c.type === "serial") fd.append("serial", c.unitId);
       else { fd.append("qtyItem", c.itemTypeId); fd.append("qtyValue", String(c.quantity)); fd.append("qtyStatus", c.statusId); }
@@ -234,6 +236,13 @@ export default function SignoutModal({
                   {selectedKit && <p className="text-[11px] text-slate-500 mt-1">{selectedKit.lines.map((l) => `${l.name}×${l.qty}`).join(", ")}</p>}
                 </div>
               )}
+              {/* מיקום פיזי — לכל פריט/ערכה (חייב להצמיד לאיפה החייל ישים את הציוד) */}
+              <div>
+                <label className="block text-[11px] text-slate-600 mb-0.5">📍 מיקום פיזי (אופציונלי)</label>
+                <input value={physicalLocation} onChange={(e) => setPhysicalLocation(e.target.value)}
+                  placeholder="לדוגמה: ארון 3, מדף ב' / רכב 12345 / חדר ירי"
+                  className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+              </div>
               {vehicles.length > 0 && cart.some((c) => c.type === "serial") && (
                 <div>
                   <label className="block text-[11px] text-slate-600 mb-0.5">רכב (אופציונלי)</label>

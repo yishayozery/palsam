@@ -37,15 +37,15 @@ export const NAV: NavItem[] = [
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "פלסם", cap: "battalion.profile" },
 
   // ===== הפלוגה שלי (רס"פ פלוגה — תפעול ברמת פלוגה) =====
-  // סדר העבודה: זיכוי → תרומות → החתמה → חיילים → ספירה → מידוף → פערים
+  // סדר: דשבורד → חיילים → תרומות → מלאי הפלוגה (זיכוי בתוכו) → החתמות → ספירה → פערים → מידוף
   // (דשבורד מופיע ב"ראשי" — תצוגה משתנה אוטומטית לפי תפקיד)
-  { href: "/return", label: "זיכוי לגדוד", icon: "↩️", group: "הפלוגה שלי", cap: "company.manage" },
-  { href: "/donations", label: "תרומות פלוגתיות", icon: "🎁", group: "הפלוגה שלי", cap: "donations.manage" },
-  { href: "/signatures", label: "החתמת חיילים", icon: "✍️", group: "הפלוגה שלי", cap: "signatures.manage" },
   { href: "/soldiers", label: "חיילי הפלוגה", icon: "🪖", group: "הפלוגה שלי", cap: "company.manage" },
+  { href: "/donations", label: "תרומות פלוגתיות", icon: "🎁", group: "הפלוגה שלי", cap: "donations.manage" },
+  { href: "/my-inventory", label: "מלאי הפלוגה", icon: "📦", group: "הפלוגה שלי", cap: "company.manage" },
+  { href: "/signatures", label: "החתמת חיילים", icon: "✍️", group: "הפלוגה שלי", cap: "signatures.manage" },
   { href: "/counts", label: "ספירת מלאי", icon: "🔢", group: "הפלוגה שלי", cap: "counts.execute" },
-  { href: "/locations", label: "מידוף מחסן", icon: "🗄️", group: "הפלוגה שלי", cap: "locations.manage" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "הפלוגה שלי", cap: "company.manage" },
+  { href: "/locations", label: "מידוף מחסן", icon: "🗄️", group: "הפלוגה שלי", cap: "locations.manage" },
 
   // ===== המחסנים שלי (קצין מחסן — תפעול שוטף) =====
   // סדר לפי שלבי העבודה: נציגים → פריטים → מלאי → ערכות → מידוף → החתמות → ספירות → פערים
