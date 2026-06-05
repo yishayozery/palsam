@@ -1,104 +1,222 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createCompanySign } from "./company-actions";
 
-type Company = { id: string; name: string; members: { id: string; name: string; role: string }[] };
-type Unit = { id: string; name: string; serial: string; status: string; statusId: string };
-type Balance = { itemTypeId: string; statusId: string; name: string; unit: string; status: string; quantity: number };
+type Member = { id: string; name: string; role: string };
+type Company = { id: string; name: string; members: Member[] };
+type Unit = { id: string; itemTypeId: string; itemName: string; serial: string; status: string; statusId: string; signMode: "COMPANY" | "SOLDIER" };
+type Balance = { itemTypeId: string; itemName: string; unit: string; status: string; statusId: string; quantity: number; signMode: "COMPANY" | "SOLDIER" };
+
+type CartSerial = { type: "serial"; unitId: string; itemName: string; serial: string; status: string };
+type CartQty = { type: "qty"; itemTypeId: string; itemName: string; unit: string; quantity: number; statusId: string; statusName: string };
+type CartItem = CartSerial | CartQty;
 
 export default function CompanySignModal({
   companies, units, balances,
 }: { companies: Company[]; units: Unit[]; balances: Balance[]; }) {
   const [open, setOpen] = useState(false);
-  const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
+  const [companyId, setCompanyId] = useState("");
+  const [recipientUserId, setRecipientUserId] = useState("");
+  const [itemSearch, setItemSearch] = useState("");
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [method, setMethod] = useState<"QR" | "LINK" | "ONSITE">("QR");
+  const [error, setError] = useState<string | null>(null);
+
   const selectedCompany = companies.find((c) => c.id === companyId);
+  const availableMembers = selectedCompany?.members ?? [];
+
+  const cartSerialIds = new Set(cart.filter((c) => c.type === "serial").map((c) => (c as CartSerial).unitId));
+  const companyUnits = useMemo(() => units.filter((u) =>
+    u.signMode === "COMPANY" && !cartSerialIds.has(u.id) &&
+    (!itemSearch.trim() || u.itemName.toLowerCase().includes(itemSearch.toLowerCase()) || u.serial.toLowerCase().includes(itemSearch.toLowerCase()))
+  ), [units, cartSerialIds, itemSearch]);
+  const companyBalances = useMemo(() => balances.filter((b) =>
+    b.signMode === "COMPANY" && b.quantity > 0 &&
+    (!itemSearch.trim() || b.itemName.toLowerCase().includes(itemSearch.toLowerCase()))
+  ), [balances, itemSearch]);
+
+  const addSerial = (u: Unit) => setCart((c) => [...c, { type: "serial", unitId: u.id, itemName: u.itemName, serial: u.serial, status: u.status }]);
+  const addQty = (b: Balance) => {
+    const existing = cart.find((c) => c.type === "qty" && c.itemTypeId === b.itemTypeId && c.statusId === b.statusId);
+    if (existing) setCart((c) => c.map((x) => x === existing ? { ...(x as CartQty), quantity: Math.min(b.quantity, (x as CartQty).quantity + 1) } : x));
+    else setCart((c) => [...c, { type: "qty", itemTypeId: b.itemTypeId, itemName: b.itemName, unit: b.unit, quantity: 1, statusId: b.statusId, statusName: b.status }]);
+  };
+  const updateCartQty = (idx: number, n: number) => setCart((c) => c.map((x, i) => i === idx ? { ...(x as CartQty), quantity: Math.max(1, n) } : x));
+  const removeCart = (idx: number) => setCart((c) => c.filter((_, i) => i !== idx));
+  const reset = () => { setCompanyId(""); setRecipientUserId(""); setItemSearch(""); setCart([]); setMethod("QR"); setError(null); };
+
+  async function submit() {
+    setError(null);
+    if (!companyId) { setError("בחר פלוגה"); return; }
+    if (!recipientUserId) { setError("בחר נמען מהפלוגה (מ״פ / רס״פ)"); return; }
+    if (cart.length === 0) { setError("הוסף לפחות פריט אחד לעגלה"); return; }
+    const fd = new FormData();
+    fd.append("companyId", companyId);
+    fd.append("recipientUserId", recipientUserId);
+    fd.append("method", method);
+    for (const c of cart) {
+      if (c.type === "serial") fd.append("serial", c.unitId);
+      else fd.append(`qty:${c.itemTypeId}:${c.statusId}`, String(c.quantity));
+    }
+    try { await createCompanySign(fd); reset(); setOpen(false); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="bg-purple-700 hover:bg-purple-800 text-white rounded-lg px-4 py-2 text-sm font-medium">
+        🏛️ החתמת פלוגה
+      </button>
+    );
+  }
 
   return (
-    <>
-      <button onClick={() => setOpen(true)}
-        className="bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm hover:bg-emerald-800">
-        + החתמת פלוגה
-      </button>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-2 md:p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden">
+        <div className="bg-gradient-to-r from-purple-700 to-purple-900 text-white p-4 flex items-center justify-between shrink-0">
+          <div>
+            <h3 className="font-bold text-lg">🏛️ החתמת פלוגה</h3>
+            <p className="text-xs text-purple-100 mt-0.5">פלוגה → נמען חותם (מ״פ/רס״פ) → פריטים → אופן חתימה</p>
+          </div>
+          <button onClick={() => { reset(); setOpen(false); }} className="text-purple-200 hover:text-white text-2xl">✕</button>
+        </div>
 
-      {open && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-slate-200">
-              <h3 className="font-bold text-slate-800">החתמת פלוגה</h3>
-              <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700">✕</button>
+        <div className="bg-purple-50 border-b border-purple-200 p-3 shrink-0">
+          <div className="flex gap-2 items-end flex-wrap">
+            <div className="flex-1 min-w-40">
+              <label className="block text-[11px] text-slate-600 mb-0.5">פלוגה</label>
+              <select value={companyId} onChange={(e) => { setCompanyId(e.target.value); setRecipientUserId(""); }}
+                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white">
+                <option value="">— בחר פלוגה —</option>
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.members.length} בעלי תפקיד)</option>)}
+              </select>
             </div>
-            <form action={async (fd) => { await createCompanySign(fd); setOpen(false); }} className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">פלוגה מקבלת</label>
-                  <select name="companyId" value={companyId} onChange={(e) => setCompanyId(e.target.value)} required
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">נמען (חותם)</label>
-                  <select name="recipientUserId" required
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    {selectedCompany?.members.length === 0
-                      ? <option value="">— אין משתמשים בפלוגה —</option>
-                      : selectedCompany?.members.map((m) => (
-                          <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
-                        ))}
-                  </select>
-                </div>
-              </div>
+            <div className="flex-1 min-w-40">
+              <label className="block text-[11px] text-slate-600 mb-0.5">נמען חותם</label>
+              <select value={recipientUserId} onChange={(e) => setRecipientUserId(e.target.value)} disabled={!companyId}
+                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white disabled:bg-slate-100">
+                <option value="">— {companyId ? "בחר נמען" : "בחר פלוגה קודם"} —</option>
+                {availableMembers.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+              </select>
+            </div>
+          </div>
+          {selectedCompany && availableMembers.length === 0 && (
+            <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs text-amber-800">
+              ⚠️ אין מ״פ/רס״פ בפלוגה זו. הזמן אחד דרך <a href="/org" className="underline">מבנה ארגוני</a>.
+            </div>
+          )}
+        </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">אופן חתימה</label>
-                <div className="flex gap-3 text-sm">
-                  <label className="flex items-center gap-1.5"><input type="radio" name="method" value="QR" defaultChecked /> קוד QR</label>
-                  <label className="flex items-center gap-1.5"><input type="radio" name="method" value="LINK" /> וואטסאפ</label>
-                  <label className="flex items-center gap-1.5"><input type="radio" name="method" value="ONSITE" /> שרבוט</label>
-                </div>
-              </div>
-
-              {balances.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">מלאי כמותי</label>
-                  <div className="space-y-1 max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-2">
-                    {balances.map((b) => (
-                      <div key={`${b.itemTypeId}:${b.statusId}`} className="flex items-center justify-between text-sm py-1">
-                        <span>{b.name} <span className="text-slate-400">({b.status}) · יש: {b.quantity} {b.unit}</span></span>
-                        <input type="number" min="0" max={b.quantity} defaultValue="0"
-                          name={`qty:${b.itemTypeId}:${b.statusId}`}
-                          className="w-20 rounded border border-slate-300 px-2 py-1 text-sm" />
+        <div className="flex-1 grid md:grid-cols-2 gap-0 overflow-hidden min-h-0">
+          <div className="border-l border-slate-200 flex flex-col bg-slate-50 order-2 md:order-1">
+            <div className="p-3 border-b border-slate-200 flex items-center justify-between bg-white">
+              <div className="font-bold text-slate-800">🛒 עגלת החתמה ({cart.length})</div>
+              {cart.length > 0 && <button onClick={() => setCart([])} className="text-xs text-rose-500">נקה</button>}
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+              {cart.length === 0 ? (
+                <div className="text-center text-slate-400 py-10 text-sm">עגלה ריקה.<br />לחץ על פריט במלאי כדי להוסיף.</div>
+              ) : cart.map((c, i) => (
+                <div key={i} className="bg-white border border-slate-200 rounded-lg p-2 flex items-center gap-2">
+                  <span className="text-lg">📦</span>
+                  {c.type === "serial" ? (
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{c.itemName}</div>
+                      <div className="text-xs text-slate-500 font-mono truncate">SN: {c.serial} · {c.status}</div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm truncate">{c.itemName}</div>
+                        <div className="text-xs text-slate-500">{c.statusName}</div>
                       </div>
-                    ))}
-                  </div>
+                      <input type="number" min={1} value={c.quantity} onChange={(e) => updateCartQty(i, parseInt(e.target.value) || 1)}
+                        className="w-16 rounded border border-slate-300 px-1.5 py-1 text-sm text-center" />
+                      <span className="text-xs text-slate-400">{c.unit}</span>
+                    </>
+                  )}
+                  <button onClick={() => removeCart(i)} className="text-rose-400 hover:text-rose-700 px-1">✕</button>
                 </div>
-              )}
-
-              {units.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">פריטים סריאליים</label>
-                  <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
-                    {units.map((u) => (
-                      <label key={u.id} className="flex items-center gap-2 text-sm px-3 py-2 hover:bg-slate-50 cursor-pointer">
-                        <input type="checkbox" name="serial" value={u.id} className="w-4 h-4" />
-                        <span className="font-medium">{u.name}</span>
-                        <span className="font-mono text-xs text-slate-500">{u.serial}</span>
-                        <span className="text-xs text-slate-400 mr-auto">{u.status}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
-                <button className="bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm">יצירת קישור חתימה</button>
+              ))}
+            </div>
+            <div className="p-3 border-t border-slate-200 bg-white">
+              <label className="block text-[11px] text-slate-600 mb-0.5">אופן חתימה</label>
+              <div className="flex gap-1.5 text-xs">
+                {(["QR", "LINK", "ONSITE"] as const).map((m) => (
+                  <label key={m} className={`flex-1 text-center px-2 py-1.5 rounded-lg border-2 cursor-pointer transition ${method === m ? "border-purple-700 bg-purple-100" : "border-slate-200"}`}>
+                    <input type="radio" checked={method === m} onChange={() => setMethod(m)} className="hidden" />
+                    {m === "QR" ? "QR" : m === "LINK" ? "WhatsApp" : "שרבוט"}
+                  </label>
+                ))}
               </div>
-            </form>
+            </div>
+          </div>
+
+          <div className="flex flex-col bg-white order-1 md:order-2 min-h-0">
+            <div className="p-3 border-b border-slate-200 bg-white sticky top-0 shrink-0">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="font-bold text-slate-800">📦 מלאי להחתמת פלוגה</div>
+                <span className="text-xs text-slate-400">({companyUnits.length + companyBalances.length})</span>
+              </div>
+              <input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="חפש פריט..."
+                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+              <p className="text-[11px] text-slate-500 mt-1">⚠️ רובים ופריטים שדורשים חתימת חייל אישית לא יוצגים כאן</p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+              {companyUnits.length === 0 && companyBalances.length === 0 && (
+                <div className="text-center text-slate-400 py-10 text-sm">
+                  אין פריטים שמתאימים להחתמת פלוגה.<br/>
+                  (פריטים אישיים כמו נשק — דרך &quot;החתמת חייל&quot;)
+                </div>
+              )}
+              {companyBalances.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-2 pb-1">כמותי</div>
+                  {companyBalances.map((b) => (
+                    <button key={`${b.itemTypeId}-${b.statusId}`} onClick={() => addQty(b)}
+                      className="w-full text-right bg-white border border-slate-200 rounded-lg p-2 mb-1 hover:bg-purple-50 hover:border-purple-300 transition flex items-center gap-2 group">
+                      <span className="text-lg">📦</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm truncate">{b.itemName}</div>
+                        <div className="text-xs text-slate-500">{b.status} · זמין: <b>{b.quantity}</b> {b.unit}</div>
+                      </div>
+                      <span className="text-purple-600 font-bold text-lg group-hover:scale-110 transition">+</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {companyUnits.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-2 pb-1 pt-1">סריאלי</div>
+                  {companyUnits.map((u) => (
+                    <button key={u.id} onClick={() => addSerial(u)}
+                      className="w-full text-right bg-white border border-slate-200 rounded-lg p-2 mb-1 hover:bg-purple-50 hover:border-purple-300 transition flex items-center gap-2 group">
+                      <span className="text-lg">📦</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm truncate">{u.itemName}</div>
+                        <div className="text-xs text-slate-500 font-mono truncate">SN: {u.serial} · {u.status}</div>
+                      </div>
+                      <span className="text-purple-600 font-bold text-lg group-hover:scale-110 transition">+</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      )}
-    </>
+
+        <div className="border-t border-slate-200 p-3 bg-white flex items-center justify-between gap-2 shrink-0">
+          {error && <div className="flex-1 text-sm text-rose-700 font-medium">⚠️ {error}</div>}
+          <div className="flex items-center gap-2 mr-auto">
+            <button onClick={() => { reset(); setOpen(false); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
+            <button onClick={submit} disabled={!companyId || !recipientUserId || cart.length === 0}
+              className="bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white rounded-lg px-5 py-2 text-sm font-bold">
+              🏛️ שלח לחתימת הנמען ({cart.length})
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

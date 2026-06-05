@@ -35,6 +35,8 @@ export default async function SignaturesPage() {
     select: { id: true, name: true },
   });
 
+  const isMafam = user.role === "BATTALION_ADMIN";
+
   const kits = user.holderId
     ? await prisma.signableKit.findMany({
         where: { holderId: user.holderId, active: true },
@@ -43,17 +45,21 @@ export default async function SignaturesPage() {
       })
     : [];
   // פלוגות + אנשי הקשר שלהן (כל משתמש פלוגתי = נמען אפשרי)
-  const companiesForSign = user.holderId
+  // מפ"מ רואה את כל הפלוגות; קצין מחסן רק אם יש לו holderId
+  const companiesForSign = (user.holderId || isMafam)
     ? await prisma.holder.findMany({
         where: { battalionId: bId, kind: "COMPANY", active: true },
         include: { users: { where: { active: true } } },
         orderBy: { name: "asc" },
       })
     : [];
-  // מלאי כמותי וסריאלי במחסן של הקצין (להחתמת פלוגה)
-  const warehouseBalances = user.holderId
+  // מלאי כמותי וסריאלי להחתמה: קצין מחסן רואה רק את שלו; מפ"מ רואה את כל מלאי הגדוד
+  const warehouseBalances = (user.holderId || isMafam)
     ? await prisma.stockBalance.findMany({
-        where: { holderId: user.holderId, quantity: { gt: 0 } },
+        where: {
+          ...(isMafam ? { battalionId: bId } : { holderId: user.holderId! }),
+          quantity: { gt: 0 },
+        },
         include: { itemType: true, status: true },
       })
     : [];
@@ -83,7 +89,11 @@ export default async function SignaturesPage() {
     }),
     prisma.soldier.findMany({ where: soldierWhere, orderBy: { fullName: "asc" } }),
     prisma.serialUnit.findMany({
-      where: { battalionId: bId, signedSoldierId: null, ...holderFilter },
+      where: {
+        battalionId: bId, signedSoldierId: null,
+        // מפ"מ: כל הגדוד; אחרים: רק המחסנים שלהם
+        ...(isMafam ? {} : holderFilter),
+      },
       include: { itemType: true, status: true, currentHolder: true },
       orderBy: { itemType: { name: "asc" } },
     }),
@@ -91,7 +101,6 @@ export default async function SignaturesPage() {
   ]);
 
   // היסטוריית כל ההחתמות של פלוגות (ISSUE/RETURN בין מחסן לפלוגה) — לצפיית מפ"מ
-  const isMafam = user.role === "BATTALION_ADMIN";
   const companyTransfers = await prisma.transfer.findMany({
     where: {
       battalionId: bId,
@@ -121,11 +130,16 @@ export default async function SignaturesPage() {
                   id: c.id, name: c.name,
                   members: c.users.map((u) => ({ id: u.id, name: u.fullName, role: ROLE_LABELS[u.role] })),
                 }))}
-                units={availableUnits.map((u) => ({ id: u.id, name: u.itemType.name, serial: u.serialNumber, status: u.status.name, statusId: u.statusId }))}
+                units={availableUnits.map((u) => ({
+                  id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber,
+                  status: u.status.name, statusId: u.statusId,
+                  signMode: u.itemType.signMode,
+                }))}
                 balances={warehouseBalances.map((b) => ({
                   itemTypeId: b.itemTypeId, statusId: b.statusId,
-                  name: b.itemType.name, unit: b.itemType.unit,
+                  itemName: b.itemType.name, unit: b.itemType.unit,
                   status: b.status.name, quantity: b.quantity,
+                  signMode: b.itemType.signMode,
                 }))}
               />
               <SignoutModal
