@@ -29,7 +29,7 @@ export type HolderRowDetail = {
   soldiers?: SoldierRefDetail[];
 };
 
-type RosterSoldier = { id: string; fullName: string; pn: string | null; companyName: string | null };
+type RosterSoldier = { id: string; fullName: string; pn: string | null; phone: string | null; companyName: string | null };
 
 function InviteForm({ holderId, kind, onDone }: { holderId: string; kind: "WAREHOUSE" | "COMPANY"; onDone: () => void }) {
   const [fullName, setFullName] = useState("");
@@ -81,12 +81,24 @@ function InviteForm({ holderId, kind, onDone }: { holderId: string; kind: "WAREH
     return () => clearTimeout(t);
   }, [linkSoldier, soldierSearch]);
 
-  function pickSoldier(s: RosterSoldier) {
-    setSelectedSoldier(s); setFullName(s.fullName);
+  async function pickSoldier(s: RosterSoldier) {
+    setSelectedSoldier(s);
+    setFullName(s.fullName);
+    if (s.phone) setPhone(s.phone);
     if (!username) {
+      // הצעה: <שם>.<חטיבה/קוד גדוד>
       const slug = s.fullName.trim().split(/\s+/).join(".").toLowerCase()
         .replace(/[^\w.-֐-׿]+/g, "").slice(0, 24);
-      if (slug) setUsername(slug);
+      if (slug) {
+        try {
+          const res = await fetch("/users/battalion-info");
+          const info = res.ok ? await res.json() : null;
+          const suffix = info?.brigade || info?.code;
+          setUsername(suffix ? `${slug}.${suffix}` : slug);
+        } catch {
+          setUsername(slug);
+        }
+      }
     }
   }
 
@@ -304,7 +316,11 @@ function EditUserRow({ user, onDone }: { user: User; onDone: () => void }) {
               {soldierOptions.length === 0 ? (
                 <p className="text-[11px] text-slate-400 p-1.5 text-center">אין חיילים פנויים</p>
               ) : soldierOptions.map((s) => (
-                <button key={s.id} type="button" onClick={() => setSelectedSoldier(s)}
+                <button key={s.id} type="button" onClick={() => {
+                  setSelectedSoldier(s);
+                  setFullName(s.fullName);
+                  if (s.phone) setPhone(s.phone);
+                }}
                   className="w-full text-right px-2 py-1 hover:bg-blue-50 flex justify-between text-xs border-b border-slate-100 last:border-0">
                   <span><b>{s.fullName}</b> {s.pn && <span className="font-mono text-slate-400">{s.pn}</span>}</span>
                   {s.companyName && <span className="text-slate-500">{s.companyName}</span>}

@@ -29,7 +29,8 @@ export async function GET(req: Request) {
     : soldiers;
   return NextResponse.json(
     filtered.slice(0, 30).map((s) => ({
-      id: s.id, fullName: s.fullName, pn: s.personalNumber, companyName: s.company?.name ?? null,
+      id: s.id, fullName: s.fullName, pn: s.personalNumber, phone: s.phone,
+      companyName: s.company?.name ?? null,
     })),
   );
 }

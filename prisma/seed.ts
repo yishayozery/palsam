@@ -74,7 +74,12 @@ async function main() {
     });
     wh[w.type] = h.id;
     await prisma.appUser.create({
-      data: { username: w.user, passwordHash: pw, fullName: `${w.manager} — ${w.name}`, role: "WAREHOUSE_MANAGER", battalionId: bId, holderId: h.id },
+      data: {
+        username: w.user, passwordHash: pw,
+        fullName: w.manager,        // השם (לפני קישור לחייל אמיתי) — למשל "קל"ג"
+        title: w.manager,            // התואר/תפקיד — למשל "קל"ג"
+        role: "WAREHOUSE_MANAGER", battalionId: bId, holderId: h.id,
+      },
     });
   }
 
@@ -87,7 +92,12 @@ async function main() {
       data: { battalionId: bId, kind: "COMPANY", name: companyNames[i] },
     });
     const rep = await prisma.appUser.create({
-      data: { username: repUser[i], passwordHash: pw, fullName: `נציג ${companyNames[i]}`, role: "COMPANY_REP", battalionId: bId, holderId: c.id },
+      data: {
+        username: repUser[i], passwordHash: pw,
+        fullName: 'רס"פ',         // השם — לפני קישור לחייל אמיתי
+        title: 'רס"פ',             // התואר
+        role: "COMPANY_REP", battalionId: bId, holderId: c.id,
+      },
     });
     companies.push({ id: c.id, name: companyNames[i], repId: rep.id });
   }
