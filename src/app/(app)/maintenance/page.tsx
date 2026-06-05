@@ -20,6 +20,19 @@ export default async function MaintenancePage() {
   const isAdmin = user.role === "BATTALION_ADMIN" || user.role === "WAREHOUSE_MANAGER";
   if (!isAdmin && !isTanaRep) redirect("/");
 
+  // כל הרכבים בגדוד (לדף הרכב + מפ"מ + טנא)
+  const allVehicles = await prisma.serialUnit.findMany({
+    where: { battalionId: bId, itemType: { category: { warehouseType: "VEHICLES" } } },
+    include: {
+      itemType: { include: { category: true } },
+      status: true,
+      currentHolder: { select: { id: true, name: true, kind: true } },
+      signedSoldier: { select: { fullName: true } },
+      location: { select: { column: true, row: true } },
+    },
+    orderBy: [{ itemType: { name: "asc" } }, { serialNumber: "asc" }],
+  });
+
   const tana = await findTanaHolder(bId);
   if (!tana) {
     return (
@@ -77,11 +90,35 @@ export default async function MaintenancePage() {
     }
   }
 
+  // איתור סיבת תקלה אחרונה לכל רכב לפי תעודות
+  const vehicleReasons = new Map<string, string>();
+  if (allVehicles.length > 0) {
+    const vehTransfers = await prisma.transferLine.findMany({
+      where: { serialUnitId: { in: allVehicles.map((v) => v.id) }, transfer: { reason: { contains: "תקלה" } } },
+      include: { transfer: { select: { reason: true, createdAt: true } } },
+      orderBy: { transfer: { createdAt: "desc" } },
+    });
+    for (const l of vehTransfers) {
+      if (!l.serialUnitId) continue;
+      if (!vehicleReasons.has(l.serialUnitId) && l.transfer.reason) {
+        vehicleReasons.set(l.serialUnitId, l.transfer.reason);
+      }
+    }
+  }
+  const vehStats = {
+    total: allVehicles.length,
+    ok: allVehicles.filter((v) => !v.status.isWear && !v.status.isLoss).length,
+    defective: allVehicles.filter((v) => v.status.isWear).length,
+    lost: allVehicles.filter((v) => v.status.isLoss).length,
+    atTana: allVehicles.filter((v) => v.currentHolderId === tana.id).length,
+    signedToSoldier: allVehicles.filter((v) => v.signedSoldierId).length,
+  };
+
   return (
     <div>
       <PageHeader
-        title="ציוד תקול / טנא"
-        subtitle={`כל הציוד שנשלח לטנא לתיקון. ${serials.length} סריאליים + ${balances.reduce((a, b) => a + b.quantity, 0)} יח׳ כמותיים בטנא כעת.`}
+        title="סטטוס רכבים וציוד תקול"
+        subtitle={`כל הרכבים בגדוד וכל הציוד התקול שאצל הטנא — מעקב בזמן אמת`}
         action={
           serials.length + balances.length > 0 ? (
             <ReturnFromTanaModal
@@ -107,6 +144,75 @@ export default async function MaintenancePage() {
         💡 לסמן פריט חדש כתקול: לחץ <b>🔧 שלח לטנא</b> במסך המלאי המתאים (מלאי המחסן / מלאי הפלוגה / החתמות).
         כאן רואים מה כעת אצל הטנא ומחזירים תקין ליעד.
       </Card>
+
+      {/* ===== כל הרכבים בגדוד ===== */}
+      {vehStats.total > 0 && (
+        <>
+          <h2 className="font-bold text-slate-700 mb-2 mt-4 flex items-center gap-2">
+            🚙 כל הרכבים בגדוד ({vehStats.total})
+          </h2>
+          <div className="grid grid-cols-3 md:grid-cols-5 gap-2 mb-3">
+            <Card className="p-2.5 bg-emerald-50 border-emerald-200">
+              <div className="text-[10px] text-slate-500">תקין</div>
+              <div className="text-xl font-bold text-emerald-700">{vehStats.ok}</div>
+            </Card>
+            <Card className="p-2.5 bg-amber-50 border-amber-200">
+              <div className="text-[10px] text-slate-500">תקול</div>
+              <div className="text-xl font-bold text-amber-700">{vehStats.defective}</div>
+            </Card>
+            <Card className="p-2.5 bg-rose-50 border-rose-200">
+              <div className="text-[10px] text-slate-500">אובדן</div>
+              <div className="text-xl font-bold text-rose-700">{vehStats.lost}</div>
+            </Card>
+            <Card className="p-2.5 bg-orange-50 border-orange-200">
+              <div className="text-[10px] text-slate-500">בטנא</div>
+              <div className="text-xl font-bold text-orange-700">{vehStats.atTana}</div>
+            </Card>
+            <Card className="p-2.5 bg-blue-50 border-blue-200">
+              <div className="text-[10px] text-slate-500">חתום על חייל</div>
+              <div className="text-xl font-bold text-blue-700">{vehStats.signedToSoldier}</div>
+            </Card>
+          </div>
+          <Card className="mb-6">
+            <Table>
+              <thead>
+                <tr><Th>רכב</Th><Th>מס׳/לוחית</Th><Th>סטטוס</Th><Th>שייכות נוכחית</Th><Th>חייל חתום</Th><Th>מיקום פיזי</Th><Th>תקלה אחרונה</Th></tr>
+              </thead>
+              <tbody>
+                {allVehicles.map((v) => {
+                  const reason = vehicleReasons.get(v.id);
+                  const isAtTana = v.currentHolderId === tana.id;
+                  const statusColor = v.status.isLoss ? "bg-rose-100 text-rose-800"
+                    : v.status.isWear ? "bg-amber-100 text-amber-800"
+                    : "bg-emerald-100 text-emerald-800";
+                  return (
+                    <tr key={v.id} className={isAtTana ? "bg-orange-50" : ""}>
+                      <Td className="font-medium">🚙 {v.itemType.name}</Td>
+                      <Td className="font-mono text-xs">{v.serialNumber}</Td>
+                      <Td><Badge className={statusColor}>{v.status.name}</Badge></Td>
+                      <Td className="text-xs">
+                        {isAtTana ? <span className="text-orange-700 font-medium">🔧 בטנא</span>
+                          : v.currentHolder ? (
+                            <>
+                              {v.currentHolder.kind === "COMPANY" ? "🪖" : "🏪"} {v.currentHolder.name}
+                            </>
+                          ) : "—"}
+                      </Td>
+                      <Td className="text-xs text-blue-700">{v.signedSoldier?.fullName ?? "—"}</Td>
+                      <Td className="text-xs text-slate-600">
+                        {v.location ? `${v.location.column}-${v.location.row}` : (v.physicalLocation ?? "—")}
+                      </Td>
+                      <Td className="text-xs text-rose-700 max-w-xs truncate">
+                        <span title={reason ?? ""}>{reason ?? (v.status.isWear ? "סומן כתקול ללא הסבר" : "—")}</span>
+                      </Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+          </Card>
+        </>
+      )}
 
       <h2 className="font-bold text-slate-700 mb-2">פריטים סריאליים בטנא ({serials.length})</h2>
       <Card className="mb-6">

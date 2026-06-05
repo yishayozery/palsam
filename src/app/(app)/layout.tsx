@@ -34,6 +34,17 @@ export default async function AppLayout({
       items.push({ href: "/maintenance", label: "ציוד תקול / טנא", icon: "🔧", group: "הפלוגה שלי" });
     }
   }
+  // הזרקה דינמית: קצין רכב (מנהל מחסן רכב) רואה /maintenance כ-"סטטוס רכבים"
+  if (user.role === "WAREHOUSE_MANAGER" && user.holderIds.length > 0) {
+    const myHolders = await prisma.holder.findMany({
+      where: { id: { in: user.holderIds } },
+      select: { warehouseType: true },
+    });
+    const isVehicleOfficer = myHolders.some((h) => h.warehouseType === "VEHICLES");
+    if (isVehicleOfficer && !items.some((n) => n.href === "/maintenance")) {
+      items.push({ href: "/maintenance", label: "סטטוס רכבים", icon: "🚙", group: "המחסנים שלי" });
+    }
+  }
 
   const battalion = user.battalionId
     ? await prisma.battalion.findUnique({ where: { id: user.battalionId }, select: { name: true, logoData: true, motto: true } })
