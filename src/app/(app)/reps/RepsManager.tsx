@@ -10,6 +10,7 @@ type RosterSoldier = { id: string; fullName: string; pn: string | null; phone: s
 function InviteForm({ companies, onDone }: { companies: Ref2[]; onDone: () => void }) {
   const [formCompanyId, setFormCompanyId] = useState(companies[0]?.id || "");
   const [fullName, setFullName] = useState("");
+  const [title, setTitle] = useState("");
   const [username, setUsername] = useState("");
   const [check, setCheck] = useState<{ available?: boolean; taken?: boolean; recommended?: string | null }>({});
   const [checking, setChecking] = useState(false);
@@ -163,10 +164,18 @@ function InviteForm({ companies, onDone }: { companies: Ref2[]; onDone: () => vo
             className={`w-full rounded-lg border px-3 py-2 text-sm font-mono ${check.taken ? "border-rose-300 bg-rose-50" : check.available ? "border-emerald-300 bg-emerald-50" : "border-slate-300"}`} />
         </div>
       </div>
-      <div>
-        <label className="block text-xs text-slate-500 mb-1">טלפון (לשליחת הזמנה)</label>
-        <input name="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="05X-XXXXXXX"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">תואר / תפקיד</label>
+          <input name="title" value={title} onChange={(e) => setTitle(e.target.value)}
+            placeholder='רס"פ פלוגתי, מ"פ...'
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">טלפון (לשליחת הזמנה)</label>
+          <input name="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="05X-XXXXXXX"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </div>
       </div>
       {error && (
         <div className="bg-rose-50 border border-rose-200 rounded-lg p-2 text-xs text-rose-700">

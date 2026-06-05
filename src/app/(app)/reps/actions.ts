@@ -17,19 +17,23 @@ export async function inviteRep(formData: FormData) {
   let fullName = String(formData.get("fullName") || "").trim();
   const enteredUsername = String(formData.get("username") || "").trim();
   let phone: string | null = String(formData.get("phone") || "").trim() || null;
+  const title = String(formData.get("title") || "").trim() || null;
   // אם נבחר חייל מהרוסטר — שאיבת השם והנייד ממנו (מקור אמת)
-  const soldierId = String(formData.get("soldierId") || "").trim() || null;
-  if (soldierId) {
-    const soldier = await prisma.soldier.findUnique({ where: { id: soldierId } });
+  // ⚠️ validateSoldierId — רק אם תקין, אחרת מתעלמים (לא קורסים)
+  let validatedSoldierId: string | null = null;
+  const rawSoldierId = String(formData.get("soldierId") || "").trim() || null;
+  if (rawSoldierId) {
+    const soldier = await prisma.soldier.findUnique({ where: { id: rawSoldierId } });
     if (soldier && soldier.battalionId === bId) {
+      // ודא שלא מקושר למשתמש אחר
+      const linked = await prisma.appUser.findUnique({ where: { soldierId: rawSoldierId } });
+      if (linked) throw new Error(`החייל ${soldier.fullName} כבר מקושר למשתמש @${linked.username}`);
+      validatedSoldierId = rawSoldierId;
       fullName = soldier.fullName;
       phone = soldier.phone ?? phone;
-      // ודא שלא מקושר למשתמש אחר
-      const linked = await prisma.appUser.findUnique({ where: { soldierId } });
-      if (linked) throw new Error(`החייל ${soldier.fullName} כבר מקושר למשתמש @${linked.username}`);
     }
   }
-  if (!companyId || !fullName || !enteredUsername) return;
+  if (!companyId || !fullName || !enteredUsername) throw new Error("חסרים שדות חובה (פלוגה / שם / שם משתמש)");
 
   // הגנה: כבר יש רס"פ פעיל לאותה פלוגה במחסן הזה?
   const existingLink = await prisma.warehouseCompany.findUnique({
@@ -52,8 +56,8 @@ export async function inviteRep(formData: FormData) {
 
   const rep = await prisma.appUser.create({
     data: {
-      username, fullName, phone, role: "COMPANY_REP", battalionId: bId, holderId: companyId,
-      ...(soldierId ? { soldierId } : {}),
+      username, fullName, phone, title, role: "COMPANY_REP", battalionId: bId, holderId: companyId,
+      ...(validatedSoldierId ? { soldierId: validatedSoldierId } : {}),
       passwordHash: await hashPassword(nanoid(32)), passwordSet: false, inviteToken: nanoid(28),
     },
   });
@@ -64,6 +68,46 @@ export async function inviteRep(formData: FormData) {
     update: { repUserId: rep.id },
   });
   await audit(user.id, "INVITE_REP", "AppUser", username, { companyId });
+  revalidatePath("/reps");
+}
+
+/** עדכון פרטי רס"פ קיים — שם, תואר, נייד, קישור לחייל */
+export async function updateRep(formData: FormData) {
+  const user = await requireCapability("reps.manage");
+  const bId = user.battalionId!;
+  const userId = String(formData.get("userId") || "");
+  let fullName = String(formData.get("fullName") || "").trim();
+  let phone: string | null = String(formData.get("phone") || "").trim() || null;
+  const title = String(formData.get("title") || "").trim() || null;
+  const unlinkSoldier = formData.get("unlinkSoldier") === "on";
+  const rawSoldierId = String(formData.get("soldierId") || "").trim() || null;
+
+  if (!userId || !fullName) throw new Error("חסרים פרטים");
+
+  const target = await prisma.appUser.findUnique({ where: { id: userId } });
+  if (!target || target.battalionId !== bId) throw new Error("רס״פ לא נמצא");
+
+  let newSoldierId: string | null | undefined = undefined;
+  if (unlinkSoldier) {
+    newSoldierId = null;
+  } else if (rawSoldierId) {
+    const soldier = await prisma.soldier.findUnique({ where: { id: rawSoldierId } });
+    if (!soldier || soldier.battalionId !== bId) throw new Error("חייל לא נמצא");
+    const linked = await prisma.appUser.findUnique({ where: { soldierId: rawSoldierId } });
+    if (linked && linked.id !== userId) throw new Error(`החייל ${soldier.fullName} כבר מקושר למשתמש @${linked.username}`);
+    newSoldierId = rawSoldierId;
+    fullName = soldier.fullName;
+    phone = soldier.phone ?? phone;
+  }
+
+  await prisma.appUser.update({
+    where: { id: userId },
+    data: {
+      fullName, title, phone,
+      ...(newSoldierId !== undefined ? { soldierId: newSoldierId } : {}),
+    },
+  });
+  await audit(user.id, "UPDATE_REP", "AppUser", userId);
   revalidatePath("/reps");
 }
 

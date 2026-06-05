@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card, Table, Th, Td, EmptyState } from "@/components/ui";
 import InviteLink from "@/components/InviteLink";
 import RepsManager from "./RepsManager";
+import EditRepInline from "./EditRepInline";
 import { removeRep } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -48,17 +49,38 @@ export default async function RepsPage() {
               {links.map((l) => (
                 <tr key={l.id}>
                   <Td className="font-medium">{l.company.name}</Td>
-                  <Td>{l.repUser ? <span className="text-blue-600">{l.repUser.fullName}</span> : <Badge className="bg-amber-100 text-amber-700">לא הוגדר רס״פ</Badge>}</Td>
+                  <Td>
+                    {l.repUser ? (
+                      <div>
+                        <div className="text-blue-600 font-medium">{l.repUser.fullName}</div>
+                        {l.repUser.title && <div className="text-xs text-slate-500">{l.repUser.title}</div>}
+                        <div className="text-[11px] text-slate-400 font-mono">@{l.repUser.username}</div>
+                      </div>
+                    ) : (
+                      <Badge className="bg-amber-100 text-amber-700">לא הוגדר רס״פ</Badge>
+                    )}
+                  </Td>
                   <Td>
                     {l.repUser && !l.repUser.passwordSet && l.repUser.inviteToken
                       ? <InviteLink token={l.repUser.inviteToken} phone={l.repUser.phone} baseUrl={baseUrl} />
                       : l.repUser ? <Badge className="bg-emerald-100 text-emerald-700">פעיל</Badge> : "—"}
                   </Td>
                   <Td>
-                    <form action={removeRep}>
-                      <input type="hidden" name="id" value={l.id} />
-                      <button className="text-xs text-rose-500 hover:text-rose-700">הסרה</button>
-                    </form>
+                    <div className="flex items-center gap-2">
+                      {l.repUser && (
+                        <EditRepInline
+                          rep={{
+                            id: l.repUser.id, fullName: l.repUser.fullName,
+                            title: l.repUser.title, phone: l.repUser.phone,
+                            soldierId: l.repUser.soldierId,
+                          }}
+                        />
+                      )}
+                      <form action={removeRep}>
+                        <input type="hidden" name="id" value={l.id} />
+                        <button className="text-xs text-rose-500 hover:text-rose-700">הסרה</button>
+                      </form>
+                    </div>
                   </Td>
                 </tr>
               ))}
