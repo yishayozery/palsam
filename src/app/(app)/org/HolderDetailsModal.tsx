@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui";
 import { ROLE_LABELS, WAREHOUSE_TYPE_SHORT, WAREHOUSE_TYPE_ICON } from "@/lib/rbac";
 import type { WarehouseType } from "@/generated/prisma";
-import { inviteHolderUser, removeHolderUser } from "./actions";
+import { inviteHolderUser, updateHolderUser, removeHolderUser } from "./actions";
 import { createSoldier } from "../roster/actions";
 
 type User = {
@@ -233,9 +233,108 @@ function SoldierQuickAdd({ companyId, onDone }: { companyId: string; onDone: () 
   );
 }
 
+function EditUserRow({ user, onDone }: { user: User; onDone: () => void }) {
+  const [fullName, setFullName] = useState(user.fullName);
+  const [title, setTitle] = useState(user.title ?? "");
+  const [phone, setPhone] = useState(user.phone ?? "");
+  const [linkSoldier, setLinkSoldier] = useState(false);
+  const [soldierSearch, setSoldierSearch] = useState("");
+  const [soldierOptions, setSoldierOptions] = useState<RosterSoldier[]>([]);
+  const [selectedSoldier, setSelectedSoldier] = useState<RosterSoldier | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!linkSoldier) return;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/roster/available?q=${encodeURIComponent(soldierSearch)}`);
+        if (res.ok) setSoldierOptions(await res.json());
+      } catch { /* ignore */ }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [linkSoldier, soldierSearch]);
+
+  async function submit(fd: FormData) {
+    setError(null);
+    try {
+      await updateHolderUser(fd);
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  return (
+    <form action={submit} className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2 mt-2">
+      <input type="hidden" name="userId" value={user.id} />
+      {selectedSoldier && <input type="hidden" name="soldierId" value={selectedSoldier.id} />}
+      <div className="text-xs font-semibold text-blue-900 mb-1">✎ עריכת @{user.username}</div>
+      {error && <div className="bg-rose-100 border border-rose-200 rounded p-2 text-xs text-rose-700">{error}</div>}
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-xs text-slate-600 mb-1">שם מלא</label>
+          <input value={fullName} onChange={(e) => setFullName(e.target.value)} name="fullName" required
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-600 mb-1">תואר / תפקיד</label>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} name="title"
+            placeholder='מפ"ם, רס"פ, אחראי...'
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm" />
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs text-slate-600 mb-1">נייד</label>
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} name="phone" placeholder="05X-XXXXXXX"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm" />
+      </div>
+
+      {/* קישור לחייל מהרוסטר */}
+      <div className="bg-white border border-blue-200 rounded p-2">
+        <label className="flex items-center gap-2 text-xs cursor-pointer">
+          <input type="checkbox" checked={linkSoldier} onChange={(e) => { setLinkSoldier(e.target.checked); if (!e.target.checked) { setSelectedSoldier(null); } }} />
+          🔗 {selectedSoldier ? "החלף" : "קשר"} לחייל ברוסטר
+        </label>
+        {linkSoldier && !selectedSoldier && (
+          <div className="mt-2 space-y-1">
+            <input value={soldierSearch} onChange={(e) => setSoldierSearch(e.target.value)} placeholder="חפש שם / מ.א..."
+              className="w-full rounded border border-slate-300 px-2 py-1 text-xs" />
+            <div className="max-h-32 overflow-y-auto border border-slate-100 rounded">
+              {soldierOptions.length === 0 ? (
+                <p className="text-[11px] text-slate-400 p-1.5 text-center">אין חיילים פנויים</p>
+              ) : soldierOptions.map((s) => (
+                <button key={s.id} type="button" onClick={() => setSelectedSoldier(s)}
+                  className="w-full text-right px-2 py-1 hover:bg-blue-50 flex justify-between text-xs border-b border-slate-100 last:border-0">
+                  <span><b>{s.fullName}</b> {s.pn && <span className="font-mono text-slate-400">{s.pn}</span>}</span>
+                  {s.companyName && <span className="text-slate-500">{s.companyName}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {selectedSoldier && (
+          <div className="mt-2 flex items-center justify-between text-xs bg-emerald-50 rounded p-1.5">
+            <span>🔗 <b>{selectedSoldier.fullName}</b> {selectedSoldier.pn && <span className="font-mono text-slate-500">({selectedSoldier.pn})</span>}</span>
+            <button type="button" onClick={() => setSelectedSoldier(null)} className="text-rose-500">ביטול</button>
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-end gap-2 pt-1">
+        <button type="button" onClick={onDone} className="text-xs text-slate-500">ביטול</button>
+        <button className="bg-emerald-600 text-white rounded-lg px-4 py-1.5 text-xs font-medium hover:bg-emerald-700">
+          שמור
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export default function HolderDetailsModal({ row, kind, onClose }: { row: HolderRowDetail; kind: "WAREHOUSE" | "COMPANY"; onClose: () => void }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [soldierAddOpen, setSoldierAddOpen] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const icon = kind === "WAREHOUSE" && row.warehouseType ? WAREHOUSE_TYPE_ICON[row.warehouseType] : "🪖";
 
   return (
@@ -264,25 +363,32 @@ export default function HolderDetailsModal({ row, kind, onClose }: { row: Holder
             ) : (
               <div className="space-y-1.5">
                 {row.users.map((u) => (
-                  <div key={u.id} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2 group">
-                    <span className="text-base">👤</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm">{u.fullName}</span>
-                        {u.title && <Badge className="bg-blue-100 text-blue-700 text-[10px]">{u.title}</Badge>}
-                        <span title="הרשאות מערכת"><Badge className="bg-slate-100 text-slate-600 text-[10px]">🔑 {ROLE_LABELS[u.role]}</Badge></span>
-                        {!u.passwordSet && <Badge className="bg-amber-100 text-amber-800 text-[10px]">⏳ ממתין</Badge>}
+                  <div key={u.id}>
+                    <div className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2 group">
+                      <span className="text-base">👤</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm">{u.fullName}</span>
+                          {u.title && <Badge className="bg-blue-100 text-blue-700 text-[10px]">{u.title}</Badge>}
+                          <span title="הרשאות מערכת"><Badge className="bg-slate-100 text-slate-600 text-[10px]">🔑 {ROLE_LABELS[u.role]}</Badge></span>
+                          {!u.passwordSet && <Badge className="bg-amber-100 text-amber-800 text-[10px]">⏳ ממתין</Badge>}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5 flex gap-2">
+                          <span className="font-mono">@{u.username}</span>
+                          {u.phone && <span>· {u.phone}</span>}
+                        </div>
                       </div>
-                      <div className="text-xs text-slate-500 mt-0.5 flex gap-2">
-                        <span className="font-mono">@{u.username}</span>
-                        {u.phone && <span>· {u.phone}</span>}
-                      </div>
+                      <button onClick={() => setEditingUserId(editingUserId === u.id ? null : u.id)}
+                        className="text-xs text-slate-400 hover:text-slate-700 px-1.5 py-0.5 md:opacity-0 md:group-hover:opacity-100 transition" title="ערוך">
+                        ✎
+                      </button>
+                      <form action={removeHolderUser}>
+                        <input type="hidden" name="userId" value={u.id} />
+                        <input type="hidden" name="holderId" value={row.id} />
+                        <button className="text-xs text-rose-400 hover:text-rose-700 px-1.5 py-0.5 md:opacity-0 md:group-hover:opacity-100" title="הסר">✕</button>
+                      </form>
                     </div>
-                    <form action={removeHolderUser}>
-                      <input type="hidden" name="userId" value={u.id} />
-                      <input type="hidden" name="holderId" value={row.id} />
-                      <button className="text-xs text-rose-400 hover:text-rose-700 px-1.5 py-0.5 opacity-0 group-hover:opacity-100">✕</button>
-                    </form>
+                    {editingUserId === u.id && <EditUserRow user={u} onDone={() => setEditingUserId(null)} />}
                   </div>
                 ))}
               </div>

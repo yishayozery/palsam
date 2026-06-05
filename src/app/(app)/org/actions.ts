@@ -65,6 +65,46 @@ export async function inviteHolderUser(formData: FormData) {
   return { username, inviteToken };
 }
 
+/** עדכון פרטי משתמש קיים (שם, תואר, נייד, קישור לחייל) */
+export async function updateHolderUser(formData: FormData) {
+  const admin = await requireCapability("users.manage");
+  const userId = String(formData.get("userId") || "");
+  const fullName = String(formData.get("fullName") || "").trim();
+  const title = String(formData.get("title") || "").trim() || null;
+  const phone = String(formData.get("phone") || "").trim() || null;
+  const soldierIdRaw = String(formData.get("soldierId") || "").trim();
+  const unlink = formData.get("unlinkSoldier") === "on";
+
+  if (!userId || !fullName) throw new Error("חסרים פרטים");
+
+  const target = await prisma.appUser.findUnique({ where: { id: userId } });
+  if (!target || target.battalionId !== admin.battalionId) throw new Error("משתמש לא נמצא");
+
+  let soldierId: string | null | undefined = undefined;
+  if (unlink) {
+    soldierId = null;
+  } else if (soldierIdRaw) {
+    const soldier = await prisma.soldier.findUnique({ where: { id: soldierIdRaw } });
+    if (!soldier || soldier.battalionId !== admin.battalionId) throw new Error("חייל לא נמצא");
+    // ודא שלא מקושר למשתמש אחר
+    const linked = await prisma.appUser.findUnique({ where: { soldierId: soldierIdRaw } });
+    if (linked && linked.id !== userId) {
+      throw new Error(`החייל ${soldier.fullName} כבר מקושר למשתמש @${linked.username}`);
+    }
+    soldierId = soldierIdRaw;
+  }
+
+  await prisma.appUser.update({
+    where: { id: userId },
+    data: {
+      fullName, title, phone,
+      ...(soldierId !== undefined ? { soldierId } : {}),
+    },
+  });
+  await audit(admin.id, "UPDATE_HOLDER_USER", "AppUser", userId, { fullName, title, soldierLink: soldierId });
+  revalidatePath("/org");
+}
+
 /** הסרת משתמש מ-holder (מבטל active = false אם זה הholder היחיד שלו) */
 export async function removeHolderUser(formData: FormData) {
   const admin = await requireCapability("users.manage");
