@@ -19,7 +19,12 @@ export async function createSignout(formData: FormData) {
   const serialIds = formData.getAll("serial").map(String).filter(Boolean);
   const vehicleId = String(formData.get("vehicleId") || "") || null;
   const kitId = String(formData.get("kitId") || "") || null;
-  if (!soldierId || (serialIds.length === 0 && !kitId)) return;
+  // פריטים כמותיים בעגלה (מקבילות: qtyItem[], qtyValue[], qtyStatus[])
+  const qtyItems = formData.getAll("qtyItem").map(String);
+  const qtyValues = formData.getAll("qtyValue").map((v) => parseInt(String(v), 10) || 0);
+  const qtyStatuses = formData.getAll("qtyStatus").map(String);
+  const hasAnything = serialIds.length > 0 || kitId || qtyItems.length > 0;
+  if (!soldierId || !hasAnything) throw new Error("בחר חייל ולפחות פריט אחד");
 
   // אם נבחרה ערכה — נוסיף את הפריטים הכמותיים שלה כשורות העברה
   const kitLines = kitId
@@ -50,6 +55,16 @@ export async function createSignout(formData: FormData) {
         await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: l.itemTypeId, quantity: l.quantity, statusId: status?.id } });
       }
     }
+    // פריטים כמותיים שנבחרו ידנית בעגלה
+    for (let i = 0; i < qtyItems.length; i++) {
+      const itemTypeId = qtyItems[i];
+      const quantity = qtyValues[i];
+      const statusId = qtyStatuses[i] || null;
+      if (!itemTypeId || quantity < 1) continue;
+      await tx.transferLine.create({
+        data: { transferId: transfer.id, itemTypeId, quantity, statusId },
+      });
+    }
     await tx.signature.create({
       data: { battalionId: bId, soldierId, transferId: transfer.id, method, status: "PENDING", token, tokenExpires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7) },
     });
@@ -71,10 +86,18 @@ export async function completeSignature(token: string, signatureData: string) {
 
   if (!sig.soldierId) return { ok: false, error: "סוג חתימה לא תואם" };
   const soldierId = sig.soldierId;
+  const fromHolderId = sig.transfer!.fromHolderId;
   await prisma.$transaction(async (tx) => {
     for (const line of sig.transfer!.lines) {
       if (line.serialUnitId) {
+        // יחידה סריאלית: מעבר signedTo + מיקום פיזי לחייל
         await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { signedSoldierId: soldierId } });
+      } else if (line.statusId && fromHolderId) {
+        // יחידה כמותית: גריעה מסך המלאי במחסן המקור
+        const existing = await tx.stockBalance.findFirst({ where: { itemTypeId: line.itemTypeId, holderId: fromHolderId, statusId: line.statusId } });
+        if (existing) {
+          await tx.stockBalance.update({ where: { id: existing.id }, data: { quantity: Math.max(0, existing.quantity - line.quantity) } });
+        }
       }
     }
     await tx.signature.update({ where: { token }, data: { status: "SIGNED", signatureData, signedAt: new Date() } });

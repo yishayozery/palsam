@@ -118,8 +118,12 @@ export default async function SignaturesPage() {
                   return { id: s.id, name: s.fullName, pn: s.personalNumber, companyId: s.companyId, companyName: c?.name ?? null };
                 })}
                 units={availableUnits.map((u) => ({
-                  id: u.id, name: u.itemType.name, serial: u.serialNumber,
-                  holder: u.currentHolder?.name ?? "", status: u.status.name,
+                  id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber,
+                  status: u.status.name, statusId: u.statusId,
+                }))}
+                balances={warehouseBalances.map((b) => ({
+                  itemTypeId: b.itemTypeId, itemName: b.itemType.name, unit: b.itemType.unit,
+                  status: b.status.name, statusId: b.statusId, quantity: b.quantity,
                 }))}
                 kits={kits.map((k) => ({ id: k.id, name: k.name, lines: k.lines.map((l) => ({ name: l.itemType.name, qty: l.quantity })) }))}
                 vehicles={vehicles.map((v) => ({ id: v.id, name: v.itemType.name, plate: v.serialNumber }))}
