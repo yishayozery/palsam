@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Heebo } from "next/font/google";
 import "./globals.css";
 
@@ -10,6 +10,13 @@ const heebo = Heebo({
 export const metadata: Metadata = {
   title: "KALAG — מערכת ניהול מלאי גדודי",
   description: "ניהול שרשרת אספקה, מלאי והחתמות ציוד — דרג גדודי",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#0f172a",
 };
 
 export default function RootLayout({

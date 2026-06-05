@@ -11,12 +11,12 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between mb-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">{title}</h1>
-        {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}
+    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-4 md:mb-6">
+      <div className="min-w-0">
+        <h1 className="text-xl md:text-2xl font-bold text-slate-800 leading-tight">{title}</h1>
+        {subtitle && <p className="text-xs md:text-sm text-slate-500 mt-1">{subtitle}</p>}
       </div>
-      {action}
+      {action && <div className="flex flex-wrap gap-2 items-center">{action}</div>}
     </div>
   );
 }
@@ -54,10 +54,10 @@ export function StatCard({
     blue: "text-blue-600",
   };
   return (
-    <Card className="p-4">
-      <div className="text-sm text-slate-500">{label}</div>
-      <div className={`text-3xl font-bold mt-1 ${tones[tone]}`}>{value}</div>
-      {hint && <div className="text-xs text-slate-400 mt-1">{hint}</div>}
+    <Card className="p-3 md:p-4">
+      <div className="text-xs md:text-sm text-slate-500 leading-tight">{label}</div>
+      <div className={`text-2xl md:text-3xl font-bold mt-1 ${tones[tone]}`}>{value}</div>
+      {hint && <div className="text-[11px] md:text-xs text-slate-400 mt-1 leading-tight">{hint}</div>}
     </Card>
   );
 }
@@ -136,15 +136,15 @@ export function EmptyState({ children }: { children: ReactNode }) {
 /** טבלה בסיסית */
 export function Table({ children }: { children: ReactNode }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm text-right">{children}</table>
+    <div className="overflow-x-auto -mx-px">
+      <table className="w-full text-sm text-right min-w-[480px]">{children}</table>
     </div>
   );
 }
 
 export function Th({ children }: { children?: ReactNode }) {
   return (
-    <th className="px-4 py-3 text-xs font-semibold text-slate-500 bg-slate-50 border-b border-slate-200">
+    <th className="px-2 md:px-4 py-2.5 md:py-3 text-xs font-semibold text-slate-500 bg-slate-50 border-b border-slate-200 whitespace-nowrap">
       {children}
     </th>
   );
@@ -158,7 +158,7 @@ export function Td({
   className?: string;
 }) {
   return (
-    <td className={`px-4 py-3 border-b border-slate-100 ${className}`}>
+    <td className={`px-2 md:px-4 py-2.5 md:py-3 border-b border-slate-100 ${className}`}>
       {children}
     </td>
   );

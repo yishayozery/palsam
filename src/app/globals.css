@@ -19,3 +19,29 @@ body {
   top: 0;
   z-index: 1;
 }
+
+/* אנימציה לדראור מובייל */
+@keyframes slide-in-rtl {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.animate-slide-in {
+  animation: slide-in-rtl 0.22s ease-out;
+}
+
+/* יציבות טאצ' במובייל — manipulation = הסרת tap delay */
+button, a, input, select, textarea {
+  touch-action: manipulation;
+}
+
+/* מניעת זום אוטומטי ב-iOS כשמקלידים בשדה (כל input מתחת ל-16px יגרום zoom) */
+@media (max-width: 768px) {
+  input[type="text"], input[type="number"], input[type="email"],
+  input[type="tel"], input[type="password"], input[type="search"],
+  input:not([type]), select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* viewport תקין למובייל — height עם שורות כתובת */
+html, body { height: 100%; }
