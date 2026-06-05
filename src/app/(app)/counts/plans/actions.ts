@@ -27,12 +27,18 @@ export async function createCountPlan(formData: FormData) {
     .split(/[,\s]+/).map((s) => s.trim()).filter((s) => /^\d{1,2}:\d{2}$/.test(s));
   const daysOfWeek = listFrom(formData, "daysOfWeek").map(Number).filter((n) => n >= 0 && n <= 6);
   const graceMinutes = Math.max(0, parseInt(String(formData.get("graceMinutes") || "60"), 10) || 60);
+  // טווח תאריכים אופציונלי
+  const startDateRaw = String(formData.get("startDate") || "").trim();
+  const endDateRaw = String(formData.get("endDate") || "").trim();
+  const startDate = startDateRaw ? new Date(startDateRaw) : null;
+  const endDate = endDateRaw ? new Date(endDateRaw) : null;
 
   const plan = await prisma.countPlan.create({
     data: {
       battalionId: bId, name, description,
       scopeHolderIds, scopeCategoryIds, scopeItemTypeIds, trackingMethods,
       frequencyDays, scheduledTimes, daysOfWeek, graceMinutes,
+      startDate, endDate,
       createdById: user.id,
     },
   });

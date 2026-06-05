@@ -11,10 +11,18 @@ export const dynamic = "force-dynamic";
 export default async function KitsPage() {
   const user = await requireUser();
   if (!can(user.role, "signatures.manage")) redirect("/");
-  if (!user.holderId) redirect("/");
 
   const bId = user.battalionId!;
-  const holder = await prisma.holder.findUnique({ where: { id: user.holderId } });
+  // אם אין holderId ראשי — ניקח את הראשון מ-holderIds (קצין מחסן יכול להיות מוקצה דרך UserHolder בלבד)
+  const effectiveHolderId = user.holderId ?? user.holderIds?.[0] ?? null;
+  if (!effectiveHolderId) {
+    return (
+      <div className="p-6 text-center">
+        <p className="text-slate-500">אינך משויך למחסן או פלוגה. פנה למפ״ם להגדרת השיוך.</p>
+      </div>
+    );
+  }
+  const holder = await prisma.holder.findUnique({ where: { id: effectiveHolderId } });
 
   // סקופ פריטים: רק לפי טיפוסי המחסנים של המשתמש (אם הוא קצין מחסן)
   const myWarehouseTypes: string[] = [];
@@ -29,7 +37,7 @@ export default async function KitsPage() {
 
   const [kits, items] = await Promise.all([
     prisma.signableKit.findMany({
-      where: { holderId: user.holderId, active: true },
+      where: { holderId: effectiveHolderId, active: true },
       include: { lines: { include: { itemType: true } } },
       orderBy: { name: "asc" },
     }),

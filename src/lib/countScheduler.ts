@@ -61,14 +61,20 @@ export async function generatePendingTasks(now: Date = new Date()): Promise<numb
   const plans = await prisma.countPlan.findMany({ where: { active: true } });
   let created = 0;
   for (const plan of plans) {
+    // טווח תאריכים: דלג אם עתידי או הסתיים
+    if (plan.startDate && now < plan.startDate) continue;
+    if (plan.endDate && now > plan.endDate) continue;
+
     // הזמן האחרון שכבר ייצרנו אליו משימה
     const latest = await prisma.countTask.findFirst({
       where: { planId: plan.id },
       orderBy: { scheduledAt: "desc" },
     });
-    const startFrom = latest?.scheduledAt ?? new Date(now.getTime() - plan.frequencyDays * 24 * 60 * 60 * 1000);
+    const earliestStart = plan.startDate ?? new Date(now.getTime() - plan.frequencyDays * 24 * 60 * 60 * 1000);
+    const startFrom = latest?.scheduledAt ?? earliestStart;
     const nextTime = nextOccurrenceFor(plan, startFrom);
     if (!nextTime || nextTime > now) continue; // עתידי — לא ניצור עדיין
+    if (plan.endDate && nextTime > plan.endDate) continue; // חרגנו
 
     const holderIds = await holdersForPlan(plan);
     const dueAt = new Date(nextTime.getTime() + plan.graceMinutes * 60 * 1000);

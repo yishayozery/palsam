@@ -654,6 +654,9 @@ model CountPlan {
   scheduledTimes String[] @default([])  // ["08:00","20:00"] — מספר פעמים ביום
   daysOfWeek     Int[]    @default([])  // ריק = כל הימים; אחרת 0..6
   graceMinutes   Int      @default(60)  // דקות עד OVERDUE
+  // טווח תאריכים — אופציונלי. אם startDate מוגדר, התכנית פעילה רק החל ממנו. endDate = עד מתי.
+  startDate      DateTime?
+  endDate        DateTime?
 
   active      Boolean  @default(true)
   createdById String

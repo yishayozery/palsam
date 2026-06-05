@@ -27,7 +27,7 @@ export default async function CountPlansPage() {
       orderBy: [{ kind: "asc" }, { name: "asc" }],
       select: { id: true, name: true, kind: true, warehouseType: true },
     }),
-    prisma.category.findMany({ where: { battalionId: bId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.category.findMany({ where: { battalionId: bId }, orderBy: { name: "asc" }, select: { id: true, name: true, warehouseType: true } }),
     prisma.itemType.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, sku: true } }),
   ]);
 

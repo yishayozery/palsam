@@ -7,6 +7,7 @@ import { createCountPlan } from "./actions";
 
 type Holder = { id: string; name: string; kind: string; warehouseType: WarehouseType | null };
 type Ref = { id: string; name: string; sku?: string | null };
+type Category = { id: string; name: string; warehouseType?: WarehouseType | string | null };
 
 const DOW = [
   { v: 0, l: "ראשון" }, { v: 1, l: "שני" }, { v: 2, l: "שלישי" },
@@ -22,7 +23,7 @@ const METHODS = [
 ];
 
 export default function CountPlanForm({ holders, categories, items }: {
-  holders: Holder[]; categories: Ref[]; items: Ref[];
+  holders: Holder[]; categories: Category[]; items: Ref[];
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -35,6 +36,8 @@ export default function CountPlanForm({ holders, categories, items }: {
   const [scheduledTimes, setScheduledTimes] = useState("08:00");
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([]);
   const [graceMinutes, setGraceMinutes] = useState(60);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const toggle = <T extends string | number>(arr: T[], v: T, set: (a: T[]) => void) =>
@@ -47,7 +50,7 @@ export default function CountPlanForm({ holders, categories, items }: {
       // reset
       setName(""); setDescription(""); setScopeHolderIds([]); setScopeCategoryIds([]);
       setScopeItemTypeIds([]); setTrackingMethods([]); setFrequencyDays(1);
-      setScheduledTimes("08:00"); setDaysOfWeek([]); setGraceMinutes(60);
+      setScheduledTimes("08:00"); setDaysOfWeek([]); setGraceMinutes(60); setStartDate(""); setEndDate("");
       setOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -145,20 +148,42 @@ export default function CountPlanForm({ holders, categories, items }: {
                 </div>
               </div>
 
-              <div>
-                <div className="text-xs font-semibold text-slate-600 mb-1">קטגוריות</div>
-                <div className="flex gap-2 flex-wrap max-h-24 overflow-y-auto">
-                  {categories.map((c) => (
-                    <label key={c.id} className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full border cursor-pointer ${scopeCategoryIds.includes(c.id) ? "bg-blue-100 border-blue-400 text-blue-800" : "bg-white border-slate-300"}`}>
-                      <input type="checkbox" name="scopeCategoryIds" value={c.id}
-                        checked={scopeCategoryIds.includes(c.id)}
-                        onChange={() => toggle(scopeCategoryIds, c.id, setScopeCategoryIds)}
-                        className="hidden" />
-                      {c.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
+              {(() => {
+                // אם נבחרו מחסנים — סנן קטגוריות לפי warehouseType של המחסנים האלו
+                const selectedWarehouseTypes = new Set(
+                  scopeHolderIds.length > 0
+                    ? holders.filter((h) => scopeHolderIds.includes(h.id) && h.warehouseType).map((h) => h.warehouseType as string)
+                    : []
+                );
+                const visibleCategories = selectedWarehouseTypes.size > 0
+                  ? categories.filter((c) => c.warehouseType && selectedWarehouseTypes.has(c.warehouseType as string))
+                  : categories;
+                return (
+                  <div>
+                    <div className="text-xs font-semibold text-slate-600 mb-1">
+                      קטגוריות
+                      {selectedWarehouseTypes.size > 0 && (
+                        <span className="text-[10px] text-blue-600 font-normal mr-1">
+                          (מסונן לפי {selectedWarehouseTypes.size} מחסנים שנבחרו)
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-2 flex-wrap max-h-24 overflow-y-auto">
+                      {visibleCategories.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic">אין קטגוריות תואמות למחסנים שנבחרו</p>
+                      ) : visibleCategories.map((c) => (
+                        <label key={c.id} className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full border cursor-pointer ${scopeCategoryIds.includes(c.id) ? "bg-blue-100 border-blue-400 text-blue-800" : "bg-white border-slate-300"}`}>
+                          <input type="checkbox" name="scopeCategoryIds" value={c.id}
+                            checked={scopeCategoryIds.includes(c.id)}
+                            onChange={() => toggle(scopeCategoryIds, c.id, setScopeCategoryIds)}
+                            className="hidden" />
+                          {c.name}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <details>
                 <summary className="text-xs font-semibold text-slate-600 cursor-pointer hover:text-slate-800">פריטים ספציפיים (אופציונלי) — לחץ להרחבה</summary>
@@ -192,6 +217,23 @@ export default function CountPlanForm({ holders, categories, items }: {
                 <label className="block text-xs font-semibold text-slate-600 mb-1">חסד עד התראה (דקות)</label>
                 <input type="number" min={0} value={graceMinutes} onChange={(e) => setGraceMinutes(parseInt(e.target.value) || 0)}
                   name="graceMinutes" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              </div>
+            </div>
+
+            {/* טווח תאריכים אופציונלי */}
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">תאריך התחלה (אופציונלי)</label>
+                <input type="date" name="startDate" value={startDate} onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white" />
+                <p className="text-[10px] text-slate-500 mt-0.5">אם ריק — מתחיל מיד</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">תאריך סיום (אופציונלי)</label>
+                <input type="date" name="endDate" value={endDate} onChange={(e) => setEndDate(e.target.value)}
+                  min={startDate || undefined}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white" />
+                <p className="text-[10px] text-slate-500 mt-0.5">אם ריק — ללא הגבלה</p>
               </div>
             </div>
 
