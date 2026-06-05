@@ -64,13 +64,32 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
             values: { column: l.column, row: l.row, label: l.label ?? "" },
             locked: l._count.serialUnits + l._count.stockBalances > 0,
             display: (
-              <span className="flex items-center gap-2">
-                <span className="font-mono font-medium">{l.column}-{l.row}</span>
-                {l.label && <span className="text-slate-500 text-sm">{l.label}</span>}
-                {l._count.serialUnits + l._count.stockBalances > 0 && (
-                  <Badge>{l._count.serialUnits + l._count.stockBalances} פריטים</Badge>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono font-medium">{l.column}-{l.row}</span>
+                  {l.label && <span className="text-slate-500 text-sm">{l.label}</span>}
+                  {l._count.serialUnits > 0 && <Badge className="bg-blue-100 text-blue-700">{l._count.serialUnits} סריאלי</Badge>}
+                  {l._count.stockBalances > 0 && <Badge className="bg-emerald-100 text-emerald-700">{l._count.stockBalances} מק״טים</Badge>}
+                </div>
+                {(l.serialUnits.length > 0 || l.stockBalances.length > 0) && (
+                  <div className="text-[11px] text-slate-500 flex flex-wrap gap-2 mt-0.5">
+                    {(() => {
+                      // קיבוץ סריאלי לפי שם פריט
+                      const serialAgg = new Map<string, number>();
+                      for (const u of l.serialUnits) serialAgg.set(u.itemType.name, (serialAgg.get(u.itemType.name) ?? 0) + (u.lotQuantity ?? 1));
+                      const qtyAgg = new Map<string, number>();
+                      for (const b of l.stockBalances) qtyAgg.set(b.itemType.name, (qtyAgg.get(b.itemType.name) ?? 0) + b.quantity);
+                      const all = [...Array.from(serialAgg.entries()), ...Array.from(qtyAgg.entries())];
+                      return all.slice(0, 6).map(([name, qty]) => (
+                        <span key={name} className="bg-slate-50 rounded px-1.5 py-0.5">{name}: <b>{qty}</b></span>
+                      ));
+                    })()}
+                    {(l.serialUnits.length + l.stockBalances.length > 6) && (
+                      <span className="text-slate-400">+ עוד {l.serialUnits.length + l.stockBalances.length - 6}</span>
+                    )}
+                  </div>
                 )}
-              </span>
+              </div>
             ),
           }))}
         />

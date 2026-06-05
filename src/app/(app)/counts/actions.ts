@@ -90,10 +90,18 @@ export async function submitCount(formData: FormData) {
       if (raw === null || String(raw) === "") continue;
       const counted = parseInt(String(raw), 10);
       if (isNaN(counted)) continue;
-      await tx.countLine.update({ where: { id: line.id }, data: { countedQty: counted } });
+      const recounted = formData.get(`recount:${line.id}`) === "on";
+      const note = recounted ? "ספירה חוזרת בוצעה" : null;
+      await tx.countLine.update({ where: { id: line.id }, data: { countedQty: counted, note } });
       if (counted !== line.expectedQty) {
         await tx.discrepancy.create({
-          data: { battalionId: bId, sessionId: session.id, itemTypeId: line.itemTypeId, holderId: line.holderId, expectedQty: line.expectedQty, countedQty: counted, diff: counted - line.expectedQty, kind: counted < line.expectedQty ? "LOSS" : "SURPLUS", status: "OPEN" },
+          data: {
+            battalionId: bId, sessionId: session.id, itemTypeId: line.itemTypeId, holderId: line.holderId,
+            expectedQty: line.expectedQty, countedQty: counted, diff: counted - line.expectedQty,
+            kind: counted < line.expectedQty ? "LOSS" : "SURPLUS",
+            status: "OPEN",
+            resolution: recounted ? "ספירה חוזרת אומתה — פער אמיתי" : null,
+          },
         });
       }
     }

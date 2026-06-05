@@ -103,6 +103,10 @@ export default async function StockPage({
           : "הצהרת הכמויות שהגדוד חתום עליהן מול החטיבה — לפי מק״ט, סטטוס ושייכות"}
         action={
           <div className="flex gap-2">
+            <Link href="/stock/serials"
+              className="bg-white border border-slate-300 text-slate-700 rounded-lg px-3 md:px-5 py-2 md:py-2.5 text-xs md:text-sm font-medium hover:bg-slate-50 flex items-center gap-2">
+              📋 <span className="hidden sm:inline">כל הסריאליים</span>
+            </Link>
             <StockEntryModal
               currentUserName={user.fullName}
               requirePersonalId={requirePersonalId}
