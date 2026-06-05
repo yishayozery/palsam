@@ -55,7 +55,7 @@ export async function createIssue(formData: FormData) {
   });
 
   await audit(user.id, "CREATE_ISSUE", "Transfer", transferId, { toHolderId });
-  revalidatePath("/transfers");
+  revalidatePath("/transfers"); revalidatePath("/stock"); revalidatePath("/inventory");
   redirect(`/transfers/${transferId}/document`);
 }
 
@@ -93,7 +93,7 @@ export async function createReturn(formData: FormData) {
   });
 
   await audit(user.id, "CREATE_RETURN", "Transfer", transferId);
-  revalidatePath("/transfers");
+  revalidatePath("/transfers"); revalidatePath("/stock"); revalidatePath("/inventory");
   redirect(`/transfers/${transferId}/document`);
 }
 
@@ -119,7 +119,7 @@ export async function approveTransfer(formData: FormData) {
   });
 
   await audit(user.id, "APPROVE", "Transfer", id);
-  revalidatePath("/transfers");
+  revalidatePath("/transfers"); revalidatePath("/stock"); revalidatePath("/inventory");
 }
 
 /** דחיית לחיצת יד — החזרת הציוד למקור */
@@ -144,5 +144,5 @@ export async function rejectTransfer(formData: FormData) {
   });
 
   await audit(user.id, "REJECT", "Transfer", id);
-  revalidatePath("/transfers");
+  revalidatePath("/transfers"); revalidatePath("/stock"); revalidatePath("/inventory");
 }

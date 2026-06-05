@@ -16,13 +16,30 @@ export default async function KitsPage() {
   const bId = user.battalionId!;
   const holder = await prisma.holder.findUnique({ where: { id: user.holderId } });
 
+  // סקופ פריטים: רק לפי טיפוסי המחסנים של המשתמש (אם הוא קצין מחסן)
+  const myWarehouseTypes: string[] = [];
+  if (user.role === "WAREHOUSE_MANAGER" && user.holderIds?.length) {
+    const myHolders = await prisma.holder.findMany({
+      where: { id: { in: user.holderIds }, kind: "WAREHOUSE" },
+      select: { warehouseType: true },
+    });
+    for (const h of myHolders) if (h.warehouseType) myWarehouseTypes.push(h.warehouseType);
+  }
+  const scoped = user.role === "WAREHOUSE_MANAGER" && myWarehouseTypes.length > 0;
+
   const [kits, items] = await Promise.all([
     prisma.signableKit.findMany({
       where: { holderId: user.holderId, active: true },
       include: { lines: { include: { itemType: true } } },
       orderBy: { name: "asc" },
     }),
-    prisma.itemType.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" } }),
+    prisma.itemType.findMany({
+      where: {
+        battalionId: bId, active: true,
+        ...(scoped ? { category: { warehouseType: { in: myWarehouseTypes as ("EQUIPMENT"|"COMMS"|"AMMO"|"ARMORY"|"VEHICLES"|"MEDICAL"|"GENERAL")[] } } } : {}),
+      },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   return (
