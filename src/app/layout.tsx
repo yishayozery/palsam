@@ -8,7 +8,7 @@ const heebo = Heebo({
 });
 
 export const metadata: Metadata = {
-  title: "KALAG — מערכת ניהול מלאי גדודי",
+  title: "PALSAM — מערכת ניהול מלאי גדודי",
   description: "ניהול שרשרת אספקה, מלאי והחתמות ציוד — דרג גדודי",
 };
 

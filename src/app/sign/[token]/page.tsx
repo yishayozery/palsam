@@ -50,7 +50,7 @@ export default async function PublicSignPage({
             <img src={logo} alt="סמל הגדוד" className="w-12 h-12 object-contain bg-white/10 rounded p-1" />
           )}
           <div>
-            <div className="text-xs text-slate-300">KALAG · {unitName}</div>
+            <div className="text-xs text-slate-300">PALSAM · {unitName}</div>
             {sig.battalion?.motto && <div className="text-[11px] text-amber-300/80 italic">״{sig.battalion.motto}״</div>}
             <h1 className="text-lg font-bold">{isCompanySign ? "החתמת פלוגה" : "אישור וחתימה על ציוד"}</h1>
             <p className="text-sm text-slate-300 mt-1">

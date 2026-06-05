@@ -15,7 +15,7 @@ export default function InviteLink({
 }) {
   const [copied, setCopied] = useState(false);
   const link = `${baseUrl}/invite/${token}`;
-  const text = `הוזמנת למערכת KALAG. קישור להגדרת סיסמה: ${link}`;
+  const text = `הוזמנת למערכת PALSAM. קישור להגדרת סיסמה: ${link}`;
   const wa = phone
     ? `https://wa.me/${phone.replace(/\D/g, "").replace(/^0/, "972")}?text=${encodeURIComponent(text)}`
     : `https://wa.me/?text=${encodeURIComponent(text)}`;

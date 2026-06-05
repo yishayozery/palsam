@@ -1,5 +1,5 @@
 {
-  "name": "gadsam",
+  "name": "palsam",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -7,8 +7,8 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
-    "start": "prisma migrate deploy && next start",
+    "build": "prisma generate && prisma migrate deploy && next build",
+    "start": "next start",
     "postinstall": "prisma generate",
     "lint": "eslint",
     "db:up": "docker compose up -d",

@@ -44,7 +44,7 @@ export default async function AppLayout({
           )}
           <div className="min-w-0">
             <div className="font-bold text-base leading-tight truncate">{unitName}</div>
-            <div className="text-xs text-slate-400 tracking-wide">KALAG · ניהול מלאי</div>
+            <div className="text-xs text-slate-400 tracking-wide">PALSAM · ניהול מלאי</div>
             {battalion?.motto && (
               <div className="text-[11px] text-amber-300/80 italic truncate mt-0.5">״{battalion.motto}״</div>
             )}

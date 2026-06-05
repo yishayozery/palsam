@@ -8,8 +8,10 @@ import { generatePendingTasks } from "@/lib/countScheduler";
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const provided = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || url.searchParams.get("secret") || "";
+  const auth = req.headers.get("authorization") || "";
+  const provided = auth.replace(/^Bearer\s+/i, "") || url.searchParams.get("secret") || "";
   const expected = process.env.CRON_SECRET || "";
+  // Vercel Cron שולח header `Authorization: Bearer <CRON_SECRET>` אוטומטית
   if (expected && provided !== expected) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }

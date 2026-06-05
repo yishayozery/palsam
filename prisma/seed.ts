@@ -1,5 +1,5 @@
 /**
- * Seed v2 — KALAG Multi-Tenant
+ * Seed v2 — PALSAM Multi-Tenant
  * אדמין-על גלובלי + גדוד "גדסם כרמלי": מפמ, 4 מחסנים מטופסים + מנהלים,
  * 5 פלוגות + נציגים, קטגוריות לפי טיפוס מחסן, מידוף, מלאי מלא, חיילים.
  */
@@ -9,7 +9,7 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 seed v2 — KALAG...");
+  console.log("🌱 seed v2 — PALSAM...");
 
   // ניקוי מלא
   await prisma.auditLog.deleteMany();
