@@ -13,6 +13,7 @@ export type NavItem = {
 /** איזה תפקיד שייך לאיזו קבוצה. סינון ברמת הקבוצה — מונע "דלף" של פריטים בין תפקידים. */
 export const GROUP_ROLES: Record<string, Role[]> = {
   "ראשי": ["SUPER_ADMIN", "BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"],
+  "עזרה": ["SUPER_ADMIN", "BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"],
   "פלסם": ["BATTALION_ADMIN"],
   "המחסנים שלי": ["WAREHOUSE_MANAGER", "BATTALION_ADMIN"],
   "הפלוגה שלי": ["COMPANY_REP"],
@@ -64,4 +65,7 @@ export const NAV: NavItem[] = [
   // ===== דוחות ובקרה =====
   { href: "/reports", label: "דוחות", icon: "📈", group: "דוחות ובקרה", cap: "reports.view" },
   { href: "/audit", label: "יומן פעולות", icon: "🧾", group: "דוחות ובקרה", cap: "audit.view" },
+
+  // ===== עזרה =====
+  { href: "/help", label: "מקראת השימוש", icon: "📖", group: "עזרה" },
 ];
