@@ -108,44 +108,54 @@ export async function importSoldiersRoster(formData: FormData): Promise<{ create
 }
 
 /** סיד מהיר — 5 חיילי דוגמה לכל פלוגה פעילה. למפ"מ בלבד. שמות עבריים גנריים. */
-export async function seedSampleSoldiers(): Promise<{ created: number }> {
+export async function seedSampleSoldiers(): Promise<{ created: number; errors?: string[] }> {
   const user = await requireCapability("soldiers.roster");
   const bId = user.battalionId!;
   const companies = await prisma.holder.findMany({ where: { battalionId: bId, kind: "COMPANY", active: true } });
   if (companies.length === 0) throw new Error("אין פלוגות פעילות. הקם פלוגות תחילה ב'מבנה ארגוני'.");
 
-  const firstNames = ["יוסי", "דוד", "מיכאל", "אבי", "רון", "אלון", "נדב", "אריאל", "עומר", "תומר", "אורי", "גיל", "ניר", "אלעד", "שחר"];
-  const lastNames  = ["כהן", "לוי", "מזרחי", "פרץ", "ביטון", "אברהם", "מלכה", "אליהו", "חיים", "שמואל", "אסולין", "ישראלי", "בן-דוד", "ארביב", "בן-חמו"];
+  const firstNames = ["יוסי", "דוד", "מיכאל", "אבי", "רון", "אלון", "נדב", "אריאל", "עומר", "תומר", "אורי", "גיל", "ניר", "אלעד", "שחר", "איתי", "עידן", "ליאור", "משה", "יואב"];
+  const lastNames  = ["כהן", "לוי", "מזרחי", "פרץ", "ביטון", "אברהם", "מלכה", "אליהו", "חיים", "שמואל", "אסולין", "ישראלי", "בן-דוד", "ארביב", "בן-חמו", "אזולאי", "דהן", "טל", "אדרי", "חדד"];
 
+  const errors: string[] = [];
   let created = 0;
   const existingPNs = new Set(
     (await prisma.soldier.findMany({ where: { battalionId: bId, personalNumber: { not: null } }, select: { personalNumber: true } }))
       .map((s) => s.personalNumber!)
   );
 
+  const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+  const randPN = () => {
+    // 7 ספרות בטווח 3,000,000 — 9,999,999 (טווח אמיתי של מ.א.)
+    return String(3_000_000 + Math.floor(Math.random() * 7_000_000));
+  };
+
   for (const c of companies) {
     for (let i = 0; i < 5; i++) {
-      const fn = firstNames[Math.floor((Math.random() * 1e6) % firstNames.length)];
-      const ln = lastNames[Math.floor((Math.random() * 1e6) % lastNames.length)];
-      // PN ייחודי - 7 ספרות; אם תפוס נדלג
-      let pn = "";
-      for (let attempt = 0; attempt < 20; attempt++) {
-        const candidate = String(1000000 + Math.floor((Math.random() * 1e6) % 9000000));
-        if (!existingPNs.has(candidate)) { pn = candidate; break; }
+      const fn = pick(firstNames);
+      const ln = pick(lastNames);
+      // PN ייחודי; אם נכשל אחרי 30 ניסיונות — יוצרים בלי PN
+      let pn: string | null = null;
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const candidate = randPN();
+        if (!existingPNs.has(candidate)) { pn = candidate; existingPNs.add(candidate); break; }
       }
-      if (!pn) continue;
-      existingPNs.add(pn);
-      await prisma.soldier.create({
-        data: {
-          battalionId: bId, fullName: `${fn} ${ln}`, firstName: fn, lastName: ln,
-          personalNumber: pn, companyId: c.id, active: true,
-          enlisted: true, enlistedAt: new Date(), enlistedById: user.id,
-        },
-      });
-      created++;
+      try {
+        await prisma.soldier.create({
+          data: {
+            battalionId: bId, fullName: `${fn} ${ln}`, firstName: fn, lastName: ln,
+            personalNumber: pn, companyId: c.id, active: true,
+            enlisted: true, enlistedAt: new Date(), enlistedById: user.id,
+          },
+        });
+        created++;
+      } catch (e) {
+        errors.push(`${c.name}: ${fn} ${ln} — ${e instanceof Error ? e.message : "שגיאה"}`);
+      }
     }
   }
-  await audit(user.id, "SEED_SOLDIERS", "Soldier", `${created}`, { companies: companies.length });
+  await audit(user.id, "SEED_SOLDIERS", "Soldier", `${created}`, { companies: companies.length, errors: errors.length });
   revalidatePath("/roster");
-  return { created };
+  revalidatePath("/org");
+  return { created, errors: errors.slice(0, 5) };
 }

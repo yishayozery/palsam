@@ -156,7 +156,8 @@ export default function RosterTable({ soldiers, companies, initialQ, initialComp
     setSeedBusy(true);
     try {
       const r = await seedSampleSoldiers();
-      alert(`✓ נוצרו ${r.created} חיילים`);
+      const errStr = r.errors && r.errors.length > 0 ? `\n\nשגיאות:\n${r.errors.join("\n")}` : "";
+      alert(`✓ נוצרו ${r.created} חיילים${errStr}`);
     } catch (e) {
       alert(`שגיאה: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
