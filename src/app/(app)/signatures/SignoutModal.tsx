@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { createSignout } from "./actions";
 
 type Soldier = { id: string; name: string; pn: string | null; companyId?: string | null; companyName?: string | null; enlisted?: boolean };
@@ -11,7 +11,7 @@ type Kit = { id: string; name: string; lines: { name: string; qty: number }[] };
 type Vehicle = { id: string; name: string; plate: string };
 
 type CartSerial = { type: "serial"; unitId: string; itemName: string; serial: string; status: string };
-type CartQty = { type: "qty"; itemTypeId: string; itemName: string; unit: string; quantity: number; statusId: string; statusName: string };
+type CartQty = { type: "qty"; itemTypeId: string; itemName: string; unit: string; quantity: number; statusId: string; statusName: string; fromKit?: string };
 type CartItem = CartSerial | CartQty;
 
 export default function SignoutModal({
@@ -32,6 +32,8 @@ export default function SignoutModal({
   const [physicalLocation, setPhysicalLocation] = useState("");
   const [method, setMethod] = useState<"QR" | "LINK" | "ONSITE">("QR");
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const submittingRef = useRef(false);
 
   const selectedSoldier = soldiers.find((s) => s.id === soldierId);
   const selectedKit = kits.find((k) => k.id === kitId);
@@ -92,12 +94,39 @@ export default function SignoutModal({
   const reset = () => {
     setSoldierId(""); setCompanyFilter(lockCompanyId ?? ""); setSoldierSearch("");
     setItemSearch(""); setCart([]); setKitId(""); setVehicleId(""); setMethod("QR"); setError(null);
+    setBusy(false); submittingRef.current = false;
+  };
+
+  // ⚠️ בחירת ערכה — מרחיבה את הפריטים לעגלה (כל פריט עם קישור לערכה כדי שנוכל לעקוב)
+  const onPickKit = (newKitId: string) => {
+    // הסר פריטים שהיו מערכה קודמת
+    setCart((c) => c.filter((x) => !(x.type === "qty" && (x as CartQty).fromKit === kitId)));
+    setKitId(newKitId);
+    if (!newKitId) return;
+    const kit = kits.find((k) => k.id === newKitId);
+    if (!kit) return;
+    // פריטים מהערכה מתווספים כשורות כמותיות (השרת ימשוך SN לפריטים סריאליים אוטומטית)
+    const newLines: CartQty[] = kit.lines.map((l) => ({
+      type: "qty" as const,
+      itemTypeId: `kit:${kit.id}:${l.name}`, // מזהה מדומה — לא נשלח לשרת (זה לא itemTypeId אמיתי)
+      itemName: l.name,
+      unit: "יח׳",
+      quantity: l.qty,
+      statusId: "",
+      statusName: "מתוך ערכה",
+      fromKit: newKitId,
+    }));
+    setCart((c) => [...c, ...newLines]);
   };
 
   async function submit() {
+    // הגנת כפילות: ref מונע double-click מהיר; busy מונע submit נוסף אחרי click
+    if (submittingRef.current || busy) return;
     setError(null);
     if (!soldierId) { setError("בחר חייל"); return; }
     if (cart.length === 0 && !kitId) { setError("הוסף לפחות פריט אחד או בחר ערכה"); return; }
+    submittingRef.current = true;
+    setBusy(true);
     const fd = new FormData();
     fd.append("soldierId", soldierId);
     fd.append("method", method);
@@ -106,13 +135,24 @@ export default function SignoutModal({
     if (physicalLocation) fd.append("physicalLocation", physicalLocation);
     for (const c of cart) {
       if (c.type === "serial") fd.append("serial", c.unitId);
-      else { fd.append("qtyItem", c.itemTypeId); fd.append("qtyValue", String(c.quantity)); fd.append("qtyStatus", c.statusId); }
+      else if (c.type === "qty" && !c.fromKit) {
+        // רק פריטים שנבחרו ידנית (לא מערכה — אלה מטופלים דרך kitId)
+        fd.append("qtyItem", c.itemTypeId);
+        fd.append("qtyValue", String(c.quantity));
+        fd.append("qtyStatus", c.statusId);
+      }
     }
     try {
       await createSignout(fd);
+      // הצלחה: השרת יפנה לדף החתימה. אם הגענו לכאן ללא redirect — נסגור.
       reset(); setOpen(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      // NEXT_REDIRECT הוא אובייקט מיוחד — אם זה זה, פשוט מתעלמים (הניתוב בוצע)
+      if (msg.includes("NEXT_REDIRECT")) return;
+      setError(msg);
+      submittingRef.current = false;
+      setBusy(false);
     }
   }
 
@@ -210,9 +250,9 @@ export default function SignoutModal({
                     </>
                   ) : (
                     <>
-                      <span className="text-lg">📦</span>
+                      <span className="text-lg">{c.fromKit ? "🎒" : "📦"}</span>
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate">{c.itemName}</div>
+                        <div className="font-medium text-sm truncate">{c.itemName}{c.fromKit && <span className="text-[10px] text-violet-600 mr-1">(מערכה)</span>}</div>
                         <div className="text-xs text-slate-500">{c.statusName}</div>
                       </div>
                       <input type="number" min={1} value={c.quantity}
@@ -228,17 +268,6 @@ export default function SignoutModal({
 
             {/* תוספות מתחת לעגלה */}
             <div className="p-3 border-t border-slate-200 bg-white space-y-2">
-              {kits.length > 0 && (
-                <div>
-                  <label className="block text-[11px] text-slate-600 mb-0.5">או — ערכה מוכנה</label>
-                  <select value={kitId} onChange={(e) => setKitId(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
-                    <option value="">— ללא —</option>
-                    {kits.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
-                  </select>
-                  {selectedKit && <p className="text-[11px] text-slate-500 mt-1">{selectedKit.lines.map((l) => `${l.name}×${l.qty}`).join(", ")}</p>}
-                </div>
-              )}
               {/* מיקום פיזי — לכל פריט/ערכה (חייב להצמיד לאיפה החייל ישים את הציוד) */}
               <div>
                 <label className="block text-[11px] text-slate-600 mb-0.5">📍 מיקום פיזי (אופציונלי)</label>
@@ -259,21 +288,42 @@ export default function SignoutModal({
               <div>
                 <label className="block text-[11px] text-slate-600 mb-0.5">אופן חתימה</label>
                 <div className="flex gap-1.5 text-xs">
-                  {(["QR", "LINK", "ONSITE"] as const).map((m) => (
+                  {(["ONSITE", "QR", "LINK"] as const).map((m) => (
                     <label key={m} className={`flex-1 text-center px-2 py-1.5 rounded-lg border-2 cursor-pointer transition ${method === m ? "border-slate-800 bg-slate-100" : "border-slate-200"}`}>
                       <input type="radio" checked={method === m} onChange={() => setMethod(m)} className="hidden" />
-                      {m === "QR" ? "QR" : m === "LINK" ? "WhatsApp" : "שרבוט"}
+                      {m === "ONSITE" ? "✍️ שרבוט (כאן)" : m === "QR" ? "📱 QR" : "💬 WhatsApp"}
                     </label>
                   ))}
                 </div>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  {method === "ONSITE" ? "✍️ החייל יחתום ישירות במכשיר הזה" :
+                   method === "QR" ? "📱 ייפתח QR שהחייל יסרוק במכשיר שלו" :
+                   "💬 ייפתח לינק שתשלח לחייל בוואטסאפ"}
+                </p>
               </div>
             </div>
           </div>
 
           {/* === עמודה שמאלית — מלאי זמין === */}
           <div className="flex flex-col bg-white order-1 md:order-2 min-h-0">
-            <div className="p-3 border-b border-slate-200 bg-white sticky top-0 shrink-0">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="p-3 border-b border-slate-200 bg-white sticky top-0 shrink-0 space-y-2">
+              {/* ⬆ בורר ערכה — מעל המלאי (בחירה גוררת פריטים לעגלה אוטומטית) */}
+              {kits.length > 0 && (
+                <div className="bg-violet-50 border border-violet-200 rounded-lg p-2">
+                  <label className="block text-[11px] font-semibold text-violet-900 mb-1">📦 ערכה מוכנה (מילוי אוטומטי של עגלה)</label>
+                  <select value={kitId} onChange={(e) => onPickKit(e.target.value)}
+                    className="w-full rounded-lg border border-violet-300 px-2 py-1.5 text-sm bg-white">
+                    <option value="">— ללא ערכה / בחירה ידנית —</option>
+                    {kits.map((k) => <option key={k.id} value={k.id}>{k.name} ({k.lines.length} פריטים)</option>)}
+                  </select>
+                  {selectedKit && (
+                    <p className="text-[10px] text-violet-700 mt-1">
+                      ✓ {selectedKit.lines.map((l) => `${l.name}×${l.qty}`).join(" · ")} — נוסף לעגלה. לחץ ✕ ליד פריט להסרה.
+                    </p>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
                 <div className="font-bold text-slate-800">📦 מלאי זמין</div>
                 <span className="text-xs text-slate-400">({availableUnits.length + availableBalances.length} פריטים)</span>
               </div>
@@ -328,11 +378,18 @@ export default function SignoutModal({
         <div className="border-t border-slate-200 p-3 bg-white flex items-center justify-between gap-2 shrink-0">
           {error && <div className="flex-1 text-sm text-rose-700 font-medium">⚠️ {error}</div>}
           <div className="flex items-center gap-2 mr-auto">
-            <button onClick={() => { reset(); setOpen(false); }}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
-            <button onClick={submit} disabled={!soldierId || (cart.length === 0 && !kitId)}
-              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg px-5 py-2 text-sm font-bold">
-              ✍️ שלח להחתמה ({cart.length}{kitId ? " + ערכה" : ""})
+            <button onClick={() => { reset(); setOpen(false); }} disabled={busy}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm disabled:opacity-50">ביטול</button>
+            <button onClick={submit} disabled={busy || !soldierId || (cart.length === 0 && !kitId)}
+              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-5 py-2 text-sm font-bold flex items-center gap-2">
+              {busy ? (
+                <>
+                  <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  שולח...
+                </>
+              ) : (
+                <>🚀 הפעל החתמה ({cart.length}{kitId ? " + ערכה" : ""})</>
+              )}
             </button>
           </div>
         </div>

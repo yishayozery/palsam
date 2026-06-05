@@ -4,6 +4,7 @@ import { can } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card, Table, Th, Td, EmptyState } from "@/components/ui";
 import { SIGNATURE_METHOD, SIGNATURE_STATUS } from "@/lib/labels";
+import { cancelSignatureForm } from "./actions";
 import SignoutModal from "./SignoutModal";
 import CompanySignModal from "./CompanySignModal";
 import CompanyCheckinModal from "./CompanyCheckinModal";
@@ -228,7 +229,7 @@ export default async function SignaturesPage() {
         ) : (
           <Table>
             <thead>
-              <tr><Th>חייל</Th><Th>פריטים</Th><Th>שיטה</Th><Th>סטטוס</Th><Th>נוצר</Th><Th></Th></tr>
+              <tr><Th>חייל</Th><Th>פריטים</Th><Th>שיטה</Th><Th>סטטוס</Th><Th>נוצר</Th><Th>פעולות</Th></tr>
             </thead>
             <tbody>
               {pending.map((s) => (
@@ -239,9 +240,17 @@ export default async function SignaturesPage() {
                   <Td><Badge className="bg-amber-100 text-amber-800">{SIGNATURE_STATUS[s.status]}</Badge></Td>
                   <Td className="text-xs text-slate-500">{s.createdAt.toLocaleDateString("he-IL")}</Td>
                   <Td>
-                    <Link href={`/signatures/${s.token}`} className="text-xs text-blue-600 hover:underline">
-                      קישור / QR
-                    </Link>
+                    <div className="flex items-center gap-3">
+                      <Link href={`/signatures/${s.token}`} className="text-xs text-blue-600 hover:underline">
+                        קישור / QR
+                      </Link>
+                      {canSign && (
+                        <form action={cancelSignatureForm}>
+                          <input type="hidden" name="signatureId" value={s.id} />
+                          <button className="text-xs text-rose-500 hover:text-rose-700">✕ ביטול</button>
+                        </form>
+                      )}
+                    </div>
                   </Td>
                 </tr>
               ))}

@@ -160,6 +160,41 @@ export async function checkinSerial(formData: FormData) {
   revalidatePath("/signatures");
 }
 
+/** עטיפה void לשימוש ב-<form action={...}> ב-Server Components */
+export async function cancelSignatureForm(formData: FormData): Promise<void> {
+  await cancelSignature(formData);
+}
+
+/**
+ * ביטול תעודת החתמה ממתינה — מבטל את ה-transfer והסיגנטור,
+ * ומשחרר את הפריטים הסריאליים שהיו "מנעולים" לאותה החתמה.
+ */
+export async function cancelSignature(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireUser();
+    if (!can(user.role, "signatures.manage")) return { error: "אין הרשאה" };
+    const bId = user.battalionId!;
+    const signatureId = String(formData.get("signatureId") || "");
+    if (!signatureId) return { error: "חסר מזהה" };
+
+    const sig = await prisma.signature.findUnique({ where: { id: signatureId }, include: { transfer: true } });
+    if (!sig || sig.battalionId !== bId) return { error: "לא נמצא" };
+    if (sig.status !== "PENDING") return { error: "לא ניתן לבטל — החתימה כבר הושלמה / בוטלה" };
+
+    await prisma.$transaction(async (tx) => {
+      await tx.signature.update({ where: { id: signatureId }, data: { status: "CANCELED" } });
+      if (sig.transferId) {
+        await tx.transfer.update({ where: { id: sig.transferId }, data: { status: "REJECTED" } });
+      }
+    });
+    await audit(user.id, "CANCEL_SIGNATURE", "Signature", signatureId);
+    revalidatePath("/signatures");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
 /** עדכון מיקום פיזי (אחריות מול מיקום) */
 export async function updatePhysicalLocation(formData: FormData) {
   const user = await requireUser();
