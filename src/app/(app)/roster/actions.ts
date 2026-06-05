@@ -18,25 +18,28 @@ export async function createSoldier(formData: FormData) {
   const enlistNow = formData.get("enlistNow") === "on";
 
   if (!firstName || !lastName) throw new Error("שם פרטי + שם משפחה חובה");
-  if (!personalNumber) throw new Error("מספר אישי (ספרות בלבד) חובה");
+  if (!companyId) throw new Error("חובה לשייך לפלוגה");
 
-  // ייחודיות מספר אישי בגדוד
-  const existing = await prisma.soldier.findFirst({
-    where: { battalionId: bId, personalNumber },
-  });
-  if (existing) throw new Error(`חייל עם מ.א. ${personalNumber} כבר קיים (${existing.fullName})`);
+  // ייחודיות מספר אישי בגדוד (אם הוזן)
+  if (personalNumber) {
+    const existing = await prisma.soldier.findFirst({
+      where: { battalionId: bId, personalNumber },
+    });
+    if (existing) throw new Error(`חייל עם מ.א. ${personalNumber} כבר קיים (${existing.fullName})`);
+  }
 
   const fullName = `${firstName} ${lastName}`;
   await prisma.soldier.create({
     data: {
-      battalionId: bId, fullName, firstName, lastName, personalNumber, phone,
-      companyId, platoon, active: true,
+      battalionId: bId, fullName, firstName, lastName,
+      personalNumber: personalNumber || null,
+      phone, companyId, platoon, active: true,
       enlisted: enlistNow,
       enlistedAt: enlistNow ? new Date() : null,
       enlistedById: enlistNow ? user.id : null,
     },
   });
-  await audit(user.id, "CREATE_SOLDIER", "Soldier", personalNumber, { companyId, enlisted: enlistNow });
+  await audit(user.id, "CREATE_SOLDIER", "Soldier", personalNumber || fullName, { companyId, enlisted: enlistNow });
   revalidatePath("/roster");
   revalidatePath("/soldiers");
 }

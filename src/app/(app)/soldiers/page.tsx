@@ -58,7 +58,7 @@ export default async function SoldiersPage() {
           id: s.id,
           values: {
             fullName: s.fullName,
-            personalNumber: s.personalNumber,
+            personalNumber: s.personalNumber ?? "",
             phone: s.phone ?? "",
             platoon: s.platoon ?? "",
             companyId: s.companyId ?? "",

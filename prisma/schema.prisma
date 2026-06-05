@@ -307,7 +307,7 @@ model Soldier {
   fullName       String  // השדה הזה משמש לתאימות לאחור — אם יש first/last יוצרים מהם
   firstName      String?
   lastName       String?
-  personalNumber String
+  personalNumber String? // אופציונלי — אפשר ליצור חייל בלעדיו ולעדכן בהמשך
   phone          String?
   platoon        String? // מחלקה בתוך הפלוגה
   companyId      String?

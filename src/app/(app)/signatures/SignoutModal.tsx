@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { createSignout } from "./actions";
 
-type Soldier = { id: string; name: string; pn: string; companyId?: string | null; companyName?: string | null };
+type Soldier = { id: string; name: string; pn: string | null; companyId?: string | null; companyName?: string | null };
 type Company = { id: string; name: string };
 type Unit = { id: string; itemTypeId: string; itemName: string; serial: string; status: string; statusId: string };
 type Balance = { itemTypeId: string; itemName: string; unit: string; status: string; statusId: string; quantity: number };
@@ -41,7 +41,7 @@ export default function SignoutModal({
       if (companyFilter && s.companyId !== companyFilter) return false;
       if (soldierSearch.trim()) {
         const q = soldierSearch.trim().toLowerCase();
-        return s.name.toLowerCase().includes(q) || s.pn.includes(q);
+        return s.name.toLowerCase().includes(q) || (s.pn ?? "").includes(q);
       }
       return true;
     }).slice(0, 200);

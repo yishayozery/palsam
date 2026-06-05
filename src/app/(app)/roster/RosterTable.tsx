@@ -3,11 +3,12 @@
 import { useState, useMemo } from "react";
 import { Card, Table, Th, Td, Badge } from "@/components/ui";
 import { createSoldier, updateSoldier, enlistSoldier, unenlistSoldier, deactivateSoldier } from "./actions";
+import { importSoldiersRoster, seedSampleSoldiers } from "./import-actions";
 
 type Company = { id: string; name: string };
 type Soldier = {
   id: string; firstName: string | null; lastName: string | null; fullName: string;
-  personalNumber: string; phone: string | null;
+  personalNumber: string | null; phone: string | null;
   companyId: string | null; companyName: string | null; platoon: string | null;
   enlisted: boolean; active: boolean; signedCount: number; enlistedAt: string | null;
 };
@@ -34,27 +35,27 @@ function AddForm({ companies, onDone }: { companies: Company[]; onDone: () => vo
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-slate-600 mb-1">מספר אישי (ספרות בלבד) *</label>
-          <input name="personalNumber" required inputMode="numeric" pattern="\d+"
-            onInput={(e) => { e.currentTarget.value = e.currentTarget.value.replace(/\D/g, ""); }}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
-        </div>
-        <div>
-          <label className="block text-xs text-slate-600 mb-1">נייד</label>
-          <input name="phone" placeholder="05X-XXXXXXX" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs text-slate-600 mb-1">פלוגה</label>
-          <select name="companyId" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="">— ללא שיוך —</option>
+          <label className="block text-xs text-slate-600 mb-1">פלוגה *</label>
+          <select name="companyId" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="">— בחר —</option>
             {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
         <div>
           <label className="block text-xs text-slate-600 mb-1">מחלקה (אופציונלי)</label>
           <input name="platoon" placeholder="א/ב/ג" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-slate-600 mb-1">מספר אישי (אופציונלי — ספרות)</label>
+          <input name="personalNumber" inputMode="numeric" pattern="\d*"
+            onInput={(e) => { e.currentTarget.value = e.currentTarget.value.replace(/\D/g, ""); }}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-600 mb-1">נייד (אופציונלי)</label>
+          <input name="phone" placeholder="05X-XXXXXXX" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
       </div>
       <label className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg cursor-pointer">
@@ -129,6 +130,40 @@ export default function RosterTable({ soldiers, companies, initialQ, initialComp
   const [editId, setEditId] = useState<string | null>(null);
   const editSoldier = soldiers.find((s) => s.id === editId) ?? null;
 
+  const [importBusy, setImportBusy] = useState(false);
+  const [importResult, setImportResult] = useState<{ created: number; errors: string[] } | null>(null);
+  const [seedBusy, setSeedBusy] = useState(false);
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportBusy(true); setImportResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await importSoldiersRoster(fd);
+      setImportResult({ created: r.created, errors: r.errors });
+    } catch (err) {
+      setImportResult({ created: 0, errors: [err instanceof Error ? err.message : String(err)] });
+    } finally {
+      setImportBusy(false);
+      e.target.value = "";
+    }
+  }
+
+  async function handleSeed() {
+    if (!confirm("יוצר 5 חיילי דוגמה לכל פלוגה (מאושרים לחתימה). להמשיך?")) return;
+    setSeedBusy(true);
+    try {
+      const r = await seedSampleSoldiers();
+      alert(`✓ נוצרו ${r.created} חיילים`);
+    } catch (e) {
+      alert(`שגיאה: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSeedBusy(false);
+    }
+  }
+
   const filtered = useMemo(() => {
     return soldiers.filter((s) => {
       if (company && s.companyId !== company) return false;
@@ -137,7 +172,7 @@ export default function RosterTable({ soldiers, companies, initialQ, initialComp
       if (status === "inactive" && s.active) return false;
       if (q.trim()) {
         const qq = q.trim().toLowerCase();
-        return s.fullName.toLowerCase().includes(qq) || s.personalNumber.includes(qq);
+        return s.fullName.toLowerCase().includes(qq) || (s.personalNumber ?? "").includes(qq);
       }
       return true;
     });
@@ -170,10 +205,34 @@ export default function RosterTable({ soldiers, companies, initialQ, initialComp
             </select>
           </div>
           <span className="text-xs text-slate-500 self-end pb-2">{filtered.length} חיילים</span>
-          <button onClick={() => setAddOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium mr-auto">
-            + הוסף חייל
-          </button>
+          <div className="flex items-center gap-2 mr-auto">
+            <a href="/roster/template" className="text-xs text-blue-600 hover:underline">⬇ תבנית Excel</a>
+            <label className={`text-xs bg-white border border-slate-300 rounded-lg px-3 py-2 cursor-pointer hover:bg-slate-50 ${importBusy ? "opacity-50" : ""}`}>
+              {importBusy ? "מייבא..." : "⬆ ייבוא Excel"}
+              <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importBusy} onChange={handleImport} />
+            </label>
+            <button onClick={handleSeed} disabled={seedBusy}
+              className="text-xs bg-amber-100 border border-amber-300 text-amber-800 rounded-lg px-3 py-2 hover:bg-amber-200 disabled:opacity-50"
+              title="הקמה מהירה: 5 חיילי דוגמה לכל פלוגה — לבדיקה">
+              {seedBusy ? "יוצר..." : "🌱 5 לכל פלוגה (בדיקה)"}
+            </button>
+            <button onClick={() => setAddOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
+              + הוסף חייל
+            </button>
+          </div>
         </div>
+        {importResult && (
+          <div className={`mt-2 rounded-lg p-2 text-xs ${importResult.created > 0 ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-rose-50 border border-rose-200 text-rose-800"}`}>
+            ✓ יובאו {importResult.created} חיילים.
+            {importResult.errors.length > 0 && (
+              <details className="mt-1">
+                <summary className="cursor-pointer">⚠️ {importResult.errors.length} שגיאות / דילוגים</summary>
+                <ul className="mt-1 list-disc list-inside space-y-0.5">{importResult.errors.map((e, i) => <li key={i}>{e}</li>)}</ul>
+              </details>
+            )}
+            <button onClick={() => setImportResult(null)} className="mr-2 text-slate-500 hover:underline">נקה</button>
+          </div>
+        )}
       </Card>
 
       <Card>
@@ -190,7 +249,7 @@ export default function RosterTable({ soldiers, companies, initialQ, initialComp
                   <div className="font-medium">{s.fullName}</div>
                   {s.platoon && <div className="text-xs text-slate-400">מחלקה: {s.platoon}</div>}
                 </Td>
-                <Td className="font-mono text-xs">{s.personalNumber}</Td>
+                <Td className="font-mono text-xs">{s.personalNumber ?? <span className="text-slate-300">—</span>}</Td>
                 <Td>{s.companyName ?? <span className="text-slate-300">—</span>}</Td>
                 <Td className="text-xs text-slate-500">{s.phone ?? "—"}</Td>
                 <Td>
