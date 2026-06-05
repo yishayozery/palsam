@@ -98,6 +98,8 @@ export async function createSignout(formData: FormData) {
 
   await audit(user.id, "CREATE_SIGNOUT", "Transfer", transferId, { soldierId, method });
   revalidatePath("/signatures");
+  // ⚠️ שרבוט → ישר למסך החתימה; QR/WhatsApp → מסך השיתוף עם QR
+  if (method === "ONSITE") redirect(`/sign/${token}`);
   redirect(`/signatures/${token}`);
 }
 

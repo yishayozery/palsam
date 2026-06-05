@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createCompanySign } from "./company-actions";
 
@@ -22,9 +22,10 @@ export default function CompanySignModal({
   const [recipientUserId, setRecipientUserId] = useState("");
   const [itemSearch, setItemSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [method, setMethod] = useState<"QR" | "LINK" | "ONSITE">("QR");
+  const [method, setMethod] = useState<"QR" | "LINK" | "ONSITE">("ONSITE");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const submittingRef = useRef(false);
 
   const selectedCompany = companies.find((c) => c.id === companyId);
   // מיון: רס"פ ראשון, מ"פ שני, השאר אחרון
@@ -65,13 +66,19 @@ export default function CompanySignModal({
   };
   const updateCartQty = (idx: number, n: number) => setCart((c) => c.map((x, i) => i === idx ? { ...(x as CartQty), quantity: Math.max(1, n) } : x));
   const removeCart = (idx: number) => setCart((c) => c.filter((_, i) => i !== idx));
-  const reset = () => { setCompanyId(""); setRecipientUserId(""); setItemSearch(""); setCart([]); setMethod("QR"); setError(null); };
+  const reset = () => {
+    setCompanyId(""); setRecipientUserId(""); setItemSearch(""); setCart([]); setMethod("ONSITE"); setError(null);
+    setBusy(false); submittingRef.current = false;
+  };
 
   async function submit() {
+    if (submittingRef.current || busy) return; // הגנת כפילות
     setError(null);
     if (!companyId) { setError("בחר פלוגה"); return; }
-    if (!recipientUserId) { setError("בחר נמען מהפלוגה (מ״פ / רס״פ)"); return; }
+    if (!recipientUserId) { setError("⚠️ לא נבחר נמען לחתימה — אי אפשר להחתים פלוגה בלי שיש מי שיחתום (מ״פ / רס״פ)"); return; }
     if (cart.length === 0) { setError("הוסף לפחות פריט אחד לעגלה"); return; }
+    submittingRef.current = true;
+    setBusy(true);
     const fd = new FormData();
     fd.append("companyId", companyId);
     fd.append("recipientUserId", recipientUserId);
@@ -80,16 +87,19 @@ export default function CompanySignModal({
       if (c.type === "serial") fd.append("serial", c.unitId);
       else fd.append(`qty:${c.itemTypeId}:${c.statusId}`, String(c.quantity));
     }
-    setBusy(true);
     try {
       const result = await createCompanySign(fd);
+      const token = result.token;
       reset();
       setOpen(false);
-      // ניווט למסך החתימה (להציג QR/WhatsApp/שרבוט)
-      router.push(`/signatures/${result.token}`);
+      // ⚠️ שרבוט (ONSITE) → ישר למסך חתימה במכשיר; QR/WhatsApp → מסך השיתוף
+      if (method === "ONSITE") router.push(`/sign/${token}`);
+      else router.push(`/signatures/${token}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("NEXT_REDIRECT")) return;
+      setError(msg);
+      submittingRef.current = false;
       setBusy(false);
     }
   }
@@ -133,8 +143,15 @@ export default function CompanySignModal({
             </div>
           </div>
           {selectedCompany && availableMembers.length === 0 && (
-            <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs text-amber-800">
-              ⚠️ אין מ״פ/רס״פ בפלוגה זו. הזמן אחד דרך <a href="/org" className="underline">מבנה ארגוני</a>.
+            <div className="mt-2 bg-rose-50 border-2 border-rose-300 rounded-lg p-3 text-sm text-rose-900">
+              <div className="font-bold mb-1">⛔ לא ניתן להחתים את הפלוגה</div>
+              <p className="text-xs mb-2">
+                אין רס״פ או מ״פ פעיל בפלוגה <b>{selectedCompany.name}</b>. צריך מישהו שיחתום על קבלת הציוד.
+              </p>
+              <div className="flex gap-2 text-xs">
+                <a href="/reps" className="bg-rose-700 text-white rounded px-3 py-1.5 hover:bg-rose-800">+ הזמן רס״פ ל-{selectedCompany.name}</a>
+                <a href="/org" className="border border-rose-300 rounded px-3 py-1.5 hover:bg-rose-100">/org</a>
+              </div>
             </div>
           )}
         </div>
@@ -174,13 +191,18 @@ export default function CompanySignModal({
             <div className="p-3 border-t border-slate-200 bg-white">
               <label className="block text-[11px] text-slate-600 mb-0.5">אופן חתימה</label>
               <div className="flex gap-1.5 text-xs">
-                {(["QR", "LINK", "ONSITE"] as const).map((m) => (
+                {(["ONSITE", "QR", "LINK"] as const).map((m) => (
                   <label key={m} className={`flex-1 text-center px-2 py-1.5 rounded-lg border-2 cursor-pointer transition ${method === m ? "border-purple-700 bg-purple-100" : "border-slate-200"}`}>
                     <input type="radio" checked={method === m} onChange={() => setMethod(m)} className="hidden" />
-                    {m === "QR" ? "QR" : m === "LINK" ? "WhatsApp" : "שרבוט"}
+                    {m === "ONSITE" ? "✍️ שרבוט (כאן)" : m === "QR" ? "📱 QR" : "💬 WhatsApp"}
                   </label>
                 ))}
               </div>
+              <p className="text-[10px] text-slate-500 mt-1">
+                {method === "ONSITE" ? "✍️ ייפתח מסך חתימה ישירות במכשיר הזה" :
+                 method === "QR" ? "📱 ייפתח QR שהנמען יסרוק במכשיר שלו" :
+                 "💬 ייפתח לינק לשליחה בוואטסאפ"}
+              </p>
             </div>
           </div>
 
@@ -237,13 +259,21 @@ export default function CompanySignModal({
           </div>
         </div>
 
-        <div className="border-t border-slate-200 p-3 bg-white flex items-center justify-between gap-2 shrink-0">
-          {error && <div className="flex-1 text-sm text-rose-700 font-medium">⚠️ {error}</div>}
-          <div className="flex items-center gap-2 mr-auto">
-            <button onClick={() => { reset(); setOpen(false); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
+        <div className="border-t border-slate-200 p-3 bg-white shrink-0">
+          {error && <div className="text-sm text-rose-700 font-medium mb-2">⚠️ {error}</div>}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => { reset(); setOpen(false); }} disabled={busy}
+              className="flex-1 sm:flex-none rounded-lg border border-slate-300 px-4 py-2.5 text-sm disabled:opacity-50">ביטול</button>
             <button onClick={submit} disabled={busy || !companyId || !recipientUserId || cart.length === 0}
-              className="bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white rounded-lg px-5 py-2 text-sm font-bold">
-              {busy ? "שולח..." : `🏛️ שלח לחתימת הנמען (${cart.length})`}
+              className="flex-1 sm:flex-none bg-purple-700 hover:bg-purple-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-5 py-2.5 text-sm font-bold flex items-center justify-center gap-2">
+              {busy ? (
+                <>
+                  <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  שולח...
+                </>
+              ) : (
+                <>{method === "ONSITE" ? "✍️ עבור לחתימה" : "🚀 הפעל החתמה"} ({cart.length})</>
+              )}
             </button>
           </div>
         </div>

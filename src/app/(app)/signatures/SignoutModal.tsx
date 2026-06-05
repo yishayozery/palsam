@@ -30,7 +30,7 @@ export default function SignoutModal({
   const [kitId, setKitId] = useState("");
   const [vehicleId, setVehicleId] = useState("");
   const [physicalLocation, setPhysicalLocation] = useState("");
-  const [method, setMethod] = useState<"QR" | "LINK" | "ONSITE">("QR");
+  const [method, setMethod] = useState<"QR" | "LINK" | "ONSITE">("ONSITE");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const submittingRef = useRef(false);
@@ -93,7 +93,7 @@ export default function SignoutModal({
 
   const reset = () => {
     setSoldierId(""); setCompanyFilter(lockCompanyId ?? ""); setSoldierSearch("");
-    setItemSearch(""); setCart([]); setKitId(""); setVehicleId(""); setMethod("QR"); setError(null);
+    setItemSearch(""); setCart([]); setKitId(""); setVehicleId(""); setMethod("ONSITE"); setError(null);
     setBusy(false); submittingRef.current = false;
   };
 
@@ -375,20 +375,20 @@ export default function SignoutModal({
         </div>
 
         {/* footer */}
-        <div className="border-t border-slate-200 p-3 bg-white flex items-center justify-between gap-2 shrink-0">
-          {error && <div className="flex-1 text-sm text-rose-700 font-medium">⚠️ {error}</div>}
-          <div className="flex items-center gap-2 mr-auto">
+        <div className="border-t border-slate-200 p-3 bg-white shrink-0">
+          {error && <div className="text-sm text-rose-700 font-medium mb-2">⚠️ {error}</div>}
+          <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => { reset(); setOpen(false); }} disabled={busy}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm disabled:opacity-50">ביטול</button>
+              className="flex-1 sm:flex-none rounded-lg border border-slate-300 px-4 py-2.5 text-sm disabled:opacity-50">ביטול</button>
             <button onClick={submit} disabled={busy || !soldierId || (cart.length === 0 && !kitId)}
-              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-5 py-2 text-sm font-bold flex items-center gap-2">
+              className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-5 py-2.5 text-sm font-bold flex items-center justify-center gap-2">
               {busy ? (
                 <>
                   <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                   שולח...
                 </>
               ) : (
-                <>🚀 הפעל החתמה ({cart.length}{kitId ? " + ערכה" : ""})</>
+                <>{method === "ONSITE" ? "✍️ עבור לחתימה" : "🚀 הפעל החתמה"} ({cart.length}{kitId ? " + ערכה" : ""})</>
               )}
             </button>
           </div>
