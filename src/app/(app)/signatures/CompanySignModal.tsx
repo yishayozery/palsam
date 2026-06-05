@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { createCompanySign } from "./company-actions";
 
 type Member = { id: string; name: string; role: string };
@@ -15,6 +16,7 @@ type CartItem = CartSerial | CartQty;
 export default function CompanySignModal({
   companies, units, balances,
 }: { companies: Company[]; units: Unit[]; balances: Balance[]; }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [companyId, setCompanyId] = useState("");
   const [recipientUserId, setRecipientUserId] = useState("");
@@ -22,9 +24,28 @@ export default function CompanySignModal({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [method, setMethod] = useState<"QR" | "LINK" | "ONSITE">("QR");
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const selectedCompany = companies.find((c) => c.id === companyId);
-  const availableMembers = selectedCompany?.members ?? [];
+  // מיון: רס"פ ראשון, מ"פ שני, השאר אחרון
+  const availableMembers = useMemo(() => {
+    if (!selectedCompany) return [];
+    const priority = (m: Member): number => {
+      const r = (m.role || "").toLowerCase();
+      const t = (m.role || "").includes('רס"פ') || r.includes("rep");
+      if (t) return 0;
+      if ((m.role || "").includes('מ"פ') || (m.role || "").includes("מפ")) return 1;
+      return 2;
+    };
+    return [...selectedCompany.members].sort((a, b) => priority(a) - priority(b));
+  }, [selectedCompany]);
+
+  // בחירה אוטומטית של הראשון (= רס"פ) ברגע שמשתנה הפלוגה
+  useEffect(() => {
+    if (availableMembers.length > 0 && !recipientUserId) {
+      setRecipientUserId(availableMembers[0].id);
+    }
+  }, [availableMembers, recipientUserId]);
 
   const cartSerialIds = new Set(cart.filter((c) => c.type === "serial").map((c) => (c as CartSerial).unitId));
   const companyUnits = useMemo(() => units.filter((u) =>
@@ -59,8 +80,18 @@ export default function CompanySignModal({
       if (c.type === "serial") fd.append("serial", c.unitId);
       else fd.append(`qty:${c.itemTypeId}:${c.statusId}`, String(c.quantity));
     }
-    try { await createCompanySign(fd); reset(); setOpen(false); }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    setBusy(true);
+    try {
+      const result = await createCompanySign(fd);
+      reset();
+      setOpen(false);
+      // ניווט למסך החתימה (להציג QR/WhatsApp/שרבוט)
+      router.push(`/signatures/${result.token}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (!open) {
@@ -93,11 +124,11 @@ export default function CompanySignModal({
               </select>
             </div>
             <div className="flex-1 min-w-40">
-              <label className="block text-[11px] text-slate-600 mb-0.5">נמען חותם</label>
+              <label className="block text-[11px] text-slate-600 mb-0.5">נמען חותם (רס״פ ראשון כברירת מחדל)</label>
               <select value={recipientUserId} onChange={(e) => setRecipientUserId(e.target.value)} disabled={!companyId}
                 className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white disabled:bg-slate-100">
                 <option value="">— {companyId ? "בחר נמען" : "בחר פלוגה קודם"} —</option>
-                {availableMembers.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+                {availableMembers.map((m) => <option key={m.id} value={m.id}>{m.name}{m.role ? `  —  ${m.role}` : ""}</option>)}
               </select>
             </div>
           </div>
@@ -210,9 +241,9 @@ export default function CompanySignModal({
           {error && <div className="flex-1 text-sm text-rose-700 font-medium">⚠️ {error}</div>}
           <div className="flex items-center gap-2 mr-auto">
             <button onClick={() => { reset(); setOpen(false); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
-            <button onClick={submit} disabled={!companyId || !recipientUserId || cart.length === 0}
+            <button onClick={submit} disabled={busy || !companyId || !recipientUserId || cart.length === 0}
               className="bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white rounded-lg px-5 py-2 text-sm font-bold">
-              🏛️ שלח לחתימת הנמען ({cart.length})
+              {busy ? "שולח..." : `🏛️ שלח לחתימת הנמען (${cart.length})`}
             </button>
           </div>
         </div>

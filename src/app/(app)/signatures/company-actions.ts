@@ -13,10 +13,11 @@ import type { SignatureMethod } from "@/generated/prisma";
 /**
  * החתמת פלוגה: ניפוק לפלוגה כשהנמען הוא משתמש בפלוגה (מפ/רס"פ),
  * הוא חותם דיגיטלית, והפריטים עוברים לפלוגה אוטומטית עם החתימה.
+ * מחזיר את ה-token לניווט בקליינט (במקום redirect שלא חוצה async wrappers טוב).
  */
-export async function createCompanySign(formData: FormData) {
+export async function createCompanySign(formData: FormData): Promise<{ token: string }> {
   const user = await requireUser();
-  if (!can(user.role, "signatures.manage")) redirect("/signatures");
+  if (!can(user.role, "signatures.manage")) throw new Error("אין הרשאה");
   const bId = user.battalionId!;
 
   const companyId = String(formData.get("companyId") || "");
@@ -28,46 +29,80 @@ export async function createCompanySign(formData: FormData) {
     if (key.startsWith("qty:")) {
       const [, itemTypeId, statusId] = key.split(":");
       const qty = parseInt(String(val), 10);
-      if (qty > 0) qtyEntries.push({ itemTypeId, statusId, qty });
+      if (qty > 0 && itemTypeId && statusId) qtyEntries.push({ itemTypeId, statusId, qty });
     }
   }
 
-  if (!companyId || !recipientUserId || (serialIds.length === 0 && qtyEntries.length === 0)) return;
+  if (!companyId) throw new Error("חסרה פלוגה");
+  if (!recipientUserId) throw new Error("חסר נמען חותם");
+  if (serialIds.length === 0 && qtyEntries.length === 0) throw new Error("חסרים פריטים");
+
+  // מציאת מחסן המקור: למפ"מ — לפי המחסן של הפריט (קטגוריה→warehouseType)
+  // לקצין מחסן — המחסן שלו
+  const findSourceHolder = async (itemTypeId: string): Promise<string | null> => {
+    if (user.holderId) return user.holderId;
+    const item = await prisma.itemType.findUnique({
+      where: { id: itemTypeId }, include: { category: true },
+    });
+    const wType = item?.category?.warehouseType;
+    if (!wType) return null;
+    const wh = await prisma.holder.findFirst({
+      where: { battalionId: bId, kind: "WAREHOUSE", warehouseType: wType, active: true },
+    });
+    return wh?.id ?? null;
+  };
 
   const token = nanoid(24);
   let transferId = "";
-  await prisma.$transaction(async (tx) => {
-    const transfer = await tx.transfer.create({
-      data: {
-        battalionId: bId, type: "ISSUE", status: "PENDING",
-        fromHolderId: user.holderId, toHolderId: companyId, toUserId: recipientUserId,
-        notes: "החתמת פלוגה דרך נמען", createdById: user.id,
-      },
+  try {
+    await prisma.$transaction(async (tx) => {
+      // בחירת holder יחיד למפ"מ (לפי הפריט הראשון; כל הפריטים אמורים להיות מאותו מחסן)
+      const sampleItemId = qtyEntries[0]?.itemTypeId ??
+        (serialIds[0] ? (await tx.serialUnit.findUnique({ where: { id: serialIds[0] } }))?.itemTypeId : null);
+      const fromHolderId = sampleItemId ? await findSourceHolder(sampleItemId) : null;
+
+      const transfer = await tx.transfer.create({
+        data: {
+          battalionId: bId, type: "ISSUE", status: "PENDING",
+          fromHolderId, toHolderId: companyId, toUserId: recipientUserId,
+          notes: "החתמת פלוגה דרך נמען", createdById: user.id,
+        },
+      });
+      transferId = transfer.id;
+
+      for (const e of qtyEntries) {
+        const itemHolder = await findSourceHolder(e.itemTypeId);
+        if (itemHolder) {
+          await adjustQuantity(tx, bId, e.itemTypeId, itemHolder, e.statusId, -e.qty);
+        }
+        await tx.transferLine.create({
+          data: { transferId: transfer.id, itemTypeId: e.itemTypeId, quantity: e.qty, statusId: e.statusId },
+        });
+      }
+      for (const sid of serialIds) {
+        const su = await tx.serialUnit.findUnique({ where: { id: sid } });
+        if (!su) continue;
+        // הסרת המיקום הנוכחי (במעבר)
+        await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: null } });
+        await tx.transferLine.create({
+          data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: su.statusId },
+        });
+      }
+      await tx.signature.create({
+        data: {
+          battalionId: bId, signerUserId: recipientUserId, transferId: transfer.id,
+          method, status: "PENDING", token,
+          tokenExpires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
+        },
+      });
     });
-    transferId = transfer.id;
-    // מורידים מהמקור (במעבר עד החתימה)
-    for (const e of qtyEntries) {
-      await adjustQuantity(tx, bId, e.itemTypeId, user.holderId!, e.statusId, -e.qty);
-      await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: e.itemTypeId, quantity: e.qty, statusId: e.statusId } });
-    }
-    for (const sid of serialIds) {
-      const su = await tx.serialUnit.findUnique({ where: { id: sid } });
-      if (!su || su.currentHolderId !== user.holderId) continue;
-      await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: null } });
-      await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: su.statusId } });
-    }
-    await tx.signature.create({
-      data: {
-        battalionId: bId, signerUserId: recipientUserId, transferId: transfer.id,
-        method, status: "PENDING", token,
-        tokenExpires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
-      },
-    });
-  });
+  } catch (e) {
+    throw new Error(`שגיאה ביצירת ההחתמה: ${e instanceof Error ? e.message : "שגיאה לא ידועה"}`);
+  }
 
   await audit(user.id, "COMPANY_SIGN_OUT", "Transfer", transferId, { companyId, recipientUserId });
   revalidatePath("/signatures");
-  redirect(`/signatures/${token}`);
+  return { token };
 }
 
 /** השלמת חתימה של נמען (מפ/רס"פ) → הפריטים עוברים לפלוגה */
