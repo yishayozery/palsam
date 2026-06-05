@@ -13,11 +13,13 @@ type Status = { id: string; name: string; isDefault: boolean };
 type Stock = { itemTypeId: string; statusId: string; statusName: string; quantity: number };
 type SerialUnit = { id: string; itemTypeId: string; serialNumber: string; lotQuantity: number | null; statusName: string };
 
+type CounterpartOption = { value: string; label: string };
 export default function StockWithdrawModal({
-  items, statuses, currentUserName, stocks, units, requirePersonalId,
+  items, statuses, currentUserName, stocks, units, requirePersonalId, counterpartOptions = [],
 }: {
   items: Item[]; statuses: Status[]; currentUserName: string;
   stocks: Stock[]; units: SerialUnit[]; requirePersonalId: boolean;
+  counterpartOptions?: CounterpartOption[];
 }) {
   const [open, setOpen] = useState(false);
   const [itemQuery, setItemQuery] = useState("");
@@ -179,8 +181,21 @@ export default function StockWithdrawModal({
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="block text-xs text-slate-600 mb-1">יחידה מקבלת</label>
-                        <input value={externalUnit} onChange={(e) => setExternalUnit(e.target.value)} placeholder="חטיבה / יחידה אחרת"
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                        {counterpartOptions.length > 0 ? (
+                          <>
+                            <select
+                              value={counterpartOptions.find((o) => o.value === externalUnit) ? externalUnit : "__manual__"}
+                              onChange={(e) => { if (e.target.value !== "__manual__") setExternalUnit(e.target.value); else setExternalUnit(""); }}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white mb-1">
+                              {counterpartOptions.map((o) => <option key={o.value || "manual"} value={o.value || "__manual__"}>{o.label}</option>)}
+                            </select>
+                            <input value={externalUnit} onChange={(e) => setExternalUnit(e.target.value)} placeholder="או הקלד ידנית..."
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                          </>
+                        ) : (
+                          <input value={externalUnit} onChange={(e) => setExternalUnit(e.target.value)} placeholder="חטיבה / יחידה אחרת"
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                        )}
                       </div>
                       <div>
                         <label className="block text-xs text-slate-600 mb-1">שם המקבל</label>

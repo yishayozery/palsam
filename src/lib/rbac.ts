@@ -35,6 +35,8 @@ const MATRIX: Record<Role, Capability[]> = {
     "warehouse.operate", // הצהרת מלאי גדודי מול החטיבה
     "counts.manage", // תכניות ספירה
     "soldiers.roster", // שלישות: ניהול חיילים גדודי
+    "signatures.manage", // החתמות (פלוגה / חייל) — צפייה ויצירה
+    "transfer.approve", // אישור לחיצת יד גם למפ"מ
     "gaps.resolve",
     "reports.view",
     "audit.view",

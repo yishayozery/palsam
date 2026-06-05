@@ -90,11 +90,29 @@ export default async function SignaturesPage() {
     prisma.itemStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" } }),
   ]);
 
+  // היסטוריית כל ההחתמות של פלוגות (ISSUE/RETURN בין מחסן לפלוגה) — לצפיית מפ"מ
+  const isMafam = user.role === "BATTALION_ADMIN";
+  const companyTransfers = await prisma.transfer.findMany({
+    where: {
+      battalionId: bId,
+      type: { in: ["ISSUE", "RETURN", "SIGNOUT", "CHECKIN"] },
+      // למפ"מ — כל ההיסטוריה; לאחרים — קשורות למחסניהם
+      ...(isMafam ? {} : { OR: [{ fromHolderId: { in: user.holderIds } }, { toHolderId: { in: user.holderIds } }] }),
+    },
+    include: {
+      fromHolder: true, toHolder: true, toSoldier: true,
+      createdBy: { select: { fullName: true } },
+      _count: { select: { lines: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+
   return (
     <div>
       <PageHeader
-        title="חתימות חיילים"
-        subtitle="החתמה דיגיטלית (QR/וואטסאפ/שרבוט) וזיכוי מהיר"
+        title={isMafam ? "החתמות פלוגה / חייל" : "חתימות חיילים"}
+        subtitle={isMafam ? "כל ההחתמות של פלוגות וחיילים בגדוד — מעקב והיסטוריה" : "החתמה דיגיטלית (QR/וואטסאפ/שרבוט) וזיכוי מהיר"}
         action={
           canSign ? (
             <div className="flex gap-2">
@@ -193,6 +211,53 @@ export default async function SignaturesPage() {
                       />
                     )}
                   </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Card>
+
+      {/* היסטוריית כל ההחתמות (פלוגה + חייל) — מוצג למטה */}
+      <h2 className="font-bold text-slate-700 mb-2 mt-6">היסטוריית תנועות (פלוגה ↔ חייל)</h2>
+      <Card>
+        {companyTransfers.length === 0 ? (
+          <EmptyState>אין תנועות עדיין</EmptyState>
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <Th>תאריך</Th><Th>סוג</Th><Th>מאת</Th><Th>אל</Th><Th>פריטים</Th><Th>סטטוס</Th><Th>בוצע ע״י</Th><Th></Th>
+              </tr>
+            </thead>
+            <tbody>
+              {companyTransfers.map((t) => (
+                <tr key={t.id}>
+                  <Td className="text-xs text-slate-500">{t.createdAt.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</Td>
+                  <Td>
+                    <Badge className={
+                      t.type === "ISSUE" ? "bg-blue-100 text-blue-800" :
+                      t.type === "RETURN" ? "bg-emerald-100 text-emerald-800" :
+                      t.type === "SIGNOUT" ? "bg-purple-100 text-purple-800" :
+                      "bg-slate-100 text-slate-700"
+                    }>
+                      {t.type === "ISSUE" ? "📤 הקצאה" : t.type === "RETURN" ? "↩️ החזרה" : t.type === "SIGNOUT" ? "✍️ החתמת חייל" : "🔄 זיכוי"}
+                    </Badge>
+                  </Td>
+                  <Td>{t.fromHolder?.name ?? "—"}</Td>
+                  <Td>{t.toSoldier?.fullName ?? t.toHolder?.name ?? "—"}</Td>
+                  <Td className="text-center">{t._count.lines}</Td>
+                  <Td>
+                    <Badge className={
+                      t.status === "PENDING" ? "bg-amber-100 text-amber-800" :
+                      t.status === "COMPLETED" ? "bg-emerald-100 text-emerald-800" :
+                      "bg-rose-100 text-rose-800"
+                    }>
+                      {t.status === "PENDING" ? "ממתין" : t.status === "COMPLETED" ? "הושלם" : t.status}
+                    </Badge>
+                  </Td>
+                  <Td className="text-xs text-slate-500">{t.createdBy.fullName}</Td>
+                  <Td><Link href={`/transfers/${t.id}/document`} className="text-xs text-blue-600 hover:underline">תעודה</Link></Td>
                 </tr>
               ))}
             </tbody>

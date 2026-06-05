@@ -59,12 +59,25 @@ export default async function StockPage({
     },
   });
 
-  const [categories, statuses, battalion] = await Promise.all([
+  const [categories, statuses, battalion, brotherBattalions] = await Promise.all([
     prisma.category.findMany({ where: { battalionId: bId }, orderBy: { name: "asc" } }),
     prisma.itemStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" } }),
-    prisma.battalion.findUnique({ where: { id: bId }, select: { requirePersonalIdOnHandover: true } }),
+    prisma.battalion.findUnique({ where: { id: bId }, select: { requirePersonalIdOnHandover: true, brigade: true, name: true } }),
+    // גדודים אחרים בחטיבה — להעברות "אחים"
+    prisma.battalion.findUnique({ where: { id: bId }, select: { brigade: true } }).then((b) =>
+      b?.brigade ? prisma.battalion.findMany({
+        where: { brigade: b.brigade, id: { not: bId }, active: true },
+        select: { id: true, name: true, code: true },
+        orderBy: { name: "asc" },
+      }) : []
+    ),
   ]);
   const requirePersonalId = !!battalion?.requirePersonalIdOnHandover;
+  const counterpartOptions = [
+    ...(battalion?.brigade ? [{ value: `חטיבה ${battalion.brigade}`, label: `חטיבה ${battalion.brigade} (הממונה)` }] : [{ value: "חטיבה", label: "חטיבה (הממונה)" }]),
+    ...brotherBattalions.map((b) => ({ value: `גדוד ${b.name}`, label: `גדוד ${b.name} (אחי בחטיבה)` })),
+    { value: "", label: "ידני / יחידה אחרת" },
+  ];
 
   // לחיצות יד בהמתנה — קבלות/החזרות שדורשות אישור של המשתמש
   const myHolderIds = user.holderIds ?? [];
@@ -93,12 +106,14 @@ export default async function StockPage({
             <StockEntryModal
               currentUserName={user.fullName}
               requirePersonalId={requirePersonalId}
+              counterpartOptions={counterpartOptions}
               items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod, unit: i.unit, association: ASSOC[i.association] }))}
               statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
             />
             <StockWithdrawModal
               currentUserName={user.fullName}
               requirePersonalId={requirePersonalId}
+              counterpartOptions={counterpartOptions}
               items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod, unit: i.unit }))}
               statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
               stocks={items.flatMap((i) => i.stockBalances.map((b) => ({ itemTypeId: i.id, statusId: b.statusId, statusName: b.status.name, quantity: b.quantity })))}
