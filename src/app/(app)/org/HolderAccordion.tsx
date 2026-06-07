@@ -307,7 +307,12 @@ function HolderItem({ row, kind, defaultOpen }: { row: HolderRow; kind: "WAREHOU
           <button type="button" onClick={() => setEditName(true)} className="text-xs text-slate-400 hover:text-slate-700 px-2 py-1">
             ✎
           </button>
-          <form action={toggleHolder}>
+          <form action={toggleHolder} onSubmit={(e) => {
+              const msg = row.active
+                ? `⚠️ להשבית את "${row.name}"?\n\nהשבתה חוסמת ניפוקים, החתמות וקליטות.\nהמלאי הקיים יישאר. ניתן להפעיל מחדש מאוחר יותר.`
+                : `להפעיל מחדש את "${row.name}"?`;
+              if (!confirm(msg)) e.preventDefault();
+            }}>
             <input type="hidden" name="id" value={row.id} />
             <button className="text-xs text-slate-400 hover:text-rose-600 px-2 py-1" title={row.active ? "השבת" : "הפעל"}>
               {row.active ? "🚫" : "↻"}

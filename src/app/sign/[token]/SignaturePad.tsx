@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { completeSignature } from "@/app/(app)/signatures/actions";
 import { completeCompanySignature } from "@/app/(app)/signatures/company-actions";
 
@@ -13,12 +14,14 @@ export default function SignaturePad({
   soldierName: string;
   isCompanySign?: boolean;
 }) {
+  const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const hasDrawn = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const [countdown, setCountdown] = useState(3);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -82,12 +85,35 @@ export default function SignaturePad({
     else setError(res.error || "שגיאה");
   };
 
+  // אוטו-ניווט לדף הראשי אחרי 3 שניות
+  useEffect(() => {
+    if (!done) return;
+    const interval = setInterval(() => {
+      setCountdown((c) => {
+        if (c <= 1) {
+          clearInterval(interval);
+          router.push("/");
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [done, router]);
+
   if (done) {
     return (
       <div className="text-center py-6">
-        <div className="text-5xl mb-2">✅</div>
-        <p className="font-bold text-emerald-700">החתימה נקלטה!</p>
-        <p className="text-sm text-slate-500 mt-1">תודה, {soldierName}.</p>
+        <div className="text-6xl mb-3">✅</div>
+        <p className="font-bold text-emerald-700 text-xl">החתימה נקלטה בהצלחה!</p>
+        <p className="text-sm text-slate-500 mt-2">תודה, {soldierName}.</p>
+        <p className="text-xs text-slate-400 mt-4">
+          חוזר לדף הראשי בעוד <b className="text-emerald-700">{countdown}</b> שניות...
+        </p>
+        <button onClick={() => router.push("/")}
+          className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-6 py-2 text-sm font-medium">
+          → חזרה עכשיו
+        </button>
       </div>
     );
   }

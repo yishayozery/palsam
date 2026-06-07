@@ -49,7 +49,12 @@ export default function HolderCard({ row, kind, baseUrl = "" }: { row: HolderRow
               <button type="button" onClick={() => setEditName(true)} className="text-xs text-slate-400 hover:text-slate-700 px-1.5 py-1" title="ערוך שם">
                 ✎
               </button>
-              <form action={toggleHolder}>
+              <form action={toggleHolder} onSubmit={(e) => {
+                  const msg = row.active
+                    ? `⚠️ להשבית את "${row.name}"?\n\nהשבתה חוסמת ניפוקים, החתמות וקליטות במחסן/פלוגה זו.\nהמלאי הקיים יישאר אך לא ניתן יהיה להזיז אותו.\n\nניתן להפעיל מחדש מאוחר יותר.`
+                    : `להפעיל מחדש את "${row.name}"?`;
+                  if (!confirm(msg)) e.preventDefault();
+                }}>
                 <input type="hidden" name="id" value={row.id} />
                 <button className="text-xs text-slate-400 hover:text-rose-600 px-1.5 py-1" title={row.active ? "השבת" : "הפעל"}>
                   {row.active ? "🚫" : "↻"}
