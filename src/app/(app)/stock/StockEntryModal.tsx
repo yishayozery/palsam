@@ -20,6 +20,7 @@ export default function StockEntryModal({ items, statuses, currentUserName, requ
   const [itemId, setItemId] = useState("");
   const [qty, setQty] = useState<number>(1);
   const [lotNumber, setLotNumber] = useState("");
+  const [expiryDate, setExpiryDate] = useState(""); // YYYY-MM-DD, ריק=ללא תפוגה
   const [serials, setSerials] = useState<string[]>([]);
   const defaultStatus = statuses.find((s) => s.isDefault)?.id ?? statuses[0]?.id ?? "";
   const [statusId, setStatusId] = useState(defaultStatus);
@@ -82,7 +83,7 @@ export default function StockEntryModal({ items, statuses, currentUserName, requ
   }, [selected?.id, selected?.trackingMethod, qty]);
 
   const reset = () => {
-    setItemId(""); setItemQuery(""); setQty(1); setLotNumber("");
+    setItemId(""); setItemQuery(""); setQty(1); setLotNumber(""); setExpiryDate("");
     setSerials([]); setStatusId(defaultStatus);
   };
 
@@ -181,6 +182,13 @@ export default function StockEntryModal({ items, statuses, currentUserName, requ
                       <input value={lotNumber} onChange={(e) => setLotNumber(e.target.value)} placeholder="GREN-2026-A"
                         className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-400" />
                       <p className="text-xs text-slate-400 mt-1">ניתן להוסיף כמה אצוות לאותו פריט. כל אצווה = שורה חדשה.</p>
+                    </div>
+                  )}
+                  {(selected.trackingMethod === "LOT" || selected.trackingMethod === "SERIAL") && (
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">⏱️ תאריך תפוגה (אופציונלי — חשוב לרפואה ולתחמושת)</label>
+                      <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm" />
                     </div>
                   )}
 
@@ -294,6 +302,7 @@ export default function StockEntryModal({ items, statuses, currentUserName, requ
                         <input type="hidden" name="lotNumber" value={lotNumber} />
                         <input type="hidden" name="quantity" value={qty} />
                         <input type="hidden" name="statusId" value={statusId} />
+                        <input type="hidden" name="expiryDate" value={expiryDate} />
                         <input type="hidden" name="externalUnit" value={externalUnit} />
                         <input type="hidden" name="externalContact" value={externalContact} />
                         <input type="hidden" name="recipientPersonalId" value={recipientPersonalId} />
@@ -317,6 +326,7 @@ export default function StockEntryModal({ items, statuses, currentUserName, requ
                         <input type="hidden" name="itemTypeId" value={itemId} />
                         <input type="hidden" name="serials" value={trimmed.join("\n")} />
                         <input type="hidden" name="statusId" value={statusId} />
+                        <input type="hidden" name="expiryDate" value={expiryDate} />
                         <input type="hidden" name="externalUnit" value={externalUnit} />
                         <input type="hidden" name="externalContact" value={externalContact} />
                         <input type="hidden" name="recipientPersonalId" value={recipientPersonalId} />

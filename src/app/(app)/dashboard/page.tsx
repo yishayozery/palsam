@@ -50,6 +50,7 @@ export default async function DashboardPage({
     signedSerial,
     companies,
     quantityStock,
+    expiringSoon,
   ] = await Promise.all([
     prisma.transfer.count({
       where: {
@@ -69,6 +70,13 @@ export default async function DashboardPage({
     prisma.serialUnit.count({ where: { battalionId: bId, signedSoldierId: { not: null }, ...holderScope } }),
     prisma.holder.findMany({ where: { battalionId: bId, kind: "COMPANY", active: true } }),
     prisma.stockBalance.aggregate({ _sum: { quantity: true }, where: { battalionId: bId, ...stockHolderScope } }),
+    // פריטים עם תפוגה — 20 הקרובים ביותר (מהכי קרוב לרחוק)
+    prisma.serialUnit.findMany({
+      where: { battalionId: bId, expiryDate: { not: null }, ...holderScope },
+      include: { itemType: { select: { name: true } }, currentHolder: { select: { name: true } }, status: { select: { name: true, isLoss: true } } },
+      orderBy: { expiryDate: "asc" },
+      take: 20,
+    }),
   ]);
 
   // === תקולים לפי מחסן (להחלטה: לתקן, להחזיר לחטיבה, או להוריד מהמלאי) ===
@@ -197,6 +205,53 @@ export default async function DashboardPage({
           tone={wearUnits + lossUnits > 0 ? "amber" : "slate"}
         />
       </div>
+
+      {/* === התראה: פג תוקף קרוב === */}
+      {expiringSoon.length > 0 && (
+        <Card className="p-4 mb-6 border-amber-300 bg-amber-50">
+          <div className="flex items-start gap-3">
+            <span className="text-3xl">⏱️</span>
+            <div className="flex-1">
+              <h2 className="font-bold text-amber-900 mb-2">
+                פריטים בתפוגה קרובה ({expiringSoon.length})
+              </h2>
+              <div className="space-y-1">
+                {expiringSoon.slice(0, 8).map((u) => {
+                  const days = u.expiryDate ? Math.round((u.expiryDate.getTime() - Date.now()) / 86_400_000) : null;
+                  const tone = days === null ? "bg-white"
+                    : days < 0 ? "bg-rose-100 border-rose-300"
+                    : days <= 7 ? "bg-rose-50 border-rose-200"
+                    : days <= 30 ? "bg-amber-50 border-amber-200"
+                    : "bg-white border-slate-200";
+                  const txt = days === null ? "—"
+                    : days < 0 ? `🔴 פג לפני ${-days} ימים`
+                    : days === 0 ? "🔴 היום!"
+                    : days <= 7 ? `🟠 בעוד ${days} ימים`
+                    : days <= 30 ? `🟡 בעוד ${days} ימים`
+                    : `בעוד ${days} ימים`;
+                  return (
+                    <div key={u.id} className={`flex items-center justify-between text-sm rounded-lg px-3 py-1.5 border ${tone}`}>
+                      <span className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium">{(u.lotQuantity ?? 1) > 1 ? "💣" : "📦"} {u.itemType.name}</span>
+                        <span className="font-mono text-xs text-slate-500">
+                          {(u.lotQuantity ?? 1) > 1 ? `לוט ${u.serialNumber} × ${u.lotQuantity}` : `SN ${u.serialNumber}`}
+                        </span>
+                        {u.currentHolder && <span className="text-xs text-slate-500">· {u.currentHolder.name}</span>}
+                      </span>
+                      <span className="text-xs font-medium whitespace-nowrap">
+                        {u.expiryDate?.toLocaleDateString("he-IL")} <span className="text-slate-500">· {txt}</span>
+                      </span>
+                    </div>
+                  );
+                })}
+                {expiringSoon.length > 8 && (
+                  <div className="text-xs text-amber-700 mt-1.5">+ עוד {expiringSoon.length - 8} פריטים — <a href="/stock/serials?sort=expiry" className="underline">הצג הכל</a></div>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* === התראה: ספירות באיחור === */}
       {overdueTasks.length > 0 && (

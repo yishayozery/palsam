@@ -136,6 +136,9 @@ export async function declareMulti(formData: FormData): Promise<{ ok?: boolean; 
         const wh = await pickWarehouse(bId, itemTypeId);
         if (!wh) continue;
 
+        const expRaw = String(formData.get(`line:${i}:expiryDate`) || "").trim();
+        const expiryDate = expRaw ? new Date(expRaw) : null;
+
         if (trackingMethod === "SERIAL") {
           const serials = serialsRaw.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
           if (serials.length === 0) throw new Error(`חסרים מספרי סריאל בשורה ${i + 1}`);
@@ -147,13 +150,13 @@ export async function declareMulti(formData: FormData): Promise<{ ok?: boolean; 
           });
           if (existing.length > 0) throw new Error(`שורה ${i + 1}: SN קיים — ${existing.map(e => e.serialNumber).join(", ")}`);
           for (const sn of serials) {
-            const su = await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: sn, statusId, currentHolderId: wh.id } });
+            const su = await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: sn, statusId, currentHolderId: wh.id, expiryDate } });
             await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity: 1, serialUnitId: su.id, statusId } });
           }
         } else if (trackingMethod === "LOT") {
           if (!lotNumber) throw new Error(`שורה ${i + 1}: חסר מספר אצווה`);
           if (quantity < 1) throw new Error(`שורה ${i + 1}: כמות חייבת להיות לפחות 1`);
-          const su = await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: lotNumber, lotQuantity: quantity, statusId, currentHolderId: wh.id } });
+          const su = await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: lotNumber, lotQuantity: quantity, statusId, currentHolderId: wh.id, expiryDate } });
           await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity, serialUnitId: su.id, statusId } });
         } else {
           // QUANTITY
@@ -226,9 +229,11 @@ export async function declareSerials(formData: FormData) {
     const transfer = await tx.transfer.create({
       data: { battalionId: bId, type: "INTAKE", status: "COMPLETED", toHolderId: wh.id, reason: "הזנת סריאליים ידני", externalUnit, externalContact, recipientPersonalId, createdById: user.id, approvedById: user.id, approvedAt: new Date() },
     });
+    const expRaw = String(formData.get("expiryDate") || "").trim();
+    const expiryDate = expRaw ? new Date(expRaw) : null;
     for (const sn of serials) {
       try {
-        const su = await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: sn, statusId, currentHolderId: wh.id } });
+        const su = await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: sn, statusId, currentHolderId: wh.id, expiryDate } });
         await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity: 1, statusId, serialUnitId: su.id } });
         created++;
       } catch { failed.push(sn); }
@@ -305,10 +310,14 @@ export async function declareLot(formData: FormData) {
   const wh = await pickWarehouse(bId, itemTypeId);
   if (!wh) return { error: "לא נמצא מחסן מתאים לפריט זה" };
 
+  // תאריך תפוגה (אופציונלי — חשוב לרפואה/אצוות)
+  const expiryRaw = String(formData.get("expiryDate") || "").trim();
+  const expiryDate = expiryRaw ? new Date(expiryRaw) : null;
+
   let dupErr: string | null = null;
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: lotNumber, lotQuantity: quantity, statusId, currentHolderId: wh.id } });
+      await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: lotNumber, lotQuantity: quantity, statusId, currentHolderId: wh.id, expiryDate } });
       await tx.transfer.create({
         data: { battalionId: bId, type: "INTAKE", status: "COMPLETED", toHolderId: wh.id, reason: "הוספת אצווה", externalUnit, externalContact, recipientPersonalId, createdById: user.id, approvedById: user.id, approvedAt: new Date(),
           lines: { create: { itemTypeId, quantity, statusId } } },

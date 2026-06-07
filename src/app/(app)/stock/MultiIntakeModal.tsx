@@ -17,8 +17,9 @@ type Line = {
   unit: string;
   statusId: string;
   quantity: number;
-  serials: string; // newline-separated
+  serials: string;
   lotNumber: string;
+  expiryDate: string; // YYYY-MM-DD; ריק=ללא תפוגה
 };
 
 let UID_SEQ = 1;
@@ -55,7 +56,7 @@ export default function MultiIntakeModal({
     setLines((l) => [...l, {
       uid: UID_SEQ++, itemId: it.id, itemName: it.name,
       trackingMethod: tm, unit: it.unit,
-      statusId: defaultStatusId, quantity: 1, serials: "", lotNumber: "",
+      statusId: defaultStatusId, quantity: 1, serials: "", lotNumber: "", expiryDate: "",
     }]);
     setSearch("");
   };
@@ -96,6 +97,7 @@ export default function MultiIntakeModal({
         fd.append(`line:${i}:quantity`, String(l.quantity));
         if (l.trackingMethod === "SERIAL") fd.append(`line:${i}:serials`, l.serials);
         if (l.trackingMethod === "LOT") fd.append(`line:${i}:lotNumber`, l.lotNumber);
+        if (l.expiryDate) fd.append(`line:${i}:expiryDate`, l.expiryDate);
       });
       const res = await declareMulti(fd);
       if (res?.error) { setError(res.error); return; }
@@ -204,6 +206,13 @@ export default function MultiIntakeModal({
                     <input value={l.lotNumber} onChange={(e) => updateLine(l.uid, { lotNumber: e.target.value })}
                       placeholder="מספר אצווה"
                       className="w-full rounded border border-slate-300 px-2 py-1 text-xs font-mono" />
+                  )}
+                  {(l.trackingMethod === "SERIAL" || l.trackingMethod === "LOT") && (
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-0.5">⏱️ תאריך תפוגה (אופציונלי)</label>
+                      <input type="date" value={l.expiryDate} onChange={(e) => updateLine(l.uid, { expiryDate: e.target.value })}
+                        className="w-full rounded border border-slate-300 px-2 py-1 text-xs" />
+                    </div>
                   )}
                 </div>
               ))}

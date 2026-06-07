@@ -501,6 +501,9 @@ model SerialUnit {
   kitInstanceId String?
   kitInstance   KitInstance? @relation(fields: [kitInstanceId], references: [id])
 
+  // תאריך תפוגה — רלוונטי בעיקר ל-LOT (תרופות, אצוות) ולפריטים סריאליים בודדים שיש להם תפוגה
+  expiryDate DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -511,6 +514,7 @@ model SerialUnit {
   @@index([battalionId])
   @@index([currentHolderId])
   @@index([signedSoldierId])
+  @@index([battalionId, expiryDate])
 }
 
 model KitInstance {
