@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef } from "react";
 import { createSignout } from "./actions";
+import { useEscClose } from "@/lib/useEscClose";
 
 type Soldier = { id: string; name: string; pn: string | null; companyId?: string | null; companyName?: string | null; enlisted?: boolean };
 type Company = { id: string; name: string };
@@ -41,6 +42,9 @@ export default function SignoutModal({
   // ערכה: תור פריטים סריאליים/אצוות שצריכים בחירה
   const [pendingKitPicks, setPendingKitPicks] = useState<PendingKitPick[]>([]);
   const [kitPickerSearch, setKitPickerSearch] = useState("");
+
+  // ESC סוגר — אבל לא בזמן שדיאלוג ילד פתוח
+  useEscClose(open && !lotPicker && pendingKitPicks.length === 0, () => { reset(); setOpen(false); });
 
   const selectedSoldier = soldiers.find((s) => s.id === soldierId);
   const selectedKit = kits.find((k) => k.id === kitId);

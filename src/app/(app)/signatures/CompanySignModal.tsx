@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createCompanySign } from "./company-actions";
+import { useEscClose } from "@/lib/useEscClose";
 
 type Member = { id: string; name: string; role: string };
 type Company = { id: string; name: string; members: Member[] };
@@ -27,6 +28,8 @@ export default function CompanySignModal({
   const [busy, setBusy] = useState(false);
   const submittingRef = useRef(false);
   const [lotPicker, setLotPicker] = useState<{ unit: Unit; qty: number } | null>(null);
+
+  useEscClose(open && !lotPicker, () => { reset(); setOpen(false); });
 
   const selectedCompany = companies.find((c) => c.id === companyId);
   // מיון: רס"פ ראשון, מ"פ שני, השאר אחרון

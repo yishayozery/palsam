@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { companyReturn } from "./company-actions";
+import { useEscClose } from "@/lib/useEscClose";
 
 type Company = { id: string; name: string };
 type SerialAtCompany = {
@@ -40,6 +41,8 @@ export default function CompanyCheckinModal({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lotPicker, setLotPicker] = useState<{ unit: SerialAtCompany; qty: number } | null>(null);
+
+  useEscClose(open && !lotPicker, () => { reset(); setOpen(false); });
 
   // פלוגות עם ציוד חתום
   const companiesWithStock = useMemo(() => {

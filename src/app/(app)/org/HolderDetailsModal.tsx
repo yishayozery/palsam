@@ -7,6 +7,7 @@ import type { WarehouseType } from "@/generated/prisma";
 import { inviteHolderUser, updateHolderUser, removeHolderUser } from "./actions";
 import { createSoldier } from "../roster/actions";
 import UserActions from "./UserActions";
+import { useEscClose } from "@/lib/useEscClose";
 
 type User = {
   id: string;
@@ -353,6 +354,9 @@ export default function HolderDetailsModal({ row, kind, onClose, baseUrl = "" }:
   const [soldierAddOpen, setSoldierAddOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const icon = kind === "WAREHOUSE" && row.warehouseType ? WAREHOUSE_TYPE_ICON[row.warehouseType] : "🪖";
+
+  // ESC במקלדת — סוגר את המודאל (תקף רק אם אין דיאלוג ילד פתוח)
+  useEscClose(!inviteOpen && !soldierAddOpen && editingUserId === null, onClose);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3" onClick={onClose}>

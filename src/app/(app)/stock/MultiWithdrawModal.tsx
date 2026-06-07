@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { withdrawMulti } from "./actions";
+import { useEscClose } from "@/lib/useEscClose";
 
 type StockEntry = { itemTypeId: string; statusId: string; statusName: string; quantity: number };
 type SerialEntry = {
@@ -39,6 +40,8 @@ export default function MultiWithdrawModal({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lotPicker, setLotPicker] = useState<{ unit: SerialEntry; qty: number; itemName: string } | null>(null);
+
+  useEscClose(open && !lotPicker, () => setOpen(false));
 
   const itemById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
 

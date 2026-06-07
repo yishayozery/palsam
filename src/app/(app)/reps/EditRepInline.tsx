@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { updateRep } from "./actions";
+import { useEscClose } from "@/lib/useEscClose";
 
 type Rep = {
   id: string; fullName: string;
@@ -23,6 +24,8 @@ export default function EditRepInline({ rep }: { rep: Rep }) {
   const [unlinkSoldier, setUnlinkSoldier] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEscClose(open, () => setOpen(false));
 
   useEffect(() => {
     if (!linkSoldier) return;

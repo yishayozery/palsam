@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { declareMulti } from "./actions";
+import { useEscClose } from "@/lib/useEscClose";
 
 type Item = { id: string; name: string; sku: string | null; trackingMethod: "QUANTITY" | "SERIAL" | "LOT" | "KIT"; unit: string };
 type Status = { id: string; name: string; isDefault: boolean };
@@ -37,6 +38,8 @@ export default function MultiIntakeModal({
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEscClose(open, () => { setOpen(false); });
 
   const defaultStatusId = statuses.find((s) => s.isDefault)?.id ?? statuses[0]?.id ?? "";
 

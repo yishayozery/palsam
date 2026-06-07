@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { checkinSerial } from "./actions";
+import { useEscClose } from "@/lib/useEscClose";
 
 type Unit = {
   id: string; serial: string; itemName: string;
@@ -26,6 +27,8 @@ export default function CheckinModal({ signedUnits, statuses }: {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lotPicker, setLotPicker] = useState<{ unit: Unit; qty: number } | null>(null);
+
+  useEscClose(open && !lotPicker, () => { reset(); setOpen(false); });
 
   // חיילים שיש להם ציוד חתום
   const soldiers = useMemo(() => {
