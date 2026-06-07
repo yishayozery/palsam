@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, Badge, Table, Th, Td, EmptyState } from "@/components/ui";
 import { findTanaHolder } from "@/lib/tana";
 import ReturnFromTanaModal from "./ReturnFromTanaModal";
+import ExcludeOfficerToggle from "./ExcludeOfficerToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -198,19 +199,7 @@ export default async function MaintenancePage({
         subtitle={`כל הרכבים הצבאיים בגדוד — מעקב סטטוס, תקלות ותחזוקה (טנא)`}
         action={
           <div className="flex items-center gap-3 flex-wrap">
-            <form method="GET" className="flex items-center">
-              <label className="flex items-center gap-1.5 text-xs bg-slate-100 border border-slate-300 rounded-lg px-3 py-2 cursor-pointer hover:bg-slate-200">
-                <input
-                  type="checkbox"
-                  name="excludeOfficer"
-                  value="1"
-                  defaultChecked={excludeOfficerOn}
-                  onChange={(e) => e.currentTarget.form?.submit()}
-                  className="w-3.5 h-3.5"
-                />
-                <span>החרג רכבים שנשלחו לטנא ע״י קצין הרכב</span>
-              </label>
-            </form>
+            <ExcludeOfficerToggle checked={excludeOfficerOn} />
             {vehiclesAtTana.length > 0 && (
               <ReturnFromTanaModal
                 serials={vehiclesAtTana.map((v) => ({
