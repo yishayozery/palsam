@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import SignaturePad from "./SignaturePad";
+import CenteredWithRedirect from "./CenteredWithRedirect";
 
 export const dynamic = "force-dynamic";
 
@@ -32,13 +33,13 @@ export default async function PublicSignPage({
   const isCompanySign = !!sig?.signerUserId;
 
   if (!sig) {
-    return <Centered title="קישור לא תקין" text="ההחתמה אינה קיימת." />;
+    return <CenteredWithRedirect title="קישור לא תקין" text="ההחתמה אינה קיימת." tone="error" />;
   }
   if (sig.status === "SIGNED") {
-    return <Centered title="✅ נחתם בהצלחה" text={`תודה, ${signerName}. החתימה נקלטה במערכת.`} tone="ok" />;
+    return <CenteredWithRedirect title="✅ נחתם בהצלחה" text={`תודה, ${signerName}. החתימה נקלטה במערכת.`} tone="ok" />;
   }
   if (sig.status === "EXPIRED" || (sig.tokenExpires && sig.tokenExpires < new Date())) {
-    return <Centered title="פג תוקף" text="הקישור אינו בתוקף. פנה לאחראי." />;
+    return <CenteredWithRedirect title="פג תוקף" text="הקישור אינו בתוקף. פנה לאחראי." tone="error" />;
   }
 
   return (
@@ -79,13 +80,3 @@ export default async function PublicSignPage({
   );
 }
 
-function Centered({ title, text, tone }: { title: string; text: string; tone?: "ok" }) {
-  return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-8 text-center max-w-sm">
-        <h1 className={`text-xl font-bold ${tone === "ok" ? "text-emerald-700" : "text-slate-800"}`}>{title}</h1>
-        <p className="text-sm text-slate-500 mt-2">{text}</p>
-      </div>
-    </div>
-  );
-}
