@@ -267,14 +267,10 @@ export default function StockTable({
                           title="היסטוריית תנועות + ייצוא Excel">
                           🕘 היסטוריה
                         </a>
-                        <button onClick={() => setExpanded(expanded === i.id ? null : i.id)}
-                          className="text-xs bg-slate-800 text-white rounded-md px-3 py-1 hover:bg-slate-900">
-                          {expanded === i.id ? "סגור" : "עדכן / הוסף"}
-                        </button>
                       </div>
                     </Td>
                   </tr>
-                  {expanded === i.id && (
+                  {false && expanded === i.id && (
                     <tr key={i.id + "-exp"}>
                       <td colSpan={7} className="p-0">
                         <ExpandedRow item={i} statuses={statuses} />

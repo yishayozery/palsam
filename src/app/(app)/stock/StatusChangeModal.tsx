@@ -71,8 +71,9 @@ export default function StatusChangeModal({ items, statuses, stocks, units }: {
   if (!open) {
     return (
       <button onClick={() => setOpen(true)}
-        className="bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-3 md:px-5 py-2 md:py-2.5 text-xs md:text-sm font-medium shadow-sm flex items-center gap-2">
-        ⚠️ <span className="hidden sm:inline">תקולים / שינוי סטטוס</span><span className="sm:hidden">תקולים</span>
+        className="bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-3 md:px-5 py-2 md:py-2.5 text-xs md:text-sm font-medium shadow-sm flex items-center gap-2"
+        title="סמן יחידות שהתקלקלו / אבדו / התבלו — מעביר אותן לסטטוס אחר בלי לגרוע מהמלאי">
+        ⚠️ <span className="hidden sm:inline">סמן תקול / שנה סטטוס</span><span className="sm:hidden">תקולים</span>
       </button>
     );
   }
@@ -83,18 +84,32 @@ export default function StatusChangeModal({ items, statuses, stocks, units }: {
         <div className="bg-gradient-to-r from-amber-700 to-amber-900 text-white p-5 rounded-t-2xl flex items-center justify-between">
           <div>
             <h3 className="font-bold text-lg">⚠️ שינוי סטטוס פריטים</h3>
-            <p className="text-xs text-amber-100 mt-0.5">לסמן יחידות כתקולות / בלאי / אבודות. הכמות לא יורדת — רק הסטטוס משתנה.</p>
+            <p className="text-xs text-amber-100 mt-0.5">סמן יחידות שהתקלקלו, אבדו, או נשחקו — הסטטוס שלהן ישתנה (הכמות נשארת).</p>
           </div>
           <button onClick={() => { reset(); setOpen(false); }} className="text-amber-100 hover:text-white text-2xl leading-none">✕</button>
         </div>
 
         <div className="p-5 space-y-4">
+          {/* הסבר התהליך — בולט בראש */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900">
+            💡 <b>שלבי התהליך:</b>
+            <ol className="list-decimal list-inside mt-1 space-y-0.5">
+              <li>חפש ובחר את הפריט (M4, רימון, אלונקה...)</li>
+              <li>בחר אילו יחידות (סריאליים) או כמה (כמותי) — מאיזה סטטוס הן</li>
+              <li>בחר את הסטטוס החדש (תקול / בלאי / אבוד / תקין)</li>
+              <li>הזן סיבה (אופציונלי) ואשר</li>
+            </ol>
+          </div>
+
           {error && <div className="bg-rose-50 border-2 border-rose-300 rounded-lg p-3 text-sm text-rose-800">⚠️ {error}</div>}
           {ok && <div className="bg-emerald-50 border-2 border-emerald-300 rounded-lg p-3 text-sm text-emerald-800">{ok}</div>}
 
           {/* בחירת פריט */}
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">פריט</label>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+              <span className="bg-amber-600 text-white rounded-full w-5 h-5 inline-flex items-center justify-center text-xs ml-1.5">1</span>
+              בחר פריט
+            </label>
             {!selected ? (
               <>
                 <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="הקלד שם/מק״ט..."
@@ -122,6 +137,7 @@ export default function StatusChangeModal({ items, statuses, stocks, units }: {
             <form action={submitSerial} className="space-y-3">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  <span className="bg-amber-600 text-white rounded-full w-5 h-5 inline-flex items-center justify-center text-xs ml-1.5">2</span>
                   בחר יחידות לשינוי סטטוס ({selectedUnits.length}/{itemSerials.length})
                 </label>
                 {itemSerials.length === 0 ? (
@@ -146,7 +162,10 @@ export default function StatusChangeModal({ items, statuses, stocks, units }: {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">סטטוס חדש</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  <span className="bg-amber-600 text-white rounded-full w-5 h-5 inline-flex items-center justify-center text-xs ml-1.5">3</span>
+                  סטטוס חדש
+                </label>
                 <div className="flex gap-2 flex-wrap">
                   {statuses.map((s) => (
                     <label key={s.id} className={`px-3 py-1.5 rounded-full text-xs font-medium border-2 cursor-pointer transition ${newStatusId === s.id ? "border-amber-500 ring-2 ring-amber-200" : "border-transparent"} ${statusBadgeColor(s)}`}>
@@ -180,7 +199,10 @@ export default function StatusChangeModal({ items, statuses, stocks, units }: {
             <form action={submitQty} className="space-y-3">
               <input type="hidden" name="itemTypeId" value={itemId} />
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">מלאי לפי סטטוס</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  <span className="bg-amber-600 text-white rounded-full w-5 h-5 inline-flex items-center justify-center text-xs ml-1.5">2</span>
+                  בחר מאיזה סטטוס לקחת
+                </label>
                 <div className="grid grid-cols-2 gap-2">
                   {itemStocks.length === 0 ? (
                     <p className="text-sm text-slate-400 p-3 bg-slate-50 rounded-lg col-span-2 text-center">אין מלאי כמותי לפריט</p>
@@ -201,7 +223,10 @@ export default function StatusChangeModal({ items, statuses, stocks, units }: {
               {fromStatusId && (
                 <>
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">סטטוס חדש</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                      <span className="bg-amber-600 text-white rounded-full w-5 h-5 inline-flex items-center justify-center text-xs ml-1.5">3</span>
+                      סטטוס חדש
+                    </label>
                     <div className="flex gap-2 flex-wrap">
                       {statuses.filter((s) => s.id !== fromStatusId).map((s) => (
                         <label key={s.id} className={`px-3 py-1.5 rounded-full text-xs font-medium border-2 cursor-pointer ${newStatusId === s.id ? "border-amber-500 ring-2 ring-amber-200" : "border-transparent"} ${statusBadgeColor(s)}`}>
@@ -215,11 +240,12 @@ export default function StatusChangeModal({ items, statuses, stocks, units }: {
 
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                      <span className="bg-amber-600 text-white rounded-full w-5 h-5 inline-flex items-center justify-center text-xs ml-1.5">4</span>
                       כמות להעביר (זמין: {fromBalance?.quantity ?? 0})
                     </label>
                     <input type="number" name="quantity" min={1} max={fromBalance?.quantity ?? 1}
                       value={qty} onChange={(e) => setQty(parseInt(e.target.value) || 1)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-lg font-bold" autoFocus />
                   </div>
 
                   <div>
