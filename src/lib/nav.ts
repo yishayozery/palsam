@@ -29,6 +29,7 @@ export const NAV: NavItem[] = [
   { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "פלסם", cap: "battalion.profile" },
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "פלסם", cap: "soldiers.roster" },
   { href: "/items", label: "הגדרות פריטים", icon: "🏷️", group: "פלסם", cap: "battalion.profile" },
+  { href: "/locations", label: "מידוף ימ\"ח", icon: "🗄️", group: "פלסם", cap: "locations.manage" },
   { href: "/stock", label: "מלאי הגדוד", icon: "📋", group: "פלסם", cap: "battalion.profile" },
   { href: "/signatures", label: "החתמות פלוגה", icon: "✍️", group: "פלסם", cap: "battalion.profile" },
   { href: "/warehouses", label: "מחסני הגדוד", icon: "🏪", group: "פלסם", cap: "battalion.profile" },
@@ -46,15 +47,15 @@ export const NAV: NavItem[] = [
   { href: "/signatures", label: "החתמת/זיכוי חייל", icon: "✍️", group: "הפלוגה שלי", cap: "signatures.manage" },
   { href: "/counts", label: "ספירת מלאי", icon: "🔢", group: "הפלוגה שלי", cap: "counts.execute" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "הפלוגה שלי", cap: "company.manage" },
-  { href: "/locations", label: "מידוף בימ\"ח", icon: "🗄️", group: "הפלוגה שלי", cap: "locations.manage" },
+  { href: "/locations", label: "מידוף ימ\"ח", icon: "🗄️", group: "הפלוגה שלי", cap: "locations.manage" },
 
   // ===== המחסנים שלי (קצין מחסן — תפעול שוטף) =====
   // סדר לפי שלבי העבודה: נציגים → פריטים → מלאי → ערכות → מידוף → החתמות → ספירות → פערים
   { href: "/reps", label: "נציגי פלוגות", icon: "🤝", group: "המחסנים שלי", cap: "reps.manage" },
   { href: "/items", label: "הגדרת פריטים", icon: "🏷️", group: "המחסנים שלי", cap: "catalog.manage" },
+  { href: "/locations", label: "מידוף ימ\"ח", icon: "🗄️", group: "המחסנים שלי", cap: "locations.manage" },
   { href: "/stock", label: "מלאי המחסן", icon: "📋", group: "המחסנים שלי", cap: "warehouse.operate" },
   { href: "/kits", label: "ערכות החתמה", icon: "📦", group: "המחסנים שלי", cap: "signatures.manage" },
-  { href: "/locations", label: "מידוף מחסן", icon: "🗄️", group: "המחסנים שלי", cap: "locations.manage" },
   { href: "/signatures", label: "החתמות (חיילים/פלוגות)", icon: "✍️", group: "המחסנים שלי", cap: "signatures.manage" },
   { href: "/counts", label: "ספירות מלאי", icon: "🔢", group: "המחסנים שלי", cap: "counts.execute" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "המחסנים שלי", cap: "gaps.resolve" },

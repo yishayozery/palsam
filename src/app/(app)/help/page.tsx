@@ -150,7 +150,7 @@ const GUIDES: RoleGuide[] = [
       },
       {
         icon: "🗄️",
-        title: "מידוף מחסן (/locations)",
+        title: "מידוף ימ״ח (/locations)",
         steps: [
           { title: "הגדר עמודה/שורה במחסן" },
           { title: "שייך פריט למיקום (homeLocation) — בעמוד /items" },

@@ -33,6 +33,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "dictionaries.manage",
     "catalog.manage",
     "kits.manage",
+    "locations.manage",
     "warehouse.operate", // הצהרת מלאי גדודי מול החטיבה
     "counts.manage", // תכניות ספירה
     "counts.execute", // ביצוע ספירה (גם למפ"מ)
