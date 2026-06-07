@@ -4,8 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { TRANSFER_TYPE } from "@/lib/labels";
 import StockTable from "./StockTable";
-import StockEntryModal from "./StockEntryModal";
-import StockWithdrawModal from "./StockWithdrawModal";
 import StatusChangeModal from "./StatusChangeModal";
 import MultiIntakeModal from "./MultiIntakeModal";
 import MultiWithdrawModal from "./MultiWithdrawModal";
@@ -122,13 +120,6 @@ export default async function StockPage({
               }))}
               statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
             />
-            <StockEntryModal
-              currentUserName={user.fullName}
-              requirePersonalId={requirePersonalId}
-              counterpartOptions={counterpartOptions}
-              items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod, unit: i.unit, association: ASSOC[i.association] }))}
-              statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
-            />
             <MultiWithdrawModal
               currentUserName={user.fullName}
               requirePersonalId={requirePersonalId}
@@ -146,15 +137,6 @@ export default async function StockPage({
                 id: u.id, itemTypeId: i.id, serialNumber: u.serialNumber,
                 lotQuantity: u.lotQuantity, statusId: u.statusId, statusName: u.status.name,
               })))}
-            />
-            <StockWithdrawModal
-              currentUserName={user.fullName}
-              requirePersonalId={requirePersonalId}
-              counterpartOptions={counterpartOptions}
-              items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod, unit: i.unit }))}
-              statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
-              stocks={items.flatMap((i) => i.stockBalances.map((b) => ({ itemTypeId: i.id, statusId: b.statusId, statusName: b.status.name, quantity: b.quantity })))}
-              units={items.flatMap((i) => i.serialUnits.map((u) => ({ id: u.id, itemTypeId: i.id, serialNumber: u.serialNumber, lotQuantity: u.lotQuantity, statusName: u.status.name })))}
             />
             {await (async () => {
               const tana = await findTanaHolder(bId);

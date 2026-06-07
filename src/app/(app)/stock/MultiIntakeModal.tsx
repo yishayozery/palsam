@@ -113,7 +113,7 @@ export default function MultiIntakeModal({
     return (
       <button onClick={() => { reset(); setOpen(true); }}
         className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg px-4 py-2.5 text-sm font-medium flex items-center gap-2">
-        📥 קליטה רב-פריטית
+        📥 הוספת מלאי
       </button>
     );
   }
@@ -123,8 +123,8 @@ export default function MultiIntakeModal({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden">
         <div className="bg-gradient-to-r from-emerald-700 to-emerald-900 text-white p-4 flex items-center justify-between shrink-0">
           <div>
-            <h3 className="font-bold text-lg">📥 קליטה רב-פריטית — תעודה אחת</h3>
-            <p className="text-xs text-emerald-100 mt-0.5">הוסף כמה פריטים שצריך לעגלה → תעודה אחת לכל הקליטה</p>
+            <h3 className="font-bold text-lg">📥 הוספת מלאי</h3>
+            <p className="text-xs text-emerald-100 mt-0.5">הוסף פריט אחד או יותר — תעודה אחת לכל הקליטה</p>
           </div>
           <button onClick={() => setOpen(false)} className="text-emerald-100 hover:text-white text-2xl">✕</button>
         </div>

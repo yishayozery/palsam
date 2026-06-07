@@ -155,7 +155,7 @@ export default function MultiWithdrawModal({
     return (
       <button onClick={() => { reset(); setOpen(true); }}
         className="bg-rose-700 hover:bg-rose-800 text-white rounded-lg px-4 py-2.5 text-sm font-medium flex items-center gap-2">
-        📤 זיכוי רב-פריטי
+        📤 זיכוי לחטיבה
       </button>
     );
   }
@@ -165,8 +165,8 @@ export default function MultiWithdrawModal({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden relative">
         <div className="bg-gradient-to-r from-rose-700 to-rose-900 text-white p-4 flex items-center justify-between shrink-0">
           <div>
-            <h3 className="font-bold text-lg">📤 זיכוי לחטיבה — תעודה אחת</h3>
-            <p className="text-xs text-rose-100 mt-0.5">הוסף כמה פריטים שצריך → תעודת WRITE_OFF אחת</p>
+            <h3 className="font-bold text-lg">📤 זיכוי לחטיבה</h3>
+            <p className="text-xs text-rose-100 mt-0.5">הוסף פריט אחד או יותר → תעודה אחת</p>
           </div>
           <button onClick={() => setOpen(false)} className="text-rose-100 hover:text-white text-2xl">✕</button>
         </div>
