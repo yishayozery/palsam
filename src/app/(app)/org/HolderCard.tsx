@@ -7,7 +7,7 @@ import type { WarehouseType } from "@/generated/prisma";
 import { renameHolder, toggleHolder } from "./actions";
 import HolderDetailsModal, { type HolderRowDetail } from "./HolderDetailsModal";
 
-export default function HolderCard({ row, kind }: { row: HolderRowDetail; kind: "WAREHOUSE" | "COMPANY" }) {
+export default function HolderCard({ row, kind, baseUrl = "" }: { row: HolderRowDetail; kind: "WAREHOUSE" | "COMPANY"; baseUrl?: string }) {
   const [open, setOpen] = useState(false);
   const [editName, setEditName] = useState(false);
 
@@ -79,15 +79,15 @@ export default function HolderCard({ row, kind }: { row: HolderRowDetail; kind: 
         </div>
       </div>
 
-      {open && <HolderDetailsModal row={row} kind={kind} onClose={() => setOpen(false)} />}
+      {open && <HolderDetailsModal row={row} kind={kind} baseUrl={baseUrl} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-export function HolderCardGrid({ rows, kind, addButton }: { rows: HolderRowDetail[]; kind: "WAREHOUSE" | "COMPANY"; addButton: React.ReactNode }) {
+export function HolderCardGrid({ rows, kind, addButton, baseUrl = "" }: { rows: HolderRowDetail[]; kind: "WAREHOUSE" | "COMPANY"; addButton: React.ReactNode; baseUrl?: string }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-      {rows.map((r) => <HolderCard key={r.id} row={r} kind={kind} />)}
+      {rows.map((r) => <HolderCard key={r.id} row={r} kind={kind} baseUrl={baseUrl} />)}
       {addButton}
     </div>
   );

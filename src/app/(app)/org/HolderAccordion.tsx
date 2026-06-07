@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui";
 import { ROLE_LABELS, WAREHOUSE_TYPE_SHORT, WAREHOUSE_TYPE_ICON } from "@/lib/rbac";
 import { inviteHolderUser, removeHolderUser, createWarehouse, createCompany, renameHolder, toggleHolder } from "./actions";
+import UserActions from "./UserActions";
 import { createSoldier, enlistSoldier } from "../roster/actions";
 import type { WarehouseType } from "@/generated/prisma";
 

@@ -122,6 +122,34 @@ export async function updateHolderUser(formData: FormData) {
   revalidatePath("/org");
 }
 
+/**
+ * 🔄 שחזור/יצירת מחדש של קישור הזמנה — שולח את המשתמש להגדיר סיסמה חדשה.
+ * אופציה ל-MAFAM/SUPER_ADMIN. אם המשתמש כבר הופעל — מאפס passwordSet ויוצר token חדש.
+ */
+export async function resetUserInvite(formData: FormData): Promise<{ ok?: boolean; error?: string; inviteToken?: string }> {
+  try {
+    const admin = await requireCapability("users.manage");
+    const userId = String(formData.get("userId") || "");
+    if (!userId) return { error: "חסר מזהה" };
+    const u = await prisma.appUser.findUnique({ where: { id: userId } });
+    if (!u || u.battalionId !== admin.battalionId) return { error: "משתמש לא נמצא" };
+
+    const newToken = nanoid(28);
+    const randomHash = await hashPassword(nanoid(32));
+    await prisma.appUser.update({
+      where: { id: userId },
+      data: { inviteToken: newToken, passwordSet: false, passwordHash: randomHash },
+    });
+    await audit(admin.id, "RESET_INVITE", "AppUser", userId);
+    revalidatePath("/org");
+    revalidatePath("/reps");
+    revalidatePath("/users");
+    return { ok: true, inviteToken: newToken };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
 /** הסרת משתמש מ-holder (מבטל active = false אם זה הholder היחיד שלו) */
 export async function removeHolderUser(formData: FormData) {
   const admin = await requireCapability("users.manage");

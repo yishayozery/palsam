@@ -48,6 +48,8 @@ export default async function OrgPage({ searchParams }: { searchParams: Promise<
     }),
   ]);
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+
   const warehouseRows: HolderRowDetail[] = warehouses.map((w) => ({
     id: w.id, name: w.name, active: w.active, warehouseType: w.warehouseType,
     users: w.users.filter((u) => u.active || !u.passwordSet),
@@ -81,10 +83,10 @@ export default async function OrgPage({ searchParams }: { searchParams: Promise<
       </div>
 
       {active === "warehouses" && (
-        <HolderCardGrid rows={warehouseRows} kind="WAREHOUSE" addButton={<AddHolderCard kind="WAREHOUSE" />} />
+        <HolderCardGrid rows={warehouseRows} kind="WAREHOUSE" baseUrl={baseUrl} addButton={<AddHolderCard kind="WAREHOUSE" />} />
       )}
       {active === "companies" && (
-        <HolderCardGrid rows={companyRows} kind="COMPANY" addButton={<AddHolderCard kind="COMPANY" />} />
+        <HolderCardGrid rows={companyRows} kind="COMPANY" baseUrl={baseUrl} addButton={<AddHolderCard kind="COMPANY" />} />
       )}
     </div>
   );

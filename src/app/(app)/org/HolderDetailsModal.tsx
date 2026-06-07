@@ -6,6 +6,7 @@ import { ROLE_LABELS, WAREHOUSE_TYPE_SHORT, WAREHOUSE_TYPE_ICON } from "@/lib/rb
 import type { WarehouseType } from "@/generated/prisma";
 import { inviteHolderUser, updateHolderUser, removeHolderUser } from "./actions";
 import { createSoldier } from "../roster/actions";
+import UserActions from "./UserActions";
 
 type User = {
   id: string;
@@ -347,7 +348,7 @@ function EditUserRow({ user, onDone }: { user: User; onDone: () => void }) {
   );
 }
 
-export default function HolderDetailsModal({ row, kind, onClose }: { row: HolderRowDetail; kind: "WAREHOUSE" | "COMPANY"; onClose: () => void }) {
+export default function HolderDetailsModal({ row, kind, onClose, baseUrl = "" }: { row: HolderRowDetail; kind: "WAREHOUSE" | "COMPANY"; onClose: () => void; baseUrl?: string }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [soldierAddOpen, setSoldierAddOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -394,15 +395,18 @@ export default function HolderDetailsModal({ row, kind, onClose }: { row: Holder
                           {u.phone && <span>· {u.phone}</span>}
                         </div>
                       </div>
-                      <button onClick={() => setEditingUserId(editingUserId === u.id ? null : u.id)}
-                        className="text-xs text-slate-400 hover:text-slate-700 px-1.5 py-0.5 md:opacity-0 md:group-hover:opacity-100 transition" title="ערוך">
-                        ✎
-                      </button>
-                      <form action={removeHolderUser}>
-                        <input type="hidden" name="userId" value={u.id} />
-                        <input type="hidden" name="holderId" value={row.id} />
-                        <button className="text-xs text-rose-400 hover:text-rose-700 px-1.5 py-0.5 md:opacity-0 md:group-hover:opacity-100" title="הסר">✕</button>
-                      </form>
+                      <div className="flex items-center gap-1 relative">
+                        <button onClick={() => setEditingUserId(editingUserId === u.id ? null : u.id)}
+                          className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded px-2 py-1 font-medium" title="ערוך פרטים">
+                          ✎ עריכה
+                        </button>
+                        <UserActions userId={u.id} fullName={u.fullName} phone={u.phone} baseUrl={baseUrl} />
+                        <form action={removeHolderUser}>
+                          <input type="hidden" name="userId" value={u.id} />
+                          <input type="hidden" name="holderId" value={row.id} />
+                          <button className="text-xs text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded px-2 py-1" title="הסר משתמש">✕</button>
+                        </form>
+                      </div>
                     </div>
                     {editingUserId === u.id && <EditUserRow user={u} onDone={() => setEditingUserId(null)} />}
                   </div>
