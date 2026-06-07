@@ -94,19 +94,27 @@ export default async function MyInventoryPage() {
         subtitle={`${company?.name ?? ""} — כל הציוד שהפלוגה חתומה עליו מול הגדוד והמחסנים`}
         action={
           <div className="flex gap-2">
-            {(await findTanaHolder(bId)) && companyId !== (await findTanaHolder(bId))!.id && (
-              <SendToTanaModal
-                serials={serialUnits.map((u) => ({
-                  id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber,
-                  statusName: u.status.name, category: u.itemType.category?.name ?? null,
-                }))}
-                balances={balances.map((b) => ({
-                  itemTypeId: b.itemTypeId, statusId: b.statusId, holderId: companyId,
-                  itemName: b.itemType.name, unit: b.itemType.unit, statusName: b.status.name,
-                  quantity: b.quantity, category: b.itemType.category?.name ?? null,
-                }))}
-              />
-            )}
+            {await (async () => {
+              const tana = await findTanaHolder(bId);
+              if (!tana || companyId === tana.id) return null;
+              // רק רכבים — טנא מטפלת ברכבים בלבד
+              const vehicleSerials = serialUnits.filter((u) => u.itemType.category?.warehouseType === "VEHICLES");
+              const vehicleBalances = balances.filter((b) => b.itemType.category?.warehouseType === "VEHICLES");
+              if (vehicleSerials.length === 0 && vehicleBalances.length === 0) return null;
+              return (
+                <SendToTanaModal
+                  serials={vehicleSerials.map((u) => ({
+                    id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber,
+                    statusName: u.status.name, category: u.itemType.category?.name ?? null,
+                  }))}
+                  balances={vehicleBalances.map((b) => ({
+                    itemTypeId: b.itemTypeId, statusId: b.statusId, holderId: companyId,
+                    itemName: b.itemType.name, unit: b.itemType.unit, statusName: b.status.name,
+                    quantity: b.quantity, category: b.itemType.category?.name ?? null,
+                  }))}
+                />
+              );
+            })()}
           <ReturnModal
             serialUnits={serialUnits.map((u) => ({
               id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, sku: u.itemType.sku,

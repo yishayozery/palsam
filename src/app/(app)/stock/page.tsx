@@ -128,20 +128,26 @@ export default async function StockPage({
             {await (async () => {
               const tana = await findTanaHolder(bId);
               if (!tana) return null;
-              // סריאליים במחסני הקצין (או כל הגדוד למפ"מ) שלא בטנא
+              // ⚠️ "שלח לטנא" שייך רק לקצין רכב (warehouseType=VEHICLES) או למפ"מ —
+              // מחסן בונקר/קשר/חימוש לא שולח לטנא (טנא מטפלת רק ברכבים).
+              const isMafam = user.role === "BATTALION_ADMIN";
+              const isVehicleOfficer = user.role === "WAREHOUSE_MANAGER" && myWarehouseTypes.includes("VEHICLES");
+              if (!isMafam && !isVehicleOfficer) return null;
+              // רק רכבים (warehouseType=VEHICLES) ולא בטנא
               const myUnits = items.flatMap((i) =>
-                i.serialUnits.filter((u) => u.currentHolderId !== tana.id).map((u) => ({
+                i.serialUnits.filter((u) => u.currentHolderId !== tana.id && i.category?.warehouseType === "VEHICLES").map((u) => ({
                   id: u.id, itemTypeId: i.id, itemName: i.name, serial: u.serialNumber,
                   statusName: u.status.name, category: i.category?.name ?? null,
                 }))
               );
               const myBalances = items.flatMap((i) =>
-                i.stockBalances.filter((b) => b.holderId !== tana.id).map((b) => ({
+                i.stockBalances.filter((b) => b.holderId !== tana.id && i.category?.warehouseType === "VEHICLES").map((b) => ({
                   itemTypeId: i.id, statusId: b.statusId, holderId: b.holderId,
                   itemName: i.name, unit: i.unit, statusName: b.status.name,
                   quantity: b.quantity, category: i.category?.name ?? null,
                 }))
               );
+              if (myUnits.length === 0 && myBalances.length === 0) return null;
               return <SendToTanaModal serials={myUnits} balances={myBalances} />;
             })()}
             <StatusChangeModal
