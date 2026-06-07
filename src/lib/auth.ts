@@ -102,19 +102,22 @@ export async function authenticate(
 ): Promise<SessionUser | null> {
   const user = await prisma.appUser.findFirst({
     where: { username: { equals: username, mode: "insensitive" } },
-    include: { customRole: true, assignedHolders: true, battalion: { select: { code: true, brigade: true } } },
+    include: { customRole: true, assignedHolders: true, battalion: { select: { code: true, brigade: true, name: true } } },
   });
   if (!user || !user.active || !user.passwordSet) return null;
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) return null;
   // ⚠️ ולידציית גדוד: אדמין-על פטור (אין לו גדוד); כל השאר חייבים להזין את הקוד שלהם.
   if (user.role !== "SUPER_ADMIN") {
-    const code = (battalionCode ?? "").trim();
+    const code = (battalionCode ?? "").trim().toLowerCase();
     if (!code) return null; // חייבים להזין מספר גדוד
-    const myCode = (user.battalion?.code ?? "").trim();
-    const myBrigade = (user.battalion?.brigade ?? "").trim();
-    // מקבל קוד גדוד או חטיבה (גמיש למשתמש)
-    if (code !== myCode && code !== myBrigade) return null;
+    // מקבל גמישות: קוד גדוד, מספר חטיבה, או שם הגדוד (case-insensitive)
+    const accepted = [
+      user.battalion?.code?.trim().toLowerCase(),
+      user.battalion?.brigade?.trim().toLowerCase(),
+      user.battalion?.name?.trim().toLowerCase(),
+    ].filter(Boolean) as string[];
+    if (!accepted.includes(code)) return null;
   }
   return toSession(user);
 }
