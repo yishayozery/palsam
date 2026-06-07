@@ -46,7 +46,7 @@ export const NAV: NavItem[] = [
   { href: "/signatures", label: "החתמת/זיכוי חייל", icon: "✍️", group: "הפלוגה שלי", cap: "signatures.manage" },
   { href: "/counts", label: "ספירת מלאי", icon: "🔢", group: "הפלוגה שלי", cap: "counts.execute" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "הפלוגה שלי", cap: "company.manage" },
-  { href: "/locations", label: "מידוף מחסן", icon: "🗄️", group: "הפלוגה שלי", cap: "locations.manage" },
+  { href: "/locations", label: "מידוף בימ\"ח", icon: "🗄️", group: "הפלוגה שלי", cap: "locations.manage" },
 
   // ===== המחסנים שלי (קצין מחסן — תפעול שוטף) =====
   // סדר לפי שלבי העבודה: נציגים → פריטים → מלאי → ערכות → מידוף → החתמות → ספירות → פערים
@@ -64,6 +64,7 @@ export const NAV: NavItem[] = [
 
   // ===== דוחות ובקרה =====
   { href: "/reports", label: "דוחות", icon: "📈", group: "דוחות ובקרה", cap: "reports.view" },
+  { href: "/history", label: "היסטוריה גלובלית", icon: "📜", group: "דוחות ובקרה", cap: "reports.view" },
   { href: "/audit", label: "יומן פעולות", icon: "🧾", group: "דוחות ובקרה", cap: "audit.view" },
 
   // ===== עזרה =====

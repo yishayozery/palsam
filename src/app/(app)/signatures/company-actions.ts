@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { adjustQuantity, defaultStatusId } from "@/lib/inventory";
+import { requiresPersonalId } from "@/lib/handover";
 import type { SignatureMethod } from "@/generated/prisma";
 
 /**
@@ -192,6 +193,19 @@ export async function companyReturn(formData: FormData): Promise<{ ok?: boolean;
     }
     if (!companyId) return { error: "חסרה פלוגה" };
     if (serialIds.length === 0 && qtyEntries.length === 0) return { error: "בחר לפחות פריט אחד" };
+
+    // 🔒 מ.א. — אם הגדוד דורש, חייב להיות לרס"פ הפלוגה (או מי שמגיש את הציוד) מספר אישי במערכת
+    if (await requiresPersonalId(bId)) {
+      const reps = await prisma.appUser.findMany({
+        where: { battalionId: bId, holderId: companyId, active: true, role: "COMPANY_REP" },
+        include: { soldier: { select: { personalNumber: true } } },
+      });
+      const anyWithPN = reps.find((r) => r.soldier?.personalNumber);
+      if (!anyWithPN) {
+        const company = await prisma.holder.findUnique({ where: { id: companyId }, select: { name: true } });
+        return { error: `🔒 הגדוד דורש מ.א. בכל מסירה. רס"פ הפלוגה "${company?.name}" חייב להיות מקושר לחייל עם מ.א. ברוסטר.` };
+      }
+    }
 
     // איתור מחסן יעד לפי קטגוריית הפריט
     const findDestWarehouse = async (itemTypeId: string): Promise<string | null> => {

@@ -25,6 +25,7 @@ export default async function TransferDocumentPage({
       createdBy: true,
       approvedBy: true,
       lines: { include: { itemType: true, serialUnit: true, status: true } },
+      signatures: { where: { status: "SIGNED" }, select: { signatureData: true, signedAt: true, soldier: { select: { fullName: true, personalNumber: true } }, signerUser: { select: { fullName: true, title: true } } }, take: 1 },
     },
   });
   if (!t) notFound();
@@ -115,11 +116,25 @@ export default async function TransferDocumentPage({
           <div className="border-t border-slate-400 pt-2">
             <div className="text-slate-500">מקבל / מאשר</div>
             <div className="font-medium mt-1">
-              {t.approvedBy?.fullName ?? "________________"}
+              {t.approvedBy?.fullName ?? t.signatures[0]?.soldier?.fullName ?? t.signatures[0]?.signerUser?.fullName ?? "________________"}
               {t.approvedAt && (
                 <span className="text-slate-400"> · {t.approvedAt.toLocaleDateString("he-IL")}</span>
               )}
             </div>
+            {/* חתימה דיגיטלית — אם קיימת */}
+            {t.signatures[0]?.signatureData && (
+              <div className="mt-3 border border-slate-200 rounded-lg p-2 bg-slate-50">
+                <div className="text-[10px] text-slate-500 mb-1">חתימה דיגיטלית:</div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={t.signatures[0].signatureData} alt="חתימה" className="max-h-24 object-contain" />
+                {t.signatures[0].signedAt && (
+                  <div className="text-[10px] text-slate-400 mt-1">
+                    נחתם: {t.signatures[0].signedAt.toLocaleString("he-IL")}
+                    {t.signatures[0].soldier?.personalNumber && ` · מ.א. ${t.signatures[0].soldier.personalNumber}`}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

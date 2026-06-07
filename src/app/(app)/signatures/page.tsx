@@ -106,11 +106,14 @@ export default async function SignaturesPage() {
   const [pending, signedUnits, soldiers, availableUnits, statuses] = await Promise.all([
     prisma.signature.findMany({
       where: { battalionId: bId, status: "PENDING" },
-      include: { soldier: true, signerUser: true, transfer: { include: { lines: true } } },
+      include: { soldier: true, signerUser: true, transfer: { include: { lines: true, createdBy: { select: { fullName: true, title: true } } } } },
       orderBy: { createdAt: "desc" },
     }),
     prisma.serialUnit.findMany({
-      where: { battalionId: bId, signedSoldierId: { not: null }, ...holderFilter },
+      // ⚠️ רס"פ פלוגה — רואה ציוד חתום על חיילי הפלוגה שלו (גם אם currentHolderId=מחסן)
+      where: isCompanyRep && user.holderId
+        ? { battalionId: bId, signedSoldierId: { not: null }, signedSoldier: { companyId: user.holderId } }
+        : { battalionId: bId, signedSoldierId: { not: null }, ...holderFilter },
       include: { itemType: true, status: true, signedSoldier: true, currentHolder: true },
       orderBy: { signedSoldier: { fullName: "asc" } },
     }),
@@ -240,13 +243,21 @@ export default async function SignaturesPage() {
         ) : (
           <Table>
             <thead>
-              <tr><Th>חייל</Th><Th>פריטים</Th><Th>שיטה</Th><Th>סטטוס</Th><Th>נוצר</Th><Th>פעולות</Th></tr>
+              <tr><Th>חייל</Th><Th>פריטים</Th><Th>החתים</Th><Th>שיטה</Th><Th>סטטוס</Th><Th>נוצר</Th><Th>פעולות</Th></tr>
             </thead>
             <tbody>
               {pending.map((s) => (
                 <tr key={s.id}>
                   <Td className="font-medium">{s.soldier?.fullName ?? s.signerUser?.fullName ?? ""}</Td>
                   <Td className="text-center">{s.transfer?.lines.length ?? 0}</Td>
+                  <Td className="text-xs">
+                    {s.transfer?.createdBy ? (
+                      <>
+                        <div className="font-medium text-slate-700">{s.transfer.createdBy.fullName}</div>
+                        {s.transfer.createdBy.title && <div className="text-[10px] text-slate-400">{s.transfer.createdBy.title}</div>}
+                      </>
+                    ) : "—"}
+                  </Td>
                   <Td><Badge>{SIGNATURE_METHOD[s.method]}</Badge></Td>
                   <Td><Badge className="bg-amber-100 text-amber-800">{SIGNATURE_STATUS[s.status]}</Badge></Td>
                   <Td className="text-xs text-slate-500">{s.createdAt.toLocaleDateString("he-IL")}</Td>

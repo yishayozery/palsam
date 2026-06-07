@@ -12,14 +12,22 @@ export default async function GapsPage() {
   const bId = user.battalionId!;
   const canResolve = can(user.role, "gaps.resolve");
 
+  // ⚠️ סקופ — רס"פ פלוגה רואה רק פערים של הפלוגה שלו (פערים שהוא יצר בעצמו בספירה).
+  // קצין מחסן — רק של המחסנים שלו. מפ"מ/אדמין-על — הכל.
+  const scope = user.role === "COMPANY_REP" && user.holderId
+    ? { holderId: user.holderId }
+    : user.role === "WAREHOUSE_MANAGER" && user.holderIds?.length
+      ? { holderId: { in: user.holderIds } }
+      : {};
+
   const [open, resolved] = await Promise.all([
     prisma.discrepancy.findMany({
-      where: { battalionId: bId, status: "OPEN" },
+      where: { battalionId: bId, status: "OPEN", ...scope },
       include: { itemType: true, holder: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.discrepancy.findMany({
-      where: { battalionId: bId, status: "RESOLVED" },
+      where: { battalionId: bId, status: "RESOLVED", ...scope },
       include: { itemType: true, holder: true, resolvedBy: true },
       orderBy: { resolvedAt: "desc" },
       take: 20,
