@@ -162,6 +162,7 @@ export default async function SignaturesPage() {
                   id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber,
                   status: u.status.name, statusId: u.statusId,
                   signMode: u.itemType.signMode,
+                  lotQuantity: u.lotQuantity ?? null,
                 }))}
                 balances={warehouseBalances.map((b) => ({
                   itemTypeId: b.itemTypeId, statusId: b.statusId,
@@ -208,6 +209,7 @@ export default async function SignaturesPage() {
                 units={availableUnits.map((u) => ({
                   id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber,
                   status: u.status.name, statusId: u.statusId,
+                  lotQuantity: u.lotQuantity,
                 }))}
                 balances={warehouseBalances.map((b) => ({
                   itemTypeId: b.itemTypeId, itemName: b.itemType.name, unit: b.itemType.unit,

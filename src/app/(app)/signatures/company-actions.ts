@@ -82,10 +82,15 @@ export async function createCompanySign(formData: FormData): Promise<{ token: st
       for (const sid of serialIds) {
         const su = await tx.serialUnit.findUnique({ where: { id: sid } });
         if (!su) continue;
-        // הסרת המיקום הנוכחי (במעבר)
-        await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: null } });
+        // אצווה? אפשר להחתים על כמות חלקית — נשמר ב-line.quantity, השרת יפצל בעת ההשלמה
+        const partialLotQty = parseInt(String(formData.get(`lotQty:${sid}`) || "0"), 10);
+        const lineQty = partialLotQty > 0 && partialLotQty < (su.lotQuantity ?? 1) ? partialLotQty : (su.lotQuantity ?? 1);
+        // הסרת המיקום הנוכחי (במעבר) — רק אם זו אצווה שלמה. בפיצול יש להשאיר את המקור
+        if (lineQty === (su.lotQuantity ?? 1)) {
+          await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: null } });
+        }
         await tx.transferLine.create({
-          data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: su.statusId },
+          data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: lineQty, serialUnitId: sid, statusId: su.statusId },
         });
       }
       await tx.signature.create({
@@ -122,7 +127,30 @@ export async function completeCompanySignature(token: string, signatureData: str
     const targetHolderId = t.toHolderId!;
     for (const line of t.lines) {
       if (line.serialUnitId) {
-        await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { currentHolderId: targetHolderId } });
+        const unit = await tx.serialUnit.findUnique({ where: { id: line.serialUnitId } });
+        if (!unit) continue;
+        const isLot = (unit.lotQuantity ?? 1) > 1;
+        const lineQty = line.quantity ?? 1;
+        if (isLot && lineQty < (unit.lotQuantity ?? 1)) {
+          // פיצול אצווה: יוצרים יחידה חדשה לפלוגה, מקטינים את המקור
+          let suffix = 1;
+          while (await tx.serialUnit.findFirst({ where: { itemTypeId: unit.itemTypeId, serialNumber: `${unit.serialNumber}/${suffix}` } })) {
+            suffix++;
+          }
+          await tx.serialUnit.create({
+            data: {
+              battalionId: unit.battalionId, itemTypeId: unit.itemTypeId,
+              serialNumber: `${unit.serialNumber}/${suffix}`, lotQuantity: lineQty,
+              statusId: unit.statusId, currentHolderId: targetHolderId,
+            },
+          });
+          await tx.serialUnit.update({
+            where: { id: unit.id },
+            data: { lotQuantity: (unit.lotQuantity ?? 1) - lineQty },
+          });
+        } else {
+          await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { currentHolderId: targetHolderId } });
+        }
       } else if (line.statusId) {
         const bId = t.battalionId!;
         const sId = line.statusId ?? await defaultStatusId(tx, bId);

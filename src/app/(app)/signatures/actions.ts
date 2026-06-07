@@ -43,7 +43,10 @@ export async function createSignout(formData: FormData) {
     for (const sid of serialIds) {
       const su = await tx.serialUnit.findUnique({ where: { id: sid } });
       if (!su) continue;
-      await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: su.statusId } });
+      // אם זו אצווה והגיע lotQty — שולח כמות חלקית
+      const partialLotQty = parseInt(String(formData.get(`lotQty:${sid}`) || "0"), 10);
+      const lineQty = partialLotQty > 0 && partialLotQty < (su.lotQuantity ?? 1) ? partialLotQty : (su.lotQuantity ?? 1);
+      await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: lineQty, serialUnitId: sid, statusId: su.statusId } });
       // עדכון מיקום פיזי + רכב
       const updateData: { vehicleId?: string; physicalLocation?: string } = {};
       if (vehicleId) updateData.vehicleId = vehicleId;
@@ -118,8 +121,36 @@ export async function completeSignature(token: string, signatureData: string) {
   await prisma.$transaction(async (tx) => {
     for (const line of sig.transfer!.lines) {
       if (line.serialUnitId) {
-        // יחידה סריאלית: מעבר signedTo + מיקום פיזי לחייל
-        await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { signedSoldierId: soldierId } });
+        // יחידה סריאלית / אצווה — אם line.quantity קטן מ-lotQuantity, מפצלים
+        const unit = await tx.serialUnit.findUnique({ where: { id: line.serialUnitId } });
+        if (!unit) continue;
+        const isLot = (unit.lotQuantity ?? 1) > 1;
+        const lineQty = line.quantity ?? 1;
+        if (isLot && lineQty < (unit.lotQuantity ?? 1)) {
+          // פיצול אצווה: יוצרים יחידה חדשה לחייל, מקטינים את המקור
+          let childSerial = unit.serialNumber;
+          let suffix = 1;
+          // מציאת serialNumber ייחודי
+          while (await tx.serialUnit.findFirst({ where: { itemTypeId: unit.itemTypeId, serialNumber: `${childSerial}/${suffix}` } })) {
+            suffix++;
+          }
+          const splitSerial = `${childSerial}/${suffix}`;
+          await tx.serialUnit.create({
+            data: {
+              battalionId: unit.battalionId, itemTypeId: unit.itemTypeId,
+              serialNumber: splitSerial, lotQuantity: lineQty,
+              statusId: unit.statusId, signedSoldierId: soldierId,
+              currentHolderId: unit.currentHolderId,
+            },
+          });
+          await tx.serialUnit.update({
+            where: { id: unit.id },
+            data: { lotQuantity: (unit.lotQuantity ?? 1) - lineQty },
+          });
+        } else {
+          // יחידה רגילה / אצווה שלמה: מעבר signedTo
+          await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { signedSoldierId: soldierId } });
+        }
       } else if (line.statusId && fromHolderId) {
         // יחידה כמותית: גריעה מסך המלאי במחסן המקור
         const existing = await tx.stockBalance.findFirst({ where: { itemTypeId: line.itemTypeId, holderId: fromHolderId, statusId: line.statusId } });
