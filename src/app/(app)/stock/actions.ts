@@ -324,6 +324,112 @@ export async function declareLot(formData: FormData) {
   }
 }
 
+/**
+ * 🆕 תעודת זיכוי (WRITE_OFF) רב-פריטית — גוריעת מספר פריטים בתעודה אחת.
+ * formData:
+ *   externalUnit, externalContact, recipientPersonalId, reason
+ *   line:<idx>:itemTypeId, line:<idx>:trackingMethod
+ *   QTY:  line:<idx>:statusId, line:<idx>:quantity
+ *   SERIAL: line:<idx>:serialUnitIds (CSV) — יחידות שכבר במלאי
+ *   LOT:  line:<idx>:serialUnitIds (CSV של אצוות), line:<idx>:lotQty (כמה לזכות מהאצווה — חלקי)
+ */
+export async function withdrawMulti(formData: FormData): Promise<{ ok?: boolean; error?: string; transferId?: string }> {
+  try {
+    const user = await requireCapability("warehouse.operate");
+    const bId = user.battalionId!;
+    const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
+    const externalContact = String(formData.get("externalContact") || "").trim() || null;
+    const reason = String(formData.get("reason") || "").trim() || "זיכוי לחטיבה";
+    let recipientPersonalId: string | null = null;
+    try { recipientPersonalId = await extractPersonalId(bId, formData); }
+    catch (e) { return { error: e instanceof Error ? e.message.replace(/^PERSONAL_ID_REQUIRED:\s*/, "") : "שגיאה במ.א." }; }
+
+    const idxs = new Set<number>();
+    for (const [k] of formData.entries()) {
+      const m = k.match(/^line:(\d+):/);
+      if (m) idxs.add(parseInt(m[1], 10));
+    }
+    const lines = [...idxs].sort((a, b) => a - b);
+    if (lines.length === 0) return { error: "לא נבחרו פריטים לזיכוי" };
+
+    let transferId = "";
+    await prisma.$transaction(async (tx) => {
+      const firstItemTypeId = String(formData.get(`line:${lines[0]}:itemTypeId`) || "");
+      const firstWh = await pickWarehouse(bId, firstItemTypeId);
+      if (!firstWh) throw new Error("לא נמצא מחסן מקור לפריט הראשון");
+
+      const transfer = await tx.transfer.create({
+        data: {
+          battalionId: bId, type: "WRITE_OFF", status: "COMPLETED",
+          fromHolderId: firstWh.id,
+          reason: `זיכוי ${lines.length} פריטים בתעודה אחת — ${reason}`,
+          externalUnit, externalContact, recipientPersonalId,
+          createdById: user.id, approvedById: user.id, approvedAt: new Date(),
+        },
+      });
+      transferId = transfer.id;
+
+      for (const i of lines) {
+        const itemTypeId = String(formData.get(`line:${i}:itemTypeId`) || "");
+        const trackingMethod = String(formData.get(`line:${i}:trackingMethod`) || "QUANTITY");
+        if (!itemTypeId) continue;
+
+        const wh = await pickWarehouse(bId, itemTypeId);
+        if (!wh) continue;
+
+        if (trackingMethod === "SERIAL" || trackingMethod === "LOT") {
+          const ids = String(formData.get(`line:${i}:serialUnitIds`) || "").split(",").map((s) => s.trim()).filter(Boolean);
+          if (ids.length === 0) throw new Error(`שורה ${i + 1}: לא נבחרו יחידות`);
+          for (const sid of ids) {
+            const su = await tx.serialUnit.findUnique({ where: { id: sid } });
+            if (!su) throw new Error(`שורה ${i + 1}: יחידה לא נמצאה`);
+            if (su.battalionId !== bId) throw new Error(`שורה ${i + 1}: יחידה לא שייכת לגדוד`);
+            // אצווה חלקית: lotQty:<sid> — אם קיים וקטן מ-lotQuantity, פצל
+            const lotQty = parseInt(String(formData.get(`lotQty:${sid}`) || "0"), 10);
+            const isLot = (su.lotQuantity ?? 1) > 1;
+            const isPartial = isLot && lotQty > 0 && lotQty < (su.lotQuantity ?? 1);
+            if (isPartial) {
+              // הקטן את הקיים והוסף שורת תעודה עם lineQty
+              await tx.serialUnit.update({
+                where: { id: sid },
+                data: { lotQuantity: (su.lotQuantity ?? 1) - lotQty },
+              });
+              await tx.transferLine.create({
+                data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: lotQty, serialUnitId: sid, statusId: su.statusId },
+              });
+            } else {
+              // יחידה שלמה: מוחקים currentHolderId (יצאה מהגדוד)
+              await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: null, signedSoldierId: null } });
+              await tx.transferLine.create({
+                data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: su.statusId },
+              });
+            }
+          }
+        } else {
+          // QUANTITY
+          const statusId = String(formData.get(`line:${i}:statusId`) || "");
+          const quantity = Math.max(1, parseInt(String(formData.get(`line:${i}:quantity`) || "0"), 10) || 0);
+          if (!statusId) throw new Error(`שורה ${i + 1}: חסר סטטוס`);
+          if (quantity < 1) throw new Error(`שורה ${i + 1}: כמות חייבת להיות לפחות 1`);
+          const existing = await tx.stockBalance.findFirst({ where: { itemTypeId, holderId: wh.id, statusId } });
+          const current = existing?.quantity ?? 0;
+          if (current < quantity) throw new Error(`שורה ${i + 1}: לא מספיק מלאי (קיים ${current}, מבקש ${quantity})`);
+          await adjustQuantity(tx, bId, itemTypeId, wh.id, statusId, -quantity);
+          await tx.transferLine.create({
+            data: { transferId: transfer.id, itemTypeId, quantity, statusId },
+          });
+        }
+      }
+    });
+
+    await audit(user.id, "WITHDRAW_MULTI", "Transfer", transferId, { lines: lines.length, externalUnit, recipientPersonalId });
+    revalidateAll();
+    return { ok: true, transferId };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message.replace(/^Error:\s*/, "") : "שגיאה" };
+  }
+}
+
 /** הורדת מלאי כמותי — העברה מחוץ לגדוד. מאפשר ירידה למינוס. */
 export async function withdrawQty(formData: FormData) {
   const user = await requireCapability("warehouse.operate");

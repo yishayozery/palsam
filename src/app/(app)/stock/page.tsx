@@ -8,6 +8,7 @@ import StockEntryModal from "./StockEntryModal";
 import StockWithdrawModal from "./StockWithdrawModal";
 import StatusChangeModal from "./StatusChangeModal";
 import MultiIntakeModal from "./MultiIntakeModal";
+import MultiWithdrawModal from "./MultiWithdrawModal";
 import SendToTanaModal from "../maintenance/SendToTanaModal";
 import { findTanaHolder } from "@/lib/tana";
 import { approveTransfer, rejectTransfer } from "../transfers/actions";
@@ -127,6 +128,24 @@ export default async function StockPage({
               counterpartOptions={counterpartOptions}
               items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod, unit: i.unit, association: ASSOC[i.association] }))}
               statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
+            />
+            <MultiWithdrawModal
+              currentUserName={user.fullName}
+              requirePersonalId={requirePersonalId}
+              counterpartOptions={counterpartOptions}
+              items={items.filter((i) => i.trackingMethod !== "KIT").map((i) => ({
+                id: i.id, name: i.name, sku: i.sku,
+                trackingMethod: i.trackingMethod as "QUANTITY" | "SERIAL" | "LOT",
+                unit: i.unit,
+              }))}
+              statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
+              stocks={items.flatMap((i) => i.stockBalances.map((b) => ({
+                itemTypeId: i.id, statusId: b.statusId, statusName: b.status.name, quantity: b.quantity,
+              })))}
+              units={items.flatMap((i) => i.serialUnits.filter((u) => u.currentHolderId && !u.signedSoldierId).map((u) => ({
+                id: u.id, itemTypeId: i.id, serialNumber: u.serialNumber,
+                lotQuantity: u.lotQuantity, statusId: u.statusId, statusName: u.status.name,
+              })))}
             />
             <StockWithdrawModal
               currentUserName={user.fullName}
