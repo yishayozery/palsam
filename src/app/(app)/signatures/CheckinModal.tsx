@@ -8,6 +8,7 @@ type Unit = {
   id: string; serial: string; itemName: string;
   soldierId: string; soldierName: string; soldierPN: string | null; companyName: string | null;
   statusId: string; statusName: string; isWear: boolean; isLoss: boolean;
+  lotQuantity: number | null;
 };
 type Status = { id: string; name: string; isWear: boolean; isLoss: boolean; isDefault: boolean };
 
@@ -19,9 +20,12 @@ export default function CheckinModal({ signedUnits, statuses }: {
   const [soldierId, setSoldierId] = useState("");
   const [soldierSearch, setSoldierSearch] = useState("");
   const [selectedUnits, setSelectedUnits] = useState<Set<string>>(new Set());
+  // ⚠️ כמות חלקית לזיכוי לכל אצווה (unitId → qty)
+  const [partialLotQty, setPartialLotQty] = useState<Map<string, number>>(new Map());
   const [newStatusId, setNewStatusId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [lotPicker, setLotPicker] = useState<{ unit: Unit; qty: number } | null>(null);
 
   // חיילים שיש להם ציוד חתום
   const soldiers = useMemo(() => {
@@ -43,17 +47,48 @@ export default function CheckinModal({ signedUnits, statuses }: {
   const selectedSoldier = soldiers.find((s) => s.id === soldierId);
   const soldierUnits = useMemo(() => signedUnits.filter((u) => u.soldierId === soldierId), [signedUnits, soldierId]);
 
-  const reset = () => { setSoldierId(""); setSoldierSearch(""); setSelectedUnits(new Set()); setNewStatusId(""); setError(null); };
+  const reset = () => {
+    setSoldierId(""); setSoldierSearch(""); setSelectedUnits(new Set());
+    setPartialLotQty(new Map()); setNewStatusId(""); setError(null);
+  };
+
+  // לחיצה על יחידה — אם זו אצווה, פתח דיאלוג; אחרת סמן/בטל
+  const toggleUnit = (u: Unit, checked: boolean) => {
+    if (checked && u.lotQuantity && u.lotQuantity > 1) {
+      setLotPicker({ unit: u, qty: u.lotQuantity });
+      return;
+    }
+    setSelectedUnits((s) => {
+      const n = new Set(s);
+      if (checked) n.add(u.id); else n.delete(u.id);
+      return n;
+    });
+    if (!checked) setPartialLotQty((m) => { const n = new Map(m); n.delete(u.id); return n; });
+  };
+
+  const confirmLotPick = () => {
+    if (!lotPicker) return;
+    const { unit, qty } = lotPicker;
+    if (qty < 1 || qty > (unit.lotQuantity ?? 1)) return;
+    setSelectedUnits((s) => new Set(s).add(unit.id));
+    if (qty < (unit.lotQuantity ?? 1)) {
+      setPartialLotQty((m) => new Map(m).set(unit.id, qty));
+    } else {
+      setPartialLotQty((m) => { const n = new Map(m); n.delete(unit.id); return n; });
+    }
+    setLotPicker(null);
+  };
 
   async function submit() {
     if (selectedUnits.size === 0) { setError("בחר לפחות יחידה אחת לזיכוי"); return; }
     setBusy(true); setError(null);
     try {
-      // checkinSerial מטפל ביחידה אחת בכל קריאה (יש לקרוא לכל יחידה)
       for (const unitId of selectedUnits) {
         const fd = new FormData();
         fd.append("serialUnitId", unitId);
         if (newStatusId) fd.append("statusId", newStatusId);
+        const partial = partialLotQty.get(unitId);
+        if (partial) fd.append("lotQty", String(partial));
         await checkinSerial(fd);
       }
       reset();
@@ -77,7 +112,7 @@ export default function CheckinModal({ signedUnits, statuses }: {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-2 md:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col overflow-hidden relative">
         <div className="bg-gradient-to-r from-amber-600 to-amber-800 text-white p-4 flex items-center justify-between shrink-0">
           <div>
             <h3 className="font-bold text-lg">↩️ זיכוי חייל</h3>
@@ -130,20 +165,29 @@ export default function CheckinModal({ signedUnits, statuses }: {
               </div>
               {soldierUnits.map((u) => {
                 const checked = selectedUnits.has(u.id);
+                const isLot = !!u.lotQuantity && u.lotQuantity > 1;
+                const partial = partialLotQty.get(u.id);
                 return (
-                  <label key={u.id} className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer ${checked ? "bg-amber-50 border-amber-300" : "bg-white border-slate-200 hover:bg-slate-50"}`}>
+                  <label key={u.id} className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer ${checked ? (isLot ? "bg-orange-50 border-orange-300" : "bg-amber-50 border-amber-300") : (isLot ? "bg-white border-orange-200 hover:bg-orange-50" : "bg-white border-slate-200 hover:bg-slate-50")}`}>
                     <input type="checkbox" checked={checked}
-                      onChange={(e) => setSelectedUnits((s) => {
-                        const n = new Set(s);
-                        if (e.target.checked) n.add(u.id); else n.delete(u.id);
-                        return n;
-                      })}
+                      onChange={(e) => toggleUnit(u, e.target.checked)}
                       className="w-4 h-4" />
-                    <span className="text-lg">📦</span>
+                    <span className="text-lg">{isLot ? "💣" : "📦"}</span>
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">{u.itemName}</div>
-                      <div className="text-xs text-slate-500 font-mono">SN: {u.serial} · {u.statusName}{u.isWear && " 🟡"}{u.isLoss && " 🔴"}</div>
+                      <div className="font-medium text-sm truncate">
+                        {u.itemName}
+                        {isLot && (
+                          <span className="mr-1 text-[10px] bg-orange-100 text-orange-800 rounded px-1.5 py-0.5">
+                            אצווה {partial ? `· מזכה ${partial}/${u.lotQuantity}` : `× ${u.lotQuantity}`}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-500 font-mono">{isLot ? `לוט: ${u.serial}` : `SN: ${u.serial}`} · {u.statusName}{u.isWear && " 🟡"}{u.isLoss && " 🔴"}</div>
                     </div>
+                    {checked && isLot && (
+                      <button type="button" onClick={(e) => { e.preventDefault(); setLotPicker({ unit: u, qty: partial ?? (u.lotQuantity ?? 1) }); }}
+                        className="text-xs text-orange-700 hover:underline">✎ ערוך כמות</button>
+                    )}
                   </label>
                 );
               })}
@@ -170,13 +214,70 @@ export default function CheckinModal({ signedUnits, statuses }: {
           </div>
         )}
 
-        <div className="border-t border-slate-200 p-3 bg-white flex items-center justify-between gap-2 shrink-0">
-          {error && <div className="flex-1 text-sm text-rose-700 font-medium">⚠️ {error}</div>}
-          <div className="flex items-center gap-2 mr-auto">
-            <button onClick={() => { reset(); setOpen(false); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
+        {/* דיאלוג אצווה לזיכוי חלקי */}
+        {lotPicker && (
+          <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-10 p-3" onClick={() => setLotPicker(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-orange-500 to-orange-700 text-white p-4">
+                <h3 className="font-bold text-lg">⚠️ זיכוי אצווה</h3>
+                <p className="text-xs text-orange-100 mt-1">בחר כמה לזכות מהאצווה — היתרה תישאר אצל החייל</p>
+              </div>
+              <div className="p-5 space-y-3">
+                <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-3 flex items-start gap-3">
+                  <span className="text-3xl">💣</span>
+                  <div className="flex-1">
+                    <div className="font-bold text-lg">{lotPicker.unit.itemName}</div>
+                    <div className="text-xs text-slate-600 mt-1">מס׳ לוט: <span className="font-mono font-bold">{lotPicker.unit.serial}</span></div>
+                    <div className="text-xs text-slate-600">חתום על: <b>{lotPicker.unit.soldierName}</b></div>
+                    <div className="text-xs text-slate-600">סה״כ באצווה: <span className="font-bold text-orange-700">{lotPicker.unit.lotQuantity}</span></div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">כמות לזיכוי</label>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setLotPicker((p) => p ? { ...p, qty: Math.max(1, p.qty - 1) } : p)}
+                      className="w-10 h-10 rounded-lg border border-slate-300 text-lg font-bold">−</button>
+                    <input type="number" min={1} max={lotPicker.unit.lotQuantity ?? 1} value={lotPicker.qty}
+                      onChange={(e) => setLotPicker((p) => p ? { ...p, qty: Math.max(1, Math.min(lotPicker.unit.lotQuantity ?? 1, parseInt(e.target.value) || 1)) } : p)}
+                      className="flex-1 rounded-lg border-2 border-orange-300 px-3 py-2 text-2xl font-bold text-center" autoFocus />
+                    <button type="button" onClick={() => setLotPicker((p) => p ? { ...p, qty: Math.min(lotPicker.unit.lotQuantity ?? 1, p.qty + 1) } : p)}
+                      className="w-10 h-10 rounded-lg border border-slate-300 text-lg font-bold">+</button>
+                  </div>
+                  <div className="flex justify-between mt-2 text-xs">
+                    <button type="button" onClick={() => setLotPicker((p) => p ? { ...p, qty: 1 } : p)} className="text-blue-600 hover:underline">1 בלבד</button>
+                    <button type="button" onClick={() => setLotPicker((p) => p ? { ...p, qty: Math.floor((lotPicker.unit.lotQuantity ?? 1) / 2) } : p)} className="text-blue-600 hover:underline">חצי</button>
+                    <button type="button" onClick={() => setLotPicker((p) => p ? { ...p, qty: lotPicker.unit.lotQuantity ?? 1 } : p)} className="text-blue-600 hover:underline">הכל ({lotPicker.unit.lotQuantity})</button>
+                  </div>
+                  {lotPicker.qty < (lotPicker.unit.lotQuantity ?? 1) && (
+                    <p className="text-[11px] text-amber-700 mt-2 bg-amber-50 rounded p-2">
+                      ℹ️ זיכוי חלקי: <b>{lotPicker.qty}</b> יחזרו למחסן, <b>{(lotPicker.unit.lotQuantity ?? 1) - lotPicker.qty}</b> יישארו אצל החייל.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="p-3 border-t border-slate-200 flex gap-2">
+                <button onClick={() => setLotPicker(null)} className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm">ביטול</button>
+                <button onClick={confirmLotPick} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white rounded-lg px-4 py-2.5 text-sm font-bold">
+                  ✓ זכה {lotPicker.qty}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="border-t border-slate-200 p-3 bg-white shrink-0">
+          {error && <div className="text-sm text-rose-700 font-medium mb-2">⚠️ {error}</div>}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => { reset(); setOpen(false); }} disabled={busy}
+              className="flex-1 sm:flex-none rounded-lg border border-slate-300 px-4 py-2.5 text-sm disabled:opacity-50">ביטול</button>
             <button onClick={submit} disabled={busy || selectedUnits.size === 0}
-              className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg px-5 py-2 text-sm font-bold">
-              {busy ? "מזכה..." : `✓ זכה ${selectedUnits.size} יחידות`}
+              className="flex-1 sm:flex-none bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg px-5 py-2.5 text-sm font-bold flex items-center justify-center gap-2">
+              {busy ? (
+                <>
+                  <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  מזכה...
+                </>
+              ) : `✓ זכה ${selectedUnits.size} יחידות`}
             </button>
           </div>
         </div>

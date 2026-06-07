@@ -175,21 +175,50 @@ export async function checkinSerial(formData: FormData) {
   const bId = user.battalionId!;
   const serialUnitId = String(formData.get("serialUnitId") || "");
   const statusId = String(formData.get("statusId") || "");
+  const partialLotQty = parseInt(String(formData.get("lotQty") || "0"), 10);
 
   const su = await prisma.serialUnit.findUnique({ where: { id: serialUnitId }, include: { signedSoldier: true } });
   if (!su || !su.signedSoldierId) return;
 
+  const isLot = (su.lotQuantity ?? 1) > 1;
+  const isPartial = isLot && partialLotQty > 0 && partialLotQty < (su.lotQuantity ?? 1);
+  const lineQty = isPartial ? partialLotQty : (su.lotQuantity ?? 1);
+
   await prisma.$transaction(async (tx) => {
-    await tx.serialUnit.update({ where: { id: serialUnitId }, data: { signedSoldierId: null, ...(statusId ? { statusId } : {}) } });
+    if (isPartial) {
+      // פיצול אצווה — חלק חוזר למחסן, השאר נשאר אצל החייל
+      let suffix = 1;
+      while (await tx.serialUnit.findFirst({ where: { itemTypeId: su.itemTypeId, serialNumber: `${su.serialNumber}/${suffix}` } })) {
+        suffix++;
+      }
+      await tx.serialUnit.create({
+        data: {
+          battalionId: bId, itemTypeId: su.itemTypeId,
+          serialNumber: `${su.serialNumber}/${suffix}`,
+          lotQuantity: partialLotQty,
+          statusId: statusId || su.statusId,
+          currentHolderId: su.currentHolderId,
+          // signedSoldierId = null (חזר למחסן)
+        },
+      });
+      await tx.serialUnit.update({
+        where: { id: su.id },
+        data: { lotQuantity: (su.lotQuantity ?? 1) - partialLotQty },
+      });
+    } else {
+      // זיכוי שלם — היחידה חוזרת למחסן
+      await tx.serialUnit.update({ where: { id: serialUnitId }, data: { signedSoldierId: null, ...(statusId ? { statusId } : {}) } });
+    }
     await tx.transfer.create({
       data: {
-        battalionId: bId, type: "CHECKIN", status: "COMPLETED", toHolderId: su.currentHolderId, createdById: user.id, approvedById: user.id, approvedAt: new Date(), reason: "זיכוי מהיר",
-        lines: { create: { itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: su.id, statusId: statusId || su.statusId } },
+        battalionId: bId, type: "CHECKIN", status: "COMPLETED", toHolderId: su.currentHolderId, createdById: user.id, approvedById: user.id, approvedAt: new Date(),
+        reason: isPartial ? `זיכוי חלקי מאצווה ${su.serialNumber} — ${partialLotQty}/${su.lotQuantity}` : "זיכוי מהיר",
+        lines: { create: { itemTypeId: su.itemTypeId, quantity: lineQty, serialUnitId: su.id, statusId: statusId || su.statusId } },
       },
     });
   });
 
-  await audit(user.id, "CHECKIN", "SerialUnit", serialUnitId, { soldier: su.signedSoldier?.fullName });
+  await audit(user.id, "CHECKIN", "SerialUnit", serialUnitId, { soldier: su.signedSoldier?.fullName, partial: isPartial ? partialLotQty : null });
   revalidatePath("/signatures");
 }
 

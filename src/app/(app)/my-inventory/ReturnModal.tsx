@@ -18,7 +18,7 @@ type Balance = {
 };
 type Status = { id: string; name: string; isDefault: boolean; isWear: boolean; isLoss: boolean };
 
-type CartSerial = { type: "serial"; unitId: string; itemName: string; serial: string; statusName: string };
+type CartSerial = { type: "serial"; unitId: string; itemName: string; serial: string; statusName: string; lotQty?: number; lotTotal?: number };
 type CartQty = { type: "qty"; itemTypeId: string; itemName: string; unit: string; quantity: number; maxQty: number; statusId: string; statusName: string };
 type CartItem = CartSerial | CartQty;
 
@@ -33,6 +33,7 @@ export default function ReturnModal({ serialUnits, balances, statuses }: {
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [lotPicker, setLotPicker] = useState<{ unit: SerialUnit; qty: number } | null>(null);
 
   const cartSerialIds = new Set(cart.filter((c) => c.type === "serial").map((c) => (c as CartSerial).unitId));
 
@@ -60,8 +61,17 @@ export default function ReturnModal({ serialUnits, balances, statuses }: {
     });
   }, [balances, itemSearch, showOnlyDefective]);
 
-  const addSerial = (u: SerialUnit) =>
+  const addSerial = (u: SerialUnit) => {
+    if (u.lotQuantity && u.lotQuantity > 1) { setLotPicker({ unit: u, qty: u.lotQuantity }); return; }
     setCart((c) => [...c, { type: "serial", unitId: u.id, itemName: u.itemName, serial: u.serial, statusName: u.statusName }]);
+  };
+  const confirmLotPick = () => {
+    if (!lotPicker) return;
+    const { unit, qty } = lotPicker;
+    if (qty < 1 || qty > (unit.lotQuantity ?? 1)) return;
+    setCart((c) => [...c, { type: "serial", unitId: unit.id, itemName: unit.itemName, serial: unit.serial, statusName: unit.statusName, lotQty: qty, lotTotal: unit.lotQuantity ?? qty }]);
+    setLotPicker(null);
+  };
   const addQty = (b: Balance) => {
     const existing = cart.find((c) => c.type === "qty" && c.itemTypeId === b.itemTypeId && c.statusId === b.statusId);
     if (existing) {
@@ -103,7 +113,13 @@ export default function ReturnModal({ serialUnits, balances, statuses }: {
           fd.append("quantity", String(total));
         }
         for (const i of items) {
-          if (i.type === "serial") fd.append("serialId", (i as CartSerial).unitId);
+          if (i.type === "serial") {
+            const cs = i as CartSerial;
+            fd.append("serialId", cs.unitId);
+            if (cs.lotQty && cs.lotTotal && cs.lotQty < cs.lotTotal) {
+              fd.append(`lotQty:${cs.unitId}`, String(cs.lotQty));
+            }
+          }
         }
         await createReturn(fd);
       }
@@ -128,7 +144,7 @@ export default function ReturnModal({ serialUnits, balances, statuses }: {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-2 md:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden relative">
         <div className="bg-gradient-to-r from-amber-600 to-amber-800 text-white p-4 flex items-center justify-between shrink-0">
           <div>
             <h3 className="font-bold text-lg">↩️ זיכוי לגדוד</h3>
@@ -158,12 +174,25 @@ export default function ReturnModal({ serialUnits, balances, statuses }: {
                 <div className="text-center text-slate-400 py-10 text-sm">עגלה ריקה.<br />לחץ על פריט לזיכוי.</div>
               ) : cart.map((c, i) => (
                 <div key={i} className="bg-white border border-slate-200 rounded-lg p-2 flex items-center gap-2">
-                  <span className="text-lg">{c.type === "serial" ? "📦" : "📦"}</span>
+                  <span className="text-lg">{c.type === "serial" && c.lotQty ? "💣" : "📦"}</span>
                   {c.type === "serial" ? (
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">{c.itemName}</div>
-                      <div className="text-xs text-slate-500 font-mono truncate">SN: {c.serial} · {c.statusName}</div>
-                    </div>
+                    <>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm truncate">
+                          {c.itemName}
+                          {c.lotQty && <span className="mr-1 text-[10px] bg-orange-100 text-orange-800 rounded px-1.5 py-0.5">אצווה · {c.lotQty}/{c.lotTotal}</span>}
+                        </div>
+                        <div className="text-xs text-slate-500 font-mono truncate">{c.lotQty ? `לוט: ${c.serial}` : `SN: ${c.serial}`} · {c.statusName}</div>
+                      </div>
+                      {c.lotQty && (
+                        <input type="number" min={1} max={c.lotTotal} value={c.lotQty}
+                          onChange={(e) => {
+                            const n = Math.max(1, Math.min(c.lotTotal ?? 1, parseInt(e.target.value) || 1));
+                            setCart((arr) => arr.map((x, j) => j === i ? { ...(x as CartSerial), lotQty: n } : x));
+                          }}
+                          className="w-14 rounded border border-slate-300 px-1.5 py-1 text-sm text-center" />
+                      )}
+                    </>
                   ) : (
                     <>
                       <div className="flex-1 min-w-0">
@@ -226,33 +255,96 @@ export default function ReturnModal({ serialUnits, balances, statuses }: {
 
               {filteredSerials.length > 0 && (
                 <div>
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-2 pb-1 pt-1">סריאלי</div>
-                  {filteredSerials.map((u) => (
-                    <button key={u.id} onClick={() => addSerial(u)}
-                      className={`w-full text-right border rounded-lg p-2 mb-1 hover:bg-amber-50 hover:border-amber-300 transition flex items-center gap-2 group ${u.isWear || u.isLoss ? "border-amber-300 bg-amber-50/50" : "bg-white border-slate-200"}`}>
-                      <span className="text-lg">📦</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate">{u.itemName}</div>
-                        <div className="text-xs text-slate-500 font-mono truncate">
-                          SN: {u.serial} · {u.statusName} {u.isLoss && "🔴"} {u.isWear && "🟡"}
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-2 pb-1 pt-1">סריאלי / אצוות</div>
+                  {filteredSerials.map((u) => {
+                    const isLot = !!u.lotQuantity && u.lotQuantity > 1;
+                    return (
+                      <button key={u.id} onClick={() => addSerial(u)}
+                        className={`w-full text-right border rounded-lg p-2 mb-1 hover:bg-amber-50 transition flex items-center gap-2 group ${isLot ? "border-orange-300 hover:border-orange-400" : (u.isWear || u.isLoss ? "border-amber-300 bg-amber-50/50" : "bg-white border-slate-200")}`}>
+                        <span className="text-lg">{isLot ? "💣" : "📦"}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">
+                            {u.itemName}
+                            {isLot && <span className="mr-1 text-[10px] bg-orange-100 text-orange-800 rounded px-1.5 py-0.5">אצווה ×{u.lotQuantity}</span>}
+                          </div>
+                          <div className="text-xs text-slate-500 font-mono truncate">
+                            {isLot ? `לוט: ${u.serial}` : `SN: ${u.serial}`} · {u.statusName} {u.isLoss && "🔴"} {u.isWear && "🟡"}
+                          </div>
                         </div>
-                      </div>
-                      <span className="text-amber-600 font-bold text-lg group-hover:scale-110 transition">+</span>
-                    </button>
-                  ))}
+                        <span className={`font-bold text-lg group-hover:scale-110 transition ${isLot ? "text-orange-600" : "text-amber-600"}`}>+</span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        <div className="border-t border-slate-200 p-3 bg-white flex items-center justify-between gap-2 shrink-0">
-          {error && <div className="flex-1 text-sm text-rose-700 font-medium">⚠️ {error}</div>}
-          <div className="flex items-center gap-2 mr-auto">
-            <button onClick={() => { reset(); setOpen(false); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
+        {/* דיאלוג אצווה לזיכוי חלקי */}
+        {lotPicker && (
+          <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-10 p-3" onClick={() => setLotPicker(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-orange-500 to-orange-700 text-white p-4">
+                <h3 className="font-bold text-lg">⚠️ זיכוי אצווה</h3>
+                <p className="text-xs text-orange-100 mt-1">בחר כמה לזכות מהאצווה — היתרה נשארת בפלוגה</p>
+              </div>
+              <div className="p-5 space-y-3">
+                <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-3 flex items-start gap-3">
+                  <span className="text-3xl">💣</span>
+                  <div className="flex-1">
+                    <div className="font-bold text-lg">{lotPicker.unit.itemName}</div>
+                    <div className="text-xs text-slate-600 mt-1">מס׳ לוט: <span className="font-mono font-bold">{lotPicker.unit.serial}</span></div>
+                    <div className="text-xs text-slate-600">סטטוס: {lotPicker.unit.statusName}</div>
+                    <div className="text-xs text-slate-600">סה״כ באצווה: <span className="font-bold text-orange-700">{lotPicker.unit.lotQuantity}</span></div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">כמות לזיכוי</label>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setLotPicker((p) => p ? { ...p, qty: Math.max(1, p.qty - 1) } : p)}
+                      className="w-10 h-10 rounded-lg border border-slate-300 text-lg font-bold">−</button>
+                    <input type="number" min={1} max={lotPicker.unit.lotQuantity ?? 1} value={lotPicker.qty}
+                      onChange={(e) => setLotPicker((p) => p ? { ...p, qty: Math.max(1, Math.min(lotPicker.unit.lotQuantity ?? 1, parseInt(e.target.value) || 1)) } : p)}
+                      className="flex-1 rounded-lg border-2 border-orange-300 px-3 py-2 text-2xl font-bold text-center" autoFocus />
+                    <button type="button" onClick={() => setLotPicker((p) => p ? { ...p, qty: Math.min(lotPicker.unit.lotQuantity ?? 1, p.qty + 1) } : p)}
+                      className="w-10 h-10 rounded-lg border border-slate-300 text-lg font-bold">+</button>
+                  </div>
+                  <div className="flex justify-between mt-2 text-xs">
+                    <button type="button" onClick={() => setLotPicker((p) => p ? { ...p, qty: 1 } : p)} className="text-blue-600 hover:underline">1 בלבד</button>
+                    <button type="button" onClick={() => setLotPicker((p) => p ? { ...p, qty: Math.floor((lotPicker.unit.lotQuantity ?? 1) / 2) } : p)} className="text-blue-600 hover:underline">חצי</button>
+                    <button type="button" onClick={() => setLotPicker((p) => p ? { ...p, qty: lotPicker.unit.lotQuantity ?? 1 } : p)} className="text-blue-600 hover:underline">הכל ({lotPicker.unit.lotQuantity})</button>
+                  </div>
+                  {lotPicker.qty < (lotPicker.unit.lotQuantity ?? 1) && (
+                    <p className="text-[11px] text-amber-700 mt-2 bg-amber-50 rounded p-2">
+                      ℹ️ זיכוי חלקי: <b>{lotPicker.qty}</b> יחזרו למחסן, <b>{(lotPicker.unit.lotQuantity ?? 1) - lotPicker.qty}</b> יישארו בפלוגה.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="p-3 border-t border-slate-200 flex gap-2">
+                <button onClick={() => setLotPicker(null)} className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm">ביטול</button>
+                <button onClick={confirmLotPick} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white rounded-lg px-4 py-2.5 text-sm font-bold">
+                  ✓ הוסף לעגלה ({lotPicker.qty})
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="border-t border-slate-200 p-3 bg-white shrink-0">
+          {error && <div className="text-sm text-rose-700 font-medium mb-2">⚠️ {error}</div>}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => { reset(); setOpen(false); }} disabled={busy}
+              className="flex-1 sm:flex-none rounded-lg border border-slate-300 px-4 py-2.5 text-sm disabled:opacity-50">ביטול</button>
             <button onClick={submit} disabled={busy || cart.length === 0}
-              className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg px-5 py-2 text-sm font-bold">
-              {busy ? "שולח..." : `↩️ שלח לאישור קצין מחסן (${cart.length})`}
+              className="flex-1 sm:flex-none bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg px-5 py-2.5 text-sm font-bold flex items-center justify-center gap-2">
+              {busy ? (
+                <>
+                  <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  שולח...
+                </>
+              ) : `↩️ שלח לאישור (${cart.length})`}
             </button>
           </div>
         </div>

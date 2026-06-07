@@ -46,8 +46,11 @@ export async function createReturn(formData: FormData) {
       for (const sid of serialIds) {
         const su = await tx.serialUnit.findUnique({ where: { id: sid } });
         if (!su || su.currentHolderId !== companyId) continue;
+        // אצווה? אם הגיע lotQty חלקי — שומרים אותו ב-line.quantity, הפיצול בעת approveTransfer
+        const partialLotQty = parseInt(String(formData.get(`lotQty:${sid}`) || "0"), 10);
+        const lineQty = partialLotQty > 0 && partialLotQty < (su.lotQuantity ?? 1) ? partialLotQty : (su.lotQuantity ?? 1);
         await tx.transferLine.create({
-          data: { transferId: t.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: su.statusId },
+          data: { transferId: t.id, itemTypeId: su.itemTypeId, quantity: lineQty, serialUnitId: sid, statusId: su.statusId },
         });
       }
     } else if (quantity > 0 && statusId) {

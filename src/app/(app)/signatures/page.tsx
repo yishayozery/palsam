@@ -196,6 +196,7 @@ export default async function SignaturesPage() {
                   soldierPN: u.signedSoldier!.personalNumber, companyName: null,
                   statusId: u.statusId, statusName: u.status.name,
                   isWear: u.status.isWear, isLoss: u.status.isLoss,
+                  lotQuantity: u.lotQuantity,
                 }))}
                 statuses={statuses.map((s) => ({ id: s.id, name: s.name, isWear: s.isWear, isLoss: s.isLoss, isDefault: s.isDefault }))}
               />

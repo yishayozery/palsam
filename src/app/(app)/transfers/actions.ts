@@ -110,7 +110,32 @@ export async function approveTransfer(formData: FormData) {
     const targetHolderId = transfer.toHolderId!;
     for (const line of transfer.lines) {
       if (line.serialUnitId) {
-        await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { currentHolderId: targetHolderId, ...(line.statusId ? { statusId: line.statusId } : {}) } });
+        const unit = await tx.serialUnit.findUnique({ where: { id: line.serialUnitId } });
+        if (!unit) continue;
+        const isLot = (unit.lotQuantity ?? 1) > 1;
+        const lineQty = line.quantity ?? 1;
+        if (isLot && lineQty < (unit.lotQuantity ?? 1)) {
+          // פיצול אצווה: יוצרים יחידה ביעד עם הכמות החלקית; המקור נשאר אצל המקור עם היתרה
+          let suffix = 1;
+          while (await tx.serialUnit.findFirst({ where: { itemTypeId: unit.itemTypeId, serialNumber: `${unit.serialNumber}/${suffix}` } })) {
+            suffix++;
+          }
+          await tx.serialUnit.create({
+            data: {
+              battalionId: unit.battalionId, itemTypeId: unit.itemTypeId,
+              serialNumber: `${unit.serialNumber}/${suffix}`, lotQuantity: lineQty,
+              statusId: line.statusId ?? unit.statusId,
+              currentHolderId: targetHolderId,
+              signedSoldierId: unit.signedSoldierId, // ביעד החדש כבר בלי חתימה אישית אם זה זיכוי
+            },
+          });
+          await tx.serialUnit.update({
+            where: { id: unit.id },
+            data: { lotQuantity: (unit.lotQuantity ?? 1) - lineQty },
+          });
+        } else {
+          await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { currentHolderId: targetHolderId, ...(line.statusId ? { statusId: line.statusId } : {}) } });
+        }
       } else if (line.statusId) {
         await adjustQuantity(tx, bId, line.itemTypeId, targetHolderId, line.statusId, line.quantity);
       }
