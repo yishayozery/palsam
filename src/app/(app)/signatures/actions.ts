@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { requiresPersonalId } from "@/lib/handover";
 import type { SignatureMethod } from "@/generated/prisma";
 
 /** יצירת החתמה (SIGNOUT): מחזיק ◄ חייל. */
@@ -26,6 +27,14 @@ export async function createSignout(formData: FormData) {
   const qtyStatuses = formData.getAll("qtyStatus").map(String);
   const hasAnything = serialIds.length > 0 || kitId || qtyItems.length > 0;
   if (!soldierId || !hasAnything) throw new Error("בחר חייל ולפחות פריט אחד");
+
+  // 🔒 אכיפת מ.א. — אם הגדוד דורש, חייב להיות לחייל מ.א. במערכת
+  if (await requiresPersonalId(bId)) {
+    const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { fullName: true, personalNumber: true } });
+    if (!soldier?.personalNumber) {
+      throw new Error(`🔒 הגדוד דורש מ.א. בכל מסירה. החייל ${soldier?.fullName ?? ""} לא מקושר למ.א. — עדכן ב-/roster לפני ההחתמה.`);
+    }
+  }
 
   // אם נבחרה ערכה — נוסיף את הפריטים הכמותיים שלה כשורות העברה
   const kitLines = kitId
@@ -179,6 +188,13 @@ export async function checkinSerial(formData: FormData) {
 
   const su = await prisma.serialUnit.findUnique({ where: { id: serialUnitId }, include: { signedSoldier: true } });
   if (!su || !su.signedSoldierId) return;
+
+  // 🔒 אכיפת מ.א. — אם הגדוד דורש, חייב להיות לחייל מ.א.
+  if (await requiresPersonalId(bId)) {
+    if (!su.signedSoldier?.personalNumber) {
+      throw new Error(`🔒 הגדוד דורש מ.א. בכל מסירה. החייל ${su.signedSoldier?.fullName ?? ""} לא מקושר למ.א.`);
+    }
+  }
 
   const isLot = (su.lotQuantity ?? 1) > 1;
   const isPartial = isLot && partialLotQty > 0 && partialLotQty < (su.lotQuantity ?? 1);

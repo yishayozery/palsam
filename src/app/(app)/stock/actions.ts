@@ -41,6 +41,7 @@ function revalidateAll() {
 
 /** הוספת מלאי כמותי — מוסיף לכמות הקיימת (לא מחליף) */
 export async function declareQty(formData: FormData) {
+  try {
   const user = await requireCapability("warehouse.operate");
   const bId = user.battalionId!;
   const itemTypeId = String(formData.get("itemTypeId") || "");
@@ -48,10 +49,12 @@ export async function declareQty(formData: FormData) {
   const statusId = String(formData.get("statusId") || "") || (await defaultStatusId(prisma, bId));
   const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
   const externalContact = String(formData.get("externalContact") || "").trim() || null;
-  const recipientPersonalId = await extractPersonalId(bId, formData);
+  let recipientPersonalId: string | null = null;
+  try { recipientPersonalId = await extractPersonalId(bId, formData); }
+  catch (e) { return { error: e instanceof Error ? e.message.replace(/^PERSONAL_ID_REQUIRED:\s*/, "") : "שגיאה במספר אישי" }; }
 
   const wh = await pickWarehouse(bId, itemTypeId);
-  if (!wh) return;
+  if (!wh) return { error: "לא נמצא מחסן מתאים לפריט זה" };
 
   await prisma.$transaction(async (tx) => {
     await adjustQuantity(tx, bId, itemTypeId, wh.id, statusId, quantity);
@@ -68,6 +71,10 @@ export async function declareQty(formData: FormData) {
 
   await audit(user.id, "ADD_QTY", "ItemType", itemTypeId, { quantity, statusId, externalUnit, externalContact, recipientPersonalId });
   revalidateAll();
+  return { ok: true as const };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message.replace(/^Error:\s*/, "") : "שגיאה" };
+  }
 }
 
 /** הוספת יחידות סריאליות לפי מספרים שהוקלדו (אחת בשורה / בפסיק) */
@@ -180,6 +187,7 @@ export async function importSerials(formData: FormData) {
 
 /** הוספת אצווה (מספר אצווה + כמות). אפשר כמה אצוות לאותו פריט. */
 export async function declareLot(formData: FormData) {
+  try {
   const user = await requireCapability("warehouse.operate");
   const bId = user.battalionId!;
   const itemTypeId = String(formData.get("itemTypeId") || "");
@@ -188,12 +196,16 @@ export async function declareLot(formData: FormData) {
   const statusId = String(formData.get("statusId") || "") || (await defaultStatusId(prisma, bId));
   const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
   const externalContact = String(formData.get("externalContact") || "").trim() || null;
-  const recipientPersonalId = await extractPersonalId(bId, formData);
-  if (!lotNumber || quantity < 1) return;
+  let recipientPersonalId: string | null = null;
+  try { recipientPersonalId = await extractPersonalId(bId, formData); }
+  catch (e) { return { error: e instanceof Error ? e.message.replace(/^PERSONAL_ID_REQUIRED:\s*/, "") : "שגיאה במספר אישי" }; }
+  if (!lotNumber) return { error: "חסר מספר אצווה" };
+  if (quantity < 1) return { error: "כמות חייבת להיות לפחות 1" };
 
   const wh = await pickWarehouse(bId, itemTypeId);
-  if (!wh) return;
+  if (!wh) return { error: "לא נמצא מחסן מתאים לפריט זה" };
 
+  let dupErr: string | null = null;
   try {
     await prisma.$transaction(async (tx) => {
       await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: lotNumber, lotQuantity: quantity, statusId, currentHolderId: wh.id } });
@@ -202,9 +214,14 @@ export async function declareLot(formData: FormData) {
           lines: { create: { itemTypeId, quantity, statusId } } },
       });
     });
-  } catch { /* כפילות מספר אצווה */ }
+  } catch { dupErr = `כפילות במספר האצווה ${lotNumber}`; }
+  if (dupErr) return { error: dupErr };
   await audit(user.id, "DECLARE_LOT", "ItemType", itemTypeId, { lot: lotNumber, quantity });
   revalidateAll();
+  return { ok: true as const };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message.replace(/^Error:\s*/, "") : "שגיאה" };
+  }
 }
 
 /** הורדת מלאי כמותי — העברה מחוץ לגדוד. מאפשר ירידה למינוס. */
