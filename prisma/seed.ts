@@ -76,8 +76,8 @@ async function main() {
     await prisma.appUser.create({
       data: {
         username: w.user, passwordHash: pw,
-        fullName: w.manager,        // השם (לפני קישור לחייל אמיתי) — למשל "קל"ג"
-        title: w.manager,            // התואר/תפקיד — למשל "קל"ג"
+        fullName: "טרם הוקצה",  // placeholder — המפ"מ ישנה לשם החייל האמיתי דרך /org
+        title: w.manager,        // התואר/תפקיד — נשמר נפרד
         role: "WAREHOUSE_MANAGER", battalionId: bId, holderId: h.id,
       },
     });
@@ -94,8 +94,8 @@ async function main() {
     const rep = await prisma.appUser.create({
       data: {
         username: repUser[i], passwordHash: pw,
-        fullName: 'רס"פ',         // השם — לפני קישור לחייל אמיתי
-        title: 'רס"פ',             // התואר
+        fullName: "טרם הוקצה",   // placeholder — שם מלא יוחלף לחייל אמיתי
+        title: 'רס"פ',             // התואר/תפקיד
         role: "COMPANY_REP", battalionId: bId, holderId: c.id,
       },
     });

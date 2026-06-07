@@ -100,14 +100,30 @@ export async function updateRep(formData: FormData) {
     phone = soldier.phone ?? phone;
   }
 
+  // 🆕 רענון שם משתמש מהשם הפרטי כל עוד המשתמש לא הופעל
+  let newUsername: string | undefined;
+  if (!target.passwordSet && fullName) {
+    const first = fullName.trim().split(/\s+/)[0] ?? "";
+    const slug = first.replace(/[^A-Za-z֐-׿0-9_.-]+/g, "").slice(0, 24);
+    if (slug && slug !== target.username) {
+      const holder = await prisma.holder.findUnique({ where: { id: target.holderId! } });
+      const battalion = await prisma.battalion.findUnique({ where: { id: bId } });
+      const holderSlug = (holder?.name || "").replace(/[^֐-׿a-zA-Z0-9]+/g, "").toLowerCase().slice(0, 12);
+      const brigadeSlug = battalion?.brigade || battalion?.code || "";
+      const suffix = [holderSlug, brigadeSlug].filter(Boolean).join(".");
+      newUsername = await resolveUniqueUsername(slug, suffix, userId);
+    }
+  }
+
   await prisma.appUser.update({
     where: { id: userId },
     data: {
       fullName, title, phone,
       ...(newSoldierId !== undefined ? { soldierId: newSoldierId } : {}),
+      ...(newUsername ? { username: newUsername } : {}),
     },
   });
-  await audit(user.id, "UPDATE_REP", "AppUser", userId);
+  await audit(user.id, "UPDATE_REP", "AppUser", userId, { newUsername });
   revalidatePath("/reps");
 }
 

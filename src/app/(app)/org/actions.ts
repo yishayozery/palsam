@@ -94,14 +94,31 @@ export async function updateHolderUser(formData: FormData) {
     soldierId = soldierIdRaw;
   }
 
+  // 🆕 אם המשתמש עדיין לא הופעל (passwordSet=false), נחדש גם את ה-username מהשם הפרטי
+  let newUsername: string | undefined;
+  if (!target.passwordSet && fullName) {
+    const first = fullName.trim().split(/\s+/)[0] ?? "";
+    const slug = first.replace(/[^A-Za-z֐-׿0-9_.-]+/g, "").slice(0, 24);
+    if (slug && slug !== target.username) {
+      // ייחודיות גלובלית עם סופיקס פלוגה.חטיבה אם תפוס
+      const holder = await prisma.holder.findUnique({ where: { id: target.holderId! } });
+      const battalion = await prisma.battalion.findUnique({ where: { id: admin.battalionId! } });
+      const holderSlug = (holder?.name || "").replace(/[^֐-׿a-zA-Z0-9]+/g, "").toLowerCase().slice(0, 12);
+      const brigadeSlug = battalion?.brigade || battalion?.code || "";
+      const suffix = [holderSlug, brigadeSlug].filter(Boolean).join(".");
+      newUsername = await resolveUniqueUsername(slug, suffix, userId);
+    }
+  }
+
   await prisma.appUser.update({
     where: { id: userId },
     data: {
       fullName, title, phone,
       ...(soldierId !== undefined ? { soldierId } : {}),
+      ...(newUsername ? { username: newUsername } : {}),
     },
   });
-  await audit(admin.id, "UPDATE_HOLDER_USER", "AppUser", userId, { fullName, title, soldierLink: soldierId });
+  await audit(admin.id, "UPDATE_HOLDER_USER", "AppUser", userId, { fullName, title, soldierLink: soldierId, newUsername });
   revalidatePath("/org");
 }
 
