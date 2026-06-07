@@ -18,21 +18,22 @@ export default function ProfileForm({ battalion }: { battalion: B }) {
     <form action={formAction} className="space-y-4">
       <ImageUpload name="logoData" initial={battalion.logoData} label="סמל הגדוד" />
 
-      {/* 🔐 קוד גדוד להתחברות — בולט, עם העתקה */}
+      {/* 🔐 קוד גדוד להתחברות — עריך, בולט */}
       <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <h3 className="font-bold text-blue-900 flex items-center gap-2">🔐 קוד גדוד להתחברות</h3>
-            <p className="text-xs text-blue-700 mt-1">
-              את הקוד הזה (או את מספר החטיבה {battalion.brigade && <b className="font-mono">{battalion.brigade}</b>}) יש להזין במסך ה-login לצד שם משתמש וסיסמה.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <code className="bg-white border-2 border-blue-400 rounded-lg px-4 py-2 text-2xl font-mono font-bold text-blue-900 select-all">
-              {battalion.code}
-            </code>
-          </div>
-        </div>
+        <h3 className="font-bold text-blue-900 flex items-center gap-2 mb-2">🔐 קוד גדוד להתחברות</h3>
+        <p className="text-xs text-blue-700 mb-3">
+          את הקוד הזה (או את מספר החטיבה / שם הגדוד) יש להזין במסך ה-login לצד שם משתמש וסיסמה.
+          קוד גדוד חייב להיות ייחודי במערכת.
+        </p>
+        <input
+          name="code"
+          defaultValue={battalion.code}
+          required
+          maxLength={32}
+          placeholder="5222"
+          className="w-full max-w-xs bg-white border-2 border-blue-400 rounded-lg px-4 py-3 text-2xl font-mono font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <p className="text-[10px] text-blue-600 mt-1">⚠️ שינוי הקוד ידרוש מכל המשתמשים בגדוד להזין את הקוד החדש בכניסה הבאה.</p>
       </div>
 
       <div>

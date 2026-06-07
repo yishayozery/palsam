@@ -14,6 +14,7 @@ export async function updateProfile(
   const user = await requireCapability("battalion.profile");
   const bId = user.battalionId!;
   const name = String(formData.get("name") || "").trim();
+  const code = String(formData.get("code") || "").trim();
   const brigade = String(formData.get("brigade") || "").trim() || null;
   const commander = String(formData.get("commander") || "").trim() || null;
   const motto = String(formData.get("motto") || "").trim() || null;
@@ -23,9 +24,17 @@ export async function updateProfile(
   const logoData = rawLogo === "__CLEAR__" ? null : rawLogo.startsWith("data:image") ? rawLogo : undefined;
 
   if (!name) return { error: "שם הגדוד חובה" };
+  if (!code) return { error: "קוד הגדוד חובה" };
   if (brigade && !/^\d+$/.test(brigade)) return { error: "מספר חטיבה חייב להכיל ספרות בלבד" };
 
-  const data: Record<string, unknown> = { name, brigade, commander, motto, notes, requirePersonalIdOnHandover };
+  // בדיקת ייחודיות לקוד (אם השתנה)
+  const current = await prisma.battalion.findUnique({ where: { id: bId }, select: { code: true } });
+  if (current && current.code !== code) {
+    const dup = await prisma.battalion.findFirst({ where: { code, id: { not: bId } } });
+    if (dup) return { error: `קוד "${code}" כבר בשימוש בגדוד אחר` };
+  }
+
+  const data: Record<string, unknown> = { name, code, brigade, commander, motto, notes, requirePersonalIdOnHandover };
   if (logoData !== undefined) data.logoData = logoData;
 
   try {
