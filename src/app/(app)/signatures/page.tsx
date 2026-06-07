@@ -217,7 +217,14 @@ export default async function SignaturesPage() {
                   itemTypeId: b.itemTypeId, itemName: b.itemType.name, unit: b.itemType.unit,
                   status: b.status.name, statusId: b.statusId, quantity: b.quantity,
                 }))}
-                kits={kits.map((k) => ({ id: k.id, name: k.name, lines: k.lines.map((l) => ({ name: l.itemType.name, qty: l.quantity })) }))}
+                kits={kits.map((k) => ({
+                  id: k.id, name: k.name,
+                  lines: k.lines.map((l) => ({
+                    name: l.itemType.name, qty: l.quantity,
+                    itemTypeId: l.itemTypeId,
+                    trackingMethod: l.itemType.trackingMethod,
+                  })),
+                }))}
                 vehicles={vehicles.map((v) => ({ id: v.id, name: v.itemType.name, plate: v.serialNumber }))}
               />
             </div>

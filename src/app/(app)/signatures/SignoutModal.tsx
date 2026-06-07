@@ -7,7 +7,9 @@ type Soldier = { id: string; name: string; pn: string | null; companyId?: string
 type Company = { id: string; name: string };
 type Unit = { id: string; itemTypeId: string; itemName: string; serial: string; status: string; statusId: string; lotQuantity: number | null };
 type Balance = { itemTypeId: string; itemName: string; unit: string; status: string; statusId: string; quantity: number };
-type Kit = { id: string; name: string; lines: { name: string; qty: number }[] };
+type KitLine = { name: string; qty: number; itemTypeId: string; trackingMethod: "QUANTITY" | "SERIAL" | "LOT" | "KIT" };
+type Kit = { id: string; name: string; lines: KitLine[] };
+type PendingKitPick = { itemTypeId: string; itemName: string; needed: number; kitName: string };
 type Vehicle = { id: string; name: string; plate: string };
 
 type CartSerial = { type: "serial"; unitId: string; itemName: string; serial: string; status: string; lotQty?: number; lotTotal?: number };
@@ -36,6 +38,9 @@ export default function SignoutModal({
   const submittingRef = useRef(false);
   // אצווה: דיאלוג בחירת כמות חלקית
   const [lotPicker, setLotPicker] = useState<{ unit: Unit; qty: number } | null>(null);
+  // ערכה: תור פריטים סריאליים/אצוות שצריכים בחירה
+  const [pendingKitPicks, setPendingKitPicks] = useState<PendingKitPick[]>([]);
+  const [kitPickerSearch, setKitPickerSearch] = useState("");
 
   const selectedSoldier = soldiers.find((s) => s.id === soldierId);
   const selectedKit = kits.find((k) => k.id === kitId);
@@ -89,9 +94,14 @@ export default function SignoutModal({
     if (qty < 1 || qty > (unit.lotQuantity ?? 1)) return;
     setCart((c) => [...c, {
       type: "serial", unitId: unit.id, itemName: unit.itemName, serial: unit.serial, status: unit.status,
-      lotQty: qty, lotTotal: unit.lotQuantity ?? qty,
+      lotQty: qty < (unit.lotQuantity ?? 1) ? qty : undefined,
+      lotTotal: unit.lotQuantity ?? qty,
     }]);
     setLotPicker(null);
+    // אם זה היה מתוך ערכה ("בחירה לפריט ערכה") — מקדמים את התור
+    if (pendingKitPicks.length > 0 && pendingKitPicks[0].itemTypeId === unit.itemTypeId) {
+      advanceKitPick();
+    }
   };
 
   const addQty = (b: Balance) => {
@@ -115,26 +125,70 @@ export default function SignoutModal({
     setBusy(false); submittingRef.current = false;
   };
 
-  // ⚠️ בחירת ערכה — מרחיבה את הפריטים לעגלה (כל פריט עם קישור לערכה כדי שנוכל לעקוב)
+  // ⚠️ בחירת ערכה — מפצלת לפריטים בעגלה:
+  //   • QTY/LOT-template → שורת qty
+  //   • SERIAL → מקפיץ פופ-אפ לבחירת SN ספציפי (או הקלדה ידנית)
+  //   • LOT (lotQuantity>1 בפועל) → גם דורש בחירה
   const onPickKit = (newKitId: string) => {
-    // הסר פריטים שהיו מערכה קודמת
+    // הסרת ערכה קודמת
     setCart((c) => c.filter((x) => !(x.type === "qty" && (x as CartQty).fromKit === kitId)));
+    setPendingKitPicks([]);
     setKitId(newKitId);
     if (!newKitId) return;
     const kit = kits.find((k) => k.id === newKitId);
     if (!kit) return;
-    // פריטים מהערכה מתווספים כשורות כמותיות (השרת ימשוך SN לפריטים סריאליים אוטומטית)
-    const newLines: CartQty[] = kit.lines.map((l) => ({
-      type: "qty" as const,
-      itemTypeId: `kit:${kit.id}:${l.name}`, // מזהה מדומה — לא נשלח לשרת (זה לא itemTypeId אמיתי)
-      itemName: l.name,
-      unit: "יח׳",
-      quantity: l.qty,
-      statusId: "",
-      statusName: "מתוך ערכה",
-      fromKit: newKitId,
-    }));
-    setCart((c) => [...c, ...newLines]);
+
+    const qtyLines: CartQty[] = [];
+    const picks: PendingKitPick[] = [];
+    for (const l of kit.lines) {
+      if (l.trackingMethod === "QUANTITY" || l.trackingMethod === "LOT") {
+        // qty/lot template — שורה כמותית (השרת ימשוך תקין רנדומלי)
+        qtyLines.push({
+          type: "qty",
+          itemTypeId: l.itemTypeId,
+          itemName: l.name, unit: "יח׳", quantity: l.qty,
+          statusId: "", statusName: "מתוך ערכה",
+          fromKit: newKitId,
+        });
+      } else if (l.trackingMethod === "SERIAL") {
+        picks.push({ itemTypeId: l.itemTypeId, itemName: l.name, needed: l.qty, kitName: kit.name });
+      }
+    }
+    setCart((c) => [...c, ...qtyLines]);
+    setPendingKitPicks(picks);
+    setKitId(""); // אחרי הרחבה — מסיר את kitId כדי שהשרת לא ירכיב שוב
+  };
+
+  const skipKitPick = () => {
+    setPendingKitPicks((p) => p.slice(1));
+    setKitPickerSearch("");
+  };
+  const advanceKitPick = () => {
+    setPendingKitPicks((p) => {
+      const cur = p[0];
+      if (!cur) return p;
+      if (cur.needed > 1) return [{ ...cur, needed: cur.needed - 1 }, ...p.slice(1)];
+      return p.slice(1);
+    });
+    setKitPickerSearch("");
+  };
+  const confirmKitPick = (u: Unit) => {
+    const cur = pendingKitPicks[0];
+    if (!cur) return;
+    if (u.lotQuantity && u.lotQuantity > 1) {
+      // לאצווה — פותחים lotPicker; ההתקדמות בערכה תקרה רק אחרי אישור
+      setLotPicker({ unit: u, qty: u.lotQuantity });
+      return;
+    }
+    setCart((c) => [...c, { type: "serial", unitId: u.id, itemName: u.itemName, serial: u.serial, status: u.status }]);
+    advanceKitPick();
+  };
+  // הקלדה ידנית: בודק שה-SN קיים במלאי הזמין של אותו פריט
+  const tryManualSn = (sn: string) => {
+    const cur = pendingKitPicks[0];
+    if (!cur || !sn.trim()) return;
+    const match = units.find((u) => u.itemTypeId === cur.itemTypeId && u.serial.toLowerCase() === sn.trim().toLowerCase());
+    if (match) confirmKitPick(match);
   };
 
   async function submit() {
@@ -420,6 +474,70 @@ export default function SignoutModal({
             </div>
           </div>
         </div>
+
+        {/* דיאלוג ערכה: בחירת SN/אצווה ספציפיים מתוך מלאי */}
+        {pendingKitPicks.length > 0 && !lotPicker && (() => {
+          const cur = pendingKitPicks[0];
+          const cartSerialSet = new Set(cart.filter((c) => c.type === "serial").map((c) => (c as CartSerial).unitId));
+          const opts = units
+            .filter((u) => u.itemTypeId === cur.itemTypeId && !cartSerialSet.has(u.id))
+            .filter((u) => !kitPickerSearch.trim() || u.serial.toLowerCase().includes(kitPickerSearch.toLowerCase()));
+          return (
+            <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-10 p-3">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+                <div className="bg-gradient-to-r from-violet-600 to-violet-800 text-white p-4 shrink-0">
+                  <h3 className="font-bold text-lg flex items-center gap-2">🎒 ערכה: {cur.kitName}</h3>
+                  <p className="text-xs text-violet-100 mt-1">
+                    נדרש פריט סריאלי: <b>{cur.itemName}</b> {cur.needed > 1 && <>· נותרו <b>{cur.needed}</b> לבחור</>}
+                  </p>
+                </div>
+                <div className="p-3 border-b border-slate-200 shrink-0">
+                  <input value={kitPickerSearch}
+                    onChange={(e) => setKitPickerSearch(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") tryManualSn(kitPickerSearch); }}
+                    placeholder="סרוק / הקלד SN לבחירה מהירה, או חפש ברשימה..."
+                    className="w-full rounded-lg border-2 border-violet-300 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-400"
+                    autoFocus />
+                  {kitPickerSearch.trim() && !opts.length && (
+                    <p className="text-xs text-rose-600 mt-1.5">⚠️ SN "{kitPickerSearch}" לא נמצא במלאי הזמין של {cur.itemName}</p>
+                  )}
+                </div>
+                <div className="flex-1 overflow-y-auto p-2">
+                  {opts.length === 0 ? (
+                    <p className="text-center text-slate-400 py-8 text-sm">
+                      {kitPickerSearch.trim() ? "אין התאמות" : `אין יחידות ${cur.itemName} פנויות במלאי`}
+                    </p>
+                  ) : opts.map((u) => {
+                    const isLot = !!u.lotQuantity && u.lotQuantity > 1;
+                    return (
+                      <button key={u.id} type="button" onClick={() => confirmKitPick(u)}
+                        className={`w-full text-right p-2.5 rounded-lg border mb-1 hover:bg-violet-50 transition flex items-center gap-2 ${isLot ? "border-orange-300" : "border-slate-200"}`}>
+                        <span className="text-lg">{isLot ? "💣" : "🔫"}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">
+                            {u.itemName}
+                            {isLot && <span className="mr-1 text-[10px] bg-orange-100 text-orange-800 rounded px-1.5 py-0.5">אצווה ×{u.lotQuantity}</span>}
+                          </div>
+                          <div className="text-xs text-slate-500 font-mono truncate">{isLot ? `לוט: ${u.serial}` : `SN: ${u.serial}`} · {u.status}</div>
+                        </div>
+                        <span className="text-violet-600 font-bold">+</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="border-t border-slate-200 p-3 flex gap-2 shrink-0">
+                  <button onClick={skipKitPick} className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm">
+                    דלג על פריט זה
+                  </button>
+                  <button onClick={() => { setPendingKitPicks([]); setKitPickerSearch(""); }}
+                    className="flex-1 rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50 px-4 py-2.5 text-sm">
+                    בטל ערכה
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* דיאלוג אצווה: בחירת כמות חלקית מתוך לוט */}
         {lotPicker && (

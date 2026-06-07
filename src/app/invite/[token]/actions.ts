@@ -14,7 +14,7 @@ export async function activateAccount(
   const password = String(formData.get("password") || "");
   const confirm = String(formData.get("confirm") || "");
 
-  if (password.length < 6) return { error: "סיסמה חייבת לפחות 6 תווים" };
+  if (password.length < 8) return { error: "סיסמה חייבת להיות לפחות 8 תווים" };
   if (password !== confirm) return { error: "הסיסמאות אינן תואמות" };
 
   const user = await setPasswordByInvite(token, password);

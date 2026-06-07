@@ -94,12 +94,16 @@ function toSession(user: {
   };
 }
 
-/** מאמת שם משתמש + סיסמה מול ה-DB ומחזיר SessionUser או null */
+/** מאמת שם משתמש + סיסמה — case-insensitive על שם משתמש */
 export async function authenticate(
   username: string,
   password: string,
 ): Promise<SessionUser | null> {
-  const user = await prisma.appUser.findUnique({ where: { username }, include: { customRole: true, assignedHolders: true } });
+  // case-insensitive — מאפשר ל-Yishai / yishai / YISHAI להתחבר לאותו חשבון
+  const user = await prisma.appUser.findFirst({
+    where: { username: { equals: username, mode: "insensitive" } },
+    include: { customRole: true, assignedHolders: true },
+  });
   if (!user || !user.active || !user.passwordSet) return null;
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) return null;
