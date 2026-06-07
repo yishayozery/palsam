@@ -17,6 +17,24 @@ export default function ProfileForm({ battalion }: { battalion: B }) {
   return (
     <form action={formAction} className="space-y-4">
       <ImageUpload name="logoData" initial={battalion.logoData} label="סמל הגדוד" />
+
+      {/* 🔐 קוד גדוד להתחברות — בולט, עם העתקה */}
+      <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="font-bold text-blue-900 flex items-center gap-2">🔐 קוד גדוד להתחברות</h3>
+            <p className="text-xs text-blue-700 mt-1">
+              את הקוד הזה (או את מספר החטיבה {battalion.brigade && <b className="font-mono">{battalion.brigade}</b>}) יש להזין במסך ה-login לצד שם משתמש וסיסמה.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="bg-white border-2 border-blue-400 rounded-lg px-4 py-2 text-2xl font-mono font-bold text-blue-900 select-all">
+              {battalion.code}
+            </code>
+          </div>
+        </div>
+      </div>
+
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">שם הגדוד</label>
         <input name="name" defaultValue={battalion.name} required
@@ -29,16 +47,12 @@ export default function ProfileForm({ battalion }: { battalion: B }) {
             inputMode="numeric" pattern="\d*"
             onInput={(e) => { e.currentTarget.value = e.currentTarget.value.replace(/\D/g, ""); }}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
+          <p className="text-[10px] text-slate-500 mt-1">המספר משמש גם להתחברות (חלופי לקוד הגדוד)</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">מפקד הגדוד</label>
           <input name="commander" defaultValue={battalion.commander ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">קוד</label>
-          <input value={battalion.code} disabled
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-mono text-slate-400" />
         </div>
       </div>
       <div>
