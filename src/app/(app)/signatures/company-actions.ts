@@ -221,26 +221,54 @@ export async function companyReturn(formData: FormData): Promise<{ ok?: boolean;
       });
       transferId = transfer.id;
 
-      // סריאליים: מעבירים currentHolderId חזרה למחסן + אפשרות לעדכן סטטוס
+      // סריאליים: סטטוס פר-שורה > כללי > מקור; אצוות חלקיות מתפצלות.
       for (const sid of serialIds) {
         const su = await tx.serialUnit.findUnique({ where: { id: sid } });
         if (!su || su.currentHolderId !== companyId) continue;
         const destId = await findDestWarehouse(su.itemTypeId);
-        const finalStatus = newStatusId || su.statusId;
-        await tx.serialUnit.update({
-          where: { id: sid },
-          data: { currentHolderId: destId, statusId: finalStatus, signedSoldierId: null, physicalLocation: null, locationId: null },
-        });
-        await tx.transferLine.create({
-          data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: finalStatus },
-        });
+        const lineOverride = String(formData.get(`serialStatus:${sid}`) || "") || null;
+        const finalStatus = lineOverride || newStatusId || su.statusId;
+        const partialLotQty = parseInt(String(formData.get(`lotQty:${sid}`) || "0"), 10);
+        const isLot = (su.lotQuantity ?? 1) > 1;
+        const isPartial = isLot && partialLotQty > 0 && partialLotQty < (su.lotQuantity ?? 1);
+
+        if (isPartial) {
+          let suffix = 1;
+          while (await tx.serialUnit.findFirst({ where: { itemTypeId: su.itemTypeId, serialNumber: `${su.serialNumber}/${suffix}` } })) {
+            suffix++;
+          }
+          await tx.serialUnit.create({
+            data: {
+              battalionId: bId, itemTypeId: su.itemTypeId,
+              serialNumber: `${su.serialNumber}/${suffix}`,
+              lotQuantity: partialLotQty,
+              statusId: finalStatus, currentHolderId: destId,
+            },
+          });
+          await tx.serialUnit.update({
+            where: { id: su.id },
+            data: { lotQuantity: (su.lotQuantity ?? 1) - partialLotQty },
+          });
+          await tx.transferLine.create({
+            data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: partialLotQty, serialUnitId: sid, statusId: finalStatus },
+          });
+        } else {
+          await tx.serialUnit.update({
+            where: { id: sid },
+            data: { currentHolderId: destId, statusId: finalStatus, signedSoldierId: null, physicalLocation: null, locationId: null },
+          });
+          await tx.transferLine.create({
+            data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: finalStatus },
+          });
+        }
       }
 
-      // כמותיים: גריעה מהפלוגה + תוספת במחסן
+      // כמותיים: גריעה מהפלוגה + תוספת במחסן (סטטוס פר-שורה גובר)
       for (const e of qtyEntries) {
         const destId = await findDestWarehouse(e.itemTypeId);
         if (!destId) continue;
-        const finalStatusId = newStatusId || e.statusId;
+        const lineOverride = String(formData.get(`qtyStatus:${e.itemTypeId}:${e.statusId}`) || "") || null;
+        const finalStatusId = lineOverride || newStatusId || e.statusId;
         await adjustQuantity(tx, bId, e.itemTypeId, companyId, e.statusId, -e.qty);
         await adjustQuantity(tx, bId, e.itemTypeId, destId, finalStatusId, e.qty);
         await tx.transferLine.create({

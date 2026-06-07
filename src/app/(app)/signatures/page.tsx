@@ -179,6 +179,7 @@ export default async function SignaturesPage() {
                     serial: u.serialNumber, companyId: u.currentHolderId!,
                     statusId: u.statusId, statusName: u.status.name,
                     isWear: u.status.isWear, isLoss: u.status.isLoss,
+                    lotQuantity: u.lotQuantity,
                   }))}
                   balances={companyBalances.map((b) => ({
                     companyId: b.holderId, itemTypeId: b.itemTypeId, statusId: b.statusId,
