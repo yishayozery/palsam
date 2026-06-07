@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
 import { TRACKING_METHOD } from "@/lib/labels";
 import { WAREHOUSE_TYPE_SHORT } from "@/lib/rbac";
-import { declareQty, declareSerialsForm, declareLot, importSerials, importLots, editSerialNumber } from "./actions";
+import { declareQtyForm, declareSerialsForm, declareLotForm, importSerials, importLots, editSerialNumber } from "./actions";
 
 type Item = {
   id: string; name: string; sku: string | null; unit: string;
@@ -69,7 +69,7 @@ function ExpandedRow({ item, statuses }: { item: Item; statuses: Status[] }) {
 
   if (item.trackingMethod === "QUANTITY") {
     return (
-      <form action={declareQty} className="bg-slate-50 p-3 space-y-2 border-t border-slate-200">
+      <form action={declareQtyForm} className="bg-slate-50 p-3 space-y-2 border-t border-slate-200">
         <input type="hidden" name="itemTypeId" value={item.id} />
         <p className="text-xs text-slate-600 mb-1">הוספת כמות נוספת (יתווסף לסך הקיים).</p>
         <div className="flex items-end gap-2 flex-wrap">
@@ -142,7 +142,7 @@ function ExpandedRow({ item, statuses }: { item: Item; statuses: Status[] }) {
   if (item.trackingMethod === "LOT") {
     return (
       <div className="bg-slate-50 p-3 space-y-3 border-t border-slate-200">
-        <form action={declareLot} className="flex items-end gap-2 flex-wrap">
+        <form action={declareLotForm} className="flex items-end gap-2 flex-wrap">
           <input type="hidden" name="itemTypeId" value={item.id} />
           <div>
             <label className="block text-xs text-slate-500 mb-1">סטטוס</label>

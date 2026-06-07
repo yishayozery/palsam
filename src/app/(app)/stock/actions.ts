@@ -78,9 +78,15 @@ export async function declareQty(formData: FormData) {
 }
 
 /** הוספת יחידות סריאליות לפי מספרים שהוקלדו (אחת בשורה / בפסיק) */
-/** עטיפה חסרת-החזרה — שימוש ב-<form action={...}> ב-Server Components (StockTable). */
+/** עטיפות חסרות-החזרה — שימוש ב-<form action={...}> ב-Server Components. */
 export async function declareSerialsForm(formData: FormData): Promise<void> {
   await declareSerials(formData);
+}
+export async function declareQtyForm(formData: FormData): Promise<void> {
+  await declareQty(formData);
+}
+export async function declareLotForm(formData: FormData): Promise<void> {
+  await declareLot(formData);
 }
 
 export async function declareSerials(formData: FormData) {
