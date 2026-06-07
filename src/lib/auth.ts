@@ -94,19 +94,28 @@ function toSession(user: {
   };
 }
 
-/** מאמת שם משתמש + סיסמה — case-insensitive על שם משתמש */
+/** מאמת שם משתמש + סיסמה + מספר גדוד (אופציונלי לאדמין-על). case-insensitive על שם משתמש */
 export async function authenticate(
   username: string,
   password: string,
+  battalionCode?: string,
 ): Promise<SessionUser | null> {
-  // case-insensitive — מאפשר ל-Yishai / yishai / YISHAI להתחבר לאותו חשבון
   const user = await prisma.appUser.findFirst({
     where: { username: { equals: username, mode: "insensitive" } },
-    include: { customRole: true, assignedHolders: true },
+    include: { customRole: true, assignedHolders: true, battalion: { select: { code: true, brigade: true } } },
   });
   if (!user || !user.active || !user.passwordSet) return null;
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) return null;
+  // ⚠️ ולידציית גדוד: אדמין-על פטור (אין לו גדוד); כל השאר חייבים להזין את הקוד שלהם.
+  if (user.role !== "SUPER_ADMIN") {
+    const code = (battalionCode ?? "").trim();
+    if (!code) return null; // חייבים להזין מספר גדוד
+    const myCode = (user.battalion?.code ?? "").trim();
+    const myBrigade = (user.battalion?.brigade ?? "").trim();
+    // מקבל קוד גדוד או חטיבה (גמיש למשתמש)
+    if (code !== myCode && code !== myBrigade) return null;
+  }
   return toSession(user);
 }
 

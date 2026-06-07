@@ -78,6 +78,100 @@ export async function declareQty(formData: FormData) {
 }
 
 /** הוספת יחידות סריאליות לפי מספרים שהוקלדו (אחת בשורה / בפסיק) */
+/**
+ * 🆕 תעודת קליטה רב-פריטית — קולט מספר פריטים בתעודה אחת (Transfer יחיד עם N שורות).
+ * formData:
+ *   externalUnit, externalContact, recipientPersonalId
+ *   line:<idx>:itemTypeId, line:<idx>:trackingMethod, line:<idx>:statusId,
+ *   line:<idx>:quantity, line:<idx>:serials (newline-separated), line:<idx>:lotNumber
+ */
+export async function declareMulti(formData: FormData): Promise<{ ok?: boolean; error?: string; transferId?: string }> {
+  try {
+    const user = await requireCapability("warehouse.operate");
+    const bId = user.battalionId!;
+    const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
+    const externalContact = String(formData.get("externalContact") || "").trim() || null;
+    let recipientPersonalId: string | null = null;
+    try { recipientPersonalId = await extractPersonalId(bId, formData); }
+    catch (e) { return { error: e instanceof Error ? e.message.replace(/^PERSONAL_ID_REQUIRED:\s*/, "") : "שגיאה במספר אישי" }; }
+
+    // שליפת כל השורות (line:0:..., line:1:..., ...)
+    const idxs = new Set<number>();
+    for (const [k] of formData.entries()) {
+      const m = k.match(/^line:(\d+):/);
+      if (m) idxs.add(parseInt(m[1], 10));
+    }
+    const lines = [...idxs].sort((a, b) => a - b);
+    if (lines.length === 0) return { error: "לא נבחרו פריטים לקליטה" };
+
+    const defStatus = await defaultStatusId(prisma, bId);
+    let transferId = "";
+
+    await prisma.$transaction(async (tx) => {
+      // משתמשים במחסן של הפריט הראשון לזיהוי toHolder; כל שורה תיקלט למחסן הנכון שלה לפי category
+      const firstItemTypeId = String(formData.get(`line:${lines[0]}:itemTypeId`) || "");
+      const firstWh = await pickWarehouse(bId, firstItemTypeId);
+      if (!firstWh) throw new Error("לא נמצא מחסן יעד לפריט הראשון");
+
+      const transfer = await tx.transfer.create({
+        data: {
+          battalionId: bId, type: "INTAKE", status: "COMPLETED",
+          toHolderId: firstWh.id,
+          reason: `קליטת ${lines.length} פריטים בתעודה אחת`,
+          externalUnit, externalContact, recipientPersonalId,
+          createdById: user.id, approvedById: user.id, approvedAt: new Date(),
+        },
+      });
+      transferId = transfer.id;
+
+      for (const i of lines) {
+        const itemTypeId = String(formData.get(`line:${i}:itemTypeId`) || "");
+        const trackingMethod = String(formData.get(`line:${i}:trackingMethod`) || "QUANTITY");
+        const statusId = String(formData.get(`line:${i}:statusId`) || "") || defStatus;
+        const quantity = Math.max(1, parseInt(String(formData.get(`line:${i}:quantity`) || "0"), 10) || 0);
+        const serialsRaw = String(formData.get(`line:${i}:serials`) || "");
+        const lotNumber = String(formData.get(`line:${i}:lotNumber`) || "").trim();
+        if (!itemTypeId) continue;
+
+        const wh = await pickWarehouse(bId, itemTypeId);
+        if (!wh) continue;
+
+        if (trackingMethod === "SERIAL") {
+          const serials = serialsRaw.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
+          if (serials.length === 0) throw new Error(`חסרים מספרי סריאל בשורה ${i + 1}`);
+          const uniq = new Set(serials);
+          if (uniq.size !== serials.length) throw new Error(`שורה ${i + 1}: יש SN כפולים`);
+          const existing = await tx.serialUnit.findMany({
+            where: { battalionId: bId, itemTypeId, serialNumber: { in: serials } },
+            select: { serialNumber: true },
+          });
+          if (existing.length > 0) throw new Error(`שורה ${i + 1}: SN קיים — ${existing.map(e => e.serialNumber).join(", ")}`);
+          for (const sn of serials) {
+            const su = await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: sn, statusId, currentHolderId: wh.id } });
+            await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity: 1, serialUnitId: su.id, statusId } });
+          }
+        } else if (trackingMethod === "LOT") {
+          if (!lotNumber) throw new Error(`שורה ${i + 1}: חסר מספר אצווה`);
+          if (quantity < 1) throw new Error(`שורה ${i + 1}: כמות חייבת להיות לפחות 1`);
+          const su = await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: lotNumber, lotQuantity: quantity, statusId, currentHolderId: wh.id } });
+          await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity, serialUnitId: su.id, statusId } });
+        } else {
+          // QUANTITY
+          if (quantity < 1) throw new Error(`שורה ${i + 1}: כמות חייבת להיות לפחות 1`);
+          await adjustQuantity(tx, bId, itemTypeId, wh.id, statusId, quantity);
+          await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity, statusId } });
+        }
+      }
+    });
+
+    await audit(user.id, "DECLARE_MULTI", "Transfer", transferId, { lines: lines.length, externalUnit, recipientPersonalId });
+    revalidateAll();
+    return { ok: true, transferId };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message.replace(/^Error:\s*/, "") : "שגיאה" };
+  }
+}
+
 /** עטיפות חסרות-החזרה — שימוש ב-<form action={...}> ב-Server Components. */
 export async function declareSerialsForm(formData: FormData): Promise<void> {
   await declareSerials(formData);

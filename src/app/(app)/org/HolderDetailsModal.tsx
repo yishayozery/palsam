@@ -50,8 +50,8 @@ function InviteForm({ holderId, kind, onDone }: { holderId: string; kind: "WAREH
 
   useEffect(() => {
     if (!username && fullName.trim()) {
-      const slug = fullName.trim().split(/\s+/).join(".").toLowerCase()
-        .replace(/[^\w.-֐-׿]+/g, "").slice(0, 24);
+      const first = fullName.trim().split(/\s+/)[0] ?? "";
+      const slug = first.replace(/[^A-Za-z֐-׿0-9_.-]+/g, "").slice(0, 24);
       if (slug) setUsername(slug);
     }
   }, [fullName, username]);
@@ -86,9 +86,9 @@ function InviteForm({ holderId, kind, onDone }: { holderId: string; kind: "WAREH
     setFullName(s.fullName);
     if (s.phone) setPhone(s.phone);
     if (!username) {
-      // הצעה: <שם>.<חטיבה/קוד גדוד>
-      const slug = s.fullName.trim().split(/\s+/).join(".").toLowerCase()
-        .replace(/[^\w.-֐-׿]+/g, "").slice(0, 24);
+      // הצעה: שם פרטי בלבד; ייחודיות תינתן ב-suffix שרת
+      const first = s.fullName.trim().split(/\s+/)[0] ?? "";
+      const slug = first.replace(/[^A-Za-z֐-׿0-9_.-]+/g, "").slice(0, 24);
       if (slug) {
         try {
           const res = await fetch("/users/battalion-info");

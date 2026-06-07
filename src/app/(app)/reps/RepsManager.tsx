@@ -35,12 +35,18 @@ function InviteForm({ companies, onDone }: { companies: Ref2[]; onDone: () => vo
     return () => clearTimeout(t);
   }, [linkSoldier, soldierSearch, formCompanyId]);
 
+  // ⚙️ שם משתמש מבוסס שם פרטי בלבד (תווית אישית קצרה)
+  // לדוגמה: "ישי עוזרי" → "Yishai"; "אבי כהן" → "Avi"
+  function firstNameSlug(full: string): string {
+    const first = full.trim().split(/\s+/)[0] ?? "";
+    return first.replace(/[^A-Za-z֐-׿0-9_.-]+/g, "").slice(0, 24);
+  }
+
   function pickSoldier(s: RosterSoldier) {
     setSelectedSoldier(s);
     setFullName(s.fullName);
     if (s.phone) setPhone(s.phone);
-    const slug = s.fullName.trim().split(/\s+/).join(".").toLowerCase()
-      .replace(/[^\w.-֐-׿]+/g, "").slice(0, 24);
+    const slug = firstNameSlug(s.fullName);
     if (slug) setUsername(slug);
   }
   function clearSoldier() {
@@ -48,12 +54,10 @@ function InviteForm({ companies, onDone }: { companies: Ref2[]; onDone: () => vo
     setFullName(""); setPhone(""); setUsername("");
   }
 
-  // הצעת שם משתמש ברירת מחדל מהשם המלא
+  // הצעת שם משתמש ברירת מחדל מהשם הפרטי
   useEffect(() => {
     if (!username && fullName.trim()) {
-      const slug = fullName.trim().split(/\s+/).join(".").toLowerCase()
-        .replace(/[^\w.-֐-׿]+/g, "")
-        .slice(0, 24);
+      const slug = firstNameSlug(fullName);
       if (slug) setUsername(slug);
     }
   }, [fullName, username]);

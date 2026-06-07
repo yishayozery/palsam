@@ -48,9 +48,8 @@ function InviteRow({ holderId, kind, onDone }: { holderId: string; kind: "WAREHO
 
   useEffect(() => {
     if (!username && fullName.trim()) {
-      const slug = fullName.trim().split(/\s+/).join(".").toLowerCase()
-        .replace(/[^\w.-֐-׿]+/g, "")
-        .slice(0, 24);
+      const first = fullName.trim().split(/\s+/)[0] ?? "";
+      const slug = first.replace(/[^A-Za-z֐-׿0-9_.-]+/g, "").slice(0, 24);
       if (slug) setUsername(slug);
     }
   }, [fullName, username]);
@@ -87,9 +86,9 @@ function InviteRow({ holderId, kind, onDone }: { holderId: string; kind: "WAREHO
     setSelectedSoldier(s);
     setFullName(s.fullName);
     if (!username) {
-      // הצעת שם משתמש בסיסי לפי השם
-      const slug = s.fullName.trim().split(/\s+/).join(".").toLowerCase()
-        .replace(/[^\w.-֐-׿]+/g, "").slice(0, 24);
+      // הצעה לפי השם הפרטי בלבד; ייחודיות תינתן בשרת
+      const first = s.fullName.trim().split(/\s+/)[0] ?? "";
+      const slug = first.replace(/[^A-Za-z֐-׿0-9_.-]+/g, "").slice(0, 24);
       if (slug) setUsername(slug);
     }
   }

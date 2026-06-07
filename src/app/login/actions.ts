@@ -12,14 +12,15 @@ export async function loginAction(
 ): Promise<LoginState> {
   const username = String(formData.get("username") || "").trim();
   const password = String(formData.get("password") || "");
+  const battalionCode = String(formData.get("battalionCode") || "").trim();
 
   if (!username || !password) {
     return { error: "יש להזין שם משתמש וסיסמה" };
   }
 
-  const user = await authenticate(username, password);
+  const user = await authenticate(username, password, battalionCode);
   if (!user) {
-    return { error: "שם משתמש או סיסמה שגויים" };
+    return { error: "שם משתמש, סיסמה או מספר גדוד שגויים" };
   }
 
   await createSession(user);

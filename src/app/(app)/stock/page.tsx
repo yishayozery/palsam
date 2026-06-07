@@ -7,6 +7,7 @@ import StockTable from "./StockTable";
 import StockEntryModal from "./StockEntryModal";
 import StockWithdrawModal from "./StockWithdrawModal";
 import StatusChangeModal from "./StatusChangeModal";
+import MultiIntakeModal from "./MultiIntakeModal";
 import SendToTanaModal from "../maintenance/SendToTanaModal";
 import { findTanaHolder } from "@/lib/tana";
 import { approveTransfer, rejectTransfer } from "../transfers/actions";
@@ -109,6 +110,17 @@ export default async function StockPage({
               className="bg-white border border-slate-300 text-slate-700 rounded-lg px-3 md:px-5 py-2 md:py-2.5 text-xs md:text-sm font-medium hover:bg-slate-50 flex items-center gap-2">
               📋 <span className="hidden sm:inline">כל הסריאליים</span>
             </Link>
+            <MultiIntakeModal
+              currentUserName={user.fullName}
+              requirePersonalId={requirePersonalId}
+              counterpartOptions={counterpartOptions}
+              items={items.filter((i) => i.trackingMethod !== "KIT").map((i) => ({
+                id: i.id, name: i.name, sku: i.sku,
+                trackingMethod: i.trackingMethod as "QUANTITY" | "SERIAL" | "LOT",
+                unit: i.unit,
+              }))}
+              statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
+            />
             <StockEntryModal
               currentUserName={user.fullName}
               requirePersonalId={requirePersonalId}
