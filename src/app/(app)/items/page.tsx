@@ -13,6 +13,7 @@ import {
 } from "../dictionaries/actions";
 import ItemsFilters from "./ItemsFilters";
 import CategoriesFilters from "./CategoriesFilters";
+import ItemLocationsTab from "../locations/ItemLocationsTab";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +26,11 @@ const ASSOC: Record<string, { label: string; cls: string }> = {
 export default async function ItemsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; q?: string; category?: string; warehouse?: string; catQ?: string; catWh?: string }>;
+  searchParams: Promise<{ tab?: string; q?: string; category?: string; warehouse?: string; catQ?: string; catWh?: string; holder?: string }>;
 }) {
   const user = await requireCapability("catalog.manage");
   const bId = user.battalionId!;
-  const { tab, q = "", category = "", warehouse = "", catQ = "", catWh = "" } = await searchParams;
+  const { tab, q = "", category = "", warehouse = "", catQ = "", catWh = "", holder: selectedHolderParam = "" } = await searchParams;
   const active = tab || "items";
 
   // סקופ לקצין מחסן: רק טיפוסי המחסנים שלו
@@ -51,6 +52,7 @@ export default async function ItemsPage({
     { key: "categories", label: "קטגוריות", href: "/items?tab=categories" },
     { key: "statuses", label: "סטטוסים", href: "/items?tab=statuses" },
     { key: "frequencies", label: "תדירויות ספירה", href: "/items?tab=frequencies" },
+    { key: "locations", label: "🗄️ מידוף ימ\"ח", href: "/items?tab=locations" },
   ];
 
   const search = q.trim();
@@ -200,6 +202,86 @@ export default async function ItemsPage({
           rows={frequencies.map((f) => ({ id: f.id, values: { name: f.name, intervalDays: String(f.intervalDays) }, display: (<span>{f.name} <Badge>כל {f.intervalDays} ימים</Badge></span>) }))}
         />
       )}
+
+      {active === "locations" && (await (async () => {
+        // בורר holder — אם למשתמש יש holderId משלו, משתמשים בו; אחרת (מפ"מ) הוא בוחר מהרשימה
+        const allHolders = await prisma.holder.findMany({
+          where: { battalionId: bId, active: true, kind: { in: ["WAREHOUSE", "COMPANY"] } },
+          orderBy: [{ kind: "asc" }, { name: "asc" }],
+          select: { id: true, name: true, kind: true },
+        });
+        const effectiveHolderId = user.holderId ?? selectedHolderParam ?? "";
+
+        if (!effectiveHolderId) {
+          return (
+            <div className="mt-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-sm text-blue-900">
+                💡 בחר מחסן או פלוגה כדי לנהל את מיקומי הפריטים שלו. כל פריט יכול להיות במיקום שונה בכל מחסן/פלוגה.
+              </div>
+              <form method="GET" className="flex items-center gap-2 flex-wrap">
+                <input type="hidden" name="tab" value="locations" />
+                <label className="text-sm text-slate-700">בחר ימ״ח לניהול:</label>
+                <select name="holder" defaultValue={selectedHolderParam}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
+                  <option value="">— בחר —</option>
+                  <optgroup label="🏪 מחסנים">
+                    {allHolders.filter((h) => h.kind === "WAREHOUSE").map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                  </optgroup>
+                  <optgroup label="🪖 פלוגות">
+                    {allHolders.filter((h) => h.kind === "COMPANY").map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                  </optgroup>
+                </select>
+                <button className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-blue-700">הצג</button>
+              </form>
+            </div>
+          );
+        }
+
+        const [chosen, locations, mappings, allItems] = await Promise.all([
+          prisma.holder.findUnique({ where: { id: effectiveHolderId }, select: { name: true } }),
+          prisma.storageLocation.findMany({ where: { holderId: effectiveHolderId }, orderBy: [{ column: "asc" }, { row: "asc" }] }),
+          prisma.itemHolderLocation.findMany({ where: { holderId: effectiveHolderId }, select: { itemTypeId: true, locationId: true } }),
+          prisma.itemType.findMany({
+            where: { battalionId: bId, active: true },
+            orderBy: { name: "asc" },
+            include: { category: { select: { warehouseType: true } } },
+          }),
+        ]);
+
+        return (
+          <div className="mt-4">
+            {!user.holderId && (
+              <form method="GET" className="flex items-center gap-2 flex-wrap mb-4">
+                <input type="hidden" name="tab" value="locations" />
+                <label className="text-sm text-slate-700">ימ״ח נבחר:</label>
+                <select name="holder" defaultValue={effectiveHolderId}
+                  onChange={(e) => e.currentTarget.form?.submit()}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
+                  <optgroup label="🏪 מחסנים">
+                    {allHolders.filter((h) => h.kind === "WAREHOUSE").map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                  </optgroup>
+                  <optgroup label="🪖 פלוגות">
+                    {allHolders.filter((h) => h.kind === "COMPANY").map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                  </optgroup>
+                </select>
+                <noscript><button className="bg-blue-600 text-white rounded-lg px-3 py-1 text-xs">החלף</button></noscript>
+                <a href={`/locations?tab=shelves`} className="text-xs text-blue-600 hover:underline mr-auto">⚙️ ניהול מדפים</a>
+              </form>
+            )}
+            <ItemLocationsTab
+              holderName={chosen?.name ?? ""}
+              items={allItems.map((i) => ({
+                id: i.id, name: i.name, sku: i.sku,
+                trackingMethod: i.trackingMethod,
+                warehouseType: i.category?.warehouseType ?? null,
+              }))}
+              locations={locations.map((l) => ({ id: l.id, column: l.column, row: l.row, label: l.label }))}
+              mappings={mappings}
+              overrideHolderId={effectiveHolderId}
+            />
+          </div>
+        );
+      })())}
     </div>
   );
 }

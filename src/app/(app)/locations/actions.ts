@@ -33,21 +33,26 @@ export async function saveLocation(formData: FormData) {
 export async function setItemLocation(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
     const user = await requireCapability("locations.manage");
-    if (!user.holderId) return { error: "אינך משויך למחסן/פלוגה" };
     const itemTypeId = String(formData.get("itemTypeId") || "");
     const locationId = String(formData.get("locationId") || "");
-    const holderId = user.holderId;
+    // ⚠️ מפ"מ יכול לבחור holderId ספציפי מהממשק; אחרים — רק שלהם
+    const overrideHolderId = String(formData.get("holderId") || "");
+    const isMafam = user.role === "BATTALION_ADMIN";
+    const holderId = overrideHolderId && isMafam ? overrideHolderId : user.holderId;
+    if (!holderId) return { error: "אינך משויך למחסן/פלוגה" };
 
     if (!itemTypeId) return { error: "חסר פריט" };
 
+    // אבטחה: ודא שה-holder שייך לאותו גדוד
+    const targetHolder = await prisma.holder.findUnique({ where: { id: holderId }, select: { battalionId: true } });
+    if (!targetHolder || targetHolder.battalionId !== user.battalionId) return { error: "מחסן לא נמצא" };
+
     if (!locationId) {
-      // מחיקה — אם המיקום ריק, מסירים את הקישור
       await prisma.itemHolderLocation.deleteMany({ where: { itemTypeId, holderId } });
       await audit(user.id, "DELETE", "ItemHolderLocation", `${itemTypeId}@${holderId}`);
     } else {
-      // ודא שהמיקום שייך ל-holder הנכון
       const loc = await prisma.storageLocation.findUnique({ where: { id: locationId } });
-      if (!loc || loc.holderId !== holderId) return { error: "מיקום לא נמצא" };
+      if (!loc || loc.holderId !== holderId) return { error: "מיקום לא נמצא במחסן שנבחר" };
       await prisma.itemHolderLocation.upsert({
         where: { itemTypeId_holderId: { itemTypeId, holderId } },
         create: { itemTypeId, holderId, locationId },
@@ -56,6 +61,7 @@ export async function setItemLocation(formData: FormData): Promise<{ ok?: boolea
       await audit(user.id, "UPSERT", "ItemHolderLocation", `${itemTypeId}@${holderId}`, { locationId });
     }
     revalidatePath("/locations");
+    revalidatePath("/items");
     return { ok: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "שגיאה" };

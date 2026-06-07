@@ -9,12 +9,13 @@ type Location = { id: string; column: string; row: string; label: string | null 
 type Mapping = { itemTypeId: string; locationId: string };
 
 export default function ItemLocationsTab({
-  items, locations, mappings, holderName,
+  items, locations, mappings, holderName, overrideHolderId,
 }: {
   items: Item[];
   locations: Location[];
   mappings: Mapping[];
   holderName: string;
+  overrideHolderId?: string;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -40,6 +41,7 @@ export default function ItemLocationsTab({
       const fd = new FormData();
       fd.append("itemTypeId", itemTypeId);
       fd.append("locationId", locationId);
+      if (overrideHolderId) fd.append("holderId", overrideHolderId);
       const res = await setItemLocation(fd);
       if (res?.error) setFeedback({ id: itemTypeId, ok: false, msg: res.error });
       else {
