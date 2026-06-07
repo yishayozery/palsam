@@ -6,8 +6,8 @@ import { useEscClose } from "@/lib/useEscClose";
 
 type Soldier = { id: string; name: string; pn: string | null; companyId?: string | null; companyName?: string | null; enlisted?: boolean };
 type Company = { id: string; name: string };
-type Unit = { id: string; itemTypeId: string; itemName: string; serial: string; status: string; statusId: string; lotQuantity: number | null };
-type Balance = { itemTypeId: string; itemName: string; unit: string; status: string; statusId: string; quantity: number };
+type Unit = { id: string; itemTypeId: string; itemName: string; serial: string; status: string; statusId: string; lotQuantity: number | null; trackLocation?: boolean };
+type Balance = { itemTypeId: string; itemName: string; unit: string; status: string; statusId: string; quantity: number; trackLocation?: boolean };
 type KitLine = { name: string; qty: number; itemTypeId: string; trackingMethod: "QUANTITY" | "SERIAL" | "LOT" | "KIT" };
 type Kit = { id: string; name: string; lines: KitLine[] };
 type PendingKitPick = { itemTypeId: string; itemName: string; needed: number; kitName: string };
@@ -42,6 +42,14 @@ export default function SignoutModal({
   // ערכה: תור פריטים סריאליים/אצוות שצריכים בחירה
   const [pendingKitPicks, setPendingKitPicks] = useState<PendingKitPick[]>([]);
   const [kitPickerSearch, setKitPickerSearch] = useState("");
+  // התראת חוסר ערכה — לפני שמרחיבים: מפרטת מה חסר, מאפשרת המשך עם מה שיש
+  const [kitShortageDialog, setKitShortageDialog] = useState<{
+    kitId: string;
+    kitName: string;
+    shortages: { name: string; needed: number; available: number; itemTypeId: string }[];
+    qtyLines: CartQty[];
+    picks: PendingKitPick[];
+  } | null>(null);
 
   // ESC סוגר — אבל לא בזמן שדיאלוג ילד פתוח
   useEscClose(open && !lotPicker && pendingKitPicks.length === 0, () => { reset(); setOpen(false); });
@@ -133,6 +141,7 @@ export default function SignoutModal({
   //   • QTY/LOT-template → שורת qty
   //   • SERIAL → מקפיץ פופ-אפ לבחירת SN ספציפי (או הקלדה ידנית)
   //   • LOT (lotQuantity>1 בפועל) → גם דורש בחירה
+  // 🆕 בודק חוסרים לפני הרחבה — אם יש פריטים שאין במלאי, מקפיץ פופ-אפ
   const onPickKit = (newKitId: string) => {
     // הסרת ערכה קודמת
     setCart((c) => c.filter((x) => !(x.type === "qty" && (x as CartQty).fromKit === kitId)));
@@ -144,23 +153,57 @@ export default function SignoutModal({
 
     const qtyLines: CartQty[] = [];
     const picks: PendingKitPick[] = [];
+    const shortages: { name: string; needed: number; available: number; itemTypeId: string }[] = [];
+
     for (const l of kit.lines) {
+      // חישוב זמין במלאי לפי שיטת מעקב
+      let available = 0;
       if (l.trackingMethod === "QUANTITY" || l.trackingMethod === "LOT") {
-        // qty/lot template — שורה כמותית (השרת ימשוך תקין רנדומלי)
+        available = balances.filter((b) => b.itemTypeId === l.itemTypeId).reduce((a, b) => a + b.quantity, 0);
+      } else if (l.trackingMethod === "SERIAL") {
+        available = units.filter((u) => u.itemTypeId === l.itemTypeId).length;
+      }
+      const willTake = Math.min(l.qty, available);
+
+      if (willTake < l.qty) {
+        shortages.push({ name: l.name, needed: l.qty, available, itemTypeId: l.itemTypeId });
+      }
+      if (willTake === 0) continue; // אין מה לקחת — מדלגים על הפריט
+
+      if (l.trackingMethod === "QUANTITY" || l.trackingMethod === "LOT") {
         qtyLines.push({
           type: "qty",
           itemTypeId: l.itemTypeId,
-          itemName: l.name, unit: "יח׳", quantity: l.qty,
+          itemName: l.name, unit: "יח׳", quantity: willTake,
           statusId: "", statusName: "מתוך ערכה",
           fromKit: newKitId,
         });
       } else if (l.trackingMethod === "SERIAL") {
-        picks.push({ itemTypeId: l.itemTypeId, itemName: l.name, needed: l.qty, kitName: kit.name });
+        picks.push({ itemTypeId: l.itemTypeId, itemName: l.name, needed: willTake, kitName: kit.name });
       }
     }
-    setCart((c) => [...c, ...qtyLines]);
-    setPendingKitPicks(picks);
-    setKitId(""); // אחרי הרחבה — מסיר את kitId כדי שהשרת לא ירכיב שוב
+
+    // אם יש חוסרים → פותחים פופ-אפ אישור; אחרת — ישר מרחיבים
+    if (shortages.length > 0) {
+      setKitShortageDialog({ kitId: newKitId, kitName: kit.name, shortages, qtyLines, picks });
+    } else {
+      setCart((c) => [...c, ...qtyLines]);
+      setPendingKitPicks(picks);
+      setKitId("");
+    }
+  };
+
+  // אחרי שהמשתמש אישר את החוסרים — מרחיבים את המה-שיש לעגלה
+  const acceptKitShortage = () => {
+    if (!kitShortageDialog) return;
+    setCart((c) => [...c, ...kitShortageDialog.qtyLines]);
+    setPendingKitPicks(kitShortageDialog.picks);
+    setKitShortageDialog(null);
+    setKitId("");
+  };
+  const cancelKitShortage = () => {
+    setKitShortageDialog(null);
+    setKitId(""); // מבטל את הערכה
   };
 
   const skipKitPick = () => {
@@ -217,8 +260,8 @@ export default function SignoutModal({
           fd.append(`lotQty:${c.unitId}`, String(c.lotQty));
         }
       }
-      else if (c.type === "qty" && !c.fromKit) {
-        // רק פריטים שנבחרו ידנית (לא מערכה — אלה מטופלים דרך kitId)
+      else if (c.type === "qty") {
+        // שורות כמותיות (ידניות או מערכה) — kitId נמחק אחרי ההרחבה, אז כולן נשלחות ישירות
         fd.append("qtyItem", c.itemTypeId);
         fd.append("qtyValue", String(c.quantity));
         fd.append("qtyStatus", c.statusId);
@@ -367,13 +410,29 @@ export default function SignoutModal({
 
             {/* תוספות מתחת לעגלה */}
             <div className="p-3 border-t border-slate-200 bg-white space-y-2">
-              {/* מיקום פיזי — לכל פריט/ערכה (חייב להצמיד לאיפה החייל ישים את הציוד) */}
-              <div>
-                <label className="block text-[11px] text-slate-600 mb-0.5">📍 מיקום פיזי (אופציונלי)</label>
-                <input value={physicalLocation} onChange={(e) => setPhysicalLocation(e.target.value)}
-                  placeholder="לדוגמה: ארון 3, מדף ב' / רכב 12345 / חדר ירי"
-                  className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
-              </div>
+              {/* 📍 מיקום פיזי — רק אם לפחות פריט אחד בעגלה מסומן trackLocation=true (לדוגמה: רכב/קסדה).
+                  נשק וציוד אישי שנשארים על החייל — לא מוצגים. */}
+              {(() => {
+                const allowLocation = cart.some((c) => {
+                  if (c.type === "serial") {
+                    const u = units.find((x) => x.id === (c as CartSerial).unitId);
+                    return u?.trackLocation === true;
+                  } else {
+                    const b = balances.find((x) => x.itemTypeId === (c as CartQty).itemTypeId);
+                    return b?.trackLocation === true;
+                  }
+                });
+                if (!allowLocation) return null;
+                return (
+                  <div>
+                    <label className="block text-[11px] text-slate-600 mb-0.5">📍 מיקום פיזי (אופציונלי)</label>
+                    <input value={physicalLocation} onChange={(e) => setPhysicalLocation(e.target.value)}
+                      placeholder="לדוגמה: ארון 3, מדף ב' / רכב 12345 / חדר ירי"
+                      className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+                    <p className="text-[10px] text-slate-400 mt-1">פריטים שמותרים לאחסון מחוץ למחסן בלבד</p>
+                  </div>
+                );
+              })()}
               {vehicles.length > 0 && cart.some((c) => c.type === "serial") && (
                 <div>
                   <label className="block text-[11px] text-slate-600 mb-0.5">רכב (אופציונלי)</label>
@@ -478,6 +537,49 @@ export default function SignoutModal({
             </div>
           </div>
         </div>
+
+        {/* דיאלוג חוסר ערכה — מפרט מה חסר ומאשר המשך עם מה שיש */}
+        {kitShortageDialog && (
+          <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-20 p-3">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+              <div className="bg-gradient-to-r from-rose-600 to-rose-800 text-white p-4 shrink-0">
+                <h3 className="font-bold text-lg flex items-center gap-2">⚠️ חסרים פריטים בערכה</h3>
+                <p className="text-xs text-rose-100 mt-1">
+                  ערכה: <b>{kitShortageDialog.kitName}</b>
+                </p>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <p className="text-sm text-slate-700">
+                  הפריטים הבאים אינם במלאי בכמות הנדרשת:
+                </p>
+                <div className="bg-rose-50 border-2 border-rose-200 rounded-lg p-3 space-y-2">
+                  {kitShortageDialog.shortages.map((s) => (
+                    <div key={s.itemTypeId} className="flex items-center justify-between text-sm">
+                      <span className="font-medium">{s.name}</span>
+                      <span className="text-rose-700 font-mono">
+                        זמין: <b>{s.available}</b> / נדרש: <b>{s.needed}</b>
+                        {s.available === 0 && <span className="text-rose-600 mr-2">⚠️ אין כלל</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900">
+                  💡 <b>אפשרות:</b> תוכל להמשיך ולהחתים רק על הפריטים שיש במלאי.
+                  הפריטים החסרים <b>לא יוחתמו</b> ולא יוסיפו לעגלה. תוכל להוסיף אותם ידנית או להחתים בנפרד מאוחר יותר.
+                </div>
+              </div>
+              <div className="border-t border-slate-200 p-3 flex gap-2 shrink-0">
+                <button onClick={cancelKitShortage} className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm">
+                  ✕ ביטול
+                </button>
+                <button onClick={acceptKitShortage}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2.5 text-sm font-bold">
+                  ✓ המשך עם מה שיש
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* דיאלוג ערכה: בחירת SN/אצווה ספציפיים מתוך מלאי */}
         {pendingKitPicks.length > 0 && !lotPicker && (() => {

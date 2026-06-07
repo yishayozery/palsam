@@ -232,10 +232,12 @@ export default async function SignaturesPage() {
                   id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber,
                   status: u.status.name, statusId: u.statusId,
                   lotQuantity: u.lotQuantity,
+                  trackLocation: u.itemType.trackLocation,
                 }))}
                 balances={warehouseBalances.map((b) => ({
                   itemTypeId: b.itemTypeId, itemName: b.itemType.name, unit: b.itemType.unit,
                   status: b.status.name, statusId: b.statusId, quantity: b.quantity,
+                  trackLocation: b.itemType.trackLocation,
                 }))}
                 kits={kits.map((k) => ({
                   id: k.id, name: k.name,
