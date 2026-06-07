@@ -32,14 +32,13 @@ export default function CompanySignModal({
   useEscClose(open && !lotPicker, () => { reset(); setOpen(false); });
 
   const selectedCompany = companies.find((c) => c.id === companyId);
-  // מיון: רס"פ ראשון, מ"פ שני, השאר אחרון
+  // מיון לפי תפקיד (title): רס"פ ראשון, מ"פ/מ"פלג שני, השאר אחרון
   const availableMembers = useMemo(() => {
     if (!selectedCompany) return [];
     const priority = (m: Member): number => {
-      const r = (m.role || "").toLowerCase();
-      const t = (m.role || "").includes('רס"פ') || r.includes("rep");
-      if (t) return 0;
-      if ((m.role || "").includes('מ"פ') || (m.role || "").includes("מפ")) return 1;
+      const t = (m.role || "");
+      if (t.includes('רס"פ') || t.includes("רספ")) return 0;
+      if (t.includes('מ"פ') || t.includes("מפ")) return 1;
       return 2;
     };
     return [...selectedCompany.members].sort((a, b) => priority(a) - priority(b));

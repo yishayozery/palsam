@@ -170,7 +170,13 @@ export default async function SignaturesPage() {
               {!isCompanyRep && <CompanySignModal
                 companies={companiesForSign.map((c) => ({
                   id: c.id, name: c.name,
-                  members: c.users.map((u) => ({ id: u.id, name: u.fullName, role: ROLE_LABELS[u.role] })),
+                  // ⚠️ מציגים את התפקיד (title) — לא את ההרשאה (role).
+                  // למשל: "מ"פ" / "רס"פ" / "מ"פלג" — לא "נציג פלוגה" / "מנהל מחסן".
+                  members: c.users.map((u) => ({
+                    id: u.id,
+                    name: u.fullName,
+                    role: u.title || ROLE_LABELS[u.role],
+                  })),
                 }))}
                 units={availableUnits.map((u) => ({
                   id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber,
