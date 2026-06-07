@@ -4,6 +4,7 @@ import { PageHeader, Badge, Card } from "@/components/ui";
 import TabNav from "@/components/TabNav";
 import CrudSection from "@/components/CrudSection";
 import { saveLocation, deleteLocation } from "./actions";
+import ItemLocationsTab from "./ItemLocationsTab";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,19 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
       stockBalances: { include: { itemType: true } },
     },
   });
+  // פריטים + המיקום הנוכחי שלהם ב-holder הזה
+  const bId = user.battalionId!;
+  const [allItems, holderMappings] = await Promise.all([
+    prisma.itemType.findMany({
+      where: { battalionId: bId, active: true },
+      orderBy: { name: "asc" },
+      include: { category: { select: { warehouseType: true } } },
+    }),
+    prisma.itemHolderLocation.findMany({
+      where: { holderId: user.holderId },
+      select: { itemTypeId: true, locationId: true },
+    }),
+  ]);
 
   // קיבוץ לרשת לפי עמודה/שורה
   const columns = [...new Set(locations.map((l) => l.column))].sort();
@@ -44,9 +58,25 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
         active={active}
         tabs={[
           { key: "shelves", label: "מדפים", href: "/locations?tab=shelves" },
+          { key: "items", label: "מיקום פריטים", href: "/locations?tab=items" },
           { key: "map", label: "שרטוט המחסן", href: "/locations?tab=map" },
         ]}
       />
+
+      {active === "items" && (
+        <div className="mt-4">
+          <ItemLocationsTab
+            holderName={holder?.name ?? ""}
+            items={allItems.map((i) => ({
+              id: i.id, name: i.name, sku: i.sku,
+              trackingMethod: i.trackingMethod,
+              warehouseType: i.category?.warehouseType ?? null,
+            }))}
+            locations={locations.map((l) => ({ id: l.id, column: l.column, row: l.row, label: l.label }))}
+            mappings={holderMappings}
+          />
+        </div>
+      )}
 
       {active === "shelves" && (
         <CrudSection

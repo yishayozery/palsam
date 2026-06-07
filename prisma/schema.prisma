@@ -253,6 +253,7 @@ model Holder {
   assignedUsers    UserHolder[]
   soldiers         Soldier[]
   storageLocations StorageLocation[]
+  itemHolderLocations ItemHolderLocation[]
   stockBalances    StockBalance[]
   serialUnits      SerialUnit[]       @relation("SerialUnitHolder")
   kitInstances     KitInstance[]      @relation("KitInstanceHolder")
@@ -299,9 +300,33 @@ model StorageLocation {
   stockBalances StockBalance[]
   serialUnits   SerialUnit[]
   homeForItems  ItemType[]     @relation("ItemHomeLocation")
+  // מיקומי פריטים פר-holder (מאפשר אותו פריט במיקומים שונים בכל מחסן/פלוגה)
+  itemLocations ItemHolderLocation[]
 
   @@unique([holderId, column, row])
   @@index([holderId])
+}
+
+/**
+ * מיקום פריט במידוף של holder ספציפי.
+ * מאפשר אותו פריט (לדוגמה: סק"ש) להיות מאוחסן במיקום שונה בכל מחסן/פלוגה.
+ * מחליף את ItemType.homeLocationId שהיה גלובלי.
+ */
+model ItemHolderLocation {
+  id         String   @id @default(cuid())
+  itemTypeId String
+  itemType   ItemType @relation(fields: [itemTypeId], references: [id], onDelete: Cascade)
+  holderId   String
+  holder     Holder   @relation(fields: [holderId], references: [id], onDelete: Cascade)
+  locationId String
+  location   StorageLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([itemTypeId, holderId])
+  @@index([itemTypeId])
+  @@index([holderId])
+  @@index([locationId])
 }
 
 // ===================== חיילים =====================
@@ -435,6 +460,8 @@ model ItemType {
   kitComponents KitComponent[] @relation("KitParent")
   usedInKits    KitComponent[] @relation("KitChild")
   kitInstances  KitInstance[]
+  // מיקומים פר-holder (מאפשר אותו פריט במיקומים שונים בכל מחסן/פלוגה)
+  holderLocations ItemHolderLocation[]
   inSignableKits SignableKitLine[] @relation("KitLineItem")
 
   @@unique([battalionId, sku])
