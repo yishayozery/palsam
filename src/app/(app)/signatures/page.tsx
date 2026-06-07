@@ -48,14 +48,25 @@ export default async function SignaturesPage() {
       })
     : [];
   // פלוגות + אנשי הקשר שלהן (כל משתמש פלוגתי = נמען אפשרי)
-  // מפ"מ רואה את כל הפלוגות; קצין מחסן רק אם יש לו holderId
-  const companiesForSign = (user.holderId || isMafam)
+  // מפ"מ רואה את כל הפלוגות; קצין מחסן רק אם יש לו holderId.
+  // ⚠️ כולל גם משתמשים שמשויכים לפלוגה דרך UserHolder (assignedUsers) — למשל מ"פ שנוסף לפלוגת אגם
+  // אבל הפרופיל הראשי שלו במקום אחר.
+  const companiesForSignRaw = (user.holderId || isMafam)
     ? await prisma.holder.findMany({
         where: { battalionId: bId, kind: "COMPANY", active: true },
-        include: { users: { where: { active: true } } },
+        include: {
+          users: { where: { active: true } },
+          assignedUsers: { where: { user: { active: true } }, include: { user: true } },
+        },
         orderBy: { name: "asc" },
       })
     : [];
+  // איחוד users + assignedUsers (ללא כפילויות לפי id)
+  const companiesForSign = companiesForSignRaw.map((c) => {
+    const all = new Map(c.users.map((u) => [u.id, u]));
+    for (const a of c.assignedUsers) if (a.user) all.set(a.user.id, a.user);
+    return { ...c, users: [...all.values()] };
+  });
   // מלאי כמותי וסריאלי להחתמה: קצין מחסן רואה רק את שלו; מפ"מ רואה את כל מלאי הגדוד
   // ⚠️ פילטר signable !== false — פריטים שהוגדרו "ללא החתמה" לא יופיעו (כמו כסאות נח)
   const warehouseBalances = (user.holderId || isMafam)
