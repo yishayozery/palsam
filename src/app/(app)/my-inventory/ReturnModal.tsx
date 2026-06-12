@@ -9,16 +9,18 @@ type SerialUnit = {
   serial: string; lotQuantity: number | null;
   signedTo: string | null;
   statusName: string; statusId: string; isWear: boolean; isLoss: boolean;
+  warehouseType: string | null;
 };
 type Balance = {
   itemTypeId: string; itemName: string; unit: string;
   statusId: string; statusName: string;
   isWear: boolean; isLoss: boolean;
   quantity: number;
+  warehouseType: string | null;
 };
 type Status = { id: string; name: string; isDefault: boolean; isWear: boolean; isLoss: boolean };
 type Recipient = { id: string; name: string; title: string | null; personalNumber: string | null };
-type Warehouse = { id: string; name: string; recipients: Recipient[] };
+type Warehouse = { id: string; name: string; recipients: Recipient[]; warehouseType: string | null };
 
 type CartSerial = { type: "serial"; unitId: string; itemName: string; serial: string; statusName: string; lotQty?: number; lotTotal?: number };
 type CartQty = { type: "qty"; itemTypeId: string; itemName: string; unit: string; quantity: number; maxQty: number; statusId: string; statusName: string };
@@ -48,10 +50,14 @@ export default function ReturnModal({ serialUnits, balances, statuses, warehouse
 
   const cartSerialIds = new Set(cart.filter((c) => c.type === "serial").map((c) => (c as CartSerial).unitId));
 
+  const selectedWhType = selectedWh?.warehouseType ?? null;
+
   const filteredSerials = useMemo(() => {
     return serialUnits.filter((u) => {
       if (cartSerialIds.has(u.id)) return false;
       if (u.signedTo) return false; // יחידה חתומה על חייל — אי-אפשר לזכות
+      // סינון לפי טיפוס מחסן הנבחר — הפלוגה מזכה רק את מה ששייך למחסן הזה
+      if (selectedWhType && u.warehouseType && u.warehouseType !== selectedWhType) return false;
       if (showOnlyDefective && !u.isWear && !u.isLoss) return false;
       if (itemSearch.trim()) {
         const q = itemSearch.toLowerCase();
@@ -59,10 +65,11 @@ export default function ReturnModal({ serialUnits, balances, statuses, warehouse
       }
       return true;
     });
-  }, [serialUnits, cartSerialIds, itemSearch, showOnlyDefective]);
+  }, [serialUnits, cartSerialIds, itemSearch, showOnlyDefective, selectedWhType]);
 
   const filteredBalances = useMemo(() => {
     return balances.filter((b) => {
+      if (selectedWhType && b.warehouseType && b.warehouseType !== selectedWhType) return false;
       if (showOnlyDefective && !b.isWear && !b.isLoss) return false;
       if (itemSearch.trim()) {
         const q = itemSearch.toLowerCase();
@@ -70,7 +77,7 @@ export default function ReturnModal({ serialUnits, balances, statuses, warehouse
       }
       return true;
     });
-  }, [balances, itemSearch, showOnlyDefective]);
+  }, [balances, itemSearch, showOnlyDefective, selectedWhType]);
 
   const addSerial = (u: SerialUnit) => {
     if (u.lotQuantity && u.lotQuantity > 1) { setLotPicker({ unit: u, qty: u.lotQuantity }); return; }
@@ -276,7 +283,10 @@ export default function ReturnModal({ serialUnits, balances, statuses, warehouse
               <div className="font-bold text-slate-800 mb-2">📦 מלאי הפלוגה להחזרה</div>
               <input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="חפש פריט..."
                 className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
-              <p className="text-[11px] text-slate-500 mt-1">⚠️ פריטים חתומים על חיילים — קודם זיכוי החייל</p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                ⚠️ פריטים חתומים על חיילים — קודם זיכוי החייל
+                {selectedWhType && <span className="block text-emerald-700 mt-0.5">🏪 מציג רק פריטים השייכים לטיפוס המחסן הנבחר</span>}
+              </p>
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
               {filteredBalances.length === 0 && filteredSerials.length === 0 && (

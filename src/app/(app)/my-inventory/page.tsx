@@ -30,7 +30,8 @@ export default async function MyInventoryPage() {
     prisma.holder.findMany({
       where: { battalionId: bId, kind: "WAREHOUSE", active: true },
       orderBy: { name: "asc" },
-      include: {
+      select: {
+        id: true, name: true, warehouseType: true,
         users: {
           where: { active: true },
           select: { id: true, fullName: true, title: true, role: true, soldier: { select: { personalNumber: true } } },
@@ -138,16 +139,18 @@ export default async function MyInventoryPage() {
               serial: u.serialNumber, lotQuantity: u.lotQuantity,
               signedTo: u.signedSoldier?.fullName ?? null,
               statusName: u.status.name, statusId: u.statusId, isWear: u.status.isWear, isLoss: u.status.isLoss,
+              warehouseType: u.itemType.category?.warehouseType ?? null,
             }))}
             balances={balances.map((b) => ({
               itemTypeId: b.itemTypeId, itemName: b.itemType.name, unit: b.itemType.unit,
               statusId: b.statusId, statusName: b.status.name,
               isWear: b.status.isWear, isLoss: b.status.isLoss,
               quantity: b.quantity,
+              warehouseType: b.itemType.category?.warehouseType ?? null,
             }))}
             statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss }))}
             warehouses={warehouses.map((w) => ({
-              id: w.id, name: w.name,
+              id: w.id, name: w.name, warehouseType: w.warehouseType ?? null,
               recipients: w.users.map((u) => ({ id: u.id, name: u.fullName, title: u.title ?? null, personalNumber: u.soldier?.personalNumber ?? null })),
             }))}
             requirePersonalId={mustHavePN}
