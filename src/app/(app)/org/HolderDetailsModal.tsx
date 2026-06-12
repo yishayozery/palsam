@@ -366,7 +366,13 @@ export default function HolderDetailsModal({ row, kind, onClose, baseUrl = "" }:
         {/* כותרת */}
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">{icon}</span>
+            {row.logoData ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={row.logoData} alt={row.name}
+                className="w-14 h-14 object-contain rounded bg-white/10 p-1 shrink-0" />
+            ) : (
+              <span className="text-3xl">{icon}</span>
+            )}
             <div>
               <h3 className="font-bold text-lg">{row.name}</h3>
               {row.warehouseType && <p className="text-xs text-slate-300">{WAREHOUSE_TYPE_SHORT[row.warehouseType]}</p>}

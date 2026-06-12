@@ -26,7 +26,13 @@ export default function HolderCard({ row, kind, baseUrl = "" }: { row: HolderRow
           {/* כותרת */}
           <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-3xl shrink-0">{icon}</span>
+              {row.logoData ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={row.logoData} alt={row.name}
+                  className="w-12 h-12 object-contain rounded shrink-0 bg-white border border-slate-200" />
+              ) : (
+                <span className="text-3xl shrink-0">{icon}</span>
+              )}
               <div className="min-w-0">
                 {editName ? (
                   <form action={async (fd) => { await renameHolder(fd); setEditName(false); }} className="flex items-center gap-1"
