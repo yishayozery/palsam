@@ -49,6 +49,10 @@ export default async function AppLayout({
   const battalion = user.battalionId
     ? await prisma.battalion.findUnique({ where: { id: user.battalionId }, select: { name: true, logoData: true, motto: true } })
     : null;
+  // סמל הפלוגה / מחסן של המשתמש (אם יש)
+  const userHolder = user.holderId
+    ? await prisma.holder.findUnique({ where: { id: user.holderId }, select: { name: true, logoData: true, kind: true } })
+    : null;
   const unitName = user.role === "SUPER_ADMIN" ? "ניהול-על" : battalion?.name || "גדוד";
 
   const sidebar = (
@@ -61,8 +65,19 @@ export default async function AppLayout({
           ) : (
             <span className="text-2xl shrink-0">🛡️</span>
           )}
+          {/* סמל פלוגה / מחסן — לצד סמל הגדוד */}
+          {userHolder?.logoData && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={userHolder.logoData} alt={userHolder.name} title={userHolder.name}
+              className="w-9 h-9 object-contain rounded shrink-0 border border-slate-600" />
+          )}
           <div className="min-w-0">
             <div className="font-bold text-base leading-tight truncate">{unitName}</div>
+            {userHolder?.name && (
+              <div className="text-[11px] text-blue-200 truncate">
+                {userHolder.kind === "COMPANY" ? "🪖" : "🏪"} {userHolder.name}
+              </div>
+            )}
             <div className="text-xs text-slate-400 tracking-wide">PALSAM · ניהול מלאי</div>
             {battalion?.motto && (
               <div className="text-[11px] text-amber-300/80 italic truncate mt-0.5">״{battalion.motto}״</div>

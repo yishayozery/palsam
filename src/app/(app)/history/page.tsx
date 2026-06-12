@@ -50,6 +50,20 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
     dateFilter.lte = end;
   }
 
+  // טעינת רשימות לדרופדאון (פריטים + חיילים)
+  const [itemsList, soldiersList] = await Promise.all([
+    prisma.itemType.findMany({
+      where: { battalionId: bId, active: true },
+      orderBy: { name: "asc" },
+      select: { name: true, sku: true },
+    }),
+    prisma.soldier.findMany({
+      where: { battalionId: bId, active: true },
+      orderBy: { fullName: "asc" },
+      select: { fullName: true, personalNumber: true },
+    }),
+  ]);
+
   const transfers = await prisma.transfer.findMany({
     where: {
       battalionId: bId,
@@ -84,14 +98,26 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
       <Card className="p-4 mb-4 bg-blue-50 border-blue-200">
         <form method="GET" className="grid grid-cols-1 md:grid-cols-5 gap-2">
           <div>
-            <label className="block text-[11px] text-slate-600 mb-0.5">📦 פריט (שם/מק״ט)</label>
-            <input name="item" defaultValue={item} placeholder="M4, רימון..."
+            <label className="block text-[11px] text-slate-600 mb-0.5">📦 פריט (בחר מהרשימה או הקלד)</label>
+            <input name="item" defaultValue={item} placeholder="התחל להקליד..." list="items-list"
               className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white" />
+            <datalist id="items-list">
+              {itemsList.map((i) => (
+                <option key={i.name} value={i.name}>{i.sku ? `${i.sku} · ${i.name}` : i.name}</option>
+              ))}
+            </datalist>
           </div>
           <div>
-            <label className="block text-[11px] text-slate-600 mb-0.5">🪖 חייל (שם/מ.א.)</label>
-            <input name="soldier" defaultValue={soldier} placeholder="אבי / 1234567"
+            <label className="block text-[11px] text-slate-600 mb-0.5">🪖 חייל (בחר מהרשימה או הקלד)</label>
+            <input name="soldier" defaultValue={soldier} placeholder="שם / מ.א..." list="soldiers-list"
               className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white" />
+            <datalist id="soldiers-list">
+              {soldiersList.map((s) => (
+                <option key={`${s.fullName}-${s.personalNumber ?? ""}`} value={s.fullName}>
+                  {s.personalNumber ? `${s.personalNumber} · ${s.fullName}` : s.fullName}
+                </option>
+              ))}
+            </datalist>
           </div>
           <div>
             <label className="block text-[11px] text-slate-600 mb-0.5">📄 מס׳ תעודה (8 ספרות)</label>

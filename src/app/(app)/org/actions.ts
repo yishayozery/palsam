@@ -211,6 +211,29 @@ export async function renameHolder(formData: FormData) {
   await prisma.holder.update({ where: { id }, data: { name } });
   await audit(user.id, "UPDATE", "Holder", id, { name });
   revalidatePath("/org");
+  revalidatePath("/", "layout");
+}
+
+/** העלאת/הסרת סמל פלוגה/מחסן (מוצג בסיידבר לצד סמל הגדוד) */
+export async function setHolderLogo(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireCapability("org.manage");
+    const id = String(formData.get("id") || "");
+    const rawLogo = String(formData.get("logoData") || "");
+    const logoData = rawLogo === "__CLEAR__" ? null
+      : rawLogo.startsWith("data:image") ? rawLogo
+      : undefined;
+    if (logoData === undefined) return { error: "פורמט תמונה לא תקין" };
+    const h = await prisma.holder.findUnique({ where: { id } });
+    if (!h || h.battalionId !== user.battalionId) return { error: "מחסן/פלוגה לא נמצא" };
+    await prisma.holder.update({ where: { id }, data: { logoData } });
+    await audit(user.id, "UPDATE_LOGO", "Holder", id);
+    revalidatePath("/org");
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
 }
 
 export async function toggleHolder(formData: FormData) {

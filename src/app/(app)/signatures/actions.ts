@@ -202,21 +202,49 @@ export async function checkinSerial(formData: FormData) {
 
   await prisma.$transaction(async (tx) => {
     if (isPartial) {
-      // פיצול אצווה — חלק חוזר למחסן, השאר נשאר אצל החייל
-      let suffix = 1;
-      while (await tx.serialUnit.findFirst({ where: { itemTypeId: su.itemTypeId, serialNumber: `${su.serialNumber}/${suffix}` } })) {
-        suffix++;
-      }
-      await tx.serialUnit.create({
-        data: {
-          battalionId: bId, itemTypeId: su.itemTypeId,
-          serialNumber: `${su.serialNumber}/${suffix}`,
-          lotQuantity: partialLotQty,
-          statusId: statusId || su.statusId,
+      const finalStatus = statusId || su.statusId;
+      // 🆕 ניסיון מיזוג: חפש אצווה-הורה במחסן עם אותו סטטוס וSN-מקור — וצרף אליה.
+      // SN-מקור = ה-serialNumber לפני סופיקס `/N` (למשל 1234585/1 → המקור 1234585).
+      const parentSerial = (() => {
+        const lastSlash = su.serialNumber.lastIndexOf("/");
+        if (lastSlash < 0) return su.serialNumber;
+        const suffix = su.serialNumber.slice(lastSlash + 1);
+        return /^\d+$/.test(suffix) ? su.serialNumber.slice(0, lastSlash) : su.serialNumber;
+      })();
+      const mergeTarget = await tx.serialUnit.findFirst({
+        where: {
+          itemTypeId: su.itemTypeId,
           currentHolderId: su.currentHolderId,
-          // signedSoldierId = null (חזר למחסן)
+          signedSoldierId: null,
+          statusId: finalStatus,
+          serialNumber: { in: [parentSerial, su.serialNumber] },
+          id: { not: su.id },
+          lotQuantity: { gt: 1 }, // אצווה בלבד
         },
       });
+
+      if (mergeTarget) {
+        // 🟢 מיזוג: מוסיפים ל-target ומקטינים את המקור — בלי יצירת ילד
+        await tx.serialUnit.update({
+          where: { id: mergeTarget.id },
+          data: { lotQuantity: (mergeTarget.lotQuantity ?? 1) + partialLotQty },
+        });
+      } else {
+        // אין אצווה-הורה במחסן — יוצרים יחידה חדשה (התנהגות מקורית)
+        let suffix = 1;
+        while (await tx.serialUnit.findFirst({ where: { itemTypeId: su.itemTypeId, serialNumber: `${su.serialNumber}/${suffix}` } })) {
+          suffix++;
+        }
+        await tx.serialUnit.create({
+          data: {
+            battalionId: bId, itemTypeId: su.itemTypeId,
+            serialNumber: `${su.serialNumber}/${suffix}`,
+            lotQuantity: partialLotQty,
+            statusId: finalStatus,
+            currentHolderId: su.currentHolderId,
+          },
+        });
+      }
       await tx.serialUnit.update({
         where: { id: su.id },
         data: { lotQuantity: (su.lotQuantity ?? 1) - partialLotQty },

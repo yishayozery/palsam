@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui";
 import { ROLE_LABELS, WAREHOUSE_TYPE_SHORT, WAREHOUSE_TYPE_ICON } from "@/lib/rbac";
 import type { WarehouseType } from "@/generated/prisma";
-import { inviteHolderUser, updateHolderUser, removeHolderUser } from "./actions";
+import { inviteHolderUser, updateHolderUser, removeHolderUser, setHolderLogo } from "./actions";
+import ImageUpload from "@/components/ImageUpload";
 import { createSoldier } from "../roster/actions";
 import UserActions from "./UserActions";
 import { useEscClose } from "@/lib/useEscClose";
@@ -27,6 +28,7 @@ export type HolderRowDetail = {
   name: string;
   active: boolean;
   warehouseType?: WarehouseType | null;
+  logoData?: string | null;
   users: User[];
   soldiers?: SoldierRefDetail[];
 };
@@ -374,6 +376,12 @@ export default function HolderDetailsModal({ row, kind, onClose, baseUrl = "" }:
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* סמל פלוגה/מחסן */}
+          <form action={async (fd) => { fd.append("id", row.id); await setHolderLogo(fd); }} className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="text-xs font-semibold text-blue-900 mb-2">🎨 סמל {kind === "WAREHOUSE" ? "המחסן" : "הפלוגה"} (אופציונלי, מוצג בסיידבר)</div>
+            <ImageUpload name="logoData" initial={row.logoData ?? null} label="" />
+            <button className="mt-2 text-xs bg-blue-700 text-white rounded px-3 py-1 hover:bg-blue-800">שמור סמל</button>
+          </form>
           {/* בעלי תפקיד */}
           <div>
             <h4 className="font-bold text-slate-700 mb-2 flex items-center justify-between">

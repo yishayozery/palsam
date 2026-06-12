@@ -254,6 +254,8 @@ model Holder {
   soldiers         Soldier[]
   storageLocations StorageLocation[]
   itemHolderLocations ItemHolderLocation[]
+  // סמל פלוגה / מחסן (אופציונלי) — מוצג בסיידבר לצד סמל הגדוד
+  logoData String?
   stockBalances    StockBalance[]
   serialUnits      SerialUnit[]       @relation("SerialUnitHolder")
   kitInstances     KitInstance[]      @relation("KitInstanceHolder")

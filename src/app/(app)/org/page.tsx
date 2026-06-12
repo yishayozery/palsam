@@ -51,14 +51,14 @@ export default async function OrgPage({ searchParams }: { searchParams: Promise<
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
 
   const warehouseRows: HolderRowDetail[] = warehouses.map((w) => ({
-    id: w.id, name: w.name, active: w.active, warehouseType: w.warehouseType,
+    id: w.id, name: w.name, active: w.active, warehouseType: w.warehouseType, logoData: w.logoData,
     users: w.users.filter((u) => u.active || !u.passwordSet),
     soldiers: w.secondarySoldiers.map((s) => ({
       id: s.id, fullName: s.fullName, personalNumber: s.personalNumber, enlisted: s.enlisted, isSecondary: true,
     })),
   }));
   const companyRows: HolderRowDetail[] = companies.map((c) => ({
-    id: c.id, name: c.name, active: c.active,
+    id: c.id, name: c.name, active: c.active, logoData: c.logoData,
     users: c.users.filter((u) => u.active || !u.passwordSet),
     soldiers: c.soldiers.map((s) => ({
       id: s.id, fullName: s.fullName, personalNumber: s.personalNumber, enlisted: s.enlisted,
