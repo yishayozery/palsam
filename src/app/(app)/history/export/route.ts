@@ -3,10 +3,29 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { TRANSFER_TYPE, TRANSFER_STATUS } from "@/lib/labels";
 
-const DIRECTION: Record<string, "in" | "out"> = {
-  INTAKE: "in", RETURN: "in", CHECKIN: "in",
-  WRITE_OFF: "out", ISSUE: "out", SIGNOUT: "out",
-};
+function directionFor(role: string, type: string): "in" | "out" | null {
+  if (role === "COMPANY_REP") {
+    if (type === "INTAKE" || type === "ISSUE" || type === "CHECKIN") return "in";
+    if (type === "WRITE_OFF" || type === "RETURN" || type === "SIGNOUT") return "out";
+  }
+  if (role === "WAREHOUSE_MANAGER") {
+    if (type === "INTAKE" || type === "RETURN") return "in";
+    if (type === "ISSUE" || type === "WRITE_OFF") return "out";
+    return null;
+  }
+  if (type === "INTAKE") return "in";
+  if (type === "WRITE_OFF") return "out";
+  return null;
+}
+function directionTypesFor(role: string, dir: "in" | "out"): string[] {
+  if (role === "COMPANY_REP") {
+    return dir === "in" ? ["INTAKE", "ISSUE", "CHECKIN"] : ["WRITE_OFF", "RETURN", "SIGNOUT"];
+  }
+  if (role === "WAREHOUSE_MANAGER") {
+    return dir === "in" ? ["INTAKE", "RETURN"] : ["ISSUE", "WRITE_OFF"];
+  }
+  return dir === "in" ? ["INTAKE"] : ["WRITE_OFF"];
+}
 
 export async function GET(req: Request) {
   const user = await getSession();
@@ -41,11 +60,9 @@ export async function GET(req: Request) {
   } : {};
   const docFilter = doc ? { id: { endsWith: doc.toLowerCase() } } : {};
   const typeFilter = type ? { type: type as "INTAKE" | "WRITE_OFF" | "ISSUE" | "RETURN" | "SIGNOUT" | "CHECKIN" } : {};
-  const directionTypes = direction === "in"
-    ? ["INTAKE", "RETURN", "CHECKIN"]
-    : direction === "out"
-      ? ["WRITE_OFF", "ISSUE", "SIGNOUT"]
-      : null;
+  const directionTypes = (direction === "in" || direction === "out")
+    ? directionTypesFor(user.role, direction)
+    : null;
   const directionFilter = directionTypes ? { type: { in: directionTypes as ("INTAKE" | "WRITE_OFF" | "ISSUE" | "RETURN" | "SIGNOUT" | "CHECKIN")[] } } : {};
   const dateFilter: { gte?: Date; lte?: Date } = {};
   if (from) dateFilter.gte = new Date(from);
@@ -95,7 +112,7 @@ export async function GET(req: Request) {
   ws.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
 
   for (const t of transfers) {
-    const dir = DIRECTION[t.type];
+    const dir = directionFor(user.role, t.type);
     const totalQty = t.lines.reduce((s, l) => s + (l.quantity || (l.serialUnit?.lotQuantity ?? 1)), 0);
     ws.addRow({
       date: t.createdAt.toLocaleDateString("he-IL"),
@@ -137,7 +154,7 @@ export async function GET(req: Request) {
   ws2.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
 
   for (const t of transfers) {
-    const dir = DIRECTION[t.type];
+    const dir = directionFor(user.role, t.type);
     for (const l of t.lines) {
       ws2.addRow({
         date: t.createdAt.toLocaleDateString("he-IL"),

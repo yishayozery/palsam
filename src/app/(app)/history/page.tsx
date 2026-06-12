@@ -13,11 +13,34 @@ const TYPE_ICONS: Record<string, string> = {
   SIGNOUT: "✍️", CHECKIN: "↩️",
 };
 
-// כיוון תנועה גדודי: in=כניסה למלאי הגדוד/מחסן, out=יציאה מהגדוד/למטה
-const DIRECTION: Record<string, "in" | "out"> = {
-  INTAKE: "in", RETURN: "in", CHECKIN: "in",
-  WRITE_OFF: "out", ISSUE: "out", SIGNOUT: "out",
-};
+// כיוון תנועה — תלוי-תפקיד (נקודת מבט של הצופה)
+// רס"פ פלוגה: ISSUE/CHECKIN/RETURN-קליטה=כניסה למלאי הפלוגה; RETURN-שליחה/SIGNOUT=יציאה
+// קצין מחסן: INTAKE/RETURN=כניסה למחסן; ISSUE/WRITE_OFF=יציאה
+// מפ"מ (גדודי): INTAKE=כניסה לגדוד; WRITE_OFF=יציאה; השאר פנימי
+function directionFor(role: string, type: string): "in" | "out" | null {
+  if (role === "COMPANY_REP") {
+    if (type === "INTAKE" || type === "ISSUE" || type === "CHECKIN") return "in";
+    if (type === "WRITE_OFF" || type === "RETURN" || type === "SIGNOUT") return "out";
+  }
+  if (role === "WAREHOUSE_MANAGER") {
+    if (type === "INTAKE" || type === "RETURN") return "in";
+    if (type === "ISSUE" || type === "WRITE_OFF") return "out";
+    return null;
+  }
+  // BATTALION_ADMIN / VIEWER / SUPER_ADMIN
+  if (type === "INTAKE") return "in";
+  if (type === "WRITE_OFF") return "out";
+  return null;
+}
+function directionTypesFor(role: string, dir: "in" | "out"): string[] {
+  if (role === "COMPANY_REP") {
+    return dir === "in" ? ["INTAKE", "ISSUE", "CHECKIN"] : ["WRITE_OFF", "RETURN", "SIGNOUT"];
+  }
+  if (role === "WAREHOUSE_MANAGER") {
+    return dir === "in" ? ["INTAKE", "RETURN"] : ["ISSUE", "WRITE_OFF"];
+  }
+  return dir === "in" ? ["INTAKE"] : ["WRITE_OFF"];
+}
 
 export default async function HistoryPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const user = await requireUser();
@@ -45,11 +68,9 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   } : {};
   const docFilter = doc.trim() ? { id: { endsWith: doc.trim().toLowerCase() } } : {};
   const typeFilter = type.trim() ? { type: type.trim() as "INTAKE" | "WRITE_OFF" | "ISSUE" | "RETURN" | "SIGNOUT" | "CHECKIN" } : {};
-  const directionTypes = direction === "in"
-    ? ["INTAKE", "RETURN", "CHECKIN"]
-    : direction === "out"
-      ? ["WRITE_OFF", "ISSUE", "SIGNOUT"]
-      : null;
+  const directionTypes = (direction === "in" || direction === "out")
+    ? directionTypesFor(user.role, direction)
+    : null;
   const directionFilter = directionTypes ? { type: { in: directionTypes as ("INTAKE" | "WRITE_OFF" | "ISSUE" | "RETURN" | "SIGNOUT" | "CHECKIN")[] } } : {};
   const dateFilter: { gte?: Date; lte?: Date } = {};
   if (from) dateFilter.gte = new Date(from);
@@ -205,7 +226,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
               </thead>
               <tbody>
                 {transfers.map((t) => {
-                  const dir = DIRECTION[t.type];
+                  const dir = directionFor(user.role, t.type);
                   const totalQty = t.lines.reduce((sum, l) => sum + (l.quantity || (l.serialUnit?.lotQuantity ?? 1)), 0);
                   const fromName = t.fromHolder?.name ?? t.externalUnit ?? "—";
                   const toName = t.toSoldier?.fullName ?? t.toHolder?.name ?? "—";
