@@ -266,6 +266,49 @@ export async function checkinSerial(formData: FormData) {
   revalidatePath("/signatures");
 }
 
+/** זיכוי כמותי של חייל: יוצר CHECKIN, מחזיר StockBalance למחסן. */
+export async function checkinQuantity(formData: FormData) {
+  const user = await requireUser();
+  if (!can(user.role, "signatures.manage")) redirect("/signatures");
+  const bId = user.battalionId!;
+  const soldierId = String(formData.get("soldierId") || "");
+  const itemTypeId = String(formData.get("itemTypeId") || "");
+  const statusId = String(formData.get("statusId") || "");
+  const newStatusId = String(formData.get("newStatusId") || "") || null;
+  const quantity = parseInt(String(formData.get("quantity") || "0"), 10);
+  const toHolderId = String(formData.get("toHolderId") || "") || (user.holderId ?? null);
+  if (!soldierId || !itemTypeId || !statusId || quantity < 1 || !toHolderId) {
+    throw new Error("חסרים נתונים — חייל / פריט / כמות / מחסן יעד");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const finalStatusId = newStatusId || statusId;
+    // מחזיר ל-StockBalance של המחסן עם הסטטוס הסופי
+    const existing = await tx.stockBalance.findFirst({
+      where: { itemTypeId, holderId: toHolderId, statusId: finalStatusId, battalionId: bId },
+    });
+    if (existing) {
+      await tx.stockBalance.update({ where: { id: existing.id }, data: { quantity: existing.quantity + quantity } });
+    } else {
+      await tx.stockBalance.create({
+        data: { battalionId: bId, itemTypeId, holderId: toHolderId, statusId: finalStatusId, quantity },
+      });
+    }
+    await tx.transfer.create({
+      data: {
+        battalionId: bId, type: "CHECKIN", status: "COMPLETED",
+        toHolderId, toSoldierId: soldierId,
+        createdById: user.id, approvedById: user.id, approvedAt: new Date(),
+        reason: "זיכוי כמותי מחייל",
+        lines: { create: { itemTypeId, quantity, statusId: finalStatusId } },
+      },
+    });
+  });
+
+  await audit(user.id, "CHECKIN_QTY", "Soldier", soldierId, { itemTypeId, quantity });
+  revalidatePath("/signatures");
+}
+
 /** עטיפה void לשימוש ב-<form action={...}> ב-Server Components */
 export async function cancelSignatureForm(formData: FormData): Promise<void> {
   await cancelSignature(formData);

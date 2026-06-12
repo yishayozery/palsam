@@ -113,6 +113,50 @@ export default async function SignaturesPage() {
     include: { itemType: true, status: true },
   });
 
+  // 🆕 חישוב יתרת ציוד כמותי שחתום על חיילים: SIGNOUT (COMPLETED) פחות CHECKIN (COMPLETED)
+  // מסונן לרס"פ — רק חיילי הפלוגה שלו
+  const qtyLines = await prisma.transferLine.findMany({
+    where: {
+      transfer: {
+        battalionId: bId,
+        status: "COMPLETED",
+        type: { in: ["SIGNOUT", "CHECKIN"] },
+        ...(isCompanyRep ? { toSoldier: { companyId: user.holderId! } } : {}),
+      },
+      serialUnitId: null, // רק כמותי
+    },
+    include: {
+      itemType: { select: { name: true, sku: true, unit: true } },
+      status: true,
+      transfer: { select: { type: true, toSoldierId: true, toSoldier: { select: { fullName: true, personalNumber: true, companyId: true } } } },
+    },
+  });
+  // קיבוץ לפי (soldierId, itemTypeId, statusId)
+  const qtyBalance = new Map<string, {
+    soldierId: string; soldierName: string; soldierPN: string | null;
+    itemTypeId: string; itemName: string; sku: string | null; unit: string;
+    statusId: string; statusName: string; isWear: boolean; isLoss: boolean;
+    quantity: number;
+  }>();
+  for (const l of qtyLines) {
+    const sId = l.transfer.toSoldierId;
+    if (!sId || !l.statusId || !l.status) continue;
+    const k = `${sId}|${l.itemTypeId}|${l.statusId}`;
+    const sign = l.transfer.type === "SIGNOUT" ? 1 : -1;
+    const cur = qtyBalance.get(k);
+    if (cur) {
+      cur.quantity += sign * l.quantity;
+    } else {
+      qtyBalance.set(k, {
+        soldierId: sId, soldierName: l.transfer.toSoldier!.fullName, soldierPN: l.transfer.toSoldier!.personalNumber,
+        itemTypeId: l.itemTypeId, itemName: l.itemType.name, sku: l.itemType.sku, unit: l.itemType.unit,
+        statusId: l.statusId, statusName: l.status.name, isWear: l.status.isWear, isLoss: l.status.isLoss,
+        quantity: sign * l.quantity,
+      });
+    }
+  }
+  const soldierQtyHoldings = Array.from(qtyBalance.values()).filter((q) => q.quantity > 0);
+
   const [pending, signedUnits, soldiers, availableUnits, statuses] = await Promise.all([
     prisma.signature.findMany({
       where: { battalionId: bId, status: "PENDING" },
@@ -201,6 +245,8 @@ export default async function SignaturesPage() {
                   isWear: u.status.isWear, isLoss: u.status.isLoss,
                   lotQuantity: u.lotQuantity,
                 }))}
+                qtyHoldings={soldierQtyHoldings}
+                defaultToHolderId={user.holderId ?? null}
                 statuses={statuses.map((s) => ({ id: s.id, name: s.name, isWear: s.isWear, isLoss: s.isLoss, isDefault: s.isDefault }))}
               />
               <SignoutModal

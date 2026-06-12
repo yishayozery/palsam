@@ -18,6 +18,7 @@ export type SessionUser = {
   fullName: string;
   role: Role; // פרופיל ההרשאות בפועל
   roleLabel: string; // שם התצוגה (תפקיד מותאם או ברירת מחדל)
+  title: string | null; // תואר/תפקיד מותאם של המשתמש (מ"פ, רס"פ, מפלג וכו') — מוצג בסיידבר
   holderId: string | null; // מחזיק ראשי
   holderIds: string[]; // כל המחזיקים המשויכים (תמיכה בכמה מחסנים)
   battalionId: string | null;
@@ -65,6 +66,7 @@ export async function getSession(): Promise<SessionUser | null> {
       fullName: payload.fullName as string,
       role: payload.role as Role,
       roleLabel: (payload.roleLabel as string) ?? ROLE_LABELS[payload.role as Role],
+      title: (payload.title as string) ?? null,
       holderId: (payload.holderId as string) ?? null,
       holderIds: (payload.holderIds as string[]) ?? ((payload.holderId as string) ? [payload.holderId as string] : []),
       battalionId: (payload.battalionId as string) ?? null,
@@ -75,7 +77,7 @@ export async function getSession(): Promise<SessionUser | null> {
 }
 
 function toSession(user: {
-  id: string; username: string; fullName: string; role: Role; holderId: string | null; battalionId: string | null;
+  id: string; username: string; fullName: string; title?: string | null; role: Role; holderId: string | null; battalionId: string | null;
   customRole?: { name: string } | null;
   assignedHolders?: { holderId: string }[];
 }): SessionUser {
@@ -88,6 +90,7 @@ function toSession(user: {
     fullName: user.fullName,
     role: user.role,
     roleLabel: user.customRole?.name ?? ROLE_LABELS[user.role],
+    title: user.title ?? null,
     holderId: user.holderId,
     holderIds: [...ids],
     battalionId: user.battalionId,
