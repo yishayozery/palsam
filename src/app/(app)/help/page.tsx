@@ -400,6 +400,38 @@ export default async function HelpPage() {
       </div>
 
       {/* טיפים כלליים */}
+      {/* הבדלים */}
+      <h2 className="text-lg font-bold text-slate-800 mb-3 mt-8">🔍 דוחות vs היסטוריה</h2>
+      <Card className="p-4 mb-6 bg-slate-50">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white rounded-lg p-3 border border-slate-200">
+            <h3 className="font-bold text-slate-800 mb-1.5">📈 דוחות (`/reports`)</h3>
+            <p className="text-xs text-slate-700 mb-2">
+              <b>תמונה מסכמת</b> של מצב המלאי כרגע: כמויות לפי מחסן/קטגוריה/סטטוס, מי חתום על מה, סיכום בלאי וחסר.
+            </p>
+            <ul className="text-xs text-slate-600 list-disc list-inside space-y-0.5">
+              <li>מתאים לסקירה תקופתית / הצגה למפקדים</li>
+              <li>ייצוא לאקסל בלחיצה</li>
+              <li>נתון נוכחי (לא היסטוריה)</li>
+            </ul>
+          </div>
+          <div className="bg-white rounded-lg p-3 border border-slate-200">
+            <h3 className="font-bold text-slate-800 mb-1.5">📜 היסטוריה גלובלית (`/history`)</h3>
+            <p className="text-xs text-slate-700 mb-2">
+              <b>כל התעודות והתנועות</b> שהיו במערכת: קליטות, הקצאות, החתמות, זיכויים, החזרות, גריעות.
+            </p>
+            <ul className="text-xs text-slate-600 list-disc list-inside space-y-0.5">
+              <li>חיפוש לפי פריט / חייל / תעודה / תאריך</li>
+              <li>מתאים לתחקור: "מה קרה לרימון העשן הירוק?"</li>
+              <li>פתיחת תעודה בלחיצה — כולל חתימה דיגיטלית</li>
+            </ul>
+          </div>
+        </div>
+        <p className="text-xs text-slate-500 mt-3">
+          <b>המלצה:</b> דוחות = סטטוס כמותי. היסטוריה = חוקרים. שניהם סוגרים את התמונה.
+        </p>
+      </Card>
+
       <h2 className="text-lg font-bold text-slate-800 mb-3 mt-8">💡 טיפים כלליים</h2>
       <Card className="p-4 bg-slate-50">
         <ul className="space-y-2 text-sm text-slate-700">

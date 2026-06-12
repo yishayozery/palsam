@@ -7,7 +7,6 @@ import { SIGNATURE_METHOD, SIGNATURE_STATUS } from "@/lib/labels";
 import { cancelSignatureForm } from "./actions";
 import SignoutModal from "./SignoutModal";
 import CompanySignModal from "./CompanySignModal";
-import CompanyCheckinModal from "./CompanyCheckinModal";
 import CheckinModal from "./CheckinModal";
 import CheckinControls from "./CheckinControls";
 import { ROLE_LABELS } from "@/lib/rbac";
@@ -191,25 +190,8 @@ export default async function SignaturesPage() {
                   signMode: b.itemType.signMode,
                 }))}
               />}
-              {!isCompanyRep && (
-                <CompanyCheckinModal
-                  companies={companiesForSign.map((c) => ({ id: c.id, name: c.name }))}
-                  serials={companySerials.map((u) => ({
-                    id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name,
-                    serial: u.serialNumber, companyId: u.currentHolderId!,
-                    statusId: u.statusId, statusName: u.status.name,
-                    isWear: u.status.isWear, isLoss: u.status.isLoss,
-                    lotQuantity: u.lotQuantity,
-                  }))}
-                  balances={companyBalances.map((b) => ({
-                    companyId: b.holderId, itemTypeId: b.itemTypeId, statusId: b.statusId,
-                    itemName: b.itemType.name, unit: b.itemType.unit,
-                    statusName: b.status.name, quantity: b.quantity,
-                    isWear: b.status.isWear, isLoss: b.status.isLoss,
-                  }))}
-                  statuses={statuses.map((s) => ({ id: s.id, name: s.name, isWear: s.isWear, isLoss: s.isLoss, isDefault: s.isDefault }))}
-                />
-              )}
+              {/* ⚠️ "זיכוי פלוגה" הוסר מכאן — הפעולה נעשית ע"י רס"פ הפלוגה ב-/my-inventory.
+                  הזיכוי כאן הוא רק "זיכוי חייל" (CheckinModal). */}
               <CheckinModal
                 signedUnits={signedUnits.map((u) => ({
                   id: u.id, serial: u.serialNumber, itemName: u.itemType.name,

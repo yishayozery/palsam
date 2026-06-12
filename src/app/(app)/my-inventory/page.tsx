@@ -6,6 +6,7 @@ import { WAREHOUSE_TYPE_SHORT, WAREHOUSE_TYPE_ICON } from "@/lib/rbac";
 import ReturnModal from "./ReturnModal";
 import SendToTanaModal from "../maintenance/SendToTanaModal";
 import { findTanaHolder } from "@/lib/tana";
+import { requiresPersonalId } from "@/lib/handover";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,22 @@ export default async function MyInventoryPage() {
   }
 
   const company = await prisma.holder.findUnique({ where: { id: companyId }, select: { name: true } });
+
+  // מחסני הגדוד למסירה + דרישת מ.א.
+  const [warehouses, mustHavePN] = await Promise.all([
+    prisma.holder.findMany({
+      where: { battalionId: bId, kind: "WAREHOUSE", active: true },
+      orderBy: { name: "asc" },
+      include: {
+        users: {
+          where: { active: true },
+          select: { id: true, fullName: true, title: true, role: true, soldier: { select: { personalNumber: true } } },
+          orderBy: { fullName: "asc" },
+        },
+      },
+    }),
+    requiresPersonalId(bId),
+  ]);
 
   // כל הפריטים שהפלוגה חתומה עליהם (currentHolderId = company)
   const [serialUnits, balances, statuses] = await Promise.all([
@@ -129,6 +146,11 @@ export default async function MyInventoryPage() {
               quantity: b.quantity,
             }))}
             statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss }))}
+            warehouses={warehouses.map((w) => ({
+              id: w.id, name: w.name,
+              recipients: w.users.map((u) => ({ id: u.id, name: u.fullName, title: u.title ?? null, personalNumber: u.soldier?.personalNumber ?? null })),
+            }))}
+            requirePersonalId={mustHavePN}
           />
           </div>
         }

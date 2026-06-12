@@ -17,13 +17,16 @@ type Balance = {
   quantity: number;
 };
 type Status = { id: string; name: string; isDefault: boolean; isWear: boolean; isLoss: boolean };
+type Recipient = { id: string; name: string; title: string | null; personalNumber: string | null };
+type Warehouse = { id: string; name: string; recipients: Recipient[] };
 
 type CartSerial = { type: "serial"; unitId: string; itemName: string; serial: string; statusName: string; lotQty?: number; lotTotal?: number };
 type CartQty = { type: "qty"; itemTypeId: string; itemName: string; unit: string; quantity: number; maxQty: number; statusId: string; statusName: string };
 type CartItem = CartSerial | CartQty;
 
-export default function ReturnModal({ serialUnits, balances, statuses }: {
+export default function ReturnModal({ serialUnits, balances, statuses, warehouses, requirePersonalId }: {
   serialUnits: SerialUnit[]; balances: Balance[]; statuses: Status[];
+  warehouses: Warehouse[]; requirePersonalId: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -34,6 +37,14 @@ export default function ReturnModal({ serialUnits, balances, statuses }: {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lotPicker, setLotPicker] = useState<{ unit: SerialUnit; qty: number } | null>(null);
+  // יעד הזיכוי
+  const [toHolderId, setToHolderId] = useState(warehouses[0]?.id ?? "");
+  const [recipientUserId, setRecipientUserId] = useState("");
+  const [manualPN, setManualPN] = useState("");
+
+  const selectedWh = warehouses.find((w) => w.id === toHolderId);
+  const selectedRecipient = selectedWh?.recipients.find((r) => r.id === recipientUserId);
+  const effectivePN = selectedRecipient?.personalNumber || manualPN;
 
   const cartSerialIds = new Set(cart.filter((c) => c.type === "serial").map((c) => (c as CartSerial).unitId));
 
@@ -87,6 +98,8 @@ export default function ReturnModal({ serialUnits, balances, statuses }: {
   async function submit() {
     setError(null);
     if (cart.length === 0) { setError("הוסף לפחות פריט אחד לעגלה"); return; }
+    if (!toHolderId) { setError("בחר מחסן יעד"); return; }
+    if (requirePersonalId && !effectivePN) { setError("🔒 הגדוד דורש מ.א. של המקבל — בחר נמען עם מ.א. או הזן ידנית"); return; }
     setBusy(true);
     try {
       // יוצרים פעולת זיכוי לכל קבוצת פריטים (group by itemTypeId)
@@ -106,6 +119,9 @@ export default function ReturnModal({ serialUnits, balances, statuses }: {
         const fd = new FormData();
         fd.append("itemTypeId", itemTypeId);
         fd.append("notes", notes);
+        fd.append("toHolderId", toHolderId);
+        if (recipientUserId) fd.append("recipientUserId", recipientUserId);
+        if (manualPN) fd.append("recipientPersonalId", manualPN);
         const qtyOne = items.find((i) => i.type === "qty") as CartQty | undefined;
         if (qtyOne) {
           fd.append("statusId", qtyOne.statusId);
@@ -153,12 +169,48 @@ export default function ReturnModal({ serialUnits, balances, statuses }: {
           <button onClick={() => { reset(); setOpen(false); }} className="text-amber-100 hover:text-white text-2xl">✕</button>
         </div>
 
-        <div className="bg-amber-50 border-b border-amber-200 p-2.5 shrink-0">
-          <label className="flex items-center gap-2 text-xs cursor-pointer">
+        {/* 🎯 יעד הזיכוי — מחסן + מקבל + מ.א. (אם הדגל דולק) */}
+        <div className="bg-amber-50 border-b border-amber-200 p-3 shrink-0 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[11px] font-semibold text-amber-900 mb-0.5">🏪 מחסן יעד</label>
+              <select value={toHolderId} onChange={(e) => { setToHolderId(e.target.value); setRecipientUserId(""); }}
+                className="w-full rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-sm">
+                <option value="">— בחר מחסן —</option>
+                {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-amber-900 mb-0.5">👤 מקבל (אופציונלי)</label>
+              <select value={recipientUserId} onChange={(e) => setRecipientUserId(e.target.value)} disabled={!selectedWh}
+                className="w-full rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-sm disabled:opacity-50">
+                <option value="">— ללא נמען ספציפי —</option>
+                {selectedWh?.recipients.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}{r.title ? ` (${r.title})` : ""}{r.personalNumber ? ` · מ.א. ${r.personalNumber}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {requirePersonalId && (
+            <div>
+              <label className="block text-[11px] font-bold text-rose-900 mb-0.5">🔒 מ.א. של המקבל (חובה)</label>
+              {selectedRecipient?.personalNumber ? (
+                <div className="bg-emerald-50 border border-emerald-300 rounded px-2 py-1.5 text-xs text-emerald-800">
+                  ✓ נלקח אוטו מ-<b>{selectedRecipient.name}</b>: <span className="font-mono">{selectedRecipient.personalNumber}</span>
+                </div>
+              ) : (
+                <input value={manualPN} onChange={(e) => setManualPN(e.target.value.replace(/\D/g, ""))}
+                  inputMode="numeric" placeholder="1234567" required
+                  className="w-full rounded-lg border-2 border-rose-400 bg-white px-2 py-1.5 text-sm font-mono" />
+              )}
+            </div>
+          )}
+          <label className="flex items-center gap-2 text-xs cursor-pointer pt-1 border-t border-amber-200">
             <input type="checkbox" checked={showOnlyDefective}
               onChange={(e) => setShowOnlyDefective(e.target.checked)} />
             <span className="font-medium text-amber-900">⚠️ הצג רק בלאי / אבוד / תקול</span>
-            <span className="text-amber-700">— זיכוי לציוד שדורש החלפה</span>
           </label>
         </div>
 
