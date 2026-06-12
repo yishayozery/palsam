@@ -33,6 +33,46 @@ export async function deleteCountDefinition(formData: FormData) {
   revalidatePath("/counts");
 }
 
+/** 🆕 מחיקת משימת ספירה ספציפית (לאדמין/מפ"מ — לניקוי בדיקות) */
+export async function deleteCountTask(formData: FormData) {
+  const user = await requireCapability("counts.manage");
+  const id = String(formData.get("id") || "");
+  const task = await prisma.countTask.findUnique({ where: { id } });
+  if (!task || task.battalionId !== user.battalionId) return;
+  await prisma.countTask.delete({ where: { id } });
+  await audit(user.id, "DELETE_COUNT_TASK", "CountTask", id);
+  revalidatePath("/counts");
+}
+
+/** 🆕 ביטול ספירה בתהליך (מחזיר ל-CANCELED, לא מוחק היסטוריה) */
+export async function cancelCountSession(formData: FormData) {
+  const user = await requireCapability("counts.manage");
+  const id = String(formData.get("id") || "");
+  const session = await prisma.countSession.findUnique({ where: { id } });
+  if (!session || session.battalionId !== user.battalionId) return;
+  if (session.status === "COMPLETED") return;
+  await prisma.countSession.update({ where: { id }, data: { status: "COMPLETED", completedAt: new Date() } });
+  await audit(user.id, "CANCEL_COUNT_SESSION", "CountSession", id);
+  revalidatePath("/counts");
+}
+
+/** עטיפת void לשימוש ב-<form action> */
+export async function purgeAllCountTasksForm(formData: FormData): Promise<void> {
+  await purgeAllCountTasks(formData);
+}
+
+/** 🆕 מחיקת כל משימות הספירה בגדוד (ניקוי כללי — אדמין בלבד) */
+export async function purgeAllCountTasks(formData: FormData) {
+  const user = await requireCapability("counts.manage");
+  const bId = user.battalionId!;
+  const confirm = String(formData.get("confirm") || "");
+  if (confirm !== "DELETE-ALL") return { error: "אישור שגוי" };
+  const result = await prisma.countTask.deleteMany({ where: { battalionId: bId } });
+  await audit(user.id, "PURGE_COUNT_TASKS", "CountTask", "all", { count: result.count });
+  revalidatePath("/counts");
+  return { ok: true, deleted: result.count };
+}
+
 /** פתיחת ספירה — מייצר שורות ספירה לפי המלאי הצפוי בהיקף. */
 export async function startCount(formData: FormData) {
   const user = await requireCapability("counts.execute");

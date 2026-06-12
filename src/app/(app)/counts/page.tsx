@@ -10,6 +10,8 @@ import MyCountTasks from "./MyCountTasks";
 import {
   saveCountDefinition,
   deleteCountDefinition,
+  cancelCountSession,
+  purgeAllCountTasksForm,
 } from "./actions";
 import { generatePendingTasks } from "@/lib/countScheduler";
 
@@ -65,12 +67,21 @@ export default async function CountsPage() {
         title="ספירות מלאי"
         subtitle="המשימות שלך + תכניות המפ״מ + ביצוע ספירה ידנית"
         action={
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {isMafam && (
               <Link href="/counts/plans"
                 className="bg-white border border-slate-300 text-slate-700 rounded-lg px-4 py-2 text-sm hover:bg-slate-50">
                 📋 תכניות ספירה
               </Link>
+            )}
+            {isMafam && (
+              <form action={purgeAllCountTasksForm}>
+                <input type="hidden" name="confirm" value="DELETE-ALL" />
+                <button className="bg-rose-50 border border-rose-300 text-rose-700 rounded-lg px-3 py-2 text-xs hover:bg-rose-100"
+                  title="מוחק את כל המשימות (לא משפיע על תכניות, היסטוריה או ספירות שכבר בוצעו)">
+                  🗑️ ניקוי כל המשימות
+                </button>
+              </form>
             )}
             {canExecute && <StartCount holders={holders.map((h) => ({ id: h.id, name: h.name }))} definitions={definitions.map((d) => ({ id: d.id, name: d.name, type: d.type, scopeHolderId: d.scopeHolderId }))} />}
           </div>
@@ -163,9 +174,17 @@ export default async function CountsPage() {
                   </Td>
                   <Td className="text-xs text-slate-500">{s.startedBy.fullName}</Td>
                   <Td>
-                    {s.status !== "COMPLETED" && (
-                      <Link href={`/counts/${s.id}`} className="text-xs text-blue-600 hover:underline">המשך ספירה</Link>
-                    )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {s.status !== "COMPLETED" && (
+                        <Link href={`/counts/${s.id}`} className="text-xs text-blue-600 hover:underline">המשך ספירה</Link>
+                      )}
+                      {canManage && s.status !== "COMPLETED" && (
+                        <form action={cancelCountSession}>
+                          <input type="hidden" name="id" value={s.id} />
+                          <button className="text-xs text-rose-500 hover:text-rose-700" title="ביטול ספירה">✕ בטל</button>
+                        </form>
+                      )}
+                    </div>
                   </Td>
                 </tr>
               ))}
