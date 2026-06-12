@@ -13,12 +13,15 @@ export default async function TransfersPage() {
   const bId = user.battalionId!;
   const canApprove = can(user.role, "transfer.approve");
 
-  // סקופ לקצין מחסן: רק העברות שמערבות את המחסנים שלו
+  // סקופ: קצין מחסן רואה רק העברות עם המחסנים שלו; רס"פ רק העברות עם הפלוגה שלו
   const isWarehouseManager = user.role === "WAREHOUSE_MANAGER";
+  const isCompanyRep = user.role === "COMPANY_REP";
   const myHolderIds = user.holderIds ?? [];
   const scopeFilter = (isWarehouseManager && myHolderIds.length > 0)
     ? { OR: [{ fromHolderId: { in: myHolderIds } }, { toHolderId: { in: myHolderIds } }] }
-    : {};
+    : (isCompanyRep && user.holderId)
+      ? { OR: [{ fromHolderId: user.holderId }, { toHolderId: user.holderId }] }
+      : {};
 
   const transfers = await prisma.transfer.findMany({
     where: {
@@ -45,8 +48,10 @@ export default async function TransfersPage() {
   return (
     <div>
       <PageHeader
-        title="קבלות והחזרות (גדוד ↔ חטיבה)"
-        subtitle="היסטוריית קליטות מהחטיבה וזיכויים. הקצאה לפלוגה/חייל — דרך מסך 'החתמות'."
+        title={isCompanyRep ? "📥 קבלות הפלוגה" : "קבלות והחזרות (גדוד ↔ חטיבה)"}
+        subtitle={isCompanyRep
+          ? "תעודות שהמחסן שלח אליך — לחץ '✓ אישור קבלה' כדי לסגור את לחיצת היד והציוד ייכנס למלאי הפלוגה."
+          : "היסטוריית קליטות מהחטיבה וזיכויים. הקצאה לפלוגה/חייל — דרך מסך 'החתמות'."}
       />
 
       {myPending.length > 0 && (
