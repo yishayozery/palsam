@@ -12,6 +12,10 @@ export default async function AppLayout({
 }) {
   const user = await requireUser();
 
+  // טוען title טרי מ-DB כדי שלא תידרש התנתקות לאחר עדכון תפקיד
+  const fresh = await prisma.appUser.findUnique({ where: { id: user.id }, select: { title: true } });
+  const displayTitle = fresh?.title || user.title || user.roleLabel;
+
   const filtered = NAV.filter((n) => {
     if (n.roles && !n.roles.includes(user.role)) return false;
     if (user.role === "SUPER_ADMIN") return n.roles?.includes("SUPER_ADMIN") ?? false;
@@ -88,7 +92,7 @@ export default async function AppLayout({
       <Sidebar items={items} />
       <div className="px-4 py-3 border-t border-slate-700">
         <div className="text-sm font-medium">{user.fullName}</div>
-        <div className="text-xs text-slate-400 mb-2">{user.title || user.roleLabel}</div>
+        <div className="text-xs text-slate-400 mb-2">{displayTitle}</div>
         <form action="/logout" method="post">
           <button className="w-full text-xs bg-slate-800 hover:bg-slate-700 rounded-md py-1.5 transition">
             התנתקות
