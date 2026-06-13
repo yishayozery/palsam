@@ -8,6 +8,7 @@ import StatusChangeModal from "./StatusChangeModal";
 import MultiIntakeModal from "./MultiIntakeModal";
 import MultiWithdrawModal from "./MultiWithdrawModal";
 import SendToTanaModal from "../maintenance/SendToTanaModal";
+import ExchangeDefectiveModal from "./ExchangeDefectiveModal";
 import { findTanaHolder } from "@/lib/tana";
 import { approveTransfer, rejectTransfer } from "../transfers/actions";
 
@@ -61,7 +62,7 @@ export default async function StockPage({
     },
   });
 
-  const [categories, statuses, battalion, brotherBattalions] = await Promise.all([
+  const [categories, statuses, battalion, brotherBattalions, companies] = await Promise.all([
     prisma.category.findMany({ where: { battalionId: bId }, orderBy: { name: "asc" } }),
     prisma.itemStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" } }),
     prisma.battalion.findUnique({ where: { id: bId }, select: { requirePersonalIdOnHandover: true, brigade: true, name: true } }),
@@ -73,6 +74,10 @@ export default async function StockPage({
         orderBy: { name: "asc" },
       }) : []
     ),
+    prisma.holder.findMany({
+      where: { battalionId: bId, kind: "COMPANY", active: true },
+      orderBy: { name: "asc" }, select: { id: true, name: true },
+    }),
   ]);
   const requirePersonalId = !!battalion?.requirePersonalIdOnHandover;
   const counterpartOptions = [
@@ -119,6 +124,21 @@ export default async function StockPage({
                 unit: i.unit,
               }))}
               statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
+            />
+            <ExchangeDefectiveModal
+              target="COMPANY"
+              items={items.filter((i) => i.trackingMethod === "QUANTITY" || i.trackingMethod === "LOT").map((i) => ({
+                id: i.id, name: i.name, sku: i.sku, unit: i.unit,
+              }))}
+              statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss }))}
+              companies={companies}
+            />
+            <ExchangeDefectiveModal
+              target="BRIGADE"
+              items={items.filter((i) => i.trackingMethod === "QUANTITY" || i.trackingMethod === "LOT").map((i) => ({
+                id: i.id, name: i.name, sku: i.sku, unit: i.unit,
+              }))}
+              statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss }))}
             />
             <MultiWithdrawModal
               currentUserName={user.fullName}
