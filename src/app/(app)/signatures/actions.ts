@@ -41,6 +41,24 @@ export async function createSignout(formData: FormData) {
     ? await prisma.signableKitLine.findMany({ where: { kitId }, include: { itemType: true } })
     : [];
 
+  // 🛡️ ולידציה: לא ניתן להחתים יותר ממה שיש במלאי (פריטים כמותיים שהמשתמש בחר ידנית)
+  if (user.holderId && qtyItems.length > 0) {
+    for (let i = 0; i < qtyItems.length; i++) {
+      const itemTypeId = qtyItems[i];
+      const quantity = qtyValues[i];
+      const statusId = qtyStatuses[i];
+      if (!itemTypeId || !statusId || quantity < 1) continue;
+      const balance = await prisma.stockBalance.findFirst({
+        where: { itemTypeId, holderId: user.holderId, statusId, battalionId: bId },
+      });
+      const available = balance?.quantity ?? 0;
+      if (available < quantity) {
+        const item = await prisma.itemType.findUnique({ where: { id: itemTypeId }, select: { name: true } });
+        throw new Error(`🚫 לא מספיק מלאי של "${item?.name ?? itemTypeId}": מבקש ${quantity}, זמין ${available}`);
+      }
+    }
+  }
+
   const token = nanoid(24);
   let transferId = "";
   await prisma.$transaction(async (tx) => {

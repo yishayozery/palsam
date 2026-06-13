@@ -283,7 +283,15 @@ export default function MultiWithdrawModal({
         {/* פיקר בחירה (לאחר לחיצה על פריט) */}
         {picker && (() => {
           const { item } = picker;
-          const myStocks = stocks.filter((s) => s.itemTypeId === item.id && s.quantity > 0);
+          // 🔧 איחוד שורות עם אותו שם סטטוס (יש כפילויות ב-DB לפעמים — "תקין" ✕ 2)
+          const rawStocks = stocks.filter((s) => s.itemTypeId === item.id && s.quantity > 0);
+          const byName = new Map<string, StockEntry>();
+          for (const s of rawStocks) {
+            const existing = byName.get(s.statusName);
+            if (existing) existing.quantity += s.quantity;
+            else byName.set(s.statusName, { ...s });
+          }
+          const myStocks = Array.from(byName.values());
           const myUnits = units.filter((u) => u.itemTypeId === item.id);
           const inCartUnits = new Set(lines.filter((l) => l.kind !== "QTY").map((l) => (l as LineSerial | LineLot).serialUnitId));
           return (

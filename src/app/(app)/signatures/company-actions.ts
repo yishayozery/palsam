@@ -57,6 +57,20 @@ export async function createCompanySign(formData: FormData): Promise<{ token: st
   let transferId = "";
   try {
     await prisma.$transaction(async (tx) => {
+      // 🛡️ ולידציה: לא ניתן להחתים יותר ממה שיש במלאי
+      for (const e of qtyEntries) {
+        const itemHolder = await findSourceHolder(e.itemTypeId);
+        if (!itemHolder) throw new Error("לא נמצא מחסן מקור לפריט");
+        const balance = await tx.stockBalance.findFirst({
+          where: { itemTypeId: e.itemTypeId, holderId: itemHolder, statusId: e.statusId, battalionId: bId },
+        });
+        const available = balance?.quantity ?? 0;
+        if (available < e.qty) {
+          const item = await tx.itemType.findUnique({ where: { id: e.itemTypeId }, select: { name: true } });
+          throw new Error(`🚫 לא מספיק מלאי של "${item?.name ?? e.itemTypeId}": מבקש ${e.qty}, זמין ${available}`);
+        }
+      }
+
       // בחירת holder יחיד למפ"מ (לפי הפריט הראשון; כל הפריטים אמורים להיות מאותו מחסן)
       const sampleItemId = qtyEntries[0]?.itemTypeId ??
         (serialIds[0] ? (await tx.serialUnit.findUnique({ where: { id: serialIds[0] } }))?.itemTypeId : null);

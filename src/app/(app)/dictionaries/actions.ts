@@ -51,6 +51,12 @@ export async function saveStatus(formData: FormData) {
     isLoss: formData.get("isLoss") === "on",
     isConsumed: formData.get("isConsumed") === "on",
   };
+  // 🛡️ מניעת כפילות שם בגדוד (case-insensitive)
+  const dup = await prisma.itemStatus.findFirst({
+    where: { battalionId: bId, name: { equals: name, mode: "insensitive" }, ...(id ? { NOT: { id } } : {}) },
+    select: { id: true },
+  });
+  if (dup) throw new Error(`כבר קיים סטטוס בשם "${name}"`);
   if (id) {
     await prisma.itemStatus.update({ where: { id }, data });
   } else {
