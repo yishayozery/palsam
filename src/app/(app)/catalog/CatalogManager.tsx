@@ -16,6 +16,7 @@ export type EditData = {
   signMode: string;
   imageData: string | null;
   homeLocationId?: string | null;
+  trackExpiry?: boolean;
 };
 
 function compressImage(file: File): Promise<string> {
@@ -123,6 +124,15 @@ export default function CatalogManager({ categories, locations = [], edit }: { c
                     <option value="SOLDIER">חייל ישירות (נשק)</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" name="trackExpiry" defaultChecked={edit?.trackExpiry ?? false}
+                    className="w-4 h-4" />
+                  <span className="font-medium">⏳ פריט עם תאריך תפוגה</span>
+                </label>
+                <p className="text-[11px] text-slate-500 mr-6 mt-0.5">סמן כדי לחייב הזנת תאריך תפוגה בקבלת מלאי. הפריט יופיע בדשבורד התראות תפוגה.</p>
               </div>
 
               <div>

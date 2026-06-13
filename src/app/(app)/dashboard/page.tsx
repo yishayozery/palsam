@@ -70,14 +70,32 @@ export default async function DashboardPage({
     prisma.serialUnit.count({ where: { battalionId: bId, signedSoldierId: { not: null }, ...holderScope } }),
     prisma.holder.findMany({ where: { battalionId: bId, kind: "COMPANY", active: true } }),
     prisma.stockBalance.aggregate({ _sum: { quantity: true }, where: { battalionId: bId, ...stockHolderScope } }),
-    // פריטים עם תפוגה — 20 הקרובים ביותר (מהכי קרוב לרחוק)
+    // פריטים עם תפוגה — 30 הקרובים ביותר (מהכי קרוב לרחוק)
     prisma.serialUnit.findMany({
       where: { battalionId: bId, expiryDate: { not: null }, ...holderScope },
       include: { itemType: { select: { name: true } }, currentHolder: { select: { name: true } }, status: { select: { name: true, isLoss: true } } },
       orderBy: { expiryDate: "asc" },
-      take: 20,
+      take: 30,
     }),
   ]);
+
+  // 🆕 פילוח תפוגה לטווחים: פג / 7 ימים / 30 ימים / 90 ימים
+  const now = Date.now();
+  const expiryBuckets = {
+    expired: 0, // כבר פג
+    soon7: 0, // עד 7 ימים
+    soon30: 0, // 8-30 ימים
+    soon90: 0, // 31-90 ימים
+  };
+  for (const u of expiringSoon) {
+    if (!u.expiryDate) continue;
+    const days = Math.round((u.expiryDate.getTime() - now) / 86_400_000);
+    if (days < 0) expiryBuckets.expired++;
+    else if (days <= 7) expiryBuckets.soon7++;
+    else if (days <= 30) expiryBuckets.soon30++;
+    else if (days <= 90) expiryBuckets.soon90++;
+  }
+  const expiryUrgent = expiryBuckets.expired + expiryBuckets.soon7;
 
   // === תקולים לפי מחסן (להחלטה: לתקן, להחזיר לחטיבה, או להוריד מהמלאי) ===
   const defectivePerWarehouse = await Promise.all(
@@ -179,7 +197,7 @@ export default async function DashboardPage({
         }
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <StatCard
           label="אמינות מלאי"
           value={`${accuracy}%`}
@@ -204,16 +222,26 @@ export default async function DashboardPage({
           hint={`${lossUnits} אבודים`}
           tone={wearUnits + lossUnits > 0 ? "amber" : "slate"}
         />
+        <StatCard
+          label="⏳ תפוגה דחופה"
+          value={expiryUrgent}
+          hint={expiryBuckets.expired > 0 ? `${expiryBuckets.expired} פגו · ${expiryBuckets.soon7} עד 7 ימים` : `עד 7 ימים`}
+          tone={expiryBuckets.expired > 0 ? "rose" : expiryUrgent > 0 ? "amber" : "slate"}
+        />
       </div>
 
       {/* === התראה: פג תוקף קרוב === */}
       {expiringSoon.length > 0 && (
         <Card className="p-4 mb-6 border-amber-300 bg-amber-50">
           <div className="flex items-start gap-3">
-            <span className="text-3xl">⏱️</span>
+            <span className="text-3xl">⏳</span>
             <div className="flex-1">
-              <h2 className="font-bold text-amber-900 mb-2">
+              <h2 className="font-bold text-amber-900 mb-2 flex items-center gap-2 flex-wrap">
                 פריטים בתפוגה קרובה ({expiringSoon.length})
+                {expiryBuckets.expired > 0 && <span className="text-xs bg-rose-200 text-rose-900 rounded-full px-2 py-0.5">🔴 {expiryBuckets.expired} פגו</span>}
+                {expiryBuckets.soon7 > 0 && <span className="text-xs bg-rose-100 text-rose-800 rounded-full px-2 py-0.5">🟠 {expiryBuckets.soon7} עד 7 ימים</span>}
+                {expiryBuckets.soon30 > 0 && <span className="text-xs bg-amber-100 text-amber-800 rounded-full px-2 py-0.5">🟡 {expiryBuckets.soon30} עד 30 ימים</span>}
+                {expiryBuckets.soon90 > 0 && <span className="text-xs bg-slate-100 text-slate-700 rounded-full px-2 py-0.5">{expiryBuckets.soon90} עד 90 ימים</span>}
               </h2>
               <div className="space-y-1">
                 {expiringSoon.slice(0, 8).map((u) => {

@@ -121,7 +121,7 @@ export default async function StockPage({
               items={items.filter((i) => i.trackingMethod !== "KIT").map((i) => ({
                 id: i.id, name: i.name, sku: i.sku,
                 trackingMethod: i.trackingMethod as "QUANTITY" | "SERIAL" | "LOT",
-                unit: i.unit,
+                unit: i.unit, trackExpiry: i.trackExpiry,
               }))}
               statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
             />
@@ -147,7 +147,7 @@ export default async function StockPage({
               items={items.filter((i) => i.trackingMethod !== "KIT").map((i) => ({
                 id: i.id, name: i.name, sku: i.sku,
                 trackingMethod: i.trackingMethod as "QUANTITY" | "SERIAL" | "LOT",
-                unit: i.unit,
+                unit: i.unit, trackExpiry: i.trackExpiry,
               }))}
               statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
               stocks={items.flatMap((i) => i.stockBalances.map((b) => ({

@@ -149,7 +149,7 @@ export default async function ItemsPage({
                       <CatalogManager
                         categories={categories.map((c) => ({ id: c.id, name: c.name }))}
                         locations={locOptions}
-                        edit={{ id: i.id, sku: i.sku ?? "", name: i.name, categoryId: i.categoryId ?? "", trackingMethod: i.trackingMethod, unit: i.unit, association: i.association, signMode: i.signMode, imageData: i.imageData, homeLocationId: i.homeLocationId }}
+                        edit={{ id: i.id, sku: i.sku ?? "", name: i.name, categoryId: i.categoryId ?? "", trackingMethod: i.trackingMethod, unit: i.unit, association: i.association, signMode: i.signMode, imageData: i.imageData, homeLocationId: i.homeLocationId, trackExpiry: i.trackExpiry }}
                       />
                     </Td>
                   </tr>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { declareMulti } from "./actions";
 import { useEscClose } from "@/lib/useEscClose";
 
-type Item = { id: string; name: string; sku: string | null; trackingMethod: "QUANTITY" | "SERIAL" | "LOT" | "KIT"; unit: string };
+type Item = { id: string; name: string; sku: string | null; trackingMethod: "QUANTITY" | "SERIAL" | "LOT" | "KIT"; unit: string; trackExpiry?: boolean };
 type Status = { id: string; name: string; isDefault: boolean };
 type CounterpartOption = { value: string; label: string };
 
@@ -20,6 +20,7 @@ type Line = {
   serials: string;
   lotNumber: string;
   expiryDate: string; // YYYY-MM-DD; ריק=ללא תפוגה
+  trackExpiry: boolean; // ⏳ פריט עם תפוגה - חובה למלא expiryDate
 };
 
 let UID_SEQ = 1;
@@ -57,6 +58,7 @@ export default function MultiIntakeModal({
       uid: UID_SEQ++, itemId: it.id, itemName: it.name,
       trackingMethod: tm, unit: it.unit,
       statusId: defaultStatusId, quantity: 1, serials: "", lotNumber: "", expiryDate: "",
+      trackExpiry: !!it.trackExpiry,
     }]);
     setSearch("");
   };
@@ -83,6 +85,8 @@ export default function MultiIntakeModal({
         if (!l.lotNumber.trim()) { setError(`חסר מספר אצווה ל-${l.itemName}`); return; }
       }
       if (l.quantity < 1 && l.trackingMethod !== "SERIAL") { setError(`כמות לא תקינה ל-${l.itemName}`); return; }
+      // ⏳ פריט מסומן לתפוגה — חובה למלא תאריך
+      if (l.trackExpiry && !l.expiryDate) { setError(`⏳ חובה למלא תאריך תפוגה ל-${l.itemName}`); return; }
     }
     setBusy(true);
     try {
@@ -207,11 +211,15 @@ export default function MultiIntakeModal({
                       placeholder="מספר אצווה"
                       className="w-full rounded border border-slate-300 px-2 py-1 text-xs font-mono" />
                   )}
-                  {(l.trackingMethod === "SERIAL" || l.trackingMethod === "LOT") && (
+                  {(l.trackingMethod === "SERIAL" || l.trackingMethod === "LOT" || l.trackExpiry) && (
                     <div>
-                      <label className="block text-[10px] text-slate-500 mb-0.5">⏱️ תאריך תפוגה (אופציונלי)</label>
-                      <input type="date" value={l.expiryDate} onChange={(e) => updateLine(l.uid, { expiryDate: e.target.value })}
-                        className="w-full rounded border border-slate-300 px-2 py-1 text-xs" />
+                      <label className={`block text-[10px] mb-0.5 ${l.trackExpiry ? "text-amber-900 font-bold" : "text-slate-500"}`}>
+                        ⏳ תאריך תפוגה {l.trackExpiry ? <span className="text-rose-600">(חובה)</span> : "(אופציונלי)"}
+                      </label>
+                      <input type="date" value={l.expiryDate}
+                        onChange={(e) => updateLine(l.uid, { expiryDate: e.target.value })}
+                        required={l.trackExpiry}
+                        className={`w-full rounded border-2 px-2 py-1 text-xs ${l.trackExpiry && !l.expiryDate ? "border-rose-400 bg-rose-50" : l.trackExpiry ? "border-emerald-300" : "border-slate-300"}`} />
                     </div>
                   )}
                 </div>

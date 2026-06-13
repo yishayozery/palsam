@@ -21,6 +21,7 @@ export async function saveItemType(formData: FormData) {
   const signMode = String(formData.get("signMode") || "COMPANY") as SignMode;
   const isDonated = association !== "MILITARY";
   const homeLocationId = String(formData.get("homeLocationId") || "") || null;
+  const trackExpiry = formData.get("trackExpiry") === "on";
   // תמונת מוצר (data-URL, אופציונלי). "__CLEAR__" = הסרת תמונה קיימת.
   const rawImage = String(formData.get("imageData") || "");
   const imageData =
@@ -28,7 +29,7 @@ export async function saveItemType(formData: FormData) {
 
   if (!name) return;
 
-  const base = { sku, name, categoryId, trackingMethod, unit, association, signMode, isDonated, homeLocationId };
+  const base = { sku, name, categoryId, trackingMethod, unit, association, signMode, isDonated, homeLocationId, trackExpiry };
   const data = imageData !== undefined ? { ...base, imageData } : base;
   if (id) {
     await prisma.itemType.update({ where: { id }, data });
