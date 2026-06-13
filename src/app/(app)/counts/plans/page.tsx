@@ -13,9 +13,23 @@ export default async function CountPlansPage() {
   const user = await requireCapability("counts.manage");
   const bId = user.battalionId!;
 
+  // סקופ: קצין מחסן רואה רק תכניות שלו/לגבי מחסניו; רס"פ רק לגבי הפלוגה שלו; מפ"מ רואה הכל
+  const isWM = user.role === "WAREHOUSE_MANAGER" && user.holderIds.length > 0;
+  const isCR = user.role === "COMPANY_REP" && !!user.holderId;
+  const myHolderIds = isWM ? user.holderIds : isCR ? [user.holderId!] : [];
+  const planScope = (isWM || isCR)
+    ? { OR: [
+        { createdById: user.id },
+        { scopeHolderIds: { hasSome: myHolderIds } },
+      ] }
+    : {};
+  const holderScope = (isWM || isCR)
+    ? { id: { in: myHolderIds } }
+    : {};
+
   const [plans, holders, categories, items, eligibleUsers] = await Promise.all([
     prisma.countPlan.findMany({
-      where: { battalionId: bId },
+      where: { battalionId: bId, ...planScope },
       orderBy: [{ active: "desc" }, { createdAt: "desc" }],
       include: {
         createdBy: { select: { fullName: true } },
@@ -31,7 +45,7 @@ export default async function CountPlansPage() {
       },
     }),
     prisma.holder.findMany({
-      where: { battalionId: bId, active: true, kind: { in: ["WAREHOUSE", "COMPANY"] } },
+      where: { battalionId: bId, active: true, kind: { in: ["WAREHOUSE", "COMPANY"] }, ...holderScope },
       orderBy: [{ kind: "asc" }, { name: "asc" }],
       select: { id: true, name: true, kind: true, warehouseType: true },
     }),
@@ -49,7 +63,11 @@ export default async function CountPlansPage() {
     <div>
       <PageHeader
         title="תכניות ספירת מלאי"
-        subtitle="המפ״מ מגדיר מה לספור, איפה, מתי. המערכת מולידה משימות לאחראים בכל זמן מתוזמן."
+        subtitle={isCR
+          ? "צור תכנית לספירת הפלוגה / המחסנים שמספקים אותך — המערכת תייצר משימות לאחראים."
+          : isWM
+            ? "צור תכנית לספירת המחסנים שלך — המערכת תייצר משימות לאחראים."
+            : "המפ״מ מגדיר מה לספור, איפה, מתי. המערכת מולידה משימות לאחראים בכל זמן מתוזמן."}
         action={
           <CountPlanForm
             holders={holders.map((h) => ({ id: h.id, name: h.name, kind: h.kind, warehouseType: h.warehouseType }))}

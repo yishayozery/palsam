@@ -67,6 +67,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "donations.manage",
     "transfer.approve",
     "signatures.manage",
+    "counts.manage", // יכול לחולל תכניות ספירה לפלוגתו (וקציני המחסן שלה)
     "counts.execute",
     "reports.view",
   ],

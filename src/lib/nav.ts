@@ -46,6 +46,7 @@ export const NAV: NavItem[] = [
   { href: "/transfers", label: "קבלות ממתינות", icon: "📥", group: "הפלוגה שלי", cap: "transfer.approve" },
   { href: "/signatures", label: "החתמת/זיכוי חייל", icon: "✍️", group: "הפלוגה שלי", cap: "signatures.manage" },
   { href: "/counts", label: "ספירת מלאי", icon: "🔢", group: "הפלוגה שלי", cap: "counts.execute" },
+  { href: "/counts/plans", label: "תכניות ספירה", icon: "📋", group: "הפלוגה שלי", cap: "counts.manage" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "הפלוגה שלי", cap: "company.manage" },
   { href: "/locations?tab=items", label: "מידוף ימ\"ח", icon: "🗄️", group: "הפלוגה שלי", cap: "locations.manage" },
 
@@ -57,6 +58,7 @@ export const NAV: NavItem[] = [
   { href: "/kits", label: "ערכות החתמה", icon: "📦", group: "המחסנים שלי", cap: "signatures.manage" },
   { href: "/signatures", label: "החתמות (חיילים/פלוגות)", icon: "✍️", group: "המחסנים שלי", cap: "signatures.manage" },
   { href: "/counts", label: "ספירות מלאי", icon: "🔢", group: "המחסנים שלי", cap: "counts.execute" },
+  { href: "/counts/plans", label: "תכניות ספירה", icon: "📋", group: "המחסנים שלי", cap: "counts.manage" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "המחסנים שלי", cap: "gaps.resolve" },
   // החתמת חיילים נפרדת
   { href: "/donations", label: "מלאי תרומה", icon: "🎁", group: "המחסנים שלי", cap: "donations.manage" },
