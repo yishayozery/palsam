@@ -56,6 +56,35 @@ export async function cancelCountSession(formData: FormData) {
   revalidatePath("/counts");
 }
 
+/** 🆕 מחיקה מוחלטת של ספירה - מוחק את הסשן ואת השורות + פערים שנוצרו ממנה */
+export async function deleteCountSession(formData: FormData) {
+  const user = await requireCapability("counts.manage");
+  const id = String(formData.get("id") || "");
+  const session = await prisma.countSession.findUnique({ where: { id } });
+  if (!session || session.battalionId !== user.battalionId) return;
+  await prisma.$transaction(async (tx) => {
+    // לנתק משימה שמצביעה לסשן (לא מוחק את המשימה עצמה)
+    await tx.countTask.updateMany({ where: { sessionId: id }, data: { sessionId: null, status: "PENDING" } });
+    // למחוק פערים שנוצרו מהספירה
+    await tx.discrepancy.deleteMany({ where: { sessionId: id } });
+    // למחוק שורות
+    await tx.countLine.deleteMany({ where: { sessionId: id } });
+    // למחוק את הסשן
+    await tx.countSession.delete({ where: { id } });
+  });
+  await audit(user.id, "DELETE_COUNT_SESSION", "CountSession", id);
+  revalidatePath("/counts");
+  revalidatePath("/gaps");
+}
+
+/** עטיפה ל-form */
+export async function deleteCountTaskForm(formData: FormData): Promise<void> {
+  await deleteCountTask(formData);
+}
+export async function deleteCountSessionForm(formData: FormData): Promise<void> {
+  await deleteCountSession(formData);
+}
+
 /** עטיפת void לשימוש ב-<form action> */
 export async function purgeAllCountTasksForm(formData: FormData): Promise<void> {
   await purgeAllCountTasks(formData);
@@ -67,10 +96,15 @@ export async function purgeAllCountTasks(formData: FormData) {
   const bId = user.battalionId!;
   const confirm = String(formData.get("confirm") || "");
   if (confirm !== "DELETE-ALL") return { error: "אישור שגוי" };
-  const result = await prisma.countTask.deleteMany({ where: { battalionId: bId } });
-  await audit(user.id, "PURGE_COUNT_TASKS", "CountTask", "all", { count: result.count });
+  const deleted = await prisma.$transaction(async (tx) => {
+    // לנתק קישור מסשנים פעילים (לא מוחקים סשנים שכבר הושלמו)
+    await tx.countTask.updateMany({ where: { battalionId: bId, sessionId: { not: null } }, data: { sessionId: null } });
+    const result = await tx.countTask.deleteMany({ where: { battalionId: bId } });
+    return result.count;
+  });
+  await audit(user.id, "PURGE_COUNT_TASKS", "CountTask", "all", { count: deleted });
   revalidatePath("/counts");
-  return { ok: true, deleted: result.count };
+  return { ok: true, deleted };
 }
 
 /** פתיחת ספירה — מייצר שורות ספירה לפי המלאי הצפוי בהיקף. */

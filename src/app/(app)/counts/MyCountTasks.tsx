@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card, Badge } from "@/components/ui";
 import { startCountFromTask } from "./taskActions";
+import { deleteCountTaskForm } from "./actions";
 
 type Task = {
   id: string;
@@ -48,7 +49,7 @@ function ShareButton({ shareToken, holderName }: { shareToken: string; holderNam
   );
 }
 
-export default function MyCountTasks({ tasks }: { tasks: Task[] }) {
+export default function MyCountTasks({ tasks, canManage = false }: { tasks: Task[]; canManage?: boolean }) {
   const overdue = tasks.filter((t) => t.status === "OVERDUE");
   return (
     <div className="space-y-3 mb-6">
@@ -87,6 +88,16 @@ export default function MyCountTasks({ tasks }: { tasks: Task[] }) {
                   <input type="hidden" name="taskId" value={t.id} />
                   <button className="bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-4 py-2 text-sm font-medium">
                     ▶ התחל ספירה
+                  </button>
+                </form>
+              )}
+              {canManage && (
+                <form action={deleteCountTaskForm}
+                  onSubmit={(e) => { if (!confirm(`למחוק את המשימה "${t.planName}" עבור ${t.holderName}?`)) e.preventDefault(); }}>
+                  <input type="hidden" name="id" value={t.id} />
+                  <button title="מחק משימה זו"
+                    className="bg-white border border-rose-300 text-rose-600 hover:bg-rose-50 rounded-lg px-3 py-2 text-sm">
+                    🗑️
                   </button>
                 </form>
               )}

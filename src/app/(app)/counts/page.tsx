@@ -12,7 +12,9 @@ import {
   deleteCountDefinition,
   cancelCountSession,
   purgeAllCountTasksForm,
+  deleteCountSessionForm,
 } from "./actions";
+import ConfirmForm from "./ConfirmForm";
 import { generatePendingTasks } from "@/lib/countScheduler";
 
 export const dynamic = "force-dynamic";
@@ -74,14 +76,14 @@ export default async function CountsPage() {
                 📋 תכניות ספירה
               </Link>
             )}
-            {isMafam && (
-              <form action={purgeAllCountTasksForm}>
-                <input type="hidden" name="confirm" value="DELETE-ALL" />
-                <button className="bg-rose-50 border border-rose-300 text-rose-700 rounded-lg px-3 py-2 text-xs hover:bg-rose-100"
-                  title="מוחק את כל המשימות (לא משפיע על תכניות, היסטוריה או ספירות שכבר בוצעו)">
+            {canManage && (
+              <ConfirmForm action={purgeAllCountTasksForm}
+                hiddenFields={{ confirm: "DELETE-ALL" }}
+                message="למחוק את כל משימות הספירה? פעולה זו אינה משפיעה על תכניות, היסטוריה או ספירות שכבר בוצעו.">
+                <button className="bg-rose-50 border border-rose-300 text-rose-700 rounded-lg px-3 py-2 text-xs hover:bg-rose-100">
                   🗑️ ניקוי כל המשימות
                 </button>
-              </form>
+              </ConfirmForm>
             )}
             {canExecute && <StartCount holders={holders.map((h) => ({ id: h.id, name: h.name }))} definitions={definitions.map((d) => ({ id: d.id, name: d.name, type: d.type, scopeHolderId: d.scopeHolderId }))} />}
           </div>
@@ -91,6 +93,7 @@ export default async function CountsPage() {
       {/* המשימות שלי */}
       {myTasks.length > 0 && (
         <MyCountTasks
+          canManage={canManage}
           tasks={myTasks.map((t) => ({
             id: t.id,
             shareToken: t.shareToken,
@@ -181,8 +184,15 @@ export default async function CountsPage() {
                       {canManage && s.status !== "COMPLETED" && (
                         <form action={cancelCountSession}>
                           <input type="hidden" name="id" value={s.id} />
-                          <button className="text-xs text-rose-500 hover:text-rose-700" title="ביטול ספירה">✕ בטל</button>
+                          <button className="text-xs text-rose-500 hover:text-rose-700" title="ביטול ספירה (נשאר ביומן)">✕ בטל</button>
                         </form>
+                      )}
+                      {canManage && (
+                        <ConfirmForm action={deleteCountSessionForm}
+                          hiddenFields={{ id: s.id }}
+                          message={`למחוק לצמיתות את ספירה זו (${s.startedAt.toLocaleDateString("he-IL")})? כולל ${s._count.lines} שורות ו-${s._count.discrepancies} פערים.`}>
+                          <button className="text-xs text-rose-500 hover:text-rose-700" title="מחיקה לצמיתות">🗑️ מחק</button>
+                        </ConfirmForm>
                       )}
                     </div>
                   </Td>
