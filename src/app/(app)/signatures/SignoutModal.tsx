@@ -348,19 +348,19 @@ export default function SignoutModal({
           )}
         </div>
 
-        {/* גוף: שתי עמודות — שמאל מלאי, ימין עגלה */}
-        <div className="flex-1 grid md:grid-cols-2 gap-0 overflow-hidden min-h-0">
+        {/* גוף: דסקטופ 2 עמודות; מובייל 1 עמודה - מלאי קודם (גלילה משלו), עגלה בהמשך */}
+        <div className="flex-1 flex flex-col md:grid md:grid-cols-2 gap-0 overflow-y-auto md:overflow-hidden min-h-0">
           {/* === עמודה ימינה (בעברית "ימין" קודם) — עגלה === */}
-          <div className="border-l border-slate-200 flex flex-col bg-slate-50 order-2 md:order-1">
+          <div className="border-l border-slate-200 flex flex-col bg-slate-50 order-2 md:order-1 md:min-h-0">
             <div className="p-3 border-b border-slate-200 flex items-center justify-between bg-white">
               <div className="font-bold text-slate-800">🛒 עגלת חתימה ({cart.length})</div>
               {cart.length > 0 && (
                 <button onClick={() => setCart([])} className="text-xs text-rose-500 hover:text-rose-700">נקה הכל</button>
               )}
             </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+            <div className="flex-1 md:overflow-y-auto p-2 space-y-1.5">
               {cart.length === 0 ? (
-                <div className="text-center text-slate-400 py-10 text-sm">
+                <div className="text-center text-slate-400 py-6 md:py-10 text-sm">
                   עגלה ריקה.<br />לחץ על פריט במלאי כדי להוסיף.
                 </div>
               ) : cart.map((c, i) => (
@@ -463,7 +463,7 @@ export default function SignoutModal({
           </div>
 
           {/* === עמודה שמאלית — מלאי זמין === */}
-          <div className="flex flex-col bg-white order-1 md:order-2 min-h-0">
+          <div className="flex flex-col bg-white order-1 md:order-2 md:min-h-0">
             <div className="p-3 border-b border-slate-200 bg-white sticky top-0 shrink-0 space-y-2">
               {/* ⬆ בורר ערכה — מעל המלאי (בחירה גוררת פריטים לעגלה אוטומטית) */}
               {kits.length > 0 && (
@@ -488,7 +488,7 @@ export default function SignoutModal({
               <input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="חפש פריט..."
                 className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
             </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+            <div className="flex-1 md:overflow-y-auto p-2 space-y-1.5 min-h-[200px]">
               {availableUnits.length === 0 && availableBalances.length === 0 && (
                 <div className="text-center text-slate-400 py-10 text-sm">
                   אין פריטים זמינים במחסן שלך.<br />הוסף מלאי קודם ב"מלאי המחסן".
