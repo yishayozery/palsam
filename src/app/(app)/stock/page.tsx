@@ -215,10 +215,18 @@ export default async function StockPage({
               return <SendToTanaModal serials={myUnits} balances={myBalances} />;
             })()}
             <StatusChangeModal
-              items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, trackingMethod: i.trackingMethod, unit: i.unit }))}
               statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss }))}
-              stocks={items.flatMap((i) => i.stockBalances.map((b) => ({ itemTypeId: i.id, statusId: b.statusId, statusName: b.status.name, quantity: b.quantity })))}
-              units={items.flatMap((i) => i.serialUnits.map((u) => ({ id: u.id, itemTypeId: i.id, serialNumber: u.serialNumber, lotQuantity: u.lotQuantity, statusId: u.statusId, statusName: u.status.name })))}
+              stocks={items.flatMap((i) => i.stockBalances.map((b) => ({
+                itemTypeId: i.id, itemName: i.name, sku: i.sku, unit: i.unit,
+                statusId: b.statusId, statusName: b.status.name, quantity: b.quantity,
+                isWear: b.status.isWear, isLoss: b.status.isLoss,
+              })))}
+              units={items.flatMap((i) => i.serialUnits.map((u) => ({
+                id: u.id, itemTypeId: i.id, itemName: i.name, sku: i.sku,
+                serialNumber: u.serialNumber, lotQuantity: u.lotQuantity,
+                statusId: u.statusId, statusName: u.status.name,
+                isWear: u.status.isWear, isLoss: u.status.isLoss,
+              })))}
             />
           </div>
         }
