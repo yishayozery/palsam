@@ -9,7 +9,7 @@ import { TRACKING_METHOD } from "@/lib/labels";
 import CatalogManager from "../catalog/CatalogManager";
 import { importItems } from "../catalog/import-actions";
 import {
-  saveCategory, deleteCategory, saveStatus, deleteStatus, saveFrequency, deleteFrequency,
+  saveCategory, deleteCategory, saveStatus, deleteStatus,
 } from "../dictionaries/actions";
 import ItemsFilters from "./ItemsFilters";
 import CategoriesFilters from "./CategoriesFilters";
@@ -51,7 +51,6 @@ export default async function ItemsPage({
     { key: "items", label: "פריטים (מק״טים)", href: "/items?tab=items" },
     { key: "categories", label: "קטגוריות", href: "/items?tab=categories" },
     { key: "statuses", label: "סטטוסים", href: "/items?tab=statuses" },
-    { key: "frequencies", label: "תדירויות ספירה", href: "/items?tab=frequencies" },
     { key: "locations", label: "🗄️ מידוף ימ\"ח", href: "/items?tab=locations" },
   ];
 
@@ -83,14 +82,13 @@ export default async function ItemsPage({
     ? { holder: { id: { in: user.holderIds }, kind: "WAREHOUSE" as const } }
     : { holder: { battalionId: bId, kind: "WAREHOUSE" as const } };
 
-  const [items, categories, statuses, frequencies, locations] = await Promise.all([
+  const [items, categories, statuses, locations] = await Promise.all([
     prisma.itemType.findMany({
       where: itemWhere, orderBy: { name: "asc" },
       include: { category: true, homeLocation: { include: { holder: true } }, _count: { select: { serialUnits: true, stockBalances: true } } },
     }),
     prisma.category.findMany({ where: categoryWhere, orderBy: { sortOrder: "asc" }, include: { _count: { select: { itemTypes: true } } } }),
     prisma.itemStatus.findMany({ where: { battalionId: bId }, orderBy: { sortOrder: "asc" } }),
-    prisma.countFrequency.findMany({ where: { battalionId: bId }, orderBy: { intervalDays: "asc" } }),
     prisma.storageLocation.findMany({ where: locationWhere, include: { holder: true }, orderBy: [{ holder: { name: "asc" } }, { column: "asc" }, { row: "asc" }] }),
   ]);
 
@@ -194,14 +192,7 @@ export default async function ItemsPage({
         />
       )}
 
-      {active === "frequencies" && (
-        <CrudSection
-          title="תדירויות ספירה" addLabel="תדירות"
-          fields={[{ name: "name", label: "שם" }, { name: "intervalDays", label: "מרווח (ימים)", type: "number", default: "7" }]}
-          saveAction={saveFrequency} deleteAction={deleteFrequency}
-          rows={frequencies.map((f) => ({ id: f.id, values: { name: f.name, intervalDays: String(f.intervalDays) }, display: (<span>{f.name} <Badge>כל {f.intervalDays} ימים</Badge></span>) }))}
-        />
-      )}
+      {/* ⚠️ טאב 'תדירויות ספירה' הוסר — לוגיקת תדירות עברה ל-CountPlan (עמוד תכניות ספירה) */}
 
       {active === "locations" && (await (async () => {
         // בורר holder — אם למשתמש יש holderId משלו, משתמשים בו; אחרת (מפ"מ) הוא בוחר מהרשימה
@@ -237,12 +228,28 @@ export default async function ItemsPage({
           );
         }
 
-        const [chosen, locations, mappings, allItems] = await Promise.all([
-          prisma.holder.findUnique({ where: { id: effectiveHolderId }, select: { name: true } }),
+        const chosen = await prisma.holder.findUnique({
+          where: { id: effectiveHolderId },
+          select: { name: true, kind: true, warehouseType: true, battalionId: true },
+        });
+        // אבטחה: אם ה-holder לא בגדוד של המשתמש — לא טוענים כלום
+        if (!chosen || chosen.battalionId !== bId) {
+          return (
+            <div className="mt-4 bg-rose-50 border border-rose-300 rounded-lg p-4 text-sm text-rose-800">
+              ⚠️ הימ״ח שנבחר לא נמצא בגדוד שלך.
+              <a href="/items?tab=locations" className="block mt-2 text-blue-600 hover:underline">← חזור לבחירה</a>
+            </div>
+          );
+        }
+        // מסננים פריטים: למחסן רק לפי טיפוס המחסן; לפלוגה — את כל הפריטים הצבאיים
+        const itemFilter = chosen.kind === "WAREHOUSE" && chosen.warehouseType
+          ? { battalionId: bId, active: true, category: { warehouseType: chosen.warehouseType } }
+          : { battalionId: bId, active: true };
+        const [locations, mappings, allItems] = await Promise.all([
           prisma.storageLocation.findMany({ where: { holderId: effectiveHolderId }, orderBy: [{ column: "asc" }, { row: "asc" }] }),
           prisma.itemHolderLocation.findMany({ where: { holderId: effectiveHolderId }, select: { itemTypeId: true, locationId: true } }),
           prisma.itemType.findMany({
-            where: { battalionId: bId, active: true },
+            where: itemFilter,
             orderBy: { name: "asc" },
             include: { category: { select: { warehouseType: true } } },
           }),
