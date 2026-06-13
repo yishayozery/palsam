@@ -347,11 +347,12 @@ export async function withdrawMulti(formData: FormData): Promise<{ ok?: boolean;
     const user = await requireCapability("warehouse.operate");
     const bId = user.battalionId!;
     const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
-    const externalContact = String(formData.get("externalContact") || "").trim() || null;
+    const externalContact = String(formData.get("externalContact") || "").trim();
     const reason = String(formData.get("reason") || "").trim() || "זיכוי לחטיבה";
-    let recipientPersonalId: string | null = null;
-    try { recipientPersonalId = await extractPersonalId(bId, formData); }
-    catch (e) { return { error: e instanceof Error ? e.message.replace(/^PERSONAL_ID_REQUIRED:\s*/, "") : "שגיאה במ.א." }; }
+    const recipientPersonalId = String(formData.get("recipientPersonalId") || "").replace(/\D/g, "");
+    // 🔒 חובה בכל תעודת זיכוי לחטיבה: שם המקבל + מ.א.
+    if (!externalContact) return { error: "🔒 חובה למלא את שם המקבל בחטיבה" };
+    if (recipientPersonalId.length < 5) return { error: "🔒 חובה למלא מ.א. תקף של המקבל (לפחות 5 ספרות)" };
 
     const idxs = new Set<number>();
     for (const [k] of formData.entries()) {

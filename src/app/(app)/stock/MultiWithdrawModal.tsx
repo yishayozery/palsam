@@ -106,6 +106,8 @@ export default function MultiWithdrawModal({
   async function submit() {
     setError(null);
     if (lines.length === 0) { setError("הוסף לפחות פריט אחד לתעודה"); return; }
+    if (!externalContact.trim()) { setError("חובה למלא את שם המקבל בחטיבה"); return; }
+    if (recipientPersonalId.length < 5) { setError("חובה למלא מ.א. תקף של המקבל (לפחות 5 ספרות)"); return; }
     setBusy(true);
     try {
       const fd = new FormData();
@@ -171,41 +173,26 @@ export default function MultiWithdrawModal({
           <button onClick={() => setOpen(false)} className="text-rose-100 hover:text-white text-2xl">✕</button>
         </div>
 
-        {/* פרטי תעודה */}
+        {/* פרטי תעודה — יחידה מקבלת + סיבה (פרטי הנמען המלאים בתחתית) */}
         <div className="bg-rose-50 border-b border-rose-200 p-3 shrink-0 space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[11px] text-slate-600 mb-0.5">יחידה מקבלת</label>
-              {counterpartOptions.length > 0 ? (
-                <select value={counterpartOptions.find((o) => o.value === externalUnit) ? externalUnit : "__manual__"}
-                  onChange={(e) => { if (e.target.value !== "__manual__") setExternalUnit(e.target.value); else setExternalUnit(""); }}
-                  className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white">
-                  {counterpartOptions.map((o) => <option key={o.value || "manual"} value={o.value || "__manual__"}>{o.label}</option>)}
-                </select>
-              ) : (
-                <input value={externalUnit} onChange={(e) => setExternalUnit(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
-              )}
-            </div>
-            <div>
-              <label className="block text-[11px] text-slate-600 mb-0.5">שם המקבל (אדם)</label>
-              <input value={externalContact} onChange={(e) => setExternalContact(e.target.value)} placeholder="שם הקצין החטיבתי"
+          <div>
+            <label className="block text-[11px] text-slate-600 mb-0.5">יחידה מקבלת</label>
+            {counterpartOptions.length > 0 ? (
+              <select value={counterpartOptions.find((o) => o.value === externalUnit) ? externalUnit : "__manual__"}
+                onChange={(e) => { if (e.target.value !== "__manual__") setExternalUnit(e.target.value); else setExternalUnit(""); }}
+                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white">
+                {counterpartOptions.map((o) => <option key={o.value || "manual"} value={o.value || "__manual__"}>{o.label}</option>)}
+              </select>
+            ) : (
+              <input value={externalUnit} onChange={(e) => setExternalUnit(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
-            </div>
+            )}
           </div>
           <div>
             <label className="block text-[11px] text-slate-600 mb-0.5">סיבת הזיכוי</label>
             <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="זיכוי תקופתי / שינוי תקן / החלפת ציוד..."
               className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
           </div>
-          {requirePersonalId && (
-            <div>
-              <label className="block text-[11px] font-bold text-amber-900 mb-0.5">🔒 מ.א. של המקבל בחטיבה (חובה)</label>
-              <input value={recipientPersonalId} onChange={(e) => setRecipientPersonalId(e.target.value.replace(/\D/g, ""))}
-                inputMode="numeric" placeholder="1234567" required
-                className="w-full rounded-lg border border-amber-400 px-2 py-1.5 text-sm font-mono" />
-            </div>
-          )}
           <p className="text-[10px] text-rose-700">המנפק: <b>{currentUserName}</b></p>
         </div>
 
@@ -366,12 +353,31 @@ export default function MultiWithdrawModal({
           </div>
         )}
 
+        {/* 🔒 פרטי הנמען — חובה בכל תעודה: שם + מ.א. ביחד */}
+        <div className="border-t-2 border-amber-300 bg-amber-50 p-3 shrink-0">
+          <div className="text-xs font-bold text-amber-900 mb-1.5">🔒 פרטי המקבל בחטיבה (חובה)</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">שם המקבל <span className="text-rose-600">*</span></label>
+              <input value={externalContact} onChange={(e) => setExternalContact(e.target.value)}
+                placeholder="שם הקצין החטיבתי" required
+                className={`w-full rounded-lg border-2 px-2 py-1.5 text-sm bg-white ${externalContact.trim() ? "border-emerald-300" : "border-amber-400"}`} />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">מ.א. של המקבל <span className="text-rose-600">*</span></label>
+              <input value={recipientPersonalId} onChange={(e) => setRecipientPersonalId(e.target.value.replace(/\D/g, ""))}
+                inputMode="numeric" placeholder="1234567" required
+                className={`w-full rounded-lg border-2 px-2 py-1.5 text-sm font-mono bg-white ${recipientPersonalId.length >= 5 ? "border-emerald-300" : "border-amber-400"}`} />
+            </div>
+          </div>
+        </div>
+
         <div className="border-t border-slate-200 p-3 bg-white shrink-0">
           {error && <div className="text-sm text-rose-700 font-medium mb-2">⚠️ {error}</div>}
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => { reset(); setOpen(false); }} disabled={busy}
               className="flex-1 sm:flex-none rounded-lg border border-slate-300 px-4 py-2.5 text-sm disabled:opacity-50">ביטול</button>
-            <button onClick={submit} disabled={busy || lines.length === 0 || (requirePersonalId && !recipientPersonalId)}
+            <button onClick={submit} disabled={busy || lines.length === 0 || !externalContact.trim() || recipientPersonalId.length < 5}
               className="flex-1 sm:flex-none bg-rose-700 hover:bg-rose-800 disabled:opacity-50 text-white rounded-lg px-5 py-2.5 text-sm font-bold flex items-center justify-center gap-2">
               {busy ? (
                 <>
