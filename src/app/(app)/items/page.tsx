@@ -209,10 +209,11 @@ export default async function ItemsPage({
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-sm text-blue-900">
                 💡 בחר מחסן או פלוגה כדי לנהל את מיקומי הפריטים שלו. כל פריט יכול להיות במיקום שונה בכל מחסן/פלוגה.
               </div>
-              <form method="GET" className="flex items-center gap-2 flex-wrap">
+              <form method="GET" action="/items" className="flex items-center gap-2 flex-wrap">
                 <input type="hidden" name="tab" value="locations" />
                 <label className="text-sm text-slate-700">בחר ימ״ח לניהול:</label>
                 <select name="holder" defaultValue={selectedHolderParam}
+                  onChange={(e) => e.currentTarget.form?.submit()}
                   className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
                   <option value="">— בחר —</option>
                   <optgroup label="🏪 מחסנים">
@@ -222,7 +223,7 @@ export default async function ItemsPage({
                     {allHolders.filter((h) => h.kind === "COMPANY").map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
                   </optgroup>
                 </select>
-                <button className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-blue-700">הצג</button>
+                <button type="submit" className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-blue-700">הצג</button>
               </form>
             </div>
           );
