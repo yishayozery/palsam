@@ -79,6 +79,39 @@ export default async function StockPage({
       orderBy: { name: "asc" }, select: { id: true, name: true },
     }),
   ]);
+
+  // 🆕 חישוב בלאי פר-פלוגה (לכל סטטוס תקול/אובד עם כמות > 0) - להחלפת בלאי לפלוגה
+  const wearStatusIds = statuses.filter((s) => s.isWear || s.isLoss).map((s) => s.id);
+  const allDefectiveStocks = wearStatusIds.length === 0 ? [] : await prisma.stockBalance.findMany({
+    where: { battalionId: bId, statusId: { in: wearStatusIds }, quantity: { gt: 0 } },
+    include: {
+      itemType: { select: { name: true, sku: true, unit: true } },
+      status: { select: { name: true } },
+      holder: { select: { id: true, kind: true } },
+    },
+  });
+  const defectiveByCompany: Record<string, Array<{
+    itemTypeId: string; itemName: string; sku: string | null; unit: string;
+    defectiveStatusId: string; defectiveStatusName: string; available: number;
+  }>> = {};
+  const defectiveAtMyWarehouseAll = isScoped
+    ? allDefectiveStocks.filter((b) => b.holder?.kind === "WAREHOUSE" && user.holderIds.includes(b.holderId)).map((b) => ({
+        itemTypeId: b.itemTypeId, itemName: b.itemType.name, sku: b.itemType.sku, unit: b.itemType.unit,
+        defectiveStatusId: b.statusId, defectiveStatusName: b.status.name, available: b.quantity,
+      }))
+    : allDefectiveStocks.filter((b) => b.holder?.kind === "WAREHOUSE").map((b) => ({
+        itemTypeId: b.itemTypeId, itemName: b.itemType.name, sku: b.itemType.sku, unit: b.itemType.unit,
+        defectiveStatusId: b.statusId, defectiveStatusName: b.status.name, available: b.quantity,
+      }));
+  for (const b of allDefectiveStocks) {
+    if (b.holder?.kind !== "COMPANY") continue;
+    const cid = b.holderId;
+    if (!defectiveByCompany[cid]) defectiveByCompany[cid] = [];
+    defectiveByCompany[cid].push({
+      itemTypeId: b.itemTypeId, itemName: b.itemType.name, sku: b.itemType.sku, unit: b.itemType.unit,
+      defectiveStatusId: b.statusId, defectiveStatusName: b.status.name, available: b.quantity,
+    });
+  }
   const requirePersonalId = !!battalion?.requirePersonalIdOnHandover;
   const counterpartOptions = [
     ...(battalion?.brigade ? [{ value: `חטיבה ${battalion.brigade}`, label: `חטיבה ${battalion.brigade} (הממונה)` }] : [{ value: "חטיבה", label: "חטיבה (הממונה)" }]),
@@ -127,18 +160,16 @@ export default async function StockPage({
             />
             <ExchangeDefectiveModal
               target="COMPANY"
-              items={items.filter((i) => i.trackingMethod === "QUANTITY" || i.trackingMethod === "LOT").map((i) => ({
-                id: i.id, name: i.name, sku: i.sku, unit: i.unit,
-              }))}
               statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss }))}
               companies={companies}
+              defectiveByCompany={defectiveByCompany}
+              requirePersonalId={requirePersonalId}
             />
             <ExchangeDefectiveModal
               target="BRIGADE"
-              items={items.filter((i) => i.trackingMethod === "QUANTITY" || i.trackingMethod === "LOT").map((i) => ({
-                id: i.id, name: i.name, sku: i.sku, unit: i.unit,
-              }))}
               statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss }))}
+              defectiveAtMyWarehouse={defectiveAtMyWarehouseAll}
+              requirePersonalId={requirePersonalId}
             />
             <MultiWithdrawModal
               currentUserName={user.fullName}

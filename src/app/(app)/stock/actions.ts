@@ -630,75 +630,105 @@ export async function importLots(formData: FormData) {
 }
 
 /**
- * 🆕 החלפת בלאי לפלוגה — תעודה אחת המקיימת שני כיוונים:
- *   1. RETURN: פלוגה ← מחסן (פריט בלאי חוזר למחסן, COMPLETED מיד)
- *   2. ISSUE:  מחסן ← פלוגה (פריט חדש תקין יוצא, PENDING ללחיצת יד)
+ * 🆕 החלפת בלאי לפלוגה — תעודה רב-פריטית:
+ *   1. RETURN: פלוגה ← מחסן (כל פריטי הבלאי, COMPLETED מיד)
+ *   2. ISSUE:  מחסן ← פלוגה (כל פריטי התקין, PENDING ללחיצת יד)
  * formData:
- *   companyId, itemTypeId, defectiveStatusId, workingStatusId, quantity, reason?
+ *   companyId, recipientName (חובה), recipientPersonalId (לפי הגדרת גדוד), reason?
+ *   line:<i>:itemTypeId, line:<i>:defectiveStatusId, line:<i>:workingStatusId, line:<i>:quantity
  */
 export async function exchangeWithCompany(formData: FormData): Promise<{ ok?: boolean; error?: string; issueTransferId?: string }> {
   try {
     const user = await requireCapability("warehouse.operate");
     const bId = user.battalionId!;
     const companyId = String(formData.get("companyId") || "");
-    const itemTypeId = String(formData.get("itemTypeId") || "");
-    const defectiveStatusId = String(formData.get("defectiveStatusId") || "");
-    const workingStatusId = String(formData.get("workingStatusId") || "");
-    const quantity = parseInt(String(formData.get("quantity") || "0"), 10);
+    const recipientName = String(formData.get("recipientName") || "").trim();
+    const recipientPersonalId = String(formData.get("recipientPersonalId") || "").replace(/\D/g, "");
     const reason = String(formData.get("reason") || "").trim() || "החלפת בלאי";
-    if (!companyId || !itemTypeId || !defectiveStatusId || !workingStatusId || quantity < 1) {
-      return { error: "חסרים שדות: פלוגה / פריט / סטטוס בלאי / סטטוס תקין / כמות" };
+
+    if (!companyId) return { error: "חסרה פלוגה" };
+    if (!recipientName) return { error: "🔒 חובה למלא את שם המקבל בפלוגה" };
+    const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { requirePersonalIdOnHandover: true } });
+    if (battalion?.requirePersonalIdOnHandover && recipientPersonalId.length < 5) {
+      return { error: "🔒 הגדוד דורש מ.א. בכל מסירה — חובה למלא מ.א. תקף" };
     }
-    const warehouse = await pickWarehouse(bId, itemTypeId);
-    if (!warehouse) return { error: "לא נמצא מחסן לפריט" };
+
+    const idxs = new Set<number>();
+    for (const [k] of formData.entries()) {
+      const m = k.match(/^line:(\d+):/);
+      if (m) idxs.add(parseInt(m[1], 10));
+    }
+    const lineIdxs = [...idxs].sort((a, b) => a - b);
+    if (lineIdxs.length === 0) return { error: "לא נבחרו פריטים להחלפה" };
+
+    type Line = { itemTypeId: string; defectiveStatusId: string; workingStatusId: string; quantity: number; warehouseId: string };
+    const lines: Line[] = [];
+    for (const i of lineIdxs) {
+      const itemTypeId = String(formData.get(`line:${i}:itemTypeId`) || "");
+      const defectiveStatusId = String(formData.get(`line:${i}:defectiveStatusId`) || "");
+      const workingStatusId = String(formData.get(`line:${i}:workingStatusId`) || "");
+      const quantity = parseInt(String(formData.get(`line:${i}:quantity`) || "0"), 10);
+      if (!itemTypeId || !defectiveStatusId || !workingStatusId || quantity < 1) continue;
+      const wh = await pickWarehouse(bId, itemTypeId);
+      if (!wh) return { error: `לא נמצא מחסן לפריט (שורה ${i + 1})` };
+      lines.push({ itemTypeId, defectiveStatusId, workingStatusId, quantity, warehouseId: wh.id });
+    }
+    if (lines.length === 0) return { error: "אין שורות תקפות" };
 
     let issueTransferId = "";
     await prisma.$transaction(async (tx) => {
-      // 1) ולידציה: לפלוגה יש מספיק בלאי, ולמחסן יש מספיק תקין
-      const companyDefective = await tx.stockBalance.findFirst({
-        where: { itemTypeId, holderId: companyId, statusId: defectiveStatusId, battalionId: bId },
-      });
-      if ((companyDefective?.quantity ?? 0) < quantity) {
-        const item = await tx.itemType.findUnique({ where: { id: itemTypeId }, select: { name: true } });
-        throw new Error(`🚫 בפלוגה יש רק ${companyDefective?.quantity ?? 0} בלאי של "${item?.name}" - לא ניתן להחליף ${quantity}`);
-      }
-      const warehouseWorking = await tx.stockBalance.findFirst({
-        where: { itemTypeId, holderId: warehouse.id, statusId: workingStatusId, battalionId: bId },
-      });
-      if ((warehouseWorking?.quantity ?? 0) < quantity) {
-        const item = await tx.itemType.findUnique({ where: { id: itemTypeId }, select: { name: true } });
-        throw new Error(`🚫 במחסן יש רק ${warehouseWorking?.quantity ?? 0} תקין של "${item?.name}" - לא ניתן להחליף ${quantity}`);
+      for (const l of lines) {
+        const cd = await tx.stockBalance.findFirst({
+          where: { itemTypeId: l.itemTypeId, holderId: companyId, statusId: l.defectiveStatusId, battalionId: bId },
+        });
+        if ((cd?.quantity ?? 0) < l.quantity) {
+          const item = await tx.itemType.findUnique({ where: { id: l.itemTypeId }, select: { name: true } });
+          throw new Error(`🚫 בפלוגה יש רק ${cd?.quantity ?? 0} בלאי של "${item?.name}" — לא ניתן להחליף ${l.quantity}`);
+        }
+        const ww = await tx.stockBalance.findFirst({
+          where: { itemTypeId: l.itemTypeId, holderId: l.warehouseId, statusId: l.workingStatusId, battalionId: bId },
+        });
+        if ((ww?.quantity ?? 0) < l.quantity) {
+          const item = await tx.itemType.findUnique({ where: { id: l.itemTypeId }, select: { name: true } });
+          throw new Error(`🚫 במחסן יש רק ${ww?.quantity ?? 0} תקין של "${item?.name}" — לא ניתן להחליף ${l.quantity}`);
+        }
       }
 
-      // 2) RETURN: בלאי מהפלוגה אל המחסן (COMPLETED מיד)
       const ret = await tx.transfer.create({
         data: {
           battalionId: bId, type: "RETURN", status: "COMPLETED",
-          fromHolderId: companyId, toHolderId: warehouse.id,
+          fromHolderId: companyId, toHolderId: lines[0].warehouseId,
           reason: `${reason} — קליטת בלאי`,
+          externalContact: recipientName,
+          recipientPersonalId: recipientPersonalId || null,
           createdById: user.id, approvedById: user.id, approvedAt: new Date(),
-          lines: { create: { itemTypeId, quantity, statusId: defectiveStatusId } },
+          lines: { create: lines.map((l) => ({ itemTypeId: l.itemTypeId, quantity: l.quantity, statusId: l.defectiveStatusId })) },
         },
       });
-      await adjustQuantity(tx, bId, itemTypeId, companyId, defectiveStatusId, -quantity);
-      await adjustQuantity(tx, bId, itemTypeId, warehouse.id, defectiveStatusId, quantity);
+      for (const l of lines) {
+        await adjustQuantity(tx, bId, l.itemTypeId, companyId, l.defectiveStatusId, -l.quantity);
+        await adjustQuantity(tx, bId, l.itemTypeId, l.warehouseId, l.defectiveStatusId, l.quantity);
+      }
 
-      // 3) ISSUE: תקין מהמחסן אל הפלוגה (PENDING ללחיצת יד)
       const iss = await tx.transfer.create({
         data: {
           battalionId: bId, type: "ISSUE", status: "PENDING",
-          fromHolderId: warehouse.id, toHolderId: companyId,
+          fromHolderId: lines[0].warehouseId, toHolderId: companyId,
           reason: `${reason} — ניפוק תקין`,
+          externalContact: recipientName,
+          recipientPersonalId: recipientPersonalId || null,
           createdById: user.id,
-          lines: { create: { itemTypeId, quantity, statusId: workingStatusId } },
+          lines: { create: lines.map((l) => ({ itemTypeId: l.itemTypeId, quantity: l.quantity, statusId: l.workingStatusId })) },
         },
       });
-      await adjustQuantity(tx, bId, itemTypeId, warehouse.id, workingStatusId, -quantity);
+      for (const l of lines) {
+        await adjustQuantity(tx, bId, l.itemTypeId, l.warehouseId, l.workingStatusId, -l.quantity);
+      }
       issueTransferId = iss.id;
       void ret;
     });
 
-    await audit(user.id, "EXCHANGE_COMPANY", "Transfer", issueTransferId, { companyId, itemTypeId, quantity });
+    await audit(user.id, "EXCHANGE_COMPANY", "Transfer", issueTransferId, { companyId, lineCount: lines.length });
     revalidateAll();
     return { ok: true, issueTransferId };
   } catch (e) {
@@ -707,76 +737,94 @@ export async function exchangeWithCompany(formData: FormData): Promise<{ ok?: bo
 }
 
 /**
- * 🆕 החלפת בלאי מול החטיבה — תעודה אחת המקיימת שני כיוונים:
- *   1. WRITE_OFF: בלאי שיוצא לחטיבה (COMPLETED מיד)
- *   2. INTAKE:    תקין שמתקבל מהחטיבה (COMPLETED מיד)
+ * 🆕 החלפת בלאי מול החטיבה — תעודה רב-פריטית:
+ *   1. WRITE_OFF: כל פריטי הבלאי יוצאים לחטיבה (COMPLETED מיד)
+ *   2. INTAKE:    כל פריטי התקין נקלטים מהחטיבה (COMPLETED מיד)
  * formData:
- *   itemTypeId, defectiveStatusId, workingStatusId, quantity,
- *   externalUnit, externalContact (חובה), recipientPersonalId (חובה), reason?
+ *   externalUnit, externalContact (חובה), recipientPersonalId (לפי הגדרת גדוד), reason?
+ *   line:<i>:itemTypeId, line:<i>:defectiveStatusId, line:<i>:workingStatusId, line:<i>:quantity
  */
 export async function exchangeWithBrigade(formData: FormData): Promise<{ ok?: boolean; error?: string; transferId?: string }> {
   try {
     const user = await requireCapability("warehouse.operate");
     const bId = user.battalionId!;
-    const itemTypeId = String(formData.get("itemTypeId") || "");
-    const defectiveStatusId = String(formData.get("defectiveStatusId") || "");
-    const workingStatusId = String(formData.get("workingStatusId") || "");
-    const quantity = parseInt(String(formData.get("quantity") || "0"), 10);
     const externalUnit = String(formData.get("externalUnit") || "").trim() || "חטיבה";
     const externalContact = String(formData.get("externalContact") || "").trim();
     const recipientPersonalId = String(formData.get("recipientPersonalId") || "").replace(/\D/g, "");
     const reason = String(formData.get("reason") || "").trim() || "החלפת בלאי מול חטיבה";
 
     if (!externalContact) return { error: "🔒 חובה למלא את שם המקבל בחטיבה" };
-    if (recipientPersonalId.length < 5) return { error: "🔒 חובה למלא מ.א. תקף (לפחות 5 ספרות)" };
-    if (!itemTypeId || !defectiveStatusId || !workingStatusId || quantity < 1) {
-      return { error: "חסרים שדות: פריט / סטטוס בלאי / סטטוס תקין / כמות" };
+    const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { requirePersonalIdOnHandover: true } });
+    if (battalion?.requirePersonalIdOnHandover && recipientPersonalId.length < 5) {
+      return { error: "🔒 הגדוד דורש מ.א. בכל מסירה — חובה למלא מ.א. תקף" };
     }
 
-    const warehouse = await pickWarehouse(bId, itemTypeId);
-    if (!warehouse) return { error: "לא נמצא מחסן לפריט" };
+    const idxs = new Set<number>();
+    for (const [k] of formData.entries()) {
+      const m = k.match(/^line:(\d+):/);
+      if (m) idxs.add(parseInt(m[1], 10));
+    }
+    const lineIdxs = [...idxs].sort((a, b) => a - b);
+    if (lineIdxs.length === 0) return { error: "לא נבחרו פריטים להחלפה" };
+
+    type Line = { itemTypeId: string; defectiveStatusId: string; workingStatusId: string; quantity: number; warehouseId: string };
+    const lines: Line[] = [];
+    for (const i of lineIdxs) {
+      const itemTypeId = String(formData.get(`line:${i}:itemTypeId`) || "");
+      const defectiveStatusId = String(formData.get(`line:${i}:defectiveStatusId`) || "");
+      const workingStatusId = String(formData.get(`line:${i}:workingStatusId`) || "");
+      const quantity = parseInt(String(formData.get(`line:${i}:quantity`) || "0"), 10);
+      if (!itemTypeId || !defectiveStatusId || !workingStatusId || quantity < 1) continue;
+      const wh = await pickWarehouse(bId, itemTypeId);
+      if (!wh) return { error: `לא נמצא מחסן לפריט (שורה ${i + 1})` };
+      lines.push({ itemTypeId, defectiveStatusId, workingStatusId, quantity, warehouseId: wh.id });
+    }
+    if (lines.length === 0) return { error: "אין שורות תקפות" };
 
     let transferId = "";
     await prisma.$transaction(async (tx) => {
-      // ולידציה: יש מספיק בלאי במחסן
-      const warehouseDefective = await tx.stockBalance.findFirst({
-        where: { itemTypeId, holderId: warehouse.id, statusId: defectiveStatusId, battalionId: bId },
-      });
-      if ((warehouseDefective?.quantity ?? 0) < quantity) {
-        const item = await tx.itemType.findUnique({ where: { id: itemTypeId }, select: { name: true } });
-        throw new Error(`🚫 במחסן יש רק ${warehouseDefective?.quantity ?? 0} בלאי של "${item?.name}" - לא ניתן להחליף ${quantity}`);
+      for (const l of lines) {
+        const wd = await tx.stockBalance.findFirst({
+          where: { itemTypeId: l.itemTypeId, holderId: l.warehouseId, statusId: l.defectiveStatusId, battalionId: bId },
+        });
+        if ((wd?.quantity ?? 0) < l.quantity) {
+          const item = await tx.itemType.findUnique({ where: { id: l.itemTypeId }, select: { name: true } });
+          throw new Error(`🚫 במחסן יש רק ${wd?.quantity ?? 0} בלאי של "${item?.name}" — לא ניתן להחליף ${l.quantity}`);
+        }
       }
 
-      // 1) WRITE_OFF: בלאי יוצא לחטיבה
       const wo = await tx.transfer.create({
         data: {
           battalionId: bId, type: "WRITE_OFF", status: "COMPLETED",
-          fromHolderId: warehouse.id,
+          fromHolderId: lines[0].warehouseId,
           reason: `${reason} — שליחת בלאי`,
-          externalUnit, externalContact, recipientPersonalId,
+          externalUnit, externalContact, recipientPersonalId: recipientPersonalId || null,
           createdById: user.id, approvedById: user.id, approvedAt: new Date(),
-          lines: { create: { itemTypeId, quantity, statusId: defectiveStatusId } },
+          lines: { create: lines.map((l) => ({ itemTypeId: l.itemTypeId, quantity: l.quantity, statusId: l.defectiveStatusId })) },
         },
       });
-      await adjustQuantity(tx, bId, itemTypeId, warehouse.id, defectiveStatusId, -quantity);
+      for (const l of lines) {
+        await adjustQuantity(tx, bId, l.itemTypeId, l.warehouseId, l.defectiveStatusId, -l.quantity);
+      }
 
-      // 2) INTAKE: תקין נכנס מהחטיבה
       const intake = await tx.transfer.create({
         data: {
           battalionId: bId, type: "INTAKE", status: "COMPLETED",
-          toHolderId: warehouse.id,
+          toHolderId: lines[0].warehouseId,
           reason: `${reason} — קליטת תקין`,
-          externalUnit, externalContact, recipientPersonalId,
+          externalUnit, externalContact, recipientPersonalId: recipientPersonalId || null,
           createdById: user.id, approvedById: user.id, approvedAt: new Date(),
-          lines: { create: { itemTypeId, quantity, statusId: workingStatusId } },
+          lines: { create: lines.map((l) => ({ itemTypeId: l.itemTypeId, quantity: l.quantity, statusId: l.workingStatusId })) },
         },
       });
-      await adjustQuantity(tx, bId, itemTypeId, warehouse.id, workingStatusId, quantity);
+      for (const l of lines) {
+        await adjustQuantity(tx, bId, l.itemTypeId, l.warehouseId, l.workingStatusId, l.quantity);
+      }
       transferId = intake.id;
       void wo;
     });
 
-    await audit(user.id, "EXCHANGE_BRIGADE", "Transfer", transferId, { itemTypeId, quantity });
+    await audit(user.id, "EXCHANGE_BRIGADE", "Transfer", transferId, { lineCount: lines.length });
     revalidateAll();
     return { ok: true, transferId };
   } catch (e) {
