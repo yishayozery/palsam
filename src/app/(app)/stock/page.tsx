@@ -247,16 +247,21 @@ export default async function StockPage({
       </Card>
       <StockTable
         items={items.map((i) => {
-          const total = i.stockBalances.reduce((s, b) => s + b.quantity, 0)
-                      + i.serialUnits.reduce((s, u) => s + (u.lotQuantity ?? 1), 0)
-                      + (transitByItem.get(i.id) ?? 0);
+          const qtyStock = i.stockBalances.reduce((s, b) => s + b.quantity, 0);
+          const serialFree = i.serialUnits.filter((u) => !u.signedSoldierId).reduce((s, u) => s + (u.lotQuantity ?? 1), 0);
+          const serialSigned = i.serialUnits.filter((u) => !!u.signedSoldierId).reduce((s, u) => s + (u.lotQuantity ?? 1), 0);
+          const transit = transitByItem.get(i.id) ?? 0;
+          // 'במלאי' = הכמות שנמצאת פיזית במחסן וזמינה (לא חתומה, לא במעבר)
+          const available = qtyStock + serialFree;
+          // 'סה"כ באחריות' = כולל חתומים על חיילים + במעבר
+          const total = available + serialSigned + transit;
           return {
             id: i.id, name: i.name, sku: i.sku, unit: i.unit,
             trackingMethod: i.trackingMethod, association: ASSOC[i.association],
             category: i.category?.name ?? null,
             categoryId: i.categoryId ?? null,
             warehouseType: i.category?.warehouseType ?? null,
-            total, transit: transitByItem.get(i.id) ?? 0,
+            total, available, signedOnSoldiers: serialSigned, transit,
             units: i.serialUnits.map((u) => ({
               id: u.id, serialNumber: u.serialNumber, lotQuantity: u.lotQuantity, statusName: u.status.name,
             })),

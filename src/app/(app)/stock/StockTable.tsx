@@ -14,6 +14,8 @@ type Item = {
   categoryId: string | null;
   warehouseType: "EQUIPMENT" | "COMMS" | "AMMO" | "ARMORY" | "VEHICLES" | "MEDICAL" | "GENERAL" | null;
   total: number;
+  available: number;
+  signedOnSoldiers: number;
   transit: number;
   units?: { id: string; serialNumber: string; lotQuantity: number | null; statusName: string; signedTo?: string | null }[];
 };
@@ -257,8 +259,16 @@ export default function StockTable({
                       </Badge>
                     </Td>
                     <Td className="font-bold text-slate-800">
-                      {i.total} <span className="text-xs text-slate-400 font-normal">{i.unit}</span>
-                      {i.transit > 0 && <div className="text-[10px] text-amber-600 font-normal">כולל {i.transit} במעבר</div>}
+                      <div title="זמין במחסן (לא חתום ולא במעבר)">
+                        {i.available} <span className="text-xs text-slate-400 font-normal">{i.unit}</span>
+                      </div>
+                      {(i.signedOnSoldiers > 0 || i.transit > 0 || i.total !== i.available) && (
+                        <div className="text-[10px] text-slate-500 font-normal mt-0.5 leading-tight">
+                          {i.signedOnSoldiers > 0 && <span className="text-blue-600">🪖 {i.signedOnSoldiers} חתום · </span>}
+                          {i.transit > 0 && <span className="text-amber-600">🚚 {i.transit} במעבר · </span>}
+                          <span>סה״כ {i.total}</span>
+                        </div>
+                      )}
                     </Td>
                     <Td>
                       <div className="flex items-center gap-1.5 justify-end">
