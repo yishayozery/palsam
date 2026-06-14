@@ -18,6 +18,7 @@ type Item = {
   signedOnSoldiers: number;
   transit: number;
   units?: { id: string; serialNumber: string; lotQuantity: number | null; statusName: string; signedTo?: string | null; locationName?: string | null; isVehicleLocation?: boolean }[];
+  companyBreakdown?: { companyId: string; companyName: string; totalQty: number; totalSerials: number; signedOnSoldiers: number; defective: number }[];
 };
 type Cat = { id: string; name: string; warehouseType: string };
 type Status = { id: string; name: string; isDefault: boolean };
@@ -181,14 +182,15 @@ function ExpandedRow({ item, statuses }: { item: Item; statuses: Status[] }) {
 }
 
 export default function StockTable({
-  items, categories, statuses, initialQ, initialCategory, initialWarehouse,
+  items, categories, statuses, initialQ, initialCategory, initialWarehouse, hideWarehouseFilter = false,
 }: {
   items: Item[]; categories: Cat[]; statuses: Status[];
   initialQ: string; initialCategory: string; initialWarehouse: string;
+  hideWarehouseFilter?: boolean;
 }) {
   const [search, setSearch] = useState(initialQ);
   const [cat, setCat] = useState(initialCategory);
-  const [wh, setWh] = useState(initialWarehouse);
+  const [wh, setWh] = useState(hideWarehouseFilter ? "" : initialWarehouse);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const filtered = items.filter((i) => {
@@ -211,14 +213,16 @@ export default function StockTable({
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="הקלד..."
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">מחסן</label>
-          <select value={wh} onChange={(e) => { setWh(e.target.value); setCat(""); }}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="">כל המחסנים</option>
-            {WH_OPTS.map((v) => <option key={v} value={v}>{WAREHOUSE_TYPE_SHORT[v]}</option>)}
-          </select>
-        </div>
+        {!hideWarehouseFilter && (
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">מחסן</label>
+            <select value={wh} onChange={(e) => { setWh(e.target.value); setCat(""); }}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              <option value="">כל המחסנים</option>
+              {WH_OPTS.map((v) => <option key={v} value={v}>{WAREHOUSE_TYPE_SHORT[v]}</option>)}
+            </select>
+          </div>
+        )}
         <div>
           <label className="block text-xs text-slate-500 mb-1">קטגוריה</label>
           <select value={cat} onChange={(e) => setCat(e.target.value)}
@@ -241,54 +245,102 @@ export default function StockTable({
           <Table>
             <thead>
               <tr>
-                <Th>פריט</Th><Th>מק״ט</Th><Th>קטגוריה</Th><Th>שיטה</Th>
-                <Th>שייכות</Th><Th>במלאי</Th><Th></Th>
+                <Th>פריט</Th><Th>מק״ט</Th><Th>קטגוריה</Th>
+                <Th>שיטה</Th><Th>במחסן</Th><Th>בפלוגות</Th><Th></Th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((i) => (
-                <>
-                  <tr key={i.id} className={expanded === i.id ? "bg-slate-50" : ""}>
-                    <Td className="font-medium">{i.name}</Td>
-                    <Td className="font-mono text-xs text-slate-500">{i.sku ?? "—"}</Td>
-                    <Td>{i.category ?? "—"}</Td>
-                    <Td><Badge>{TRACKING_METHOD[i.trackingMethod]}</Badge></Td>
-                    <Td>
-                      <Badge className={i.association === "צבאי" ? "bg-slate-100 text-slate-600" : "bg-purple-100 text-purple-700"}>
-                        {i.association}
-                      </Badge>
-                    </Td>
-                    <Td className="font-bold text-slate-800">
-                      <div title="זמין במחסן (לא חתום ולא במעבר)">
-                        {i.available} <span className="text-xs text-slate-400 font-normal">{i.unit}</span>
-                      </div>
-                      {(i.signedOnSoldiers > 0 || i.transit > 0 || i.total !== i.available) && (
-                        <div className="text-[10px] text-slate-500 font-normal mt-0.5 leading-tight">
-                          {i.signedOnSoldiers > 0 && <span className="text-blue-600">🪖 {i.signedOnSoldiers} חתום · </span>}
-                          {i.transit > 0 && <span className="text-amber-600">🚚 {i.transit} במעבר · </span>}
-                          <span>סה״כ {i.total}</span>
+              {filtered.map((i) => {
+                const cb = i.companyBreakdown ?? [];
+                const cbTotal = cb.reduce((s, c) => s + c.totalQty + c.totalSerials + c.signedOnSoldiers, 0);
+                const cbSigned = cb.reduce((s, c) => s + c.signedOnSoldiers, 0);
+                const cbDefective = cb.reduce((s, c) => s + c.defective, 0);
+                const isExp = expanded === i.id;
+                return (
+                  <>
+                    <tr key={i.id} className={isExp ? "bg-slate-50" : ""}>
+                      <Td className="font-medium">
+                        <div>{i.name}</div>
+                        {i.category && <div className="text-[10px] text-slate-400">{i.category}</div>}
+                      </Td>
+                      <Td className="font-mono text-xs text-slate-500">{i.sku ?? "—"}</Td>
+                      <Td>
+                        <Badge className={i.association === "צבאי" ? "bg-slate-100 text-slate-600" : "bg-purple-100 text-purple-700"}>
+                          {i.association}
+                        </Badge>
+                      </Td>
+                      <Td><Badge>{TRACKING_METHOD[i.trackingMethod]}</Badge></Td>
+                      <Td className="font-bold text-slate-800">
+                        <div title="זמין במחסן (לא חתום ולא במעבר)">
+                          {i.available} <span className="text-xs text-slate-400 font-normal">{i.unit}</span>
                         </div>
-                      )}
-                    </Td>
-                    <Td>
-                      <div className="flex items-center gap-1.5 justify-end">
-                        <a href={`/items/${i.id}/history`}
-                          className="text-xs bg-white border border-slate-300 text-slate-700 rounded-md px-2.5 py-1 hover:bg-slate-50"
-                          title="היסטוריית תנועות + ייצוא Excel">
-                          🕘 היסטוריה
-                        </a>
-                      </div>
-                    </Td>
-                  </tr>
-                  {false && expanded === i.id && (
-                    <tr key={i.id + "-exp"}>
-                      <td colSpan={7} className="p-0">
-                        <ExpandedRow item={i} statuses={statuses} />
-                      </td>
+                        {(i.transit > 0 || i.total !== i.available) && (
+                          <div className="text-[10px] text-slate-500 font-normal mt-0.5 leading-tight">
+                            {i.transit > 0 && <span className="text-amber-600">🚚 {i.transit} במעבר</span>}
+                          </div>
+                        )}
+                      </Td>
+                      <Td>
+                        {cbTotal === 0 ? (
+                          <span className="text-xs text-slate-300">—</span>
+                        ) : (
+                          <button onClick={() => setExpanded(isExp ? null : i.id)}
+                            className="text-right hover:text-blue-700 group">
+                            <div className="font-bold text-slate-800">{cbTotal}</div>
+                            <div className="text-[10px] flex flex-wrap gap-1 mt-0.5">
+                              {cbSigned > 0 && <span className="bg-blue-100 text-blue-700 rounded px-1">🪖 {cbSigned} חתום</span>}
+                              {cbDefective > 0 && <span className="bg-amber-100 text-amber-700 rounded px-1">⚠️ {cbDefective} תקול</span>}
+                              <span className="text-slate-400 group-hover:text-blue-700">
+                                {isExp ? "▼ סגור" : `▶ ${cb.length} פלוגות`}
+                              </span>
+                            </div>
+                          </button>
+                        )}
+                      </Td>
+                      <Td>
+                        <div className="flex items-center gap-1.5 justify-end">
+                          <a href={`/items/${i.id}/history`}
+                            className="text-xs bg-white border border-slate-300 text-slate-700 rounded-md px-2.5 py-1 hover:bg-slate-50"
+                            title="היסטוריית תנועות + ייצוא Excel">
+                            🕘 היסטוריה
+                          </a>
+                        </div>
+                      </Td>
                     </tr>
-                  )}
-                </>
-              ))}
+                    {isExp && cb.length > 0 && (
+                      <tr key={i.id + "-cb"} className="bg-blue-50/50">
+                        <td colSpan={7} className="p-3">
+                          <div className="text-xs font-bold text-slate-700 mb-2">פילוח לפי פלוגה — {i.name}</div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {cb.map((c) => {
+                              const totalAtCompany = c.totalQty + c.totalSerials;
+                              return (
+                                <div key={c.companyId} className="bg-white border border-blue-200 rounded-lg p-2.5">
+                                  <div className="font-medium text-sm">🪖 {c.companyName}</div>
+                                  <div className="grid grid-cols-3 gap-1 mt-2 text-center">
+                                    <div className="bg-slate-50 rounded p-1.5">
+                                      <div className="text-[10px] text-slate-500">בפלוגה</div>
+                                      <div className="text-lg font-bold text-slate-800">{totalAtCompany}</div>
+                                    </div>
+                                    <div className={`rounded p-1.5 ${c.signedOnSoldiers > 0 ? "bg-blue-50" : "bg-slate-50"}`}>
+                                      <div className="text-[10px] text-slate-500">חתום על חיילים</div>
+                                      <div className={`text-lg font-bold ${c.signedOnSoldiers > 0 ? "text-blue-700" : "text-slate-300"}`}>{c.signedOnSoldiers}</div>
+                                    </div>
+                                    <div className={`rounded p-1.5 ${c.defective > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
+                                      <div className="text-[10px] text-slate-500">תקול/בלאי</div>
+                                      <div className={`text-lg font-bold ${c.defective > 0 ? "text-amber-700" : "text-slate-300"}`}>{c.defective}</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })}
             </tbody>
           </Table>
         )}

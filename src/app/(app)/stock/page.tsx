@@ -64,15 +64,20 @@ export default async function StockPage({
   const items = await prisma.itemType.findMany({
     where: {
       battalionId: bId, active: true,
+      // 🛡️ סקופ קצין מחסן: רק פריטים השייכים לטיפוסי המחסנים שלו (חייב קטגוריה עם warehouseType מתאים)
       ...(isScoped ? { category: { warehouseType: { in: myWarehouseTypes as never[] } } } : {}),
     },
     orderBy: { name: "asc" },
     include: {
       category: true,
-      stockBalances: { include: { status: true }, where: balanceHolderScope },
+      stockBalances: { include: { status: true, holder: { select: { id: true, name: true, kind: true } } } },
       serialUnits: {
-        include: { status: true, equipmentLocation: { select: { name: true, vehicleSerialUnitId: true } } },
-        where: serialHolderScope,
+        include: {
+          status: true,
+          equipmentLocation: { select: { name: true, vehicleSerialUnitId: true } },
+          currentHolder: { select: { id: true, name: true, kind: true } },
+          signedSoldier: { select: { companyId: true } },
+        },
       },
     },
   });
@@ -321,14 +326,68 @@ export default async function StockPage({
       </Card>
       <StockTable
         items={items.map((i) => {
-          const qtyStock = i.stockBalances.reduce((s, b) => s + b.quantity, 0);
-          const serialFree = i.serialUnits.filter((u) => !u.signedSoldierId).reduce((s, u) => s + (u.lotQuantity ?? 1), 0);
-          const serialSigned = i.serialUnits.filter((u) => !!u.signedSoldierId).reduce((s, u) => s + (u.lotQuantity ?? 1), 0);
+          // 🛡️ סקופ במחסן: רק יחידות במחסנים של המשתמש
+          const warehouseScopedBalances = i.stockBalances.filter((b) => isScoped
+            ? user.holderIds.includes(b.holderId)
+            : b.holder?.kind === "WAREHOUSE");
+          const warehouseScopedSerials = i.serialUnits.filter((u) => isScoped
+            ? u.currentHolderId && user.holderIds.includes(u.currentHolderId)
+            : u.currentHolder?.kind === "WAREHOUSE");
+
+          const qtyStock = warehouseScopedBalances.reduce((s, b) => s + b.quantity, 0);
+          const serialFree = warehouseScopedSerials.filter((u) => !u.signedSoldierId).reduce((s, u) => s + (u.lotQuantity ?? 1), 0);
+          const serialSigned = warehouseScopedSerials.filter((u) => !!u.signedSoldierId).reduce((s, u) => s + (u.lotQuantity ?? 1), 0);
           const transit = transitByItem.get(i.id) ?? 0;
-          // 'במלאי' = הכמות שנמצאת פיזית במחסן וזמינה (לא חתומה, לא במעבר)
           const available = qtyStock + serialFree;
-          // 'סה"כ באחריות' = כולל חתומים על חיילים + במעבר
           const total = available + serialSigned + transit;
+
+          // 🆕 פילוח פר פלוגה: כמה יש לכל פלוגה, כמה חתום על חיילים, כמה תקול
+          const companyMap = new Map<string, {
+            companyId: string; companyName: string;
+            totalQty: number; totalSerials: number;
+            signedOnSoldiers: number;
+            defective: number;
+          }>();
+          // יתרות כמותיות אצל פלוגות
+          for (const b of i.stockBalances) {
+            if (b.holder?.kind !== "COMPANY") continue;
+            const c = companyMap.get(b.holderId) ?? {
+              companyId: b.holderId, companyName: b.holder.name,
+              totalQty: 0, totalSerials: 0, signedOnSoldiers: 0, defective: 0,
+            };
+            c.totalQty += b.quantity;
+            if (b.status.isWear || b.status.isLoss) c.defective += b.quantity;
+            companyMap.set(b.holderId, c);
+          }
+          // סריאליים שיושבים אצל פלוגות
+          for (const u of i.serialUnits) {
+            if (u.currentHolder?.kind === "COMPANY" && u.currentHolderId) {
+              const c = companyMap.get(u.currentHolderId) ?? {
+                companyId: u.currentHolderId, companyName: u.currentHolder.name,
+                totalQty: 0, totalSerials: 0, signedOnSoldiers: 0, defective: 0,
+              };
+              c.totalSerials += (u.lotQuantity ?? 1);
+              if (u.signedSoldierId) c.signedOnSoldiers += (u.lotQuantity ?? 1);
+              if (u.status.isWear || u.status.isLoss) c.defective += (u.lotQuantity ?? 1);
+              companyMap.set(u.currentHolderId, c);
+            }
+            // סריאליים שחתומים על חיילי פלוגה - גם אם currentHolder=מחסן
+            else if (u.signedSoldier?.companyId && u.signedSoldier.companyId !== u.currentHolderId) {
+              const cId = u.signedSoldier.companyId;
+              const companyName = companies.find((c) => c.id === cId)?.name ?? "—";
+              const c = companyMap.get(cId) ?? {
+                companyId: cId, companyName,
+                totalQty: 0, totalSerials: 0, signedOnSoldiers: 0, defective: 0,
+              };
+              c.signedOnSoldiers += (u.lotQuantity ?? 1);
+              if (u.status.isWear || u.status.isLoss) c.defective += (u.lotQuantity ?? 1);
+              companyMap.set(cId, c);
+            }
+          }
+          const companyBreakdown = Array.from(companyMap.values())
+            .filter((c) => c.totalQty + c.totalSerials + c.signedOnSoldiers > 0)
+            .sort((a, b) => a.companyName.localeCompare(b.companyName));
+
           return {
             id: i.id, name: i.name, sku: i.sku, unit: i.unit,
             trackingMethod: i.trackingMethod, association: ASSOC[i.association],
@@ -336,18 +395,22 @@ export default async function StockPage({
             categoryId: i.categoryId ?? null,
             warehouseType: i.category?.warehouseType ?? null,
             total, available, signedOnSoldiers: serialSigned, transit,
-            units: i.serialUnits.map((u) => ({
+            companyBreakdown,
+            units: warehouseScopedSerials.map((u) => ({
               id: u.id, serialNumber: u.serialNumber, lotQuantity: u.lotQuantity, statusName: u.status.name,
               locationName: u.equipmentLocation?.name ?? null,
               isVehicleLocation: !!u.equipmentLocation?.vehicleSerialUnitId,
             })),
           };
         })}
-        categories={categories.map((c) => ({ id: c.id, name: c.name, warehouseType: c.warehouseType }))}
+        categories={categories
+          .filter((c) => !isScoped || myWarehouseTypes.includes(c.warehouseType))
+          .map((c) => ({ id: c.id, name: c.name, warehouseType: c.warehouseType }))}
         statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
         initialQ={q}
         initialCategory={category}
         initialWarehouse={warehouse}
+        hideWarehouseFilter={isScoped}
       />
     </div>
   );
