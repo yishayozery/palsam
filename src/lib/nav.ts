@@ -73,5 +73,6 @@ export const NAV: NavItem[] = [
   { href: "/audit", label: "יומן פעולות", icon: "🧾", group: "דוחות ובקרה", cap: "audit.view" },
 
   // ===== עזרה =====
+  { href: "/security", label: "🔐 אבטחה אישית (2FA)", icon: "🔐", group: "עזרה" },
   { href: "/help", label: "מקראת השימוש", icon: "📖", group: "עזרה" },
 ];

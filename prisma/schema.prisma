@@ -171,6 +171,9 @@ model AppUser {
   soldierId    String?    @unique
   soldier      Soldier?   @relation("SoldierAsUser", fields: [soldierId], references: [id])
   active       Boolean    @default(true)
+  // 🔐 2FA TOTP (Google Authenticator) — אופציונלי, מומלץ לאדמינים
+  totpSecret   String? // base32 secret, מוצפן בעתיד
+  totpEnabledAt DateTime? // נקבע ברגע ההפעלה
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -868,6 +871,9 @@ model AuditLog {
   entity      String
   entityId    String?
   details     Json?
+  // 🔐 Hash chain — מונע שינוי רטרואקטיבי של היומן
+  prevHash    String? // ה-hash של הרישום הקודם
+  hash        String? // hash של ערכי הרישום הנוכחי + prevHash
   createdAt   DateTime   @default(now())
 
   @@index([battalionId])

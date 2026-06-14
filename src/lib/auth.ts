@@ -97,31 +97,52 @@ function toSession(user: {
   };
 }
 
+/** תוצאה של ניסיון התחברות */
+export type AuthResult =
+  | { kind: "ok"; user: SessionUser }
+  | { kind: "totp_required"; userId: string } // צריך לבקש קוד 2FA
+  | { kind: "fail" };
+
 /** מאמת שם משתמש + סיסמה + מספר גדוד (אופציונלי לאדמין-על). case-insensitive על שם משתמש */
 export async function authenticate(
   username: string,
   password: string,
   battalionCode?: string,
-): Promise<SessionUser | null> {
+): Promise<AuthResult> {
   const user = await prisma.appUser.findFirst({
     where: { username: { equals: username, mode: "insensitive" } },
     include: { customRole: true, assignedHolders: true, battalion: { select: { code: true, brigade: true, name: true } } },
   });
-  if (!user || !user.active || !user.passwordSet) return null;
+  if (!user || !user.active || !user.passwordSet) return { kind: "fail" };
   const ok = await verifyPassword(password, user.passwordHash);
-  if (!ok) return null;
+  if (!ok) return { kind: "fail" };
   // ⚠️ ולידציית גדוד: אדמין-על פטור (אין לו גדוד); כל השאר חייבים להזין את הקוד שלהם.
   if (user.role !== "SUPER_ADMIN") {
     const code = (battalionCode ?? "").trim().toLowerCase();
-    if (!code) return null; // חייבים להזין מספר גדוד
-    // מקבל גמישות: קוד גדוד, מספר חטיבה, או שם הגדוד (case-insensitive)
+    if (!code) return { kind: "fail" };
     const accepted = [
       user.battalion?.code?.trim().toLowerCase(),
       user.battalion?.brigade?.trim().toLowerCase(),
       user.battalion?.name?.trim().toLowerCase(),
     ].filter(Boolean) as string[];
-    if (!accepted.includes(code)) return null;
+    if (!accepted.includes(code)) return { kind: "fail" };
   }
+  // 🔐 2FA — אם המשתמש הפעיל TOTP, נדרש קוד נוסף
+  if (user.totpSecret) {
+    return { kind: "totp_required", userId: user.id };
+  }
+  return { kind: "ok", user: toSession(user) };
+}
+
+/** שלב 2 של 2FA — אימות קוד TOTP אחרי סיסמה תקינה */
+export async function completeAuthWithTotp(userId: string, token: string): Promise<SessionUser | null> {
+  const { verifyTotp } = await import("./totp");
+  const user = await prisma.appUser.findUnique({
+    where: { id: userId },
+    include: { customRole: true, assignedHolders: true, battalion: { select: { code: true, brigade: true, name: true } } },
+  });
+  if (!user || !user.totpSecret || !user.active) return null;
+  if (!verifyTotp(token, user.totpSecret)) return null;
   return toSession(user);
 }
 
