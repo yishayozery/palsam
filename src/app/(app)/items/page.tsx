@@ -123,7 +123,7 @@ export default async function ItemsPage({
           />
           <Card>
             <Table>
-              <thead><tr><Th></Th><Th>שם</Th><Th>מק״ט</Th><Th>קטגוריה</Th><Th>מיקום במחסן</Th><Th>שיטה</Th><Th>שייכות</Th><Th>במלאי</Th><Th></Th></tr></thead>
+              <thead><tr><Th></Th><Th>שם</Th><Th>מק״ט</Th><Th>קטגוריה</Th><Th>מיקום בימ&quot;ח</Th><Th>שיטה</Th><Th>שייכות</Th><Th>במלאי</Th><Th></Th></tr></thead>
               <tbody>
                 {items.map((i) => (
                   <tr key={i.id} className={i.active ? "" : "opacity-50"}>
