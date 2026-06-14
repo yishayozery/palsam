@@ -35,13 +35,25 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-      # אופציונלי: העלאה ל-S3 (אם יש כזה)
+      # אופציונלי: העלאה ל-S3 (אם הוגדרו secrets של AWS)
+      - name: בדיקה אם S3 מוגדר
+        id: check_s3
+        env:
+          AWS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        run: |
+          if [ -n "$AWS_KEY" ]; then
+            echo "enabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "enabled=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: 'אופציונלי: העלאה ל-S3'
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
+        if: steps.check_s3.outputs.enabled == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION || 'eu-central-1' }}
+          S3_BUCKET: ${{ secrets.S3_BACKUP_BUCKET }}
         run: |
-          aws s3 cp "${FILENAME}" "s3://${{ secrets.S3_BACKUP_BUCKET }}/palsam-backups/${FILENAME}"
+          aws s3 cp "${FILENAME}" "s3://${S3_BUCKET}/palsam-backups/${FILENAME}"
           echo "✓ הועלה ל-S3"
