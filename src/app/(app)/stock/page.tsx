@@ -58,7 +58,7 @@ export default async function StockPage({
     include: {
       category: true,
       stockBalances: { include: { status: true } },
-      serialUnits: { include: { status: true } },
+      serialUnits: { include: { status: true, equipmentLocation: { select: { name: true, vehicleSerialUnitId: true } } } },
     },
   });
 
@@ -323,6 +323,8 @@ export default async function StockPage({
             total, available, signedOnSoldiers: serialSigned, transit,
             units: i.serialUnits.map((u) => ({
               id: u.id, serialNumber: u.serialNumber, lotQuantity: u.lotQuantity, statusName: u.status.name,
+              locationName: u.equipmentLocation?.name ?? null,
+              isVehicleLocation: !!u.equipmentLocation?.vehicleSerialUnitId,
             })),
           };
         })}

@@ -67,7 +67,10 @@ export default async function ReportsPage({
           itemTypeId: selected.id, battalionId: bId,
           ...(scopedHolderIds.length > 0 ? { currentHolderId: { in: scopedHolderIds } } : {}),
         },
-        include: { status: true, currentHolder: true, signedSoldier: true },
+        include: {
+          status: true, currentHolder: true, signedSoldier: true,
+          equipmentLocation: { select: { name: true, vehicleSerialUnitId: true } },
+        },
         orderBy: [{ currentHolder: { name: "asc" } }],
       })
     : [];
@@ -141,7 +144,7 @@ export default async function ReportsPage({
           ) : (
             <Table>
               <thead>
-                <tr><Th>מספר סריאלי</Th><Th>סטטוס</Th><Th>מחזיק</Th><Th>חתום על</Th><Th>מיקום פיזי</Th></tr>
+                <tr><Th>מספר סריאלי</Th><Th>סטטוס</Th><Th>מחזיק</Th><Th>חתום על</Th><Th>📍 מיקום ציוד</Th></tr>
               </thead>
               <tbody>
                 {crossSection.map((u) => (
@@ -150,7 +153,11 @@ export default async function ReportsPage({
                     <Td><Badge>{u.status.name}</Badge></Td>
                     <Td>{u.currentHolder?.name ?? <span className="text-amber-600">במעבר</span>}</Td>
                     <Td>{u.signedSoldier ? <span className="text-blue-600">{u.signedSoldier.fullName}</span> : "—"}</Td>
-                    <Td className="text-slate-500">{u.physicalLocation ?? "—"}</Td>
+                    <Td className="text-slate-500">
+                      {u.equipmentLocation
+                        ? <span>{u.equipmentLocation.vehicleSerialUnitId ? "🚙" : "📍"} {u.equipmentLocation.name}</span>
+                        : (u.physicalLocation ?? "—")}
+                    </Td>
                   </tr>
                 ))}
               </tbody>

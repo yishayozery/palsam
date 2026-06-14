@@ -21,6 +21,7 @@ export async function createSignout(formData: FormData) {
   const vehicleId = String(formData.get("vehicleId") || "") || null;
   const kitId = String(formData.get("kitId") || "") || null;
   const physicalLocation = String(formData.get("physicalLocation") || "").trim() || null;
+  const equipmentLocationId = String(formData.get("equipmentLocationId") || "") || null;
   // פריטים כמותיים בעגלה (מקבילות: qtyItem[], qtyValue[], qtyStatus[])
   const qtyItems = formData.getAll("qtyItem").map(String);
   const qtyValues = formData.getAll("qtyValue").map((v) => parseInt(String(v), 10) || 0);
@@ -74,10 +75,11 @@ export async function createSignout(formData: FormData) {
       const partialLotQty = parseInt(String(formData.get(`lotQty:${sid}`) || "0"), 10);
       const lineQty = partialLotQty > 0 && partialLotQty < (su.lotQuantity ?? 1) ? partialLotQty : (su.lotQuantity ?? 1);
       await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: lineQty, serialUnitId: sid, statusId: su.statusId } });
-      // עדכון מיקום פיזי + רכב
-      const updateData: { vehicleId?: string; physicalLocation?: string } = {};
+      // עדכון מיקום פיזי + רכב + מיקום ציוד (חדש)
+      const updateData: { vehicleId?: string; physicalLocation?: string; equipmentLocationId?: string } = {};
       if (vehicleId) updateData.vehicleId = vehicleId;
       if (physicalLocation) updateData.physicalLocation = physicalLocation;
+      if (equipmentLocationId) updateData.equipmentLocationId = equipmentLocationId;
       if (Object.keys(updateData).length > 0) {
         await tx.serialUnit.update({ where: { id: sid }, data: updateData });
       }

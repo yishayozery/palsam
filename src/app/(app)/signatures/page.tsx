@@ -212,6 +212,13 @@ export default async function SignaturesPage() {
     prisma.itemStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" } }),
   ]);
 
+  // 🆕 מיקומי ציוד פלוגתיים (לכל הפלוגות שמקבלות כעת ציוד)
+  const allCompanyLocations = await prisma.equipmentLocation.findMany({
+    where: { battalionId: bId, active: true, holder: { kind: "COMPANY" } },
+    select: { id: true, name: true, holderId: true, vehicleSerialUnitId: true },
+    orderBy: { name: "asc" },
+  });
+
   // היסטוריית כל ההחתמות של פלוגות (ISSUE/RETURN בין מחסן לפלוגה) — לצפיית מפ"מ
   const companyTransfers = await prisma.transfer.findMany({
     where: {
@@ -322,6 +329,9 @@ export default async function SignaturesPage() {
                   })),
                 }))}
                 vehicles={vehicles.map((v) => ({ id: v.id, name: v.itemType.name, plate: v.serialNumber }))}
+                equipmentLocations={allCompanyLocations.map((l) => ({
+                  id: l.id, name: l.name, companyId: l.holderId, isVehicle: !!l.vehicleSerialUnitId,
+                }))}
               />
             </div>
           ) : undefined
@@ -399,7 +409,10 @@ export default async function SignaturesPage() {
                       <CheckinControls
                         serialUnitId={u.id}
                         trackLocation={u.itemType.trackLocation}
-                        currentLocation={u.physicalLocation ?? ""}
+                        currentLocationId={u.equipmentLocationId ?? null}
+                        equipmentLocations={allCompanyLocations
+                          .filter((l) => l.holderId === u.signedSoldier?.companyId)
+                          .map((l) => ({ id: l.id, name: l.name, isVehicle: !!l.vehicleSerialUnitId }))}
                         statuses={statuses.map((st) => ({ id: st.id, name: st.name }))}
                       />
                     )}

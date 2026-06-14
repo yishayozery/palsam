@@ -12,16 +12,18 @@ type KitLine = { name: string; qty: number; itemTypeId: string; trackingMethod: 
 type Kit = { id: string; name: string; lines: KitLine[] };
 type PendingKitPick = { itemTypeId: string; itemName: string; needed: number; kitName: string };
 type Vehicle = { id: string; name: string; plate: string };
+type EquipLocation = { id: string; name: string; isVehicle: boolean; companyId: string };
 
 type CartSerial = { type: "serial"; unitId: string; itemName: string; serial: string; status: string; lotQty?: number; lotTotal?: number };
 type CartQty = { type: "qty"; itemTypeId: string; itemName: string; unit: string; quantity: number; statusId: string; statusName: string; fromKit?: string };
 type CartItem = CartSerial | CartQty;
 
 export default function SignoutModal({
-  soldiers, companies = [], balances = [], units, kits, vehicles, lockCompanyId,
+  soldiers, companies = [], balances = [], units, kits, vehicles, equipmentLocations = [], lockCompanyId,
 }: {
   soldiers: Soldier[]; companies?: Company[]; balances?: Balance[];
   units: Unit[]; kits: Kit[]; vehicles: Vehicle[];
+  equipmentLocations?: EquipLocation[];
   lockCompanyId?: string | null;
 }) {
   const [open, setOpen] = useState(false);
@@ -32,7 +34,7 @@ export default function SignoutModal({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [kitId, setKitId] = useState("");
   const [vehicleId, setVehicleId] = useState("");
-  const [physicalLocation, setPhysicalLocation] = useState("");
+  const [equipmentLocationId, setEquipmentLocationId] = useState("");
   const [method, setMethod] = useState<"QR" | "LINK" | "ONSITE">("ONSITE");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -251,7 +253,7 @@ export default function SignoutModal({
     fd.append("method", method);
     if (kitId) fd.append("kitId", kitId);
     if (vehicleId) fd.append("vehicleId", vehicleId);
-    if (physicalLocation) fd.append("physicalLocation", physicalLocation);
+    if (equipmentLocationId) fd.append("equipmentLocationId", equipmentLocationId);
     for (const c of cart) {
       if (c.type === "serial") {
         fd.append("serial", c.unitId);
@@ -423,13 +425,28 @@ export default function SignoutModal({
                   }
                 });
                 if (!allowLocation) return null;
+                // מסנן מיקומים לפי הפלוגה של החייל הנבחר
+                const soldierCompany = selectedSoldier?.companyId ?? null;
+                const filteredLocs = soldierCompany
+                  ? equipmentLocations.filter((l) => l.companyId === soldierCompany)
+                  : equipmentLocations;
                 return (
                   <div>
-                    <label className="block text-[11px] text-slate-600 mb-0.5">📍 מיקום פיזי (אופציונלי)</label>
-                    <input value={physicalLocation} onChange={(e) => setPhysicalLocation(e.target.value)}
-                      placeholder="לדוגמה: ארון 3, מדף ב' / רכב 12345 / חדר ירי"
-                      className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
-                    <p className="text-[10px] text-slate-400 mt-1">פריטים שמותרים לאחסון מחוץ למחסן בלבד</p>
+                    <label className="block text-[11px] text-slate-600 mb-0.5">📍 מיקום ציוד (אופציונלי)</label>
+                    {filteredLocs.length === 0 ? (
+                      <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                        ⚠️ אין מיקומים מוגדרים לפלוגה זו. <a href="/locations?tab=equipment" className="underline">הגדר עכשיו</a>
+                      </div>
+                    ) : (
+                      <select value={equipmentLocationId} onChange={(e) => setEquipmentLocationId(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                        <option value="">— ללא מיקום —</option>
+                        {filteredLocs.map((l) => (
+                          <option key={l.id} value={l.id}>{l.isVehicle ? "🚙" : "📍"} {l.name}</option>
+                        ))}
+                      </select>
+                    )}
+                    <p className="text-[10px] text-slate-400 mt-1">הפלוגה תוכל לעדכן בעתיד דרך &apos;מיקומי ציוד&apos;</p>
                   </div>
                 );
               })()}

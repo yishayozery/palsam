@@ -17,7 +17,7 @@ type Item = {
   available: number;
   signedOnSoldiers: number;
   transit: number;
-  units?: { id: string; serialNumber: string; lotQuantity: number | null; statusName: string; signedTo?: string | null }[];
+  units?: { id: string; serialNumber: string; lotQuantity: number | null; statusName: string; signedTo?: string | null; locationName?: string | null; isVehicleLocation?: boolean }[];
 };
 type Cat = { id: string; name: string; warehouseType: string };
 type Status = { id: string; name: string; isDefault: boolean };
