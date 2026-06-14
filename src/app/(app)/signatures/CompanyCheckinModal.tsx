@@ -130,7 +130,7 @@ export default function CompanyCheckinModal({
   async function submit() {
     if (!companyId) { setError("בחר פלוגה"); return; }
     if (cart.length === 0) { setError("הוסף לפחות פריט אחד"); return; }
-    if (!recipientName.trim()) { setError("חובה למלא שם המקבל"); return; }
+    if (!recipientName.trim()) { setError("חובה למלא שם המוסר מהפלוגה"); return; }
     if (requirePersonalId && recipientPersonalId.length < 5) {
       setError("הגדוד דורש מ.א. — חובה למלא מ.א. תקף"); return;
     }
@@ -349,19 +349,19 @@ export default function CompanyCheckinModal({
           </div>
         )}
 
-        {/* 🔒 פרטי מקבל בתחתית */}
+        {/* 🔒 פרטי מי שמסר מהפלוגה - חובה */}
         <div className="border-t-2 border-amber-300 bg-amber-50 p-3 shrink-0">
-          <div className="text-xs font-bold text-amber-900 mb-1.5">🔒 פרטי המקבל בפלוגה (חובה)</div>
+          <div className="text-xs font-bold text-amber-900 mb-1.5">🔒 פרטי מי שמסר מהפלוגה (חובה)</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">שם המקבל <span className="text-rose-600">*</span></label>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">שם המוסר <span className="text-rose-600">*</span></label>
               <input value={recipientName} onChange={(e) => setRecipientName(e.target.value)}
-                placeholder='שם הרס"פ / קצין הפלוגה' required
+                placeholder='שם הרס"פ / קצין הפלוגה שמסר' required
                 className={`w-full rounded-lg border-2 px-2 py-1.5 text-sm bg-white ${recipientName.trim() ? "border-emerald-300" : "border-amber-400"}`} />
             </div>
             <div>
               <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
-                מ.א. {requirePersonalId ? <span className="text-rose-600">*</span> : <span className="text-slate-400 text-[10px]">(אופציונלי)</span>}
+                מ.א. של המוסר {requirePersonalId ? <span className="text-rose-600">*</span> : <span className="text-slate-400 text-[10px]">(אופציונלי)</span>}
               </label>
               <input value={recipientPersonalId} onChange={(e) => setRecipientPersonalId(e.target.value.replace(/\D/g, ""))}
                 inputMode="numeric" placeholder="1234567" required={requirePersonalId}

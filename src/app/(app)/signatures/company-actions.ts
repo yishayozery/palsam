@@ -209,7 +209,7 @@ export async function companyReturn(formData: FormData): Promise<{ ok?: boolean;
     }
     if (!companyId) return { error: "חסרה פלוגה" };
     if (serialIds.length === 0 && qtyEntries.length === 0) return { error: "בחר לפחות פריט אחד" };
-    if (!recipientName) return { error: "🔒 חובה למלא את שם המקבל בפלוגה" };
+    if (!recipientName) return { error: "🔒 חובה למלא את שם המוסר מהפלוגה" };
 
     // 🔒 מ.א. - אם הגדוד דורש, חובה למלא ידנית בתעודה (לא נסמך יותר על רוסטר רס"פ)
     if (await requiresPersonalId(bId) && recipientPersonalId.length < 5) {
