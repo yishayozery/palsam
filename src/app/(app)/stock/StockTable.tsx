@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
 import { TRACKING_METHOD } from "@/lib/labels";
 import { WAREHOUSE_TYPE_SHORT } from "@/lib/rbac";
@@ -257,8 +257,8 @@ export default function StockTable({
                 const cbDefective = cb.reduce((s, c) => s + c.defective, 0);
                 const isExp = expanded === i.id;
                 return (
-                  <>
-                    <tr key={i.id} className={isExp ? "bg-slate-50" : ""}>
+                  <Fragment key={i.id}>
+                    <tr className={isExp ? "bg-slate-50" : ""}>
                       <Td className="font-medium">
                         <div>{i.name}</div>
                         {i.category && <div className="text-[10px] text-slate-400">{i.category}</div>}
@@ -308,7 +308,7 @@ export default function StockTable({
                       </Td>
                     </tr>
                     {isExp && cb.length > 0 && (
-                      <tr key={i.id + "-cb"} className="bg-blue-50/50">
+                      <tr className="bg-blue-50/50">
                         <td colSpan={7} className="p-3">
                           <div className="text-xs font-bold text-slate-700 mb-2">פילוח לפי פלוגה — {i.name}</div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -338,7 +338,7 @@ export default function StockTable({
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
