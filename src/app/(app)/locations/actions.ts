@@ -79,3 +79,84 @@ export async function deleteLocation(formData: FormData) {
   await audit(user.id, "DELETE", "StorageLocation", id);
   revalidatePath("/locations");
 }
+
+// ===================================================================
+// 📍 EquipmentLocation - מיקומי ציוד בשטח (כשהגדוד מופעל)
+// ===================================================================
+
+/** הוספת/עדכון מיקום ציוד בpierwszym holder (פלוגה/מחסן) */
+export async function saveEquipmentLocation(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireCapability("locations.manage");
+    if (!user.battalionId) return { error: "אינך משויך לגדוד" };
+    const id = String(formData.get("id") || "");
+    const holderId = String(formData.get("holderId") || "") || user.holderId;
+    const name = String(formData.get("name") || "").trim();
+    const vehicleSerialUnitId = String(formData.get("vehicleSerialUnitId") || "") || null;
+    if (!holderId) return { error: "חסר holder" };
+    if (!name) return { error: "חסר שם מיקום" };
+
+    // אבטחה: holder שייך לגדוד של המשתמש
+    const holder = await prisma.holder.findUnique({ where: { id: holderId }, select: { battalionId: true } });
+    if (!holder || holder.battalionId !== user.battalionId) return { error: "מיקום לא בגדוד" };
+
+    if (id) {
+      await prisma.equipmentLocation.update({ where: { id }, data: { name, vehicleSerialUnitId } });
+    } else {
+      // מניעת כפילות בתוך אותו holder
+      const exists = await prisma.equipmentLocation.findFirst({ where: { holderId, name: { equals: name, mode: "insensitive" } } });
+      if (exists) return { error: `כבר קיים מיקום בשם "${name}"` };
+      await prisma.equipmentLocation.create({ data: { battalionId: user.battalionId, holderId, name, vehicleSerialUnitId } });
+    }
+    await audit(user.id, id ? "UPDATE" : "CREATE", "EquipmentLocation", `${holderId}/${name}`);
+    revalidatePath("/locations");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** מחיקה רכה — מעבירה ל-inactive (לא נמחק כדי לשמור היסטוריה ביחידות) */
+export async function deleteEquipmentLocation(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireCapability("locations.manage");
+    const id = String(formData.get("id") || "");
+    const loc = await prisma.equipmentLocation.findUnique({ where: { id } });
+    if (!loc || loc.battalionId !== user.battalionId) return { error: "מיקום לא נמצא" };
+
+    // אם יש יחידות שמצביעות אליו - מנתקים אותן ואז מבטלים
+    await prisma.$transaction(async (tx) => {
+      await tx.serialUnit.updateMany({ where: { equipmentLocationId: id }, data: { equipmentLocationId: null } });
+      await tx.equipmentLocation.update({ where: { id }, data: { active: false } });
+    });
+    await audit(user.id, "DELETE", "EquipmentLocation", id);
+    revalidatePath("/locations");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** הגדרת מיקום ציוד ליחידה סריאלית - גם חייל יכול דרך הtoken של החתימה שלו */
+export async function setUnitEquipmentLocation(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireCapability("locations.manage");
+    const serialUnitId = String(formData.get("serialUnitId") || "");
+    const equipmentLocationId = String(formData.get("equipmentLocationId") || "") || null;
+    const su = await prisma.serialUnit.findUnique({ where: { id: serialUnitId }, select: { battalionId: true } });
+    if (!su || su.battalionId !== user.battalionId) return { error: "יחידה לא בגדוד" };
+
+    if (equipmentLocationId) {
+      const loc = await prisma.equipmentLocation.findUnique({ where: { id: equipmentLocationId }, select: { battalionId: true } });
+      if (!loc || loc.battalionId !== user.battalionId) return { error: "מיקום לא נמצא" };
+    }
+    await prisma.serialUnit.update({ where: { id: serialUnitId }, data: { equipmentLocationId } });
+    await audit(user.id, "UPDATE_LOCATION", "SerialUnit", serialUnitId, { equipmentLocationId });
+    revalidatePath("/signatures");
+    revalidatePath("/stock");
+    revalidatePath("/my-inventory");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}

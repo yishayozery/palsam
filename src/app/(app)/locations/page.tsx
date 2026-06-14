@@ -3,8 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card } from "@/components/ui";
 import TabNav from "@/components/TabNav";
 import CrudSection from "@/components/CrudSection";
-import { saveLocation, deleteLocation } from "./actions";
+import { saveLocation, deleteLocation, saveEquipmentLocation, deleteEquipmentLocation } from "./actions";
 import ItemLocationsTab from "./ItemLocationsTab";
+import EquipmentLocationsTab from "./EquipmentLocationsTab";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,27 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
       stockBalances: { include: { itemType: true } },
     },
   });
+  // 🆕 מיקומי ציוד (במחסן/פלוגה) + רכבים אוטומטיים
+  const [equipmentLocations, vehicles] = await Promise.all([
+    prisma.equipmentLocation.findMany({
+      where: { holderId: user.holderId, active: true },
+      orderBy: { name: "asc" },
+      include: {
+        vehicleSerialUnit: { select: { serialNumber: true } },
+        _count: { select: { serialUnits: true } },
+      },
+    }),
+    // רכבים שייכים ל-holder: יחידות סריאליות בקטגוריית VEHICLES שmקופצות ב-holder הזה
+    prisma.serialUnit.findMany({
+      where: {
+        currentHolderId: user.holderId,
+        itemType: { category: { warehouseType: "VEHICLES" } },
+      },
+      include: { itemType: { select: { name: true } } },
+      orderBy: { serialNumber: "asc" },
+    }),
+  ]);
+
   // פריטים + המיקום הנוכחי שלהם ב-holder הזה
   const bId = user.battalionId!;
   const [allItems, holderMappings] = await Promise.all([
@@ -57,11 +79,27 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
       <TabNav
         active={active}
         tabs={[
-          { key: "shelves", label: "מדפים", href: "/locations?tab=shelves" },
-          { key: "items", label: "מיקום פריטים", href: "/locations?tab=items" },
+          { key: "shelves", label: "🗄️ מידוף מחסן", href: "/locations?tab=shelves" },
+          { key: "items", label: "פריטים במידוף", href: "/locations?tab=items" },
+          { key: "equipment", label: "📍 מיקומי ציוד (שטח)", href: "/locations?tab=equipment" },
           { key: "map", label: "שרטוט המחסן", href: "/locations?tab=map" },
         ]}
       />
+
+      {active === "equipment" && (
+        <EquipmentLocationsTab
+          holderName={holder?.name ?? ""}
+          locations={equipmentLocations.map((l) => ({
+            id: l.id, name: l.name,
+            vehicleSerialUnitId: l.vehicleSerialUnitId,
+            vehicleSerialNumber: l.vehicleSerialUnit?.serialNumber ?? null,
+            unitsCount: l._count.serialUnits,
+          }))}
+          vehicles={vehicles.map((v) => ({
+            id: v.id, serialNumber: v.serialNumber, itemName: v.itemType.name,
+          }))}
+        />
+      )}
 
       {active === "items" && (
         <div className="mt-4">

@@ -142,6 +142,7 @@ model Battalion {
   countSessions CountSession[]
   discrepancies Discrepancy[]
   auditLogs     AuditLog[]
+  equipmentLocations EquipmentLocation[]
 }
 
 // ===================== משתמשים =====================
@@ -254,6 +255,7 @@ model Holder {
   soldiers         Soldier[]
   storageLocations StorageLocation[]
   itemHolderLocations ItemHolderLocation[]
+  equipmentLocations EquipmentLocation[]
   // סמל פלוגה / מחסן (אופציונלי) — מוצג בסיידבר לצד סמל הגדוד
   logoData String?
   stockBalances    StockBalance[]
@@ -306,6 +308,32 @@ model StorageLocation {
   itemLocations ItemHolderLocation[]
 
   @@unique([holderId, column, row])
+  @@index([holderId])
+}
+
+/**
+ * 📍 מיקום ציוד בשטח (כשהגדוד מופעל).
+ * נמצא ברמת holder (פלוגה/מחסן). מיועד להחליף את ה-physicalLocation החופשי.
+ * דוגמאות: "אוהל מח״ט", "מחסן שדה", "ערמה צפונית". רכבים מתווספים אוטומטית.
+ */
+model EquipmentLocation {
+  id          String   @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation(fields: [battalionId], references: [id])
+  holderId    String // פלוגה או מחסן
+  holder      Holder   @relation(fields: [holderId], references: [id], onDelete: Cascade)
+  name        String // "אוהל מ"כ", "ערמת ציוד", "רכב צ-12345"
+  // אם המיקום הוא רכב — קישור ליחידה הסריאלית של הרכב (להציג עם מספר רכב)
+  vehicleSerialUnitId String?
+  vehicleSerialUnit   SerialUnit? @relation("EquipmentLocationVehicle", fields: [vehicleSerialUnitId], references: [id], onDelete: SetNull)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  serialUnits SerialUnit[] @relation("SerialUnitEquipmentLocation")
+
+  @@unique([holderId, name])
+  @@index([battalionId])
   @@index([holderId])
 }
 
@@ -521,11 +549,16 @@ model SerialUnit {
   currentHolder    Holder?          @relation("SerialUnitHolder", fields: [currentHolderId], references: [id])
   signedSoldierId  String?
   signedSoldier    Soldier?         @relation("SerialUnitSignedSoldier", fields: [signedSoldierId], references: [id])
-  physicalLocation String?
+  physicalLocation String? // ⚠️ Deprecated — שדה טקסט חופשי ישן. השתמש ב-equipmentLocationId
+  // 🆕 מיקום ציוד מהרשימה המוגדרת (במקום טקסט חופשי)
+  equipmentLocationId String?
+  equipmentLocation   EquipmentLocation? @relation("SerialUnitEquipmentLocation", fields: [equipmentLocationId], references: [id])
   // אם הפריט נמצא ברכב — שיוך לרכב (SerialUnit מטיפוס רכב)
   vehicleId        String?
   vehicle          SerialUnit?      @relation("SerialUnitVehicle", fields: [vehicleId], references: [id])
   storedItems      SerialUnit[]     @relation("SerialUnitVehicle")
+  // אם זו יחידת רכב — מיקומי ציוד שמצביעים אליה
+  asEquipmentLocations EquipmentLocation[] @relation("EquipmentLocationVehicle")
   locationId       String?
   location         StorageLocation? @relation(fields: [locationId], references: [id])
 
