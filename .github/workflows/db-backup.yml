@@ -1,0 +1,47 @@
+name: 💾 גיבוי שבועי DB
+
+on:
+  schedule:
+    # כל יום שישי בשעה 02:00 UTC (05:00 ישראל)
+    - cron: '0 2 * * 5'
+  workflow_dispatch: # מאפשר הרצה ידנית
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: התקנת PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: ייצוא ה-DB
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          TIMESTAMP=$(date -u +"%Y-%m-%d_%H-%M-%S")
+          FILENAME="palsam-backup-${TIMESTAMP}.sql.gz"
+          echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
+          pg_dump "${DATABASE_URL}" --no-owner --no-acl --format=plain | gzip > "${FILENAME}"
+          ls -lh "${FILENAME}"
+
+      - name: שמירה כ-artifact ל-90 ימים
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ env.FILENAME }}
+          path: ${{ env.FILENAME }}
+          retention-days: 90
+          if-no-files-found: error
+
+      # אופציונלי: העלאה ל-S3 (אם יש כזה)
+      - name: 'אופציונלי: העלאה ל-S3'
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION || 'eu-central-1' }}
+        run: |
+          aws s3 cp "${FILENAME}" "s3://${{ secrets.S3_BACKUP_BUCKET }}/palsam-backups/${FILENAME}"
+          echo "✓ הועלה ל-S3"

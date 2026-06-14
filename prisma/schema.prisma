@@ -873,3 +873,15 @@ model AuditLog {
   @@index([battalionId])
   @@index([entity, entityId])
 }
+
+// ===================== Rate Limiting =====================
+
+model RateLimitHit {
+  id        String   @id @default(cuid())
+  scope     String   // לדוגמה: "login"
+  key       String   // לרוב IP
+  createdAt DateTime @default(now())
+
+  @@index([scope, key, createdAt])
+  @@index([createdAt]) // לניקוי תקופתי
+}
