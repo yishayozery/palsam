@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
 import { TRACKING_METHOD } from "@/lib/labels";
 import { WAREHOUSE_TYPE_SHORT } from "@/lib/rbac";
@@ -191,7 +191,16 @@ export default function StockTable({
   const [search, setSearch] = useState(initialQ);
   const [cat, setCat] = useState(initialCategory);
   const [wh, setWh] = useState(hideWarehouseFilter ? "" : initialWarehouse);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [companyFilter, setCompanyFilter] = useState("");
+
+  // רשימת כל הפלוגות שיש להן ציוד באיזשהו פריט
+  const allCompanies = (() => {
+    const map = new Map<string, string>();
+    for (const i of items) {
+      for (const c of i.companyBreakdown ?? []) map.set(c.companyId, c.companyName);
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  })();
 
   const filtered = items.filter((i) => {
     if (search.trim()) {
@@ -200,10 +209,31 @@ export default function StockTable({
     }
     if (cat && i.categoryId !== cat) return false;
     if (wh && i.warehouseType !== wh) return false;
+    // כאשר נבחרת פלוגה - הצג רק פריטים שיש לה
+    if (companyFilter) {
+      const has = (i.companyBreakdown ?? []).find((c) => c.companyId === companyFilter);
+      if (!has || (has.totalQty + has.totalSerials + has.signedOnSoldiers) === 0) return false;
+    }
     return true;
   });
   // אם נבחר מחסן — הצג רק קטגוריות של אותו מחסן
   const visibleCats = wh ? categories.filter((c) => c.warehouseType === wh) : categories;
+
+  // 🧮 חישוב סה"כ עבור שורת התחתית
+  const totals = filtered.reduce((acc, i) => {
+    const cb = i.companyBreakdown ?? [];
+    const scoped = companyFilter ? cb.filter((c) => c.companyId === companyFilter) : cb;
+    const inCompanies = scoped.reduce((s, c) => s + c.totalQty + c.totalSerials, 0);
+    const signed = scoped.reduce((s, c) => s + c.signedOnSoldiers, 0);
+    const defective = scoped.reduce((s, c) => s + c.defective, 0);
+    return {
+      available: acc.available + i.available,
+      transit: acc.transit + i.transit,
+      inCompanies: acc.inCompanies + inCompanies,
+      signed: acc.signed + signed,
+      defective: acc.defective + defective,
+    };
+  }, { available: 0, transit: 0, inCompanies: 0, signed: 0, defective: 0 });
 
   return (
     <>
@@ -231,8 +261,16 @@ export default function StockTable({
             {visibleCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        {(search || cat || wh) && (
-          <button onClick={() => { setSearch(""); setCat(""); setWh(""); }}
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">🪖 פלוגה</label>
+          <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="">כל הפלוגות</option>
+            {allCompanies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        {(search || cat || wh || companyFilter) && (
+          <button onClick={() => { setSearch(""); setCat(""); setWh(""); setCompanyFilter(""); }}
             className="text-sm text-slate-500 hover:text-slate-800 self-end pb-2">נקה</button>
         )}
         <span className="text-xs text-slate-500 self-end pb-2">{filtered.length} פריטים</span>
@@ -251,97 +289,99 @@ export default function StockTable({
             </thead>
             <tbody>
               {filtered.map((i) => {
-                const cb = i.companyBreakdown ?? [];
-                const cbTotal = cb.reduce((s, c) => s + c.totalQty + c.totalSerials + c.signedOnSoldiers, 0);
+                const allCb = i.companyBreakdown ?? [];
+                // אם נבחרה פלוגה - הצג רק אותה; אחרת את הכל
+                const cb = companyFilter ? allCb.filter((c) => c.companyId === companyFilter) : allCb;
+                const cbInCompany = cb.reduce((s, c) => s + c.totalQty + c.totalSerials, 0);
                 const cbSigned = cb.reduce((s, c) => s + c.signedOnSoldiers, 0);
                 const cbDefective = cb.reduce((s, c) => s + c.defective, 0);
-                const isExp = expanded === i.id;
+                const cbTotal = cbInCompany + cbSigned;
                 return (
-                  <Fragment key={i.id}>
-                    <tr className={isExp ? "bg-slate-50" : ""}>
-                      <Td className="font-medium">
-                        <div>{i.name}</div>
-                        {i.category && <div className="text-[10px] text-slate-400">{i.category}</div>}
-                      </Td>
-                      <Td className="font-mono text-xs text-slate-500">{i.sku ?? "—"}</Td>
-                      <Td>
-                        <Badge className={i.association === "צבאי" ? "bg-slate-100 text-slate-600" : "bg-purple-100 text-purple-700"}>
-                          {i.association}
-                        </Badge>
-                      </Td>
-                      <Td><Badge>{TRACKING_METHOD[i.trackingMethod]}</Badge></Td>
-                      <Td className="font-bold text-slate-800">
-                        <div title="זמין במחסן (לא חתום ולא במעבר)">
-                          {i.available} <span className="text-xs text-slate-400 font-normal">{i.unit}</span>
-                        </div>
-                        {(i.transit > 0 || i.total !== i.available) && (
-                          <div className="text-[10px] text-slate-500 font-normal mt-0.5 leading-tight">
-                            {i.transit > 0 && <span className="text-amber-600">🚚 {i.transit} במעבר</span>}
-                          </div>
-                        )}
-                      </Td>
-                      <Td>
-                        {cbTotal === 0 ? (
-                          <span className="text-xs text-slate-300">—</span>
-                        ) : (
-                          <button onClick={() => setExpanded(isExp ? null : i.id)}
-                            className="text-right hover:text-blue-700 group">
-                            <div className="font-bold text-slate-800">{cbTotal}</div>
-                            <div className="text-[10px] flex flex-wrap gap-1 mt-0.5">
-                              {cbSigned > 0 && <span className="bg-blue-100 text-blue-700 rounded px-1">🪖 {cbSigned} חתום</span>}
-                              {cbDefective > 0 && <span className="bg-amber-100 text-amber-700 rounded px-1">⚠️ {cbDefective} תקול</span>}
-                              <span className="text-slate-400 group-hover:text-blue-700">
-                                {isExp ? "▼ סגור" : `▶ ${cb.length} פלוגות`}
-                              </span>
+                  <tr key={i.id}>
+                    <Td className="font-medium">
+                      <div>{i.name}</div>
+                      {i.category && <div className="text-[10px] text-slate-400">{i.category}</div>}
+                    </Td>
+                    <Td className="font-mono text-xs text-slate-500">{i.sku ?? "—"}</Td>
+                    <Td>
+                      <Badge className={i.association === "צבאי" ? "bg-slate-100 text-slate-600" : "bg-purple-100 text-purple-700"}>
+                        {i.association}
+                      </Badge>
+                    </Td>
+                    <Td><Badge>{TRACKING_METHOD[i.trackingMethod]}</Badge></Td>
+                    <Td className="font-bold text-slate-800">
+                      <div title="זמין במחסן (לא חתום ולא במעבר)">
+                        {i.available} <span className="text-xs text-slate-400 font-normal">{i.unit}</span>
+                      </div>
+                      {i.transit > 0 && (
+                        <div className="text-[10px] text-amber-600 font-normal mt-0.5">🚚 {i.transit} במעבר</div>
+                      )}
+                    </Td>
+                    <Td>
+                      {cbTotal === 0 ? (
+                        <span className="text-xs text-slate-300">—</span>
+                      ) : (
+                        <div className="text-xs leading-tight">
+                          <div className="font-bold text-slate-800 mb-0.5">{cbTotal}</div>
+                          {cb.length > 1 && !companyFilter && (
+                            <div className="text-[10px] text-slate-500">{cb.length} פלוגות</div>
+                          )}
+                          {(cbSigned > 0 || cbDefective > 0) && (
+                            <div className="flex flex-wrap gap-1 mt-0.5">
+                              {cbSigned > 0 && <span className="bg-blue-100 text-blue-700 rounded px-1.5 py-0.5 text-[10px]">🪖 {cbSigned}</span>}
+                              {cbDefective > 0 && <span className="bg-amber-100 text-amber-700 rounded px-1.5 py-0.5 text-[10px]">⚠️ {cbDefective}</span>}
                             </div>
-                          </button>
-                        )}
-                      </Td>
-                      <Td>
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <a href={`/items/${i.id}/history`}
-                            className="text-xs bg-white border border-slate-300 text-slate-700 rounded-md px-2.5 py-1 hover:bg-slate-50"
-                            title="היסטוריית תנועות + ייצוא Excel">
-                            🕘 היסטוריה
-                          </a>
-                        </div>
-                      </Td>
-                    </tr>
-                    {isExp && cb.length > 0 && (
-                      <tr className="bg-blue-50/50">
-                        <td colSpan={7} className="p-3">
-                          <div className="text-xs font-bold text-slate-700 mb-2">פילוח לפי פלוגה — {i.name}</div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                            {cb.map((c) => {
-                              const totalAtCompany = c.totalQty + c.totalSerials;
-                              return (
-                                <div key={c.companyId} className="bg-white border border-blue-200 rounded-lg p-2.5">
-                                  <div className="font-medium text-sm">🪖 {c.companyName}</div>
-                                  <div className="grid grid-cols-3 gap-1 mt-2 text-center">
-                                    <div className="bg-slate-50 rounded p-1.5">
-                                      <div className="text-[10px] text-slate-500">בפלוגה</div>
-                                      <div className="text-lg font-bold text-slate-800">{totalAtCompany}</div>
-                                    </div>
-                                    <div className={`rounded p-1.5 ${c.signedOnSoldiers > 0 ? "bg-blue-50" : "bg-slate-50"}`}>
-                                      <div className="text-[10px] text-slate-500">חתום על חיילים</div>
-                                      <div className={`text-lg font-bold ${c.signedOnSoldiers > 0 ? "text-blue-700" : "text-slate-300"}`}>{c.signedOnSoldiers}</div>
-                                    </div>
-                                    <div className={`rounded p-1.5 ${c.defective > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
-                                      <div className="text-[10px] text-slate-500">תקול/בלאי</div>
-                                      <div className={`text-lg font-bold ${c.defective > 0 ? "text-amber-700" : "text-slate-300"}`}>{c.defective}</div>
-                                    </div>
-                                  </div>
+                          )}
+                          {!companyFilter && cb.length > 1 && (
+                            <div className="text-[10px] text-slate-500 mt-1 space-y-0.5">
+                              {cb.slice(0, 3).map((c) => (
+                                <div key={c.companyId} className="truncate">
+                                  <span className="text-slate-400">🪖</span> {c.companyName}: <b>{c.totalQty + c.totalSerials + c.signedOnSoldiers}</b>
+                                  {c.signedOnSoldiers > 0 && <span className="text-blue-600"> ({c.signedOnSoldiers} חתום)</span>}
+                                  {c.defective > 0 && <span className="text-amber-600"> · {c.defective} תקול</span>}
                                 </div>
-                              );
-                            })}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
+                              ))}
+                              {cb.length > 3 && <div className="text-slate-400">+ עוד {cb.length - 3} פלוגות</div>}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </Td>
+                    <Td>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <a href={`/items/${i.id}/history`}
+                          className="text-xs bg-white border border-slate-300 text-slate-700 rounded-md px-2.5 py-1 hover:bg-slate-50"
+                          title="היסטוריית תנועות + ייצוא Excel">
+                          🕘 היסטוריה
+                        </a>
+                      </div>
+                    </Td>
+                  </tr>
                 );
               })}
             </tbody>
+            {/* שורת סה"כ */}
+            {filtered.length > 0 && (
+              <tfoot>
+                <tr className="bg-slate-100 border-t-2 border-slate-300 font-bold">
+                  <td colSpan={4} className="px-2 md:px-4 py-2.5 md:py-3 border-b border-slate-100 font-bold text-slate-800">
+                    סה״כ ({filtered.length} פריטים{companyFilter ? ` · ${allCompanies.find((c) => c.id === companyFilter)?.name}` : ""})
+                  </td>
+                  <Td className="font-bold text-slate-800">
+                    <div>{totals.available}</div>
+                    {totals.transit > 0 && <div className="text-[10px] text-amber-700 font-normal">🚚 {totals.transit} במעבר</div>}
+                  </Td>
+                  <Td className="font-bold text-slate-800">
+                    <div>{totals.inCompanies + totals.signed}</div>
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                      {totals.signed > 0 && <span className="bg-blue-200 text-blue-800 rounded px-1.5 py-0.5 text-[10px]">🪖 {totals.signed}</span>}
+                      {totals.defective > 0 && <span className="bg-amber-200 text-amber-800 rounded px-1.5 py-0.5 text-[10px]">⚠️ {totals.defective}</span>}
+                    </div>
+                  </Td>
+                  <Td></Td>
+                </tr>
+              </tfoot>
+            )}
           </Table>
         )}
       </Card>
