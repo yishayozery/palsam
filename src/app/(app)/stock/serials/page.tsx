@@ -27,20 +27,28 @@ export default async function AllSerialsPage({
   }
   const scoped = isWarehouseManager && myWarehouseTypes.length > 0;
 
-  const units = await prisma.serialUnit.findMany({
-    where: {
-      battalionId: bId,
-      ...(scoped ? { itemType: { category: { warehouseType: { in: myWarehouseTypes as never[] } } } } : {}),
-    },
-    include: {
-      itemType: { include: { category: true } },
-      status: true,
-      currentHolder: true,
-      signedSoldier: { include: { company: { select: { id: true, name: true } } } },
-      equipmentLocation: { select: { name: true, vehicleSerialUnitId: true } },
-    },
-    orderBy: [{ itemType: { name: "asc" } }, { serialNumber: "asc" }],
-  });
+  const [units, allLocations] = await Promise.all([
+    prisma.serialUnit.findMany({
+      where: {
+        battalionId: bId,
+        ...(scoped ? { itemType: { category: { warehouseType: { in: myWarehouseTypes as never[] } } } } : {}),
+      },
+      include: {
+        itemType: { include: { category: true } },
+        status: true,
+        currentHolder: true,
+        signedSoldier: { include: { company: { select: { id: true, name: true } } } },
+        equipmentLocation: { select: { name: true, vehicleSerialUnitId: true } },
+      },
+      orderBy: [{ itemType: { name: "asc" } }, { serialNumber: "asc" }],
+    }),
+    // 🆕 כל מיקומי הציוד בגדוד עם holderId - לעריכת מיקום inline
+    prisma.equipmentLocation.findMany({
+      where: { battalionId: bId, active: true },
+      select: { id: true, name: true, holderId: true, vehicleSerialUnitId: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   return (
     <div>
@@ -81,9 +89,15 @@ export default async function AllSerialsPage({
             signedSoldierPN: u.signedSoldier?.personalNumber ?? null,
             companyId: u.signedSoldier?.company?.id ?? (u.currentHolder?.kind === "COMPANY" ? u.currentHolder.id : null),
             companyName: u.signedSoldier?.company?.name ?? (u.currentHolder?.kind === "COMPANY" ? u.currentHolder.name : null),
+            // לאיזה holder המיקום שייך - כדי לסנן מיקומים רלוונטיים
+            relevantHolderId: u.signedSoldier?.company?.id ?? u.currentHolderId,
             equipmentLocationId: u.equipmentLocationId,
             equipmentLocationName: u.equipmentLocation?.name ?? null,
             isVehicleLocation: !!u.equipmentLocation?.vehicleSerialUnitId,
+            trackLocation: u.itemType.trackLocation,
+          }))}
+          allLocations={allLocations.map((l) => ({
+            id: l.id, name: l.name, holderId: l.holderId, isVehicle: !!l.vehicleSerialUnitId,
           }))}
           initialQ={q}
           initialStatus={status}

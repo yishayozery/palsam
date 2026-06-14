@@ -5,8 +5,6 @@ import { PageHeader, Card, Badge } from "@/components/ui";
 import { TRANSFER_TYPE } from "@/lib/labels";
 import StockTable from "./StockTable";
 import StatusChangeModal from "./StatusChangeModal";
-import MultiIntakeModal from "./MultiIntakeModal";
-import MultiWithdrawModal from "./MultiWithdrawModal";
 import SendToTanaModal from "../maintenance/SendToTanaModal";
 import ExchangeDefectiveModal from "./ExchangeDefectiveModal";
 import { findTanaHolder } from "@/lib/tana";
@@ -172,52 +170,21 @@ export default async function StockPage({
           : "הצהרת הכמויות שהגדוד חתום עליהן מול החטיבה"}
         action={
           <div className="flex gap-2 flex-wrap items-center">
-            {/* קבוצת פעולות פנימיות */}
+            {/* 🤝 קישור לעמוד עבודה מול החטיבה (קבלה / זיכוי / החלפת בלאי) */}
+            <Link href="/stock/brigade"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-xs md:text-sm font-bold">
+              🤝 מול החטיבה
+            </Link>
             <Link href="/kits"
               className="bg-white border border-slate-300 text-slate-700 rounded-lg px-3 py-2 text-xs md:text-sm font-medium hover:bg-slate-50">
               ✍️ ערכת החתמה
             </Link>
-            <MultiIntakeModal
-              currentUserName={user.fullName}
-              requirePersonalId={requirePersonalId}
-              counterpartOptions={counterpartOptions}
-              items={items.filter((i) => i.trackingMethod !== "KIT").map((i) => ({
-                id: i.id, name: i.name, sku: i.sku,
-                trackingMethod: i.trackingMethod as "QUANTITY" | "SERIAL" | "LOT",
-                unit: i.unit, trackExpiry: i.trackExpiry,
-              }))}
-              statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
-            />
             <ExchangeDefectiveModal
               target="COMPANY"
               statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss }))}
               companies={companies}
               defectiveByCompany={defectiveByCompany}
               requirePersonalId={requirePersonalId}
-            />
-            <ExchangeDefectiveModal
-              target="BRIGADE"
-              statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss }))}
-              defectiveAtMyWarehouse={defectiveAtMyWarehouseAll}
-              requirePersonalId={requirePersonalId}
-            />
-            <MultiWithdrawModal
-              currentUserName={user.fullName}
-              requirePersonalId={requirePersonalId}
-              counterpartOptions={counterpartOptions}
-              items={items.filter((i) => i.trackingMethod !== "KIT").map((i) => ({
-                id: i.id, name: i.name, sku: i.sku,
-                trackingMethod: i.trackingMethod as "QUANTITY" | "SERIAL" | "LOT",
-                unit: i.unit, trackExpiry: i.trackExpiry,
-              }))}
-              statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
-              stocks={items.flatMap((i) => i.stockBalances.map((b) => ({
-                itemTypeId: i.id, statusId: b.statusId, statusName: b.status.name, quantity: b.quantity,
-              })))}
-              units={items.flatMap((i) => i.serialUnits.filter((u) => u.currentHolderId && !u.signedSoldierId).map((u) => ({
-                id: u.id, itemTypeId: i.id, serialNumber: u.serialNumber,
-                lotQuantity: u.lotQuantity, statusId: u.statusId, statusName: u.status.name,
-              })))}
             />
             {await (async () => {
               const tana = await findTanaHolder(bId);

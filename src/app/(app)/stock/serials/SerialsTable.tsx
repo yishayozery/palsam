@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
+import { setUnitEquipmentLocation } from "../../locations/actions";
 
 type Unit = {
   id: string;
@@ -20,14 +22,20 @@ type Unit = {
   signedSoldierPN: string | null;
   companyId: string | null;
   companyName: string | null;
+  relevantHolderId: string | null;
   equipmentLocationId: string | null;
   equipmentLocationName: string | null;
   isVehicleLocation: boolean;
+  trackLocation: boolean;
 };
+type Loc = { id: string; name: string; holderId: string; isVehicle: boolean };
 
-export default function SerialsTable({ units, initialQ, initialStatus, initialSigned }: {
-  units: Unit[]; initialQ: string; initialStatus: string; initialSigned: string;
+export default function SerialsTable({ units, allLocations, initialQ, initialStatus, initialSigned }: {
+  units: Unit[]; allLocations: Loc[]; initialQ: string; initialStatus: string; initialSigned: string;
 }) {
+  const router = useRouter();
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ id: string; ok: boolean } | null>(null);
   const [q, setQ] = useState(initialQ);
   const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [itemFilter, setItemFilter] = useState("");
@@ -45,7 +53,7 @@ export default function SerialsTable({ units, initialQ, initialStatus, initialSi
     for (const u of units) if (u.companyId && u.companyName) m.set(u.companyId, u.companyName);
     return Array.from(m.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [units]);
-  const allLocations = useMemo(() => {
+  const filterLocations = useMemo(() => {
     const m = new Map<string, { name: string; isVehicle: boolean }>();
     for (const u of units) if (u.equipmentLocationId && u.equipmentLocationName) {
       m.set(u.equipmentLocationId, { name: u.equipmentLocationName, isVehicle: u.isVehicleLocation });
@@ -76,6 +84,21 @@ export default function SerialsTable({ units, initialQ, initialStatus, initialSi
   }, [units, q, itemFilter, companyFilter, locationFilter, statusFilter]);
 
   const hasFilters = q || itemFilter || companyFilter || locationFilter || statusFilter;
+
+  async function changeLocation(unitId: string, equipmentLocationId: string) {
+    setSavingId(unitId); setFeedback(null);
+    try {
+      const fd = new FormData();
+      fd.append("serialUnitId", unitId);
+      if (equipmentLocationId) fd.append("equipmentLocationId", equipmentLocationId);
+      const res = await setUnitEquipmentLocation(fd);
+      if (res?.error) { setFeedback({ id: unitId, ok: false }); }
+      else { setFeedback({ id: unitId, ok: true }); router.refresh(); }
+    } finally {
+      setSavingId(null);
+      setTimeout(() => setFeedback(null), 2000);
+    }
+  }
 
   return (
     <>
@@ -109,7 +132,7 @@ export default function SerialsTable({ units, initialQ, initialStatus, initialSi
             <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
               <option value="">כל המיקומים</option>
-              {allLocations.map((l) => <option key={l.id} value={l.id}>{l.isVehicle ? "🚙 " : "📍 "}{l.name}</option>)}
+              {filterLocations.map((l) => <option key={l.id} value={l.id}>{l.isVehicle ? "🚙 " : "📍 "}{l.name}</option>)}
             </select>
           </div>
           <div>
@@ -160,11 +183,40 @@ export default function SerialsTable({ units, initialQ, initialStatus, initialSi
                       </Badge>
                     </Td>
                     <Td className="text-xs">
-                      {u.equipmentLocationName ? (
-                        <span className="text-slate-700">{u.isVehicleLocation ? "🚙" : "📍"} {u.equipmentLocationName}</span>
-                      ) : (
-                        <span className="text-slate-300">{u.holderName ?? "—"}</span>
-                      )}
+                      {(() => {
+                        // מיקומים רלוונטיים: של ה-holder של היחידה (פלוגה אם חתום, אחרת מחסן)
+                        const relLocs = u.relevantHolderId
+                          ? allLocations.filter((l) => l.holderId === u.relevantHolderId)
+                          : [];
+                        if (!u.trackLocation || relLocs.length === 0) {
+                          // הצג רק כקריאה - אין מיקומים מוגדרים או הפריט לא עוקב
+                          return u.equipmentLocationName ? (
+                            <span className="text-slate-700">{u.isVehicleLocation ? "🚙" : "📍"} {u.equipmentLocationName}</span>
+                          ) : (
+                            <span className="text-slate-300">{u.holderName ?? "—"}</span>
+                          );
+                        }
+                        const fb = feedback?.id === u.id ? feedback : null;
+                        return (
+                          <div className="flex items-center gap-1">
+                            <select value={u.equipmentLocationId ?? ""}
+                              onChange={(e) => changeLocation(u.id, e.target.value)}
+                              disabled={savingId === u.id}
+                              className={`rounded border-2 px-1.5 py-1 text-xs ${
+                                !u.equipmentLocationId ? "border-rose-200 bg-rose-50"
+                                : "border-emerald-200 bg-white"
+                              } disabled:opacity-50`}>
+                              <option value="">— ללא —</option>
+                              {relLocs.map((l) => (
+                                <option key={l.id} value={l.id}>{l.isVehicle ? "🚙" : "📍"} {l.name}</option>
+                              ))}
+                            </select>
+                            {savingId === u.id && <span className="text-[10px] text-slate-500">...</span>}
+                            {fb?.ok && <span className="text-emerald-600">✓</span>}
+                            {fb && !fb.ok && <span className="text-rose-600">⚠️</span>}
+                          </div>
+                        );
+                      })()}
                     </Td>
                     <Td className="text-xs">{u.companyName ?? <span className="text-slate-300">—</span>}</Td>
                     <Td className="text-xs">

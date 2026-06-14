@@ -56,7 +56,9 @@ export const NAV: NavItem[] = [
   { href: "/reps", label: "נציגי פלוגות", icon: "🤝", group: "המחסנים שלי", cap: "reps.manage" },
   { href: "/items", label: "הגדרת פריטים", icon: "🏷️", group: "המחסנים שלי", cap: "catalog.manage" },
   { href: "/stock", label: "מלאי המחסן", icon: "📋", group: "המחסנים שלי", cap: "warehouse.operate" },
-  { href: "/kits", label: "ערכות החתמה", icon: "📦", group: "המחסנים שלי", cap: "signatures.manage" },
+  // 🆕 כפתור עבודה מול החטיבה - קבלה / זיכוי / החלפת בלאי
+  { href: "/stock/brigade", label: "מול החטיבה", icon: "🤝", group: "המחסנים שלי", cap: "warehouse.operate" },
+  // ⚠️ /kits הוסר מהתפריט - הקישור עבר לכפתור בתוך /stock ('ערכת החתמה')
   { href: "/signatures", label: "החתמות (חיילים/פלוגות)", icon: "✍️", group: "המחסנים שלי", cap: "signatures.manage" },
   { href: "/counts", label: "ספירות מלאי", icon: "🔢", group: "המחסנים שלי", cap: "counts.execute" },
   { href: "/counts/plans", label: "תכניות ספירה", icon: "📋", group: "המחסנים שלי", cap: "counts.manage" },
