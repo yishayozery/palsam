@@ -154,18 +154,28 @@ export default async function StockPage({
     take: 20,
   });
 
+  // 🆕 דשבורד מספרים למחסן: סריאליים, אצוות, סטטוסים
+  const myItemSerials = items.flatMap((i) => i.serialUnits.filter((u) => isScoped
+    ? u.currentHolderId && user.holderIds.includes(u.currentHolderId)
+    : u.currentHolder?.kind === "WAREHOUSE"));
+  const totalSerials = myItemSerials.filter((u) => !u.lotQuantity || u.lotQuantity === 1).length;
+  const totalLots = myItemSerials.filter((u) => u.lotQuantity && u.lotQuantity > 1).length;
+  const defectiveSerials = myItemSerials.filter((u) => u.status.isWear || u.status.isLoss).length;
+  const expiringSoonSerials = myItemSerials.filter((u) => u.expiryDate && (u.expiryDate.getTime() - Date.now()) < 30 * 86_400_000).length;
+
   return (
     <div>
       <PageHeader
         title={isScoped ? "מלאי המחסן" : "מלאי הגדוד"}
         subtitle={isScoped
-          ? `המלאי במחסניך בלבד (${myWarehouseTypes.length} מחסנים). הוספה/גריעה מבוצעת אל המחסן שלך.`
-          : "הצהרת הכמויות שהגדוד חתום עליהן מול החטיבה — לפי מק״ט, סטטוס ושייכות"}
+          ? `המלאי במחסניך בלבד (${myWarehouseTypes.length} מחסנים)`
+          : "הצהרת הכמויות שהגדוד חתום עליהן מול החטיבה"}
         action={
-          <div className="flex gap-2">
-            <Link href="/stock/serials"
-              className="bg-white border border-slate-300 text-slate-700 rounded-lg px-3 md:px-5 py-2 md:py-2.5 text-xs md:text-sm font-medium hover:bg-slate-50 flex items-center gap-2">
-              📋 <span className="hidden sm:inline">כל הסריאליים</span>
+          <div className="flex gap-2 flex-wrap items-center">
+            {/* קבוצת פעולות פנימיות */}
+            <Link href="/kits"
+              className="bg-white border border-slate-300 text-slate-700 rounded-lg px-3 py-2 text-xs md:text-sm font-medium hover:bg-slate-50">
+              ✍️ ערכת החתמה
             </Link>
             <MultiIntakeModal
               currentUserName={user.fullName}
@@ -315,14 +325,39 @@ export default async function StockPage({
         </Card>
       )}
 
-      <Card className="p-4 mb-4 bg-blue-50 border-blue-200">
-        <p className="text-sm text-blue-900">
-          לחץ על <b>+ הוספת מלאי</b> למעלה להזנת פריטים חדשים. ניתן לחפש לפי שם/מק״ט,
-          להזין סטטוס (ברירת מחדל: תקין), ולהוסיף ידנית או לטעון מאקסל.
-          <span className="block text-xs mt-1 text-blue-800">
-            לחץ על "🕘 היסטוריה" בכל שורה לפירוט תנועות וייצוא לאקסל. להוספת מלאי חדש — "📥 הוספת מלאי" למעלה.
-          </span>
-        </p>
+      {/* 📊 דשבורד מספרים: סריאליים, אצוות, תקולים, פגי תוקף */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <Card className="p-3">
+          <div className="text-xs text-slate-500">סריאליים במחסן</div>
+          <div className="text-2xl font-bold text-slate-800 mt-1">{totalSerials}</div>
+          <Link href="/stock/serials" className="text-[11px] text-blue-600 hover:underline">צפה בכולם ←</Link>
+        </Card>
+        <Card className="p-3">
+          <div className="text-xs text-slate-500">אצוות במחסן</div>
+          <div className="text-2xl font-bold text-slate-800 mt-1">{totalLots}</div>
+        </Card>
+        <Card className={`p-3 ${defectiveSerials > 0 ? "bg-amber-50 border-amber-200" : ""}`}>
+          <div className="text-xs text-slate-500">🟡 תקולים / אבודים</div>
+          <div className={`text-2xl font-bold mt-1 ${defectiveSerials > 0 ? "text-amber-700" : "text-slate-800"}`}>{defectiveSerials}</div>
+        </Card>
+        <Card className={`p-3 ${expiringSoonSerials > 0 ? "bg-rose-50 border-rose-200" : ""}`}>
+          <div className="text-xs text-slate-500">⏳ תפוגה בקרוב (30 ימים)</div>
+          <div className={`text-2xl font-bold mt-1 ${expiringSoonSerials > 0 ? "text-rose-700" : "text-slate-800"}`}>{expiringSoonSerials}</div>
+        </Card>
+      </div>
+
+      {/* 🔍 חיפוש מהיר של סריאלי / אצווה — קישור למסך ייעודי */}
+      <Card className="p-3 mb-4 bg-slate-50 border-slate-200">
+        <Link href="/stock/serials" className="flex items-center justify-between gap-3 hover:opacity-80">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🔍</span>
+            <div>
+              <div className="font-bold text-slate-800 text-sm">חיפוש מהיר של פריט סריאלי / אצווה</div>
+              <div className="text-xs text-slate-600">לפי מספר סריאלי, אצווה, פלוגה, סטטוס, מיקום — הקשה חלקית מספיקה</div>
+            </div>
+          </div>
+          <span className="text-blue-600 text-sm font-medium">פתח חיפוש ←</span>
+        </Link>
       </Card>
       <StockTable
         items={items.map((i) => {

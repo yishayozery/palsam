@@ -36,7 +36,8 @@ export default async function AllSerialsPage({
       itemType: { include: { category: true } },
       status: true,
       currentHolder: true,
-      signedSoldier: true,
+      signedSoldier: { include: { company: { select: { id: true, name: true } } } },
+      equipmentLocation: { select: { name: true, vehicleSerialUnitId: true } },
     },
     orderBy: [{ itemType: { name: "asc" } }, { serialNumber: "asc" }],
   });
@@ -67,15 +68,22 @@ export default async function AllSerialsPage({
             id: u.id,
             serialNumber: u.serialNumber,
             lotQuantity: u.lotQuantity,
+            itemTypeId: u.itemTypeId,
             itemName: u.itemType.name,
             sku: u.itemType.sku,
             category: u.itemType.category?.name ?? null,
+            statusId: u.statusId,
             statusName: u.status.name,
             isWear: u.status.isWear,
             isLoss: u.status.isLoss,
             holderName: u.currentHolder?.name ?? null,
             signedSoldierName: u.signedSoldier?.fullName ?? null,
             signedSoldierPN: u.signedSoldier?.personalNumber ?? null,
+            companyId: u.signedSoldier?.company?.id ?? (u.currentHolder?.kind === "COMPANY" ? u.currentHolder.id : null),
+            companyName: u.signedSoldier?.company?.name ?? (u.currentHolder?.kind === "COMPANY" ? u.currentHolder.name : null),
+            equipmentLocationId: u.equipmentLocationId,
+            equipmentLocationName: u.equipmentLocation?.name ?? null,
+            isVehicleLocation: !!u.equipmentLocation?.vehicleSerialUnitId,
           }))}
           initialQ={q}
           initialStatus={status}
