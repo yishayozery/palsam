@@ -9,6 +9,7 @@ import SignoutModal from "./SignoutModal";
 import CompanySignModal from "./CompanySignModal";
 import CheckinModal from "./CheckinModal";
 import CheckinControls from "./CheckinControls";
+import CompanyCheckinModal from "./CompanyCheckinModal";
 import { ROLE_LABELS } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
@@ -93,12 +94,22 @@ export default async function SignaturesPage() {
 
   // ציוד פלוגתי שחתום (יחידות סריאליות שמיקומן בפלוגה ולא חתומות על חייל)
   const companyHolderIds = companiesForSign.map((c) => c.id);
+  // 🆕 לקצין מחסן: סינון לפי טיפוסי המחסנים שלו - רואה רק פריטים שהונפקו מהמחסן שלו
+  const myWarehouseTypesForCompany = (user.role === "WAREHOUSE_MANAGER" && user.holderIds.length > 0)
+    ? (await prisma.holder.findMany({
+        where: { id: { in: user.holderIds }, kind: "WAREHOUSE" },
+        select: { warehouseType: true },
+      })).map((h) => h.warehouseType).filter((t): t is NonNullable<typeof t> => !!t)
+    : [];
+  const companyScopeForWM = myWarehouseTypesForCompany.length > 0
+    ? { category: { warehouseType: { in: myWarehouseTypesForCompany } } }
+    : {};
   const companySerials = companyHolderIds.length === 0 ? [] : await prisma.serialUnit.findMany({
     where: {
       battalionId: bId,
       currentHolderId: { in: companyHolderIds },
       signedSoldierId: null,
-      itemType: { signable: true },
+      itemType: { signable: true, ...companyScopeForWM },
     },
     include: { itemType: true, status: true },
     orderBy: { itemType: { name: "asc" } },
@@ -108,13 +119,14 @@ export default async function SignaturesPage() {
       battalionId: bId,
       holderId: { in: companyHolderIds },
       quantity: { gt: 0 },
-      itemType: { signable: true },
+      itemType: { signable: true, ...companyScopeForWM },
     },
     include: { itemType: true, status: true },
   });
 
   // 🆕 חישוב יתרת ציוד כמותי שחתום על חיילים: SIGNOUT (COMPLETED) פחות CHECKIN (COMPLETED)
-  // מסונן לרס"פ — רק חיילי הפלוגה שלו
+  // מסונן: רס"פ — רק חיילי הפלוגה שלו; קצין מחסן — רק חתימות מהמחסנים שלו
+  const isWM = user.role === "WAREHOUSE_MANAGER" && user.holderIds.length > 0;
   const qtyLines = await prisma.transferLine.findMany({
     where: {
       transfer: {
@@ -122,6 +134,7 @@ export default async function SignaturesPage() {
         status: "COMPLETED",
         type: { in: ["SIGNOUT", "CHECKIN"] },
         ...(isCompanyRep ? { toSoldier: { companyId: user.holderId! } } : {}),
+        ...(isWM ? { fromHolderId: { in: user.holderIds } } : {}),
       },
       serialUnitId: null, // רק כמותי
     },
@@ -157,6 +170,18 @@ export default async function SignaturesPage() {
   }
   const soldierQtyHoldings = Array.from(qtyBalance.values()).filter((q) => q.quantity > 0);
 
+  // 🆕 לקצין מחסן: רשימת SerialUnit.id שנחתמו דרך SIGNOUT מהמחסנים שלו
+  const wmSignedSerialIds = isWM ? new Set((await prisma.transferLine.findMany({
+    where: {
+      serialUnitId: { not: null },
+      transfer: {
+        battalionId: bId, type: "SIGNOUT", status: "COMPLETED",
+        fromHolderId: { in: user.holderIds },
+      },
+    },
+    select: { serialUnitId: true },
+  })).map((l) => l.serialUnitId!)) : null;
+
   const [pending, signedUnits, soldiers, availableUnits, statuses] = await Promise.all([
     prisma.signature.findMany({
       where: { battalionId: bId, status: "PENDING" },
@@ -164,10 +189,13 @@ export default async function SignaturesPage() {
       orderBy: { createdAt: "desc" },
     }),
     prisma.serialUnit.findMany({
-      // ⚠️ רס"פ פלוגה — רואה ציוד חתום על חיילי הפלוגה שלו (גם אם currentHolderId=מחסן)
+      // ⚠️ רס"פ פלוגה — רק ציוד שחתום על חיילי הפלוגה שלו
+      // קצין מחסן — רק יחידות שהוא בעצמו החתים (יש להן SIGNOUT מאחד ממחסניו)
       where: isCompanyRep && user.holderId
         ? { battalionId: bId, signedSoldierId: { not: null }, signedSoldier: { companyId: user.holderId } }
-        : { battalionId: bId, signedSoldierId: { not: null }, ...holderFilter },
+        : isWM && wmSignedSerialIds
+          ? { battalionId: bId, signedSoldierId: { not: null }, id: { in: [...wmSignedSerialIds] } }
+          : { battalionId: bId, signedSoldierId: { not: null }, ...holderFilter },
       include: { itemType: true, status: true, signedSoldier: true, currentHolder: true },
       orderBy: { signedSoldier: { fullName: "asc" } },
     }),
@@ -234,8 +262,26 @@ export default async function SignaturesPage() {
                   signMode: b.itemType.signMode,
                 }))}
               />}
-              {/* ⚠️ "זיכוי פלוגה" הוסר מכאן — הפעולה נעשית ע"י רס"פ הפלוגה ב-/my-inventory.
-                  הזיכוי כאן הוא רק "זיכוי חייל" (CheckinModal). */}
+              {/* 🆕 זיכוי פלוגה — לקצין מחסן ולמפ"מ (לא לרס"פ). מקבל ציוד מפלוגה למחסן. */}
+              {!isCompanyRep && (
+                <CompanyCheckinModal
+                  companies={companiesForSign.map((c) => ({ id: c.id, name: c.name }))}
+                  serials={companySerials.map((u) => ({
+                    id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber,
+                    companyId: u.currentHolderId!,
+                    statusId: u.statusId, statusName: u.status.name,
+                    isWear: u.status.isWear, isLoss: u.status.isLoss,
+                    lotQuantity: u.lotQuantity,
+                  }))}
+                  balances={companyBalances.map((b) => ({
+                    companyId: b.holderId, itemTypeId: b.itemTypeId, statusId: b.statusId,
+                    itemName: b.itemType.name, unit: b.itemType.unit,
+                    statusName: b.status.name, quantity: b.quantity,
+                    isWear: b.status.isWear, isLoss: b.status.isLoss,
+                  }))}
+                  statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss }))}
+                />
+              )}
               <CheckinModal
                 signedUnits={signedUnits.map((u) => ({
                   id: u.id, serial: u.serialNumber, itemName: u.itemType.name,
