@@ -23,12 +23,13 @@ type Status = { id: string; name: string; isWear: boolean; isLoss: boolean; isDe
 type SerialPick = { lotQty?: number; statusOverride?: string };
 
 export default function CompanyCheckinModal({
-  companies, serials, balances, statuses,
+  companies, serials, balances, statuses, requirePersonalId = false,
 }: {
   companies: Company[];
   serials: SerialAtCompany[];
   balances: QtyAtCompany[];
   statuses: Status[];
+  requirePersonalId?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -38,6 +39,9 @@ export default function CompanyCheckinModal({
   const [qtyToReturn, setQtyToReturn] = useState<Map<string, number>>(new Map());
   const [qtyOverrides, setQtyOverrides] = useState<Map<string, string>>(new Map()); // key→statusId
   const [newStatusId, setNewStatusId] = useState("");
+  // 🆕 פרטי המקבל בפלוגה (חובה בכל תעודה)
+  const [recipientName, setRecipientName] = useState("");
+  const [recipientPersonalId, setRecipientPersonalId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lotPicker, setLotPicker] = useState<{ unit: SerialAtCompany; qty: number } | null>(null);
@@ -63,7 +67,7 @@ export default function CompanyCheckinModal({
   const reset = () => {
     setCompanyId(""); setSelectedSerials(new Set()); setSerialPicks(new Map());
     setQtyToReturn(new Map()); setQtyOverrides(new Map());
-    setNewStatusId(""); setError(null);
+    setNewStatusId(""); setRecipientName(""); setRecipientPersonalId(""); setError(null);
   };
 
   function toggleSerial(u: SerialAtCompany, checked: boolean) {
@@ -120,10 +124,17 @@ export default function CompanyCheckinModal({
 
   async function submit() {
     if (!companyId || totalSelected === 0) { setError("בחר פלוגה ולפחות פריט אחד"); return; }
+    if (!recipientName.trim()) { setError("חובה למלא שם המקבל בפלוגה"); return; }
+    if (requirePersonalId && recipientPersonalId.length < 5) {
+      setError("הגדוד דורש מ.א. בכל מסירה — חובה למלא מ.א. תקף (לפחות 5 ספרות)");
+      return;
+    }
     setBusy(true); setError(null);
     try {
       const fd = new FormData();
       fd.append("companyId", companyId);
+      fd.append("recipientName", recipientName.trim());
+      if (recipientPersonalId) fd.append("recipientPersonalId", recipientPersonalId);
       if (newStatusId) fd.append("newStatusId", newStatusId);
       for (const sid of selectedSerials) {
         fd.append("serial", sid);
@@ -388,11 +399,43 @@ export default function CompanyCheckinModal({
           </div>
         )}
 
+        {/* 🔒 פרטי המקבל בפלוגה — חובה תמיד; מ.א. לפי הגדרת הגדוד */}
+        <div className="border-t-2 border-amber-300 bg-amber-50 p-3 shrink-0">
+          <div className="text-xs font-bold text-amber-900 mb-1.5">🔒 פרטי המקבל בפלוגה (חובה)</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                שם המקבל <span className="text-rose-600">*</span>
+              </label>
+              <input value={recipientName} onChange={(e) => setRecipientName(e.target.value)}
+                placeholder='שם הרס"פ / קצין הפלוגה' required
+                className={`w-full rounded-lg border-2 px-2 py-1.5 text-sm bg-white ${recipientName.trim() ? "border-emerald-300" : "border-amber-400"}`} />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                מ.א. של המקבל {requirePersonalId
+                  ? <span className="text-rose-600">*</span>
+                  : <span className="text-slate-400 text-[10px]">(אופציונלי)</span>}
+              </label>
+              <input value={recipientPersonalId} onChange={(e) => setRecipientPersonalId(e.target.value.replace(/\D/g, ""))}
+                inputMode="numeric" placeholder="1234567" required={requirePersonalId}
+                className={`w-full rounded-lg border-2 px-2 py-1.5 text-sm font-mono bg-white ${
+                  requirePersonalId && recipientPersonalId.length < 5
+                    ? "border-amber-400"
+                    : recipientPersonalId.length >= 5
+                      ? "border-emerald-300"
+                      : "border-slate-300"
+                }`} />
+            </div>
+          </div>
+        </div>
+
         <div className="border-t border-slate-200 p-3 bg-white flex items-center justify-between gap-2 shrink-0">
           {error && <div className="flex-1 text-sm text-rose-700 font-medium">⚠️ {error}</div>}
           <div className="flex items-center gap-2 mr-auto">
             <button onClick={() => { reset(); setOpen(false); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
-            <button onClick={submit} disabled={busy || totalSelected === 0}
+            <button onClick={submit}
+              disabled={busy || totalSelected === 0 || !recipientName.trim() || (requirePersonalId && recipientPersonalId.length < 5)}
               className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg px-5 py-2 text-sm font-bold">
               {busy ? "מזכה..." : `✓ זכה ${totalSelected} יחידות`}
             </button>

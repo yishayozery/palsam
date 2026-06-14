@@ -219,6 +219,12 @@ export default async function SignaturesPage() {
     orderBy: { name: "asc" },
   });
 
+  // 🆕 דגל מ.א. - לתעודות חתום-בק
+  const battalionConfig = await prisma.battalion.findUnique({
+    where: { id: bId }, select: { requirePersonalIdOnHandover: true },
+  });
+  const requirePersonalIdFlag = !!battalionConfig?.requirePersonalIdOnHandover;
+
   // היסטוריית כל ההחתמות של פלוגות (ISSUE/RETURN בין מחסן לפלוגה) — לצפיית מפ"מ
   const companyTransfers = await prisma.transfer.findMany({
     where: {
@@ -287,6 +293,7 @@ export default async function SignaturesPage() {
                     isWear: b.status.isWear, isLoss: b.status.isLoss,
                   }))}
                   statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss }))}
+                  requirePersonalId={requirePersonalIdFlag}
                 />
               )}
               <CheckinModal

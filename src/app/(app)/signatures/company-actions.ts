@@ -196,6 +196,8 @@ export async function companyReturn(formData: FormData): Promise<{ ok?: boolean;
     const bId = user.battalionId!;
     const companyId = String(formData.get("companyId") || "");
     const newStatusId = String(formData.get("newStatusId") || "") || null;
+    const recipientName = String(formData.get("recipientName") || "").trim();
+    const recipientPersonalId = String(formData.get("recipientPersonalId") || "").replace(/\D/g, "");
     const serialIds = formData.getAll("serial").map(String).filter(Boolean);
     const qtyEntries: { itemTypeId: string; statusId: string; qty: number }[] = [];
     for (const [key, val] of formData.entries()) {
@@ -207,18 +209,11 @@ export async function companyReturn(formData: FormData): Promise<{ ok?: boolean;
     }
     if (!companyId) return { error: "חסרה פלוגה" };
     if (serialIds.length === 0 && qtyEntries.length === 0) return { error: "בחר לפחות פריט אחד" };
+    if (!recipientName) return { error: "🔒 חובה למלא את שם המקבל בפלוגה" };
 
-    // 🔒 מ.א. — אם הגדוד דורש, חייב להיות לרס"פ הפלוגה (או מי שמגיש את הציוד) מספר אישי במערכת
-    if (await requiresPersonalId(bId)) {
-      const reps = await prisma.appUser.findMany({
-        where: { battalionId: bId, holderId: companyId, active: true, role: "COMPANY_REP" },
-        include: { soldier: { select: { personalNumber: true } } },
-      });
-      const anyWithPN = reps.find((r) => r.soldier?.personalNumber);
-      if (!anyWithPN) {
-        const company = await prisma.holder.findUnique({ where: { id: companyId }, select: { name: true } });
-        return { error: `🔒 הגדוד דורש מ.א. בכל מסירה. רס"פ הפלוגה "${company?.name}" חייב להיות מקושר לחייל עם מ.א. ברוסטר.` };
-      }
+    // 🔒 מ.א. - אם הגדוד דורש, חובה למלא ידנית בתעודה (לא נסמך יותר על רוסטר רס"פ)
+    if (await requiresPersonalId(bId) && recipientPersonalId.length < 5) {
+      return { error: "🔒 הגדוד דורש מ.א. בכל מסירה — חובה למלא מ.א. תקף (לפחות 5 ספרות)" };
     }
 
     // איתור מחסן יעד לפי קטגוריית הפריט
@@ -244,7 +239,10 @@ export async function companyReturn(formData: FormData): Promise<{ ok?: boolean;
         data: {
           battalionId: bId, type: "RETURN", status: "COMPLETED",
           fromHolderId: companyId, toHolderId,
-          reason: "זיכוי פלוגה", createdById: user.id, approvedById: user.id, approvedAt: new Date(),
+          reason: "זיכוי פלוגה",
+          externalContact: recipientName,
+          recipientPersonalId: recipientPersonalId || null,
+          createdById: user.id, approvedById: user.id, approvedAt: new Date(),
         },
       });
       transferId = transfer.id;
