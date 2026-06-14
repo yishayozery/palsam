@@ -49,6 +49,18 @@ export default async function StockPage({
   const transitByItem = new Map<string, number>();
   for (const l of transitLines) if (!l.serialUnitId) transitByItem.set(l.itemTypeId, (transitByItem.get(l.itemTypeId) ?? 0) + l.quantity);
 
+  // 🛡️ סקופ פר-holder: קצין מחסן רואה רק את היתרות במחסניו;
+  // מפ"מ רואה רק יתרות במחסנים גדודיים (לא במלאי הפלוגות) - מסך זה מציג 'מלאי הגדוד'
+  const allWarehouseIds = await prisma.holder.findMany({
+    where: { battalionId: bId, kind: "WAREHOUSE", active: true }, select: { id: true },
+  }).then((rows) => rows.map((r) => r.id));
+  const balanceHolderScope = isScoped
+    ? { holderId: { in: user.holderIds } }
+    : { holderId: { in: allWarehouseIds } };
+  const serialHolderScope = isScoped
+    ? { currentHolderId: { in: user.holderIds } }
+    : { currentHolderId: { in: allWarehouseIds } };
+
   const items = await prisma.itemType.findMany({
     where: {
       battalionId: bId, active: true,
@@ -57,8 +69,11 @@ export default async function StockPage({
     orderBy: { name: "asc" },
     include: {
       category: true,
-      stockBalances: { include: { status: true } },
-      serialUnits: { include: { status: true, equipmentLocation: { select: { name: true, vehicleSerialUnitId: true } } } },
+      stockBalances: { include: { status: true }, where: balanceHolderScope },
+      serialUnits: {
+        include: { status: true, equipmentLocation: { select: { name: true, vehicleSerialUnitId: true } } },
+        where: serialHolderScope,
+      },
     },
   });
 
