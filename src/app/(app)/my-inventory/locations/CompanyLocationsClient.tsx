@@ -59,8 +59,36 @@ type Location = {
   count: number;
 };
 
+// 🆕 שורה מאוחדת — כל פריט-מיקום-בעלים בשורה אחת
+type UnifiedRow = {
+  key: string;
+  kind: "serial" | "qty_company" | "qty_soldier";
+  itemName: string;
+  sku: string | null;
+  itemDetails: string; // SN / לוט / —
+  ownerLabel: string; // "מחסן הפלוגה" / "ניר ישראלי — 9100012"
+  ownerKind: "company" | "soldier";
+  soldierId: string | null;
+  itemTypeId: string | null;
+  statusId: string | null;
+  quantity: number;
+  unit: string;
+  statusName: string;
+  isWear: boolean;
+  isLoss: boolean;
+  equipmentLocationId: string | null;
+  equipmentLocationName: string | null;
+  canSplit: boolean;
+  // Backing IDs/context:
+  serialUnitId?: string;
+  stockBalanceId?: string;
+  // לציוד חתום-חייל - צריך לדעת את כל הפלייסמנטים כדי לערוך אחד מהם
+  allPlacements?: Placement[];
+  totalSigned?: number;
+};
+
 export default function CompanyLocationsClient({
-  items, companyQtyStock, signedQtyRows, soldiers, locations, unassignedCount,
+  items, companyQtyStock, signedQtyRows, soldiers, locations,
   initialQ, initialLoc, initialSigned,
 }: {
   items: SerialItem[];
@@ -79,97 +107,265 @@ export default function CompanyLocationsClient({
   const [itemFilter, setItemFilter] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ id: string; ok: boolean; msg?: string } | null>(null);
+  const [splittingId, setSplittingId] = useState<string | null>(null);
+  const [splitQty, setSplitQty] = useState(1);
+  const [splitTo, setSplitTo] = useState("");
+  const [splitErr, setSplitErr] = useState<string | null>(null);
 
-  // רשימת פריטים ייחודית לבורר
-  const uniqueItemNames = useMemo(() => {
-    const set = new Set<string>();
-    items.forEach((i) => set.add(i.itemName));
-    companyQtyStock.forEach((i) => set.add(i.itemName));
-    signedQtyRows.forEach((i) => set.add(i.itemName));
-    return Array.from(set).sort();
+  // איחוד הכל לשורות שטוחות
+  const allRows: UnifiedRow[] = useMemo(() => {
+    const rows: UnifiedRow[] = [];
+
+    // סריאליים
+    for (const u of items) {
+      rows.push({
+        key: `s:${u.id}`,
+        kind: "serial",
+        itemName: u.itemName,
+        sku: u.sku,
+        itemDetails: u.isLot ? `לוט: ${u.serial}` : `SN: ${u.serial}`,
+        ownerLabel: u.signedSoldier
+          ? `${u.signedSoldier.name}${u.signedSoldier.personalNumber ? ` — ${u.signedSoldier.personalNumber}` : ""}`
+          : "מחסן הפלוגה",
+        ownerKind: u.signedSoldier ? "soldier" : "company",
+        soldierId: u.signedSoldier?.id ?? null,
+        itemTypeId: null,
+        statusId: null,
+        quantity: u.lotQuantity ?? 1,
+        unit: "יח",
+        statusName: u.statusName,
+        isWear: u.isWear,
+        isLoss: u.isLoss,
+        equipmentLocationId: u.equipmentLocationId,
+        equipmentLocationName: u.equipmentLocationName,
+        canSplit: false,
+        serialUnitId: u.id,
+      });
+    }
+
+    // כמותי במלאי הפלוגה
+    for (const s of companyQtyStock) {
+      rows.push({
+        key: `cq:${s.stockBalanceId}`,
+        kind: "qty_company",
+        itemName: s.itemName,
+        sku: s.sku,
+        itemDetails: "",
+        ownerLabel: "מחסן הפלוגה",
+        ownerKind: "company",
+        soldierId: null,
+        itemTypeId: s.itemTypeId,
+        statusId: s.statusId,
+        quantity: s.quantity,
+        unit: s.unit,
+        statusName: s.statusName,
+        isWear: s.isWear,
+        isLoss: s.isLoss,
+        equipmentLocationId: s.equipmentLocationId,
+        equipmentLocationName: s.equipmentLocationName,
+        canSplit: s.quantity > 1,
+        stockBalanceId: s.stockBalanceId,
+      });
+    }
+
+    // כמותי חתום על חיילים — שורה לכל placement + שורה ל"לא ממוקם" אם יש
+    for (const r of signedQtyRows) {
+      const placed = r.placements.reduce((a, p) => a + p.quantity, 0);
+      for (const p of r.placements) {
+        rows.push({
+          key: `sq:${r.soldierId}:${r.itemTypeId}:${r.statusId}:${p.equipmentLocationId}`,
+          kind: "qty_soldier",
+          itemName: r.itemName,
+          sku: r.sku,
+          itemDetails: "",
+          ownerLabel: `${r.soldierName}${r.soldierPN ? ` — ${r.soldierPN}` : ""}`,
+          ownerKind: "soldier",
+          soldierId: r.soldierId,
+          itemTypeId: r.itemTypeId,
+          statusId: r.statusId,
+          quantity: p.quantity,
+          unit: r.unit,
+          statusName: r.statusName,
+          isWear: r.isWear,
+          isLoss: r.isLoss,
+          equipmentLocationId: p.equipmentLocationId,
+          equipmentLocationName: p.equipmentLocationName,
+          canSplit: p.quantity > 1,
+          allPlacements: r.placements,
+          totalSigned: r.totalQuantity,
+        });
+      }
+      const unplaced = r.totalQuantity - placed;
+      if (unplaced > 0) {
+        rows.push({
+          key: `sq:${r.soldierId}:${r.itemTypeId}:${r.statusId}:__null__`,
+          kind: "qty_soldier",
+          itemName: r.itemName,
+          sku: r.sku,
+          itemDetails: "",
+          ownerLabel: `${r.soldierName}${r.soldierPN ? ` — ${r.soldierPN}` : ""}`,
+          ownerKind: "soldier",
+          soldierId: r.soldierId,
+          itemTypeId: r.itemTypeId,
+          statusId: r.statusId,
+          quantity: unplaced,
+          unit: r.unit,
+          statusName: r.statusName,
+          isWear: r.isWear,
+          isLoss: r.isLoss,
+          equipmentLocationId: null,
+          equipmentLocationName: null,
+          canSplit: unplaced > 1,
+          allPlacements: r.placements,
+          totalSigned: r.totalQuantity,
+        });
+      }
+    }
+
+    return rows;
   }, [items, companyQtyStock, signedQtyRows]);
 
-  // טקסט חיפוש כללי + פילטרים
-  const matchesText = (text: string) => !q.trim() || text.toLowerCase().includes(q.toLowerCase());
+  const uniqueItemNames = useMemo(() => {
+    const set = new Set(allRows.map((r) => r.itemName));
+    return Array.from(set).sort();
+  }, [allRows]);
 
-  const filteredSerial = items.filter((i) => {
-    if (!matchesText(`${i.itemName} ${i.sku ?? ""} ${i.serial} ${i.signedSoldier?.name ?? ""} ${i.signedSoldier?.personalNumber ?? ""}`)) return false;
-    if (locFilter === "__unassigned__" && i.equipmentLocationId) return false;
-    if (locFilter && locFilter !== "__unassigned__" && i.equipmentLocationId !== locFilter) return false;
-    if (signedFilter === "signed" && !i.signedSoldier) return false;
-    if (signedFilter === "unsigned" && i.signedSoldier) return false;
-    if (soldierFilter && i.signedSoldier?.id !== soldierFilter) return false;
-    if (itemFilter && i.itemName !== itemFilter) return false;
-    return true;
-  });
+  // סינון
+  const filtered = useMemo(() => {
+    return allRows.filter((r) => {
+      if (q.trim()) {
+        const s = q.toLowerCase();
+        if (!`${r.itemName} ${r.sku ?? ""} ${r.itemDetails} ${r.ownerLabel}`.toLowerCase().includes(s)) return false;
+      }
+      if (locFilter === "__unassigned__" && r.equipmentLocationId) return false;
+      if (locFilter && locFilter !== "__unassigned__" && r.equipmentLocationId !== locFilter) return false;
+      if (signedFilter === "signed" && r.ownerKind !== "soldier") return false;
+      if (signedFilter === "unsigned" && r.ownerKind !== "company") return false;
+      if (soldierFilter && r.soldierId !== soldierFilter) return false;
+      if (itemFilter && r.itemName !== itemFilter) return false;
+      return true;
+    }).sort((a, b) =>
+      a.itemName.localeCompare(b.itemName) ||
+      a.ownerLabel.localeCompare(b.ownerLabel) ||
+      (a.equipmentLocationName ?? "ZZ").localeCompare(b.equipmentLocationName ?? "ZZ")
+    );
+  }, [allRows, q, locFilter, signedFilter, soldierFilter, itemFilter]);
 
-  const filteredCompanyQty = companyQtyStock.filter((s) => {
-    if (!matchesText(`${s.itemName} ${s.sku ?? ""}`)) return false;
-    if (locFilter === "__unassigned__" && s.equipmentLocationId) return false;
-    if (locFilter && locFilter !== "__unassigned__" && s.equipmentLocationId !== locFilter) return false;
-    if (signedFilter === "signed") return false;
-    if (soldierFilter) return false;
-    if (itemFilter && s.itemName !== itemFilter) return false;
-    return true;
-  });
-
-  const filteredSignedQty = signedQtyRows.filter((r) => {
-    if (!matchesText(`${r.itemName} ${r.sku ?? ""} ${r.soldierName} ${r.soldierPN ?? ""}`)) return false;
-    if (signedFilter === "unsigned") return false;
-    if (soldierFilter && r.soldierId !== soldierFilter) return false;
-    if (itemFilter && r.itemName !== itemFilter) return false;
-    if (locFilter === "__unassigned__") {
-      const placed = r.placements.reduce((s, p) => s + p.quantity, 0);
-      if (placed === r.totalQuantity) return false;
-    } else if (locFilter) {
-      if (!r.placements.some((p) => p.equipmentLocationId === locFilter)) return false;
+  // ספירות לפי מיקום
+  const countsByLoc = useMemo(() => {
+    const m = new Map<string, number>();
+    let unassigned = 0;
+    for (const r of allRows) {
+      if (r.equipmentLocationId) m.set(r.equipmentLocationId, (m.get(r.equipmentLocationId) ?? 0) + r.quantity);
+      else unassigned += r.quantity;
     }
-    return true;
-  });
+    return { byLoc: m, unassigned };
+  }, [allRows]);
 
-  const totalFiltered = filteredSerial.length + filteredCompanyQty.length + filteredSignedQty.length;
-
-  async function changeSerialLocation(itemId: string, locationId: string) {
-    setSavingId(itemId); setFeedback(null);
+  // ===== Actions =====
+  async function changeLocation(r: UnifiedRow, newLocId: string | null) {
+    const id = r.key;
+    setSavingId(id); setFeedback(null);
     try {
-      const fd = new FormData();
-      fd.append("serialUnitId", itemId);
-      if (locationId) fd.append("equipmentLocationId", locationId);
-      const res = await setUnitEquipmentLocation(fd);
-      if (res?.error) setFeedback({ id: itemId, ok: false, msg: res.error });
-      else { setFeedback({ id: itemId, ok: true }); router.refresh(); }
+      let res: { ok?: boolean; error?: string } | undefined;
+      if (r.kind === "serial" && r.serialUnitId) {
+        const fd = new FormData();
+        fd.append("serialUnitId", r.serialUnitId);
+        if (newLocId) fd.append("equipmentLocationId", newLocId);
+        res = await setUnitEquipmentLocation(fd);
+      } else if (r.kind === "qty_company" && r.stockBalanceId) {
+        const fd = new FormData();
+        fd.append("stockBalanceId", r.stockBalanceId);
+        if (newLocId) fd.append("equipmentLocationId", newLocId);
+        res = await setStockEquipmentLocation(fd);
+      } else if (r.kind === "qty_soldier" && r.soldierId && r.itemTypeId && r.statusId && r.allPlacements) {
+        // עורכים placement אחד: מוציאים את הישן ומוסיפים חדש
+        const next = r.allPlacements.filter((p) => p.equipmentLocationId !== r.equipmentLocationId);
+        if (newLocId) {
+          const locName = locations.find((l) => l.id === newLocId)?.name ?? "";
+          // אם כבר יש placement במיקום החדש — מאחדים
+          const existing = next.find((p) => p.equipmentLocationId === newLocId);
+          if (existing) existing.quantity += r.quantity;
+          else next.push({ equipmentLocationId: newLocId, equipmentLocationName: locName, quantity: r.quantity });
+        }
+        const fd = new FormData();
+        fd.append("soldierId", r.soldierId);
+        fd.append("itemTypeId", r.itemTypeId);
+        fd.append("statusId", r.statusId);
+        fd.append("placements", JSON.stringify(next));
+        res = await setSoldierItemPlacements(fd);
+      }
+      if (res?.error) setFeedback({ id, ok: false, msg: res.error });
+      else { setFeedback({ id, ok: true }); router.refresh(); }
     } finally { setSavingId(null); setTimeout(() => setFeedback(null), 2000); }
   }
 
-  async function changeStockLocation(stockId: string, locationId: string) {
-    setSavingId(stockId); setFeedback(null);
+  async function doSplit(r: UnifiedRow) {
+    if (!splitTo) { setSplitErr("בחר מיקום יעד"); return; }
+    if (splitQty < 1 || splitQty >= r.quantity) { setSplitErr("כמות לא חוקית"); return; }
+    setSavingId(r.key); setSplitErr(null);
     try {
-      const fd = new FormData();
-      fd.append("stockBalanceId", stockId);
-      if (locationId) fd.append("equipmentLocationId", locationId);
-      const res = await setStockEquipmentLocation(fd);
-      if (res?.error) setFeedback({ id: stockId, ok: false, msg: res.error });
-      else { setFeedback({ id: stockId, ok: true }); router.refresh(); }
-    } finally { setSavingId(null); setTimeout(() => setFeedback(null), 2000); }
+      let res: { ok?: boolean; error?: string } | undefined;
+      if (r.kind === "qty_company" && r.stockBalanceId) {
+        const fd = new FormData();
+        fd.append("stockBalanceId", r.stockBalanceId);
+        fd.append("toLocationId", splitTo);
+        fd.append("quantity", String(splitQty));
+        res = await moveStockToLocation(fd);
+      } else if (r.kind === "qty_soldier" && r.soldierId && r.itemTypeId && r.statusId && r.allPlacements) {
+        // מקטינים את ה-placement הנוכחי, מוסיפים placement חדש ביעד
+        const next = r.allPlacements.map((p) =>
+          p.equipmentLocationId === r.equipmentLocationId
+            ? { ...p, quantity: p.quantity - splitQty }
+            : p
+        ).filter((p) => p.quantity > 0);
+        const locName = locations.find((l) => l.id === splitTo)?.name ?? "";
+        const existing = next.find((p) => p.equipmentLocationId === splitTo);
+        if (existing) existing.quantity += splitQty;
+        else next.push({ equipmentLocationId: splitTo, equipmentLocationName: locName, quantity: splitQty });
+        // אם זה ה"לא ממוקם" - מוסיפים בלי להפחית
+        if (r.equipmentLocationId === null) {
+          const allCurrent = r.allPlacements.slice();
+          const existing2 = allCurrent.find((p) => p.equipmentLocationId === splitTo);
+          if (existing2) existing2.quantity += splitQty;
+          else allCurrent.push({ equipmentLocationId: splitTo, equipmentLocationName: locName, quantity: splitQty });
+          const fd = new FormData();
+          fd.append("soldierId", r.soldierId);
+          fd.append("itemTypeId", r.itemTypeId);
+          fd.append("statusId", r.statusId);
+          fd.append("placements", JSON.stringify(allCurrent));
+          res = await setSoldierItemPlacements(fd);
+        } else {
+          const fd = new FormData();
+          fd.append("soldierId", r.soldierId);
+          fd.append("itemTypeId", r.itemTypeId);
+          fd.append("statusId", r.statusId);
+          fd.append("placements", JSON.stringify(next));
+          res = await setSoldierItemPlacements(fd);
+        }
+      }
+      if (res?.error) setSplitErr(res.error);
+      else { setSplittingId(null); setSplitQty(1); setSplitTo(""); router.refresh(); }
+    } finally { setSavingId(null); }
   }
 
   return (
     <div className="space-y-4">
-      {/* פאנל סטטיסטיקות לפי מיקום */}
+      {/* פאנל מיקומים */}
       <Card className="p-3">
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => setLocFilter("")}
             className={`text-xs rounded-full px-3 py-1 ${!locFilter ? "bg-slate-800 text-white" : "bg-slate-100 hover:bg-slate-200"}`}>
-            הכל
+            הכל ({allRows.length})
           </button>
           <button onClick={() => setLocFilter("__unassigned__")}
             className={`text-xs rounded-full px-3 py-1 ${locFilter === "__unassigned__" ? "bg-rose-700 text-white" : "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200"}`}>
-            ⚠️ ללא מיקום ({unassignedCount})
+            ⚠️ ללא מיקום ({countsByLoc.unassigned})
           </button>
           {locations.map((l) => (
             <button key={l.id} onClick={() => setLocFilter(l.id)}
               className={`text-xs rounded-full px-3 py-1 ${locFilter === l.id ? "bg-blue-700 text-white" : "bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200"}`}>
-              {l.isVehicle ? "🚙" : "📍"} {l.name} ({l.count})
+              {l.isVehicle ? "🚙" : "📍"} {l.name} ({countsByLoc.byLoc.get(l.id) ?? 0})
             </button>
           ))}
         </div>
@@ -196,367 +392,127 @@ export default function CompanyLocationsClient({
             className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
             <option value="">הכל</option>
             <option value="signed">🪖 חתום על חייל</option>
-            <option value="unsigned">📦 לא חתום</option>
+            <option value="unsigned">📦 במחסן הפלוגה</option>
           </select>
           {(q || locFilter || signedFilter || soldierFilter || itemFilter) && (
             <button onClick={() => { setQ(""); setLocFilter(""); setSignedFilter(""); setSoldierFilter(""); setItemFilter(""); }}
               className="rounded-lg border border-slate-300 text-sm hover:bg-slate-50 lg:col-span-1">✕ נקה פילטרים</button>
           )}
           <div className="sm:col-span-2 lg:col-span-4 text-xs text-slate-500">
-            {totalFiltered} פריטים מתוך {items.length + companyQtyStock.length + signedQtyRows.length}
+            {filtered.length} שורות מתוך {allRows.length}
           </div>
         </div>
       </Card>
 
-      {totalFiltered === 0 && <Card className="p-10 text-center text-slate-400">אין פריטים מתאימים</Card>}
-
-      {/* סריאלי */}
-      {filteredSerial.length > 0 && (
-        <Card className="overflow-hidden">
-          <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-            <h3 className="font-bold text-slate-700">🔫 סריאלי / אצוות ({filteredSerial.length})</h3>
+      {/* טבלה מאוחדת */}
+      <Card className="overflow-hidden">
+        {filtered.length === 0 ? (
+          <div className="p-10 text-center text-slate-400">אין פריטים מתאימים</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="text-right p-2.5 font-medium text-xs text-slate-600">פריט</th>
+                  <th className="text-right p-2.5 font-medium text-xs text-slate-600">חתום על</th>
+                  <th className="text-right p-2.5 font-medium text-xs text-slate-600">כמות</th>
+                  <th className="text-right p-2.5 font-medium text-xs text-slate-600">סטטוס</th>
+                  <th className="text-right p-2.5 font-medium text-xs text-slate-600">📍 מיקום</th>
+                  <th className="text-right p-2.5 font-medium text-xs text-slate-600">פעולות</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map((r) => {
+                  const fb = feedback?.id === r.key ? feedback : null;
+                  const isSplitting = splittingId === r.key;
+                  const isSaving = savingId === r.key;
+                  return (
+                    <>
+                      <tr key={r.key} className={fb?.ok ? "bg-emerald-50" : "hover:bg-slate-50"}>
+                        <td className="p-2.5">
+                          <div className="font-medium">{r.itemName}</div>
+                          <div className="text-[11px] text-slate-500 flex gap-2 flex-wrap">
+                            {r.sku && <span className="font-mono">{r.sku}</span>}
+                            {r.itemDetails && <span className="font-mono">{r.itemDetails}</span>}
+                          </div>
+                        </td>
+                        <td className="p-2.5">
+                          {r.ownerKind === "soldier" ? (
+                            <span className="text-blue-700">🪖 {r.ownerLabel}</span>
+                          ) : (
+                            <span className="text-slate-700">📦 {r.ownerLabel}</span>
+                          )}
+                        </td>
+                        <td className="p-2.5 font-mono">
+                          <span className="bg-slate-100 rounded px-2 py-0.5">×{r.quantity}</span>
+                          <span className="text-[11px] text-slate-400 mr-1">{r.unit}</span>
+                        </td>
+                        <td className="p-2.5">
+                          <span className={r.isLoss ? "text-rose-600 font-medium" : r.isWear ? "text-amber-600 font-medium" : ""}>
+                            {r.statusName}{r.isLoss && " 🔴"}{r.isWear && " 🟡"}
+                          </span>
+                        </td>
+                        <td className="p-2.5">
+                          <select value={r.equipmentLocationId ?? ""}
+                            onChange={(e) => changeLocation(r, e.target.value || null)}
+                            disabled={isSaving || locations.length === 0}
+                            className={`rounded-lg border-2 px-2 py-1 text-sm min-w-44 ${
+                              !r.equipmentLocationId ? "border-rose-300 bg-rose-50" : "border-emerald-200 bg-white"
+                            } disabled:opacity-50`}>
+                            <option value="">— ללא מיקום —</option>
+                            {locations.map((l) => (
+                              <option key={l.id} value={l.id}>{l.isVehicle ? "🚙" : "📍"} {l.name}</option>
+                            ))}
+                          </select>
+                          {isSaving && <span className="text-xs text-slate-500 mr-2">שומר...</span>}
+                          {fb?.ok && <span className="text-xs text-emerald-700 mr-2">✓</span>}
+                          {fb?.msg && <span className="text-xs text-rose-700 mr-2" title={fb.msg}>⚠️</span>}
+                        </td>
+                        <td className="p-2.5">
+                          {r.canSplit && !isSplitting && (
+                            <button onClick={() => { setSplittingId(r.key); setSplitQty(1); setSplitTo(""); setSplitErr(null); }}
+                              className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg px-2 py-1 whitespace-nowrap">
+                              📤 פצל
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {isSplitting && (
+                        <tr className="bg-blue-50">
+                          <td colSpan={6} className="p-3">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs text-slate-700 font-medium">📤 פצל {r.itemName}:</span>
+                              <span className="text-xs text-slate-700">העבר</span>
+                              <input type="number" min={1} max={r.quantity - 1} value={splitQty}
+                                onChange={(e) => setSplitQty(Math.max(1, Math.min(r.quantity - 1, parseInt(e.target.value) || 1)))}
+                                className="w-20 rounded border border-slate-300 px-2 py-1 text-center" />
+                              <span className="text-xs text-slate-700">מתוך {r.quantity} ל-</span>
+                              <select value={splitTo} onChange={(e) => setSplitTo(e.target.value)}
+                                className="rounded border border-slate-300 px-2 py-1 text-sm">
+                                <option value="">— בחר יעד —</option>
+                                {locations.filter((l) => l.id !== r.equipmentLocationId).map((l) => (
+                                  <option key={l.id} value={l.id}>{l.isVehicle ? "🚙" : "📍"} {l.name}</option>
+                                ))}
+                              </select>
+                              <button onClick={() => doSplit(r)} disabled={isSaving || !splitTo}
+                                className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-1 disabled:opacity-50">
+                                ✓ פצל
+                              </button>
+                              <button onClick={() => { setSplittingId(null); setSplitErr(null); }}
+                                className="text-xs text-slate-500">ביטול</button>
+                              {splitErr && <span className="text-xs text-rose-700 w-full mt-1">⚠️ {splitErr}</span>}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          <div className="divide-y divide-slate-100">
-            {filteredSerial.map((u) => {
-              const fb = feedback?.id === u.id ? feedback : null;
-              return (
-                <div key={u.id} className={`px-4 py-2.5 flex items-center gap-3 flex-wrap ${fb?.ok ? "bg-emerald-50" : ""}`}>
-                  <span className="text-lg">{u.isLot ? "💣" : "🔫"}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium">
-                      {u.itemName}
-                      {u.sku && <span className="text-[10px] text-slate-400 mr-2">{u.sku}</span>}
-                    </div>
-                    <div className="text-xs text-slate-500 flex flex-wrap gap-2 mt-0.5">
-                      <span className="font-mono">{u.isLot ? `לוט: ${u.serial}` : `SN: ${u.serial}`}</span>
-                      <span className={u.isLoss ? "text-rose-600 font-medium" : u.isWear ? "text-amber-600 font-medium" : ""}>
-                        {u.statusName}{u.isLoss && " 🔴"}{u.isWear && " 🟡"}
-                      </span>
-                      {u.signedSoldier ? (
-                        <span className="text-blue-700">🪖 <b>{u.signedSoldier.name}</b>
-                          {u.signedSoldier.personalNumber && <span className="font-mono text-slate-400 mr-1">{u.signedSoldier.personalNumber}</span>}
-                        </span>
-                      ) : <span className="text-slate-500">📦 לא חתום</span>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-[11px] text-slate-600 whitespace-nowrap">📍</label>
-                    <select value={u.equipmentLocationId ?? ""}
-                      onChange={(e) => changeSerialLocation(u.id, e.target.value)}
-                      disabled={savingId === u.id || locations.length === 0}
-                      className={`rounded-lg border-2 px-2 py-1.5 text-sm min-w-44 ${
-                        !u.equipmentLocationId ? "border-rose-300 bg-rose-50" : "border-emerald-200 bg-white"
-                      } disabled:opacity-50`}>
-                      <option value="">— ללא מיקום —</option>
-                      {locations.map((l) => (
-                        <option key={l.id} value={l.id}>{l.isVehicle ? "🚙" : "📍"} {l.name}</option>
-                      ))}
-                    </select>
-                    {savingId === u.id && <span className="text-xs text-slate-500">שומר...</span>}
-                    {fb?.ok && <span className="text-xs text-emerald-700">✓</span>}
-                    {fb?.msg && <span className="text-xs text-rose-700" title={fb.msg}>⚠️</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
-
-      {/* כמותי במלאי הפלוגה - מקובץ לפי (item, status) להצגת פיצולים */}
-      {filteredCompanyQty.length > 0 && (() => {
-        const groups = new Map<string, QtyStock[]>();
-        for (const s of filteredCompanyQty) {
-          const k = `${s.itemTypeId}|${s.statusId}`;
-          const arr = groups.get(k) ?? [];
-          arr.push(s);
-          groups.set(k, arr);
-        }
-        const groupArr = Array.from(groups.values()).sort((a, b) => a[0].itemName.localeCompare(b[0].itemName));
-        return (
-          <Card className="overflow-hidden">
-            <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-              <h3 className="font-bold text-slate-700">📦 כמותי במלאי הפלוגה ({groupArr.length} פריטים, {filteredCompanyQty.length} שורות)</h3>
-            </div>
-            <div className="divide-y divide-slate-100">
-              {groupArr.map((rows) => (
-                <CompanyQtyGroup
-                  key={`${rows[0].itemTypeId}|${rows[0].statusId}`}
-                  rows={rows}
-                  locations={locations}
-                  feedback={feedback}
-                  savingId={savingId}
-                  onChange={(id, locId) => changeStockLocation(id, locId)}
-                  onSplit={() => router.refresh()}
-                />
-              ))}
-            </div>
-          </Card>
-        );
-      })()}
-
-      {/* כמותי חתום על חיילים */}
-      {filteredSignedQty.length > 0 && (
-        <Card className="overflow-hidden">
-          <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-            <h3 className="font-bold text-slate-700">🪖 כמותי חתום על חיילים ({filteredSignedQty.length})</h3>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {filteredSignedQty.map((r) => (
-              <SignedQtyRowEditor key={`${r.soldierId}|${r.itemTypeId}|${r.statusId}`}
-                row={r} locations={locations} onSaved={() => router.refresh()} />
-            ))}
-          </div>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-function SignedQtyRowEditor({
-  row, locations, onSaved,
-}: {
-  row: SignedQtyRow;
-  locations: Location[];
-  onSaved: () => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [placements, setPlacements] = useState<Placement[]>(row.placements);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const placed = placements.reduce((s, p) => s + (p.quantity || 0), 0);
-  const remaining = row.totalQuantity - placed;
-
-  async function save() {
-    setBusy(true); setError(null);
-    try {
-      const fd = new FormData();
-      fd.append("soldierId", row.soldierId);
-      fd.append("itemTypeId", row.itemTypeId);
-      fd.append("statusId", row.statusId);
-      fd.append("placements", JSON.stringify(placements.filter((p) => p.quantity > 0)));
-      const res = await setSoldierItemPlacements(fd);
-      if (res?.error) setError(res.error);
-      else { setEditing(false); onSaved(); }
-    } finally { setBusy(false); }
-  }
-
-  function addPlacement() {
-    const used = new Set(placements.map((p) => p.equipmentLocationId));
-    const next = locations.find((l) => !used.has(l.id));
-    if (!next) return;
-    setPlacements([...placements, { equipmentLocationId: next.id, equipmentLocationName: next.name, quantity: 1 }]);
-  }
-
-  return (
-    <div className="px-4 py-2.5">
-      <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-lg">🪖</span>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium">
-            {row.itemName}
-            {row.sku && <span className="text-[10px] text-slate-400 mr-2">{row.sku}</span>}
-            <span className="text-[11px] bg-blue-100 text-blue-800 rounded px-1.5 py-0.5 mr-1">×{row.totalQuantity} {row.unit}</span>
-          </div>
-          <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap gap-2">
-            <span className="text-blue-700"><b>{row.soldierName}</b>
-              {row.soldierPN && <span className="font-mono text-slate-400 mr-1">{row.soldierPN}</span>}
-            </span>
-            <span className={row.isLoss ? "text-rose-600 font-medium" : row.isWear ? "text-amber-600 font-medium" : ""}>
-              {row.statusName}{row.isLoss && " 🔴"}{row.isWear && " 🟡"}
-            </span>
-            {!editing && row.placements.length > 0 && (
-              <span className="text-emerald-700">
-                📍 {row.placements.map((p) => `${p.equipmentLocationName} ×${p.quantity}`).join(" / ")}
-              </span>
-            )}
-            {!editing && remaining > 0 && row.placements.length > 0 && (
-              <span className="text-rose-600">⚠️ {remaining} לא מוקצים</span>
-            )}
-            {!editing && row.placements.length === 0 && (
-              <span className="text-rose-600">⚠️ ללא מיקום</span>
-            )}
-          </div>
-        </div>
-        {!editing && (
-          <button onClick={() => setEditing(true)}
-            className="text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5">
-            📍 הגדר מיקום
-          </button>
         )}
-      </div>
-
-      {editing && (
-        <div className="mt-3 bg-slate-50 rounded-lg p-3 space-y-2">
-          {placements.length === 0 ? (
-            <div className="text-xs text-slate-500">לחץ "+ הוסף מיקום" כדי להתחיל לשייך</div>
-          ) : (
-            placements.map((p, idx) => (
-              <div key={idx} className="flex items-center gap-2 flex-wrap">
-                <select value={p.equipmentLocationId}
-                  onChange={(e) => {
-                    const loc = locations.find((l) => l.id === e.target.value);
-                    const next = [...placements];
-                    next[idx] = { ...p, equipmentLocationId: e.target.value, equipmentLocationName: loc?.name ?? "" };
-                    setPlacements(next);
-                  }}
-                  className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
-                  {locations.map((l) => (
-                    <option key={l.id} value={l.id}>{l.isVehicle ? "🚙" : "📍"} {l.name}</option>
-                  ))}
-                </select>
-                <input type="number" min={1} max={row.totalQuantity} value={p.quantity}
-                  onChange={(e) => {
-                    const next = [...placements];
-                    next[idx] = { ...p, quantity: Math.max(0, parseInt(e.target.value) || 0) };
-                    setPlacements(next);
-                  }}
-                  className="w-20 rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-center" />
-                <span className="text-xs text-slate-500">{row.unit}</span>
-                <button onClick={() => setPlacements(placements.filter((_, i) => i !== idx))}
-                  className="text-rose-500 hover:text-rose-700 text-sm">✕</button>
-              </div>
-            ))
-          )}
-          <div className="flex items-center gap-2 flex-wrap pt-1">
-            <button onClick={addPlacement} disabled={placements.length >= locations.length}
-              className="text-xs rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50 px-3 py-1.5 disabled:opacity-50">
-              + הוסף מיקום
-            </button>
-            <span className="text-xs text-slate-500">
-              סך {placed} / {row.totalQuantity} {row.unit}
-              {remaining !== 0 && <span className={remaining > 0 ? "text-amber-600 mr-2" : "text-rose-600 mr-2"}>
-                ({remaining > 0 ? `נשארו ${remaining}` : `חורג ב-${Math.abs(remaining)}`})
-              </span>}
-            </span>
-          </div>
-          {error && <div className="text-xs text-rose-700 bg-rose-50 rounded p-2">⚠️ {error}</div>}
-          <div className="flex gap-2 pt-1">
-            <button onClick={save} disabled={busy || remaining < 0}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-1.5 text-sm disabled:opacity-50">
-              ✓ שמור
-            </button>
-            <button onClick={() => { setEditing(false); setPlacements(row.placements); setError(null); }}
-              className="rounded-lg border border-slate-300 px-4 py-1.5 text-sm">ביטול</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CompanyQtyGroup({
-  rows, locations, feedback, savingId, onChange, onSplit,
-}: {
-  rows: QtyStock[];
-  locations: Location[];
-  feedback: { id: string; ok: boolean; msg?: string } | null;
-  savingId: string | null;
-  onChange: (id: string, locId: string) => void;
-  onSplit: () => void;
-}) {
-  const first = rows[0];
-  const total = rows.reduce((s, r) => s + r.quantity, 0);
-  const [splittingId, setSplittingId] = useState<string | null>(null);
-  const [splitQty, setSplitQty] = useState(1);
-  const [splitTo, setSplitTo] = useState("");
-  const [splitErr, setSplitErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function doSplit(sourceId: string, sourceQty: number) {
-    setSplitErr(null);
-    if (!splitTo) { setSplitErr("בחר מיקום יעד"); return; }
-    if (splitQty < 1 || splitQty > sourceQty) { setSplitErr("כמות לא חוקית"); return; }
-    setBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append("stockBalanceId", sourceId);
-      fd.append("toLocationId", splitTo);
-      fd.append("quantity", String(splitQty));
-      const res = await moveStockToLocation(fd);
-      if (res?.error) setSplitErr(res.error);
-      else { setSplittingId(null); setSplitQty(1); setSplitTo(""); onSplit(); }
-    } finally { setBusy(false); }
-  }
-
-  return (
-    <div className="px-4 py-2.5">
-      <div className="flex items-center gap-3 flex-wrap mb-2">
-        <span className="text-lg">📦</span>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium">
-            {first.itemName}
-            {first.sku && <span className="text-[10px] text-slate-400 mr-2">{first.sku}</span>}
-            <span className="text-[11px] bg-blue-100 text-blue-800 rounded px-1.5 py-0.5 mr-1">×{total} {first.unit}</span>
-          </div>
-          <div className="text-xs text-slate-500 mt-0.5">
-            <span className={first.isLoss ? "text-rose-600 font-medium" : first.isWear ? "text-amber-600 font-medium" : ""}>
-              {first.statusName}{first.isLoss && " 🔴"}{first.isWear && " 🟡"}
-            </span>
-            {rows.length > 1 && <span className="mr-2 text-blue-700">📤 מפוצל ל-{rows.length} מיקומים</span>}
-          </div>
-        </div>
-      </div>
-      {/* כל שורת מיקום בנפרד */}
-      <div className="space-y-1.5 ms-7">
-        {rows.map((s) => {
-          const fb = feedback?.id === s.stockBalanceId ? feedback : null;
-          const canSplit = s.quantity > 1 && locations.length > 0;
-          const isSplitting = splittingId === s.stockBalanceId;
-          return (
-            <div key={s.stockBalanceId}>
-              <div className={`flex items-center gap-2 flex-wrap text-sm ${fb?.ok ? "bg-emerald-50 rounded p-1" : ""}`}>
-                <span className="font-mono text-slate-600 text-xs bg-slate-100 rounded px-2 py-0.5">×{s.quantity}</span>
-                <label className="text-[11px] text-slate-600 whitespace-nowrap">📍</label>
-                <select value={s.equipmentLocationId ?? ""}
-                  onChange={(e) => onChange(s.stockBalanceId, e.target.value)}
-                  disabled={savingId === s.stockBalanceId || locations.length === 0}
-                  className={`rounded-lg border-2 px-2 py-1 text-sm min-w-44 ${
-                    !s.equipmentLocationId ? "border-rose-300 bg-rose-50" : "border-emerald-200 bg-white"
-                  } disabled:opacity-50`}>
-                  <option value="">— ללא מיקום —</option>
-                  {locations.map((l) => (
-                    <option key={l.id} value={l.id}>{l.isVehicle ? "🚙" : "📍"} {l.name}</option>
-                  ))}
-                </select>
-                {canSplit && !isSplitting && (
-                  <button onClick={() => { setSplittingId(s.stockBalanceId); setSplitQty(1); setSplitTo(""); setSplitErr(null); }}
-                    className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg px-2 py-1">
-                    📤 פצל למיקום נוסף
-                  </button>
-                )}
-                {savingId === s.stockBalanceId && <span className="text-xs text-slate-500">שומר...</span>}
-                {fb?.ok && <span className="text-xs text-emerald-700">✓</span>}
-                {fb?.msg && <span className="text-xs text-rose-700" title={fb.msg}>⚠️</span>}
-              </div>
-              {isSplitting && (
-                <div className="mt-1.5 bg-blue-50 border border-blue-200 rounded-lg p-2 flex items-center gap-2 flex-wrap text-sm">
-                  <span className="text-xs text-slate-700">העבר</span>
-                  <input type="number" min={1} max={s.quantity - 1} value={splitQty}
-                    onChange={(e) => setSplitQty(Math.max(1, Math.min(s.quantity - 1, parseInt(e.target.value) || 1)))}
-                    className="w-20 rounded border border-slate-300 px-2 py-1 text-center" />
-                  <span className="text-xs text-slate-700">מתוך {s.quantity} ל-</span>
-                  <select value={splitTo} onChange={(e) => setSplitTo(e.target.value)}
-                    className="rounded border border-slate-300 px-2 py-1 text-sm">
-                    <option value="">— בחר יעד —</option>
-                    {locations.filter((l) => l.id !== s.equipmentLocationId).map((l) => (
-                      <option key={l.id} value={l.id}>{l.isVehicle ? "🚙" : "📍"} {l.name}</option>
-                    ))}
-                  </select>
-                  <button onClick={() => doSplit(s.stockBalanceId, s.quantity)} disabled={busy || !splitTo}
-                    className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-1 disabled:opacity-50">
-                    ✓ פצל
-                  </button>
-                  <button onClick={() => { setSplittingId(null); setSplitErr(null); }}
-                    className="text-xs text-slate-500">ביטול</button>
-                  {splitErr && <span className="text-xs text-rose-700 w-full mt-1">⚠️ {splitErr}</span>}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      </Card>
     </div>
   );
 }
