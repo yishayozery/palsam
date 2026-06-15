@@ -55,8 +55,14 @@ export default async function SignaturesPage() {
     ? await prisma.holder.findMany({
         where: { battalionId: bId, kind: "COMPANY", active: true },
         include: {
-          users: { where: { active: true } },
-          assignedUsers: { where: { user: { active: true } }, include: { user: true } },
+          users: {
+            where: { active: true },
+            include: { soldier: { select: { fullName: true, personalNumber: true } } },
+          },
+          assignedUsers: {
+            where: { user: { active: true } },
+            include: { user: { include: { soldier: { select: { fullName: true, personalNumber: true } } } } },
+          },
         },
         orderBy: { name: "asc" },
       })
@@ -260,6 +266,7 @@ export default async function SignaturesPage() {
                     id: u.id,
                     name: u.fullName,
                     role: u.title || ROLE_LABELS[u.role],
+                    personalNumber: u.soldier?.personalNumber ?? null,
                   })),
                 }))}
                 units={availableUnits.map((u) => ({

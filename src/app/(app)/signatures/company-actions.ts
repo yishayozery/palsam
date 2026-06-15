@@ -14,29 +14,59 @@ import type { SignatureMethod } from "@/generated/prisma";
 /**
  * החתמת פלוגה: ניפוק לפלוגה כשהנמען הוא משתמש בפלוגה (מפ/רס"פ),
  * הוא חותם דיגיטלית, והפריטים עוברים לפלוגה אוטומטית עם החתימה.
- * מחזיר את ה-token לניווט בקליינט (במקום redirect שלא חוצה async wrappers טוב).
+ * 🔒 הנמען חייב להיות מקושר לחייל ברוסטר עם מ.א. — איש קשר עם זיהוי.
+ * מחזיר { token } להצלחה או { error } להודעת שגיאה בעברית.
  */
-export async function createCompanySign(formData: FormData): Promise<{ token: string }> {
-  const user = await requireUser();
-  if (!can(user.role, "signatures.manage")) throw new Error("אין הרשאה");
-  const bId = user.battalionId!;
-
-  const companyId = String(formData.get("companyId") || "");
-  const recipientUserId = String(formData.get("recipientUserId") || "");
-  const method = String(formData.get("method") || "QR") as SignatureMethod;
-  const serialIds = formData.getAll("serial").map(String).filter(Boolean);
-  const qtyEntries: { itemTypeId: string; statusId: string; qty: number }[] = [];
-  for (const [key, val] of formData.entries()) {
-    if (key.startsWith("qty:")) {
-      const [, itemTypeId, statusId] = key.split(":");
-      const qty = parseInt(String(val), 10);
-      if (qty > 0 && itemTypeId && statusId) qtyEntries.push({ itemTypeId, statusId, qty });
+export async function createCompanySign(
+  formData: FormData,
+): Promise<{ token?: string; error?: string }> {
+  try {
+    const user = await requireUser();
+    if (!can(user.role, "signatures.manage")) {
+      return { error: "אין לך הרשאה להחתים פלוגה" };
     }
-  }
+    const bId = user.battalionId!;
 
-  if (!companyId) throw new Error("חסרה פלוגה");
-  if (!recipientUserId) throw new Error("חסר נמען חותם");
-  if (serialIds.length === 0 && qtyEntries.length === 0) throw new Error("חסרים פריטים");
+    const companyId = String(formData.get("companyId") || "");
+    const recipientUserId = String(formData.get("recipientUserId") || "");
+    const method = String(formData.get("method") || "QR") as SignatureMethod;
+    const serialIds = formData.getAll("serial").map(String).filter(Boolean);
+    const qtyEntries: { itemTypeId: string; statusId: string; qty: number }[] = [];
+    for (const [key, val] of formData.entries()) {
+      if (key.startsWith("qty:")) {
+        const [, itemTypeId, statusId] = key.split(":");
+        const qty = parseInt(String(val), 10);
+        if (qty > 0 && itemTypeId && statusId) qtyEntries.push({ itemTypeId, statusId, qty });
+      }
+    }
+
+    if (!companyId) return { error: "לא נבחרה פלוגה" };
+    if (!recipientUserId) return { error: "לא נבחר נמען חותם — מי יקבל ויחתום על הציוד?" };
+    if (serialIds.length === 0 && qtyEntries.length === 0) {
+      return { error: "לא נבחרו פריטים להחתמה — הוסף לפחות פריט אחד לעגלה" };
+    }
+
+    // 🔒 ולידציה: נמען חייב להיות מקושר לחייל ברוסטר עם שם + מ.א.
+    const recipient = await prisma.appUser.findUnique({
+      where: { id: recipientUserId },
+      select: {
+        fullName: true,
+        soldier: { select: { fullName: true, personalNumber: true } },
+      },
+    });
+    if (!recipient) {
+      return { error: "הנמען החותם לא נמצא במערכת. רענן את הדף ונסה שוב." };
+    }
+    if (!recipient.soldier) {
+      return {
+        error: `🔒 ${recipient.fullName} לא מקושר לחייל ברוסטר השלישות. אי אפשר להחתים בלי איש קשר עם מ.א. — קשר אותו אצל המפ"מ ב-/users.`,
+      };
+    }
+    if (!recipient.soldier.personalNumber || recipient.soldier.personalNumber.length < 5) {
+      return {
+        error: `🔒 לחייל ${recipient.soldier.fullName} חסר מספר אישי (מ.א.) ברוסטר. עדכן ב-/roster ונסה שוב.`,
+      };
+    }
 
   // מציאת מחסן המקור: למפ"מ — לפי המחסן של הפריט (קטגוריה→warehouseType)
   // לקצין מחסן — המחסן שלו
@@ -53,14 +83,13 @@ export async function createCompanySign(formData: FormData): Promise<{ token: st
     return wh?.id ?? null;
   };
 
-  const token = nanoid(24);
-  let transferId = "";
-  try {
+    const token = nanoid(24);
+    let transferId = "";
     await prisma.$transaction(async (tx) => {
       // 🛡️ ולידציה: לא ניתן להחתים יותר ממה שיש במלאי
       for (const e of qtyEntries) {
         const itemHolder = await findSourceHolder(e.itemTypeId);
-        if (!itemHolder) throw new Error("לא נמצא מחסן מקור לפריט");
+        if (!itemHolder) throw new Error("לא נמצא מחסן המקור לפריט שנבחר");
         const balance = await tx.stockBalance.findFirst({
           where: { itemTypeId: e.itemTypeId, holderId: itemHolder, statusId: e.statusId, battalionId: bId },
         });
@@ -116,13 +145,20 @@ export async function createCompanySign(formData: FormData): Promise<{ token: st
         },
       });
     });
-  } catch (e) {
-    throw new Error(`שגיאה ביצירת ההחתמה: ${e instanceof Error ? e.message : "שגיאה לא ידועה"}`);
-  }
 
-  await audit(user.id, "COMPANY_SIGN_OUT", "Transfer", transferId, { companyId, recipientUserId });
-  revalidatePath("/signatures");
-  return { token };
+    await audit(user.id, "COMPANY_SIGN_OUT", "Transfer", transferId, { companyId, recipientUserId });
+    revalidatePath("/signatures");
+    return { token };
+  } catch (e) {
+    const raw = e instanceof Error ? e.message : "שגיאה לא ידועה";
+    // אם זו הודעת עברית שלנו — להעביר כמו שהיא; אחרת לעטוף בעברית
+    const looksHebrew = /[֐-׿]/.test(raw);
+    return {
+      error: looksHebrew
+        ? raw
+        : `שגיאת מערכת ביצירת ההחתמה. פנה למפ"מ עם הפרטים הבאים: ${raw}`,
+    };
+  }
 }
 
 /** השלמת חתימה של נמען (מפ/רס"פ) → הפריטים עוברים לפלוגה */

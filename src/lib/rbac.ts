@@ -59,7 +59,6 @@ const MATRIX: Record<Role, Capability[]> = {
     "counts.execute",
     "gaps.resolve",
     "reports.view",
-    "audit.view",
   ],
   COMPANY_REP: [
     "company.manage",

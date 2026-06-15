@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createCompanySign } from "./company-actions";
 import { useEscClose } from "@/lib/useEscClose";
 
-type Member = { id: string; name: string; role: string };
+type Member = { id: string; name: string; role: string; personalNumber: string | null };
 type Company = { id: string; name: string; members: Member[] };
 type Unit = { id: string; itemTypeId: string; itemName: string; serial: string; status: string; statusId: string; signMode: "COMPANY" | "SOLDIER"; lotQuantity: number | null };
 type Balance = { itemTypeId: string; itemName: string; unit: string; status: string; statusId: string; quantity: number; signMode: "COMPANY" | "SOLDIER" };
@@ -44,12 +44,16 @@ export default function CompanySignModal({
     return [...selectedCompany.members].sort((a, b) => priority(a) - priority(b));
   }, [selectedCompany]);
 
-  // בחירה אוטומטית של הראשון (= רס"פ) ברגע שמשתנה הפלוגה
+  // בחירה אוטומטית של הראשון התקף (יש מ.א.) ברגע שמשתנה הפלוגה
   useEffect(() => {
-    if (availableMembers.length > 0 && !recipientUserId) {
-      setRecipientUserId(availableMembers[0].id);
+    if (!recipientUserId) {
+      const firstValid = availableMembers.find((m) => !!m.personalNumber);
+      if (firstValid) setRecipientUserId(firstValid.id);
     }
   }, [availableMembers, recipientUserId]);
+
+  const validMembers = availableMembers.filter((m) => !!m.personalNumber);
+  const invalidMembers = availableMembers.filter((m) => !m.personalNumber);
 
   const cartSerialIds = new Set(cart.filter((c) => c.type === "serial").map((c) => (c as CartSerial).unitId));
   const companyUnits = useMemo(() => units.filter((u) =>
@@ -107,6 +111,12 @@ export default function CompanySignModal({
     }
     try {
       const result = await createCompanySign(fd);
+      if (result.error || !result.token) {
+        setError(result.error || "שגיאה לא ידועה ביצירת ההחתמה");
+        submittingRef.current = false;
+        setBusy(false);
+        return;
+      }
       const token = result.token;
       reset();
       setOpen(false);
@@ -116,7 +126,11 @@ export default function CompanySignModal({
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes("NEXT_REDIRECT")) return;
-      setError(msg);
+      // הודעת שגיאה כללית של React production — נציג טקסט ידידותי
+      const friendly = msg.includes("Server Components render") || msg.includes("digest property")
+        ? "שגיאת שרת לא צפויה. נסה שוב בעוד רגע, ואם הבעיה חוזרת — פנה למפ\"מ."
+        : msg;
+      setError(friendly);
       submittingRef.current = false;
       setBusy(false);
     }
@@ -156,7 +170,17 @@ export default function CompanySignModal({
               <select value={recipientUserId} onChange={(e) => setRecipientUserId(e.target.value)} disabled={!companyId}
                 className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white disabled:bg-slate-100">
                 <option value="">— {companyId ? "בחר נמען" : "בחר פלוגה קודם"} —</option>
-                {availableMembers.map((m) => <option key={m.id} value={m.id}>{m.name}{m.role ? `  —  ${m.role}` : ""}</option>)}
+                {validMembers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} (מ.א. {m.personalNumber}){m.role ? `  —  ${m.role}` : ""}
+                  </option>
+                ))}
+                {invalidMembers.length > 0 && <option disabled>──────── ללא מ.א. (חסומים) ────────</option>}
+                {invalidMembers.map((m) => (
+                  <option key={m.id} value={m.id} disabled>
+                    🔒 {m.name} — חסר מ.א. ברוסטר
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -169,6 +193,19 @@ export default function CompanySignModal({
               <div className="flex gap-2 text-xs">
                 <a href="/reps" className="bg-rose-700 text-white rounded px-3 py-1.5 hover:bg-rose-800">+ הזמן רס״פ ל-{selectedCompany.name}</a>
                 <a href="/org" className="border border-rose-300 rounded px-3 py-1.5 hover:bg-rose-100">/org</a>
+              </div>
+            </div>
+          )}
+          {selectedCompany && availableMembers.length > 0 && validMembers.length === 0 && (
+            <div className="mt-2 bg-amber-50 border-2 border-amber-300 rounded-lg p-3 text-sm text-amber-900">
+              <div className="font-bold mb-1">🔒 אין נמען תקף להחתמה</div>
+              <p className="text-xs mb-2">
+                לכל בעלי התפקיד ב-<b>{selectedCompany.name}</b> חסר מספר אישי (מ.א.) ברוסטר השלישות.
+                לפי תקנון, נמען חותם חייב להיות חייל עם מ.א. תקף.
+              </p>
+              <div className="flex gap-2 text-xs">
+                <a href="/roster" className="bg-amber-700 text-white rounded px-3 py-1.5 hover:bg-amber-800">+ עדכן מ.א. ברוסטר</a>
+                <a href="/users" className="border border-amber-300 rounded px-3 py-1.5 hover:bg-amber-100">קשר משתמש↔חייל</a>
               </div>
             </div>
           )}
