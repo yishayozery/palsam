@@ -1,12 +1,12 @@
 import { requireCapability } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
-import { PageHeader, Card, Badge, EmptyState } from "@/components/ui";
-import { WAREHOUSE_TYPE_SHORT, WAREHOUSE_TYPE_ICON } from "@/lib/rbac";
+import { PageHeader, Card, EmptyState } from "@/components/ui";
 import ReturnModal from "./ReturnModal";
 import SendToTanaModal from "../maintenance/SendToTanaModal";
 import { findTanaHolder } from "@/lib/tana";
 import { requiresPersonalId } from "@/lib/handover";
 import { getCompanyItemTotals } from "@/lib/company-stock-snapshot";
+import InventoryTable from "./InventoryTable";
 
 export const dynamic = "force-dynamic";
 
@@ -69,12 +69,9 @@ export default async function MyInventoryPage() {
     getCompanyItemTotals(bId, companyId),
   ]);
 
-  const totals = {
-    totalItems: serialUnits.length + balances.reduce((s, b) => s + b.quantity, 0),
-    defective: serialUnits.filter((u) => u.status.isWear || u.status.isLoss).length
-              + balances.filter((b) => b.status.isWear || b.status.isLoss).reduce((s, b) => s + b.quantity, 0),
-    signedOnSoldiers: serialUnits.filter((u) => u.signedSoldierId).length,
-  };
+  // 💡 ה-totals הישנים חישבו רק serialUnits ב-currentHolderId=company + balances,
+  // אבל פספסו ציוד חתום על חיילים. החישוב המתוקן יבוא אחרי standardMap.
+  let totals = { totalItems: 0, defective: 0, signedOnSoldiers: 0 };
 
   // 🆕 טבלת תקן - כל פריט שיש לו בסיס > 0 או שיש לו כמות נוכחית
   type StatusBreakdown = { statusName: string; qty: number; isWear: boolean; isLoss: boolean };
@@ -132,9 +129,15 @@ export default async function MyInventoryPage() {
     else r.statusBreakdown.set(b.statusId, { statusName: b.status.name, qty: b.quantity, isWear: b.status.isWear, isLoss: b.status.isLoss });
   }
   // אחרי שמילאנו את הפירוט - קובעים את ה-current וה-diff מ-totalsMap (אגרגציה הכוללת חתום-חיילים)
+  // 🆕 וגם משלימים signedOnSoldiers ל-qty חתום (לא רק serialUnits)
+  // qty חתום = totalsMap[item] - (כמותי במחסן + סריאלי אצל הפלוגה)
   for (const [itemTypeId, r] of standardMap.entries()) {
-    r.current = totalsMap.get(itemTypeId) ?? 0;
-    r.diff = r.current - r.baseline;
+    const total = totalsMap.get(itemTypeId) ?? 0;
+    r.current = total;
+    r.diff = total - r.baseline;
+    const heldHere = Array.from(r.statusBreakdown.values()).reduce((s, b) => s + b.qty, 0);
+    const qtySignedToSoldiers = Math.max(0, total - heldHere);
+    r.signedOnSoldiers += qtySignedToSoldiers; // קודם רק סריאלי-חתום, עכשיו גם כמותי-חתום
   }
   const standardRows = Array.from(standardMap.values()).sort((a, b) =>
     a.itemName.localeCompare(b.itemName)
@@ -142,6 +145,14 @@ export default async function MyInventoryPage() {
   const shortage = standardRows.filter((r) => r.diff < 0); // חסר
   const surplus = standardRows.filter((r) => r.diff > 0 && r.baseline > 0); // יש מה לזכות (עודף מעל תקן)
   const balanced = standardRows.filter((r) => r.diff === 0 && r.baseline > 0); // מאוזן בדיוק לתקן
+
+  // 📊 ספירות מאוחדות לדשבורד - מהשורות המסונכרנות (מתחשב גם בחתום-חיילים)
+  totals = {
+    totalItems: standardRows.reduce((s, r) => s + r.current, 0),
+    defective: standardRows.reduce((s, r) =>
+      s + Array.from(r.statusBreakdown.values()).filter((b) => b.isWear || b.isLoss).reduce((a, b) => a + b.qty, 0), 0),
+    signedOnSoldiers: standardRows.reduce((s, r) => s + r.signedOnSoldiers, 0),
+  };
 
   return (
     <div>
@@ -222,129 +233,24 @@ export default async function MyInventoryPage() {
         </Card>
       </div>
 
-      {/* 📌 טבלה מאוחדת: פריט × תקן × יש × פירוט סטטוסים × חתום */}
+      {/* 📌 טבלה מאוחדת עם סינונים (Client) */}
       {standardRows.length === 0 ? (
         <Card><EmptyState>אין מלאי בפלוגה. מקבלים ציוד דרך החתמת פלוגה ע״י קצין המחסן.</EmptyState></Card>
       ) : (
-        <Card className="overflow-hidden">
-          <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center gap-3 flex-wrap">
-            <h3 className="font-bold text-slate-700 flex items-center gap-2">
-              <span className="text-xl">📦</span>
-              ציוד הפלוגה
-            </h3>
-            <span className="text-xs text-slate-500">
-              {standardRows.length} פריטים · {balanced.length} מאוזנים · {shortage.length} חסרים · {surplus.length} מעל תקן
-            </span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-right p-2 font-medium text-xs text-slate-600">פריט</th>
-                  <th className="text-right p-2 font-medium text-xs text-slate-600">קטגוריה</th>
-                  <th className="text-right p-2 font-medium text-xs text-slate-600">📌 תקן</th>
-                  <th className="text-right p-2 font-medium text-xs text-slate-600">📦 יש</th>
-                  <th className="text-right p-2 font-medium text-xs text-slate-600">פירוט סטטוסים</th>
-                  <th className="text-right p-2 font-medium text-xs text-slate-600">🪖 חתום</th>
-                  <th className="text-right p-2 font-medium text-xs text-slate-600">הפרש מתקן</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {standardRows.map((r) => {
-                  const rowClass = r.diff < 0 ? "bg-rose-50" : r.diff > 0 && r.baseline > 0 ? "bg-emerald-50/50" : "";
-                  const whIcon = r.warehouseType ? (WAREHOUSE_TYPE_ICON[r.warehouseType as keyof typeof WAREHOUSE_TYPE_ICON] ?? "📦") : "📦";
-                  const breakdown = Array.from(r.statusBreakdown.values()).sort((a, b) => b.qty - a.qty);
-                  const allOK = breakdown.length === 1 && !breakdown[0].isWear && !breakdown[0].isLoss;
-                  return (
-                    <tr key={r.itemTypeId} className={rowClass}>
-                      <td className="p-2">
-                        <div className="font-medium flex items-center gap-1.5">
-                          <span>{whIcon}</span>
-                          <span>{r.itemName}</span>
-                        </div>
-                        {(r.sku || r.serialNumbers.length > 0) && (
-                          <div className="text-[11px] text-slate-500 mt-0.5 flex gap-2 flex-wrap">
-                            {r.sku && <span className="font-mono">{r.sku}</span>}
-                            {r.serialNumbers.length > 0 && r.serialNumbers.length <= 3 && (
-                              <span className="font-mono text-slate-400" title={r.serialNumbers.join(", ")}>
-                                SN: {r.serialNumbers.slice(0, 3).join(", ")}
-                              </span>
-                            )}
-                            {r.serialNumbers.length > 3 && (
-                              <span className="font-mono text-slate-400" title={r.serialNumbers.join(", ")}>
-                                {r.serialNumbers.length} סריאליים
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-2 text-xs text-slate-600">
-                        {r.categoryName ?? "—"}
-                        {r.warehouseType && (
-                          <div className="text-[10px] text-slate-400">
-                            {WAREHOUSE_TYPE_SHORT[r.warehouseType as keyof typeof WAREHOUSE_TYPE_SHORT] ?? r.warehouseType}
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-2 font-mono">
-                        <span className="bg-slate-100 rounded px-2 py-0.5">{r.baseline}</span>
-                        <span className="text-[10px] text-slate-400 mr-1">{r.unit}</span>
-                      </td>
-                      <td className="p-2 font-mono">
-                        <span className="bg-blue-50 text-blue-700 rounded px-2 py-0.5 font-bold">{r.current}</span>
-                        <span className="text-[10px] text-slate-400 mr-1">{r.unit}</span>
-                      </td>
-                      <td className="p-2">
-                        {allOK ? (
-                          <Badge className="bg-emerald-100 text-emerald-700">{breakdown[0].statusName}</Badge>
-                        ) : breakdown.length === 0 ? (
-                          <span className="text-xs text-slate-400">—</span>
-                        ) : (
-                          <div className="flex gap-1 flex-wrap">
-                            {breakdown.map((b, i) => (
-                              <Badge key={i} className={
-                                b.isLoss ? "bg-rose-100 text-rose-700" :
-                                b.isWear ? "bg-amber-100 text-amber-700" :
-                                "bg-emerald-100 text-emerald-700"
-                              }>
-                                {b.qty} {b.statusName}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-2 text-xs">
-                        {r.signedOnSoldiers > 0 ? (
-                          <span className="text-blue-700 font-medium">{r.signedOnSoldiers}</span>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
-                      </td>
-                      <td className="p-2">
-                        {r.diff < 0 && r.baseline > 0 && (
-                          <Badge className="bg-rose-100 text-rose-700">⚠️ חסר {Math.abs(r.diff)}</Badge>
-                        )}
-                        {r.diff === 0 && r.baseline > 0 && (
-                          <Badge className="bg-emerald-100 text-emerald-700">✓ מאוזן</Badge>
-                        )}
-                        {r.diff > 0 && r.baseline > 0 && (
-                          <Badge className="bg-emerald-100 text-emerald-700">↩️ {r.diff} לזיכוי</Badge>
-                        )}
-                        {r.baseline === 0 && (
-                          <Badge className="bg-slate-100 text-slate-600">ללא תקן</Badge>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="p-2.5 border-t border-slate-200 bg-slate-50 text-[11px] text-slate-600">
-            💡 <b>תקן</b> = הכמות שאמורה להישאר אצלכם גם אחרי תעסוקה (קובע מפ&quot;ם). <b>יש</b> = הכמות הכוללת בפלוגה (מלאי + חתום על חיילים).
-            פירוט יחידני (SN, חייל, מיקום) — בעמוד <b>📍 מיקומי ציוד</b>.
-          </div>
-        </Card>
+        <InventoryTable rows={standardRows.map((r) => ({
+          itemTypeId: r.itemTypeId,
+          itemName: r.itemName,
+          sku: r.sku,
+          unit: r.unit,
+          categoryName: r.categoryName,
+          warehouseType: r.warehouseType,
+          baseline: r.baseline,
+          current: r.current,
+          diff: r.diff,
+          statusBreakdown: Array.from(r.statusBreakdown.values()),
+          signedOnSoldiers: r.signedOnSoldiers,
+          serialNumbers: r.serialNumbers,
+        }))} />
       )}
 
     </div>
