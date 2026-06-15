@@ -8,8 +8,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // 🔧 חיבור ישיר (ללא pooler) רק למיגרציות - Neon Pooler לא תומך טוב ב-advisory locks
+  // ב-Vercel: הגדר DIRECT_URL = אותו URL כמו DATABASE_URL אבל בלי '-pooler' בכתובת
+  directUrl = env("DIRECT_URL")
 }
 
 // ===================== Enums =====================
