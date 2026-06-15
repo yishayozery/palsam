@@ -29,13 +29,6 @@ type Assignment = {
   soldiers: { id: string; fullName: string; personalNumber: string | null; companyName: string | null }[];
 };
 
-function todayISO(): string {
-  // local YYYY-MM-DD
-  const d = new Date();
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
 export default function DispatchClient({
   battalionName, myCompanyId, vehicles, soldiers, assignments,
 }: {
@@ -61,8 +54,8 @@ export default function DispatchClient({
     : assignments.find((a) => a.id === editingId) ?? null;
 
   const [vehicleId, setVehicleId] = useState("");
-  const [missionDate, setMissionDate] = useState(todayISO());
-  const [departureTime, setDepartureTime] = useState("08:00");
+  const [missionDate, setMissionDate] = useState("");
+  const [departureTime, setDepartureTime] = useState("");
   const [chosenSoldiers, setChosenSoldiers] = useState<Soldier[]>([]);
   const [vehicleExpand, setVehicleExpand] = useState(false);
   const [soldierExpand, setSoldierExpand] = useState(false);
@@ -74,8 +67,8 @@ export default function DispatchClient({
   function openNew() {
     setEditingId("new");
     setVehicleId("");
-    setMissionDate(todayISO());
-    setDepartureTime("08:00");
+    setMissionDate("");
+    setDepartureTime("");
     setChosenSoldiers([]);
     setError(null);
   }
@@ -137,6 +130,8 @@ export default function DispatchClient({
     setError(null);
     if (!vehicleId) { setError("בחר רכב"); return; }
     if (chosenSoldiers.length === 0) { setError("הוסף לפחות חייל אחד"); return; }
+    if (!missionDate) { setError("בחר תאריך משימה"); return; }
+    if (!departureTime) { setError("בחר שעת יציאה"); return; }
     setBusy(true);
     try {
       const fd = new FormData();
@@ -432,17 +427,27 @@ export default function DispatchClient({
                 </div>
               </div>
 
-              {/* 3. תאריך + שעה */}
+              {/* 3. תאריך + שעה - שדות חובה */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm font-semibold text-slate-700 block mb-1">3. תאריך משימה</label>
+                  <label className="text-sm font-semibold text-slate-700 block mb-1">
+                    3. תאריך משימה <span className="text-rose-600">*</span>
+                  </label>
                   <input type="date" value={missionDate} onChange={(e) => setMissionDate(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+                    required
+                    className={`w-full rounded-lg border-2 px-3 py-1.5 text-sm ${
+                      missionDate ? "border-slate-300" : "border-rose-300 bg-rose-50"
+                    }`} />
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-slate-700 block mb-1">4. שעת יציאה</label>
+                  <label className="text-sm font-semibold text-slate-700 block mb-1">
+                    4. שעת יציאה <span className="text-rose-600">*</span>
+                  </label>
                   <input type="time" value={departureTime} onChange={(e) => setDepartureTime(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+                    required
+                    className={`w-full rounded-lg border-2 px-3 py-1.5 text-sm ${
+                      departureTime ? "border-slate-300" : "border-rose-300 bg-rose-50"
+                    }`} />
                 </div>
               </div>
 
