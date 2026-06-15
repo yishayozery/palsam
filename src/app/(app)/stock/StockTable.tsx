@@ -13,6 +13,7 @@ type Item = {
   category: string | null;
   categoryId: string | null;
   warehouseType: "EQUIPMENT" | "COMMS" | "AMMO" | "ARMORY" | "VEHICLES" | "MEDICAL" | "GENERAL" | null;
+  categoryMismatch?: boolean;
   total: number;
   available: number;
   signedOnSoldiers: number;
@@ -299,7 +300,17 @@ export default function StockTable({
                 return (
                   <tr key={i.id}>
                     <Td className="font-medium">
-                      <div>{i.name}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span>{i.name}</span>
+                        {i.categoryMismatch && (
+                          <span
+                            title={`קטגוריה רשומה על מחסן ${i.warehouseType ?? ""} — שונה מטיפוס המחסן שלך`}
+                            className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 rounded px-1.5 py-0.5"
+                          >
+                            ⚠️ קטגוריה אחרת
+                          </span>
+                        )}
+                      </div>
                       {i.category && <div className="text-[10px] text-slate-400">{i.category}</div>}
                     </Td>
                     <Td className="font-mono text-xs text-slate-500">{i.sku ?? "—"}</Td>

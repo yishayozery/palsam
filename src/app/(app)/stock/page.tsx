@@ -62,8 +62,15 @@ export default async function StockPage({
   const items = await prisma.itemType.findMany({
     where: {
       battalionId: bId, active: true,
-      // 🛡️ סקופ קצין מחסן: רק פריטים השייכים לטיפוסי המחסנים שלו (חייב קטגוריה עם warehouseType מתאים)
-      ...(isScoped ? { category: { warehouseType: { in: myWarehouseTypes as never[] } } } : {}),
+      // 🛡️ סקופ קצין מחסן: מציגים כל פריט שיש לו יתרה כלשהי במחסניו (לא משנה מה הקטגוריה),
+      // כדי לכסות את המקרה של אותו פריט שמוחזק פיזית גם במחסן שלא תואם לקטגוריה שלו.
+      // הקטגוריה "הלא תואמת" תסומן בדגל ב-UI במקום להסתיר את הפריט.
+      ...(isScoped ? {
+        OR: [
+          { stockBalances: { some: { holderId: { in: user.holderIds }, quantity: { gt: 0 } } } },
+          { serialUnits: { some: { currentHolderId: { in: user.holderIds } } } },
+        ],
+      } : {}),
     },
     orderBy: { name: "asc" },
     include: {
@@ -390,12 +397,17 @@ export default async function StockPage({
             .filter((c) => c.totalQty + c.totalSerials + c.signedOnSoldiers > 0)
             .sort((a, b) => a.companyName.localeCompare(b.companyName));
 
+          // 🚩 קטגוריה לא תואמת: הפריט מאוחסן פיזית אצלי אבל קטגוריית-המחסן שלו שייכת לטיפוס אחר
+          const itemWhType = i.category?.warehouseType ?? null;
+          const categoryMismatch = isScoped && !!itemWhType && !myWarehouseTypes.includes(itemWhType);
+
           return {
             id: i.id, name: i.name, sku: i.sku, unit: i.unit,
             trackingMethod: i.trackingMethod, association: ASSOC[i.association],
             category: i.category?.name ?? null,
             categoryId: i.categoryId ?? null,
-            warehouseType: i.category?.warehouseType ?? null,
+            warehouseType: itemWhType,
+            categoryMismatch,
             total, available, signedOnSoldiers: serialSigned, transit,
             companyBreakdown,
             units: warehouseScopedSerials.map((u) => ({
