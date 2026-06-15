@@ -98,6 +98,15 @@ export default async function AppLayout({
             התנתקות
           </button>
         </form>
+        <div
+          className="mt-2 text-[10px] text-slate-500 font-mono text-center select-text"
+          title={`גרסה: ${process.env.NEXT_PUBLIC_BUILD_VERSION ?? "dev"} · נבנה: ${process.env.NEXT_PUBLIC_BUILD_DATE ?? ""}`}
+        >
+          v.{process.env.NEXT_PUBLIC_BUILD_VERSION ?? "dev"}
+          {process.env.NEXT_PUBLIC_BUILD_DATE && (
+            <span className="text-slate-600 mr-1">· {process.env.NEXT_PUBLIC_BUILD_DATE.slice(5, 10)} {process.env.NEXT_PUBLIC_BUILD_DATE.slice(11, 16)}</span>
+          )}
+        </div>
       </div>
     </>
   );

@@ -1,4 +1,25 @@
 import type { NextConfig } from "next";
+import { execSync } from "child_process";
+
+// 🏷️ זיהוי גרסה - מתעדכן אוטומטית בכל פריסה
+function getBuildVersion(): string {
+  // ב-Vercel: שתי ENV vars זמינות אוטומטית
+  const vercelSha = process.env.VERCEL_GIT_COMMIT_SHA;
+  if (vercelSha) return vercelSha.slice(0, 7);
+  // לוקלי: ננסה לקרוא מגיט
+  try {
+    return execSync("git rev-parse --short HEAD", { encoding: "utf-8" }).trim();
+  } catch {
+    return "dev";
+  }
+}
+
+function getBuildDate(): string {
+  return new Date().toISOString().slice(0, 16).replace("T", " ");
+}
+
+const BUILD_VERSION = getBuildVersion();
+const BUILD_DATE = getBuildDate();
 
 const securityHeaders = [
   // 🛡️ HSTS — דורש HTTPS לכל בקשה, מונע downgrade
@@ -18,6 +39,11 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // 🏷️ זמין לקליינט כ-process.env.NEXT_PUBLIC_BUILD_VERSION / DATE
+  env: {
+    NEXT_PUBLIC_BUILD_VERSION: BUILD_VERSION,
+    NEXT_PUBLIC_BUILD_DATE: BUILD_DATE,
+  },
   experimental: {
     serverActions: { bodySizeLimit: "10mb" },
   },
