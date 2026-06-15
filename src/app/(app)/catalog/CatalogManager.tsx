@@ -143,7 +143,7 @@ export default function CatalogManager({ categories, locations = [], edit }: { c
                   {locations.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
                 </select>
                 {locations.length === 0 && (
-                  <p className="text-[11px] text-slate-400 mt-1">אין מידופים מוגדרים. הגדר ב<a href="/locations" className="text-blue-600 hover:underline">מידוף ימ״ח</a>.</p>
+                  <p className="text-[11px] text-slate-400 mt-1">אין מחסנים מוגדרים. הגדר ב<a href="/locations" className="text-blue-600 hover:underline">מחסני ימ״ח</a>.</p>
                 )}
               </div>
 

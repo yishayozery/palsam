@@ -49,7 +49,7 @@ export const NAV: NavItem[] = [
   { href: "/counts", label: "ספירת מלאי", icon: "🔢", group: "הפלוגה שלי", cap: "counts.execute" },
   { href: "/counts/plans", label: "תכניות ספירה", icon: "📋", group: "הפלוגה שלי", cap: "counts.manage" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "הפלוגה שלי", cap: "company.manage" },
-  { href: "/locations?tab=items", label: "מידוף ימ\"ח", icon: "🗄️", group: "הפלוגה שלי", cap: "locations.manage" },
+  { href: "/locations?tab=items", label: "מחסני ימ\"ח", icon: "🗄️", group: "הפלוגה שלי", cap: "locations.manage" },
 
   // ===== המחסנים שלי (קצין מחסן — תפעול שוטף) =====
   // סדר לפי שלבי העבודה: נציגים → פריטים → מלאי → ערכות → מידוף → החתמות → ספירות → פערים

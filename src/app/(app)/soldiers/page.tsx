@@ -114,6 +114,7 @@ export default async function SoldiersPage() {
         lastSignedBy: l.transfer.type === "SIGNOUT" ? l.transfer.createdBy.fullName : null,
       });
     }
+    qtyBySoldier.set(sId, map); // 🐛 fix: ה-map לא נשמר חזרה במפה הראשית — לכן ציוד כמותי לא הוצג
   }
 
   const fields = [

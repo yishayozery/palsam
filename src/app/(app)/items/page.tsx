@@ -51,7 +51,7 @@ export default async function ItemsPage({
     { key: "items", label: "פריטים (מק״טים)", href: "/items?tab=items" },
     { key: "categories", label: "קטגוריות", href: "/items?tab=categories" },
     { key: "statuses", label: "סטטוסים", href: "/items?tab=statuses" },
-    { key: "locations", label: "🗄️ מידוף ימ\"ח", href: "/items?tab=locations" },
+    { key: "locations", label: "🗄️ מחסני ימ\"ח", href: "/items?tab=locations" },
   ];
 
   const search = q.trim();
