@@ -22,7 +22,8 @@ export type Capability =
   | "gaps.resolve" // אישור/סגירת פערים
   | "maintenance.manage" // טנא: ניהול ציוד תקול ותיקונים
   | "reports.view" // דשבורד ודוחות
-  | "audit.view"; // יומן פעולות
+  | "audit.view" // יומן פעולות
+  | "dispatch.manage"; // שבצ"ק - יצירה/עריכה של שיבוצי רכב
 
 const MATRIX: Record<Role, Capability[]> = {
   SUPER_ADMIN: ["battalions.manage", "users.manage", "reports.view", "audit.view"],
@@ -44,6 +45,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "maintenance.manage",
     "reports.view",
     "audit.view",
+    "dispatch.manage",
   ],
   WAREHOUSE_MANAGER: [
     "warehouse.operate",
@@ -59,6 +61,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "counts.execute",
     "gaps.resolve",
     "reports.view",
+    "dispatch.manage",
   ],
   COMPANY_REP: [
     "company.manage",
@@ -66,11 +69,12 @@ const MATRIX: Record<Role, Capability[]> = {
     "donations.manage",
     "transfer.approve",
     "signatures.manage",
-    "counts.manage", // יכול לחולל תכניות ספירה לפלוגתו (וקציני המחסן שלה)
+    "counts.manage",
     "counts.execute",
     "reports.view",
+    "dispatch.manage",
   ],
-  VIEWER: ["reports.view"],
+  VIEWER: ["reports.view", "dispatch.manage"],
 };
 
 export function can(role: Role, cap: Capability): boolean {

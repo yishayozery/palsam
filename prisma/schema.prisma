@@ -134,6 +134,7 @@ model Battalion {
   stockBalances StockBalance[]
   soldierItemLocations SoldierItemLocation[]
   companyItemBaselines CompanyItemBaseline[] @relation("BattalionBaselines")
+  vehicleAssignments   VehicleAssignment[] @relation("BattalionDispatch")
   serialUnits   SerialUnit[]
   kitInstances  KitInstance[]
   transfers     Transfer[]
@@ -183,6 +184,7 @@ model AppUser {
   approvedTransfers Transfer[]         @relation("TransferApprovedBy")
   recipientTransfers Transfer[]        @relation("TransferToUser")
   signedAsUser      Signature[]        @relation("SignerUser")
+  createdDispatches VehicleAssignment[] @relation("DispatchCreatedBy")
   startedCounts     CountSession[]     @relation("CountStartedBy")
   createdCountPlans CountPlan[]        @relation("CountPlanCreatedBy")
   responsibleCountPlans CountPlan[]    @relation("CountPlanResponsible")
@@ -274,6 +276,7 @@ model Holder {
   secondarySoldiers Soldier[]        @relation("SoldierSecondary")
   discrepancies    Discrepancy[]
   companyItemBaselines CompanyItemBaseline[] @relation("HolderBaselines")
+  dispatchAssignments VehicleAssignment[] @relation("CompanyDispatch")
   // קשרי מחסן↔פלוגה (איזה פלוגות המחסן עובד מולן)
   warehouseLinks   WarehouseCompany[] @relation("WarehouseSide")
   companyLinks     WarehouseCompany[] @relation("CompanySide")
@@ -396,6 +399,7 @@ model Soldier {
   transfersTo        Transfer[]    @relation("TransferToSoldier")
   signatures         Signature[]
   itemLocations      SoldierItemLocation[] @relation("SoldierItemLocations")
+  dispatchAssignments VehicleAssignmentSoldier[] @relation("SoldierDispatch")
   // מקושר למשתמש מערכת (קצין/רס"פ)
   appUser            AppUser?      @relation("SoldierAsUser")
 
@@ -409,6 +413,44 @@ model Soldier {
  * משמש כדי לאכוף בזיכוי: לא ניתן לזכות מתחת ל-baseline.
  * אגרגטיבי - לא תלוי סטטוס (תקין/תקול/אובד).
  */
+/**
+ * שבצ"ק - שיבוץ חיילים לרכב למשימה.
+ * נראה לכולם, ניתן לעריכה ע"י כולם, מינימום שדות (ביטחון מידע).
+ */
+model VehicleAssignment {
+  id                  String   @id @default(cuid())
+  battalionId         String
+  battalion           Battalion @relation("BattalionDispatch", fields: [battalionId], references: [id], onDelete: Cascade)
+  companyId           String?
+  company             Holder?  @relation("CompanyDispatch", fields: [companyId], references: [id], onDelete: SetNull)
+  vehicleSerialUnitId String
+  vehicleSerialUnit   SerialUnit @relation("VehicleAssignmentVehicle", fields: [vehicleSerialUnitId], references: [id], onDelete: Cascade)
+  missionDate         DateTime // תאריך משימה (ביום הראשון של היום - שעה 00:00)
+  departureTime       String   // שעת יציאה כ-string HH:mm (פשוט יותר משילוב בתאריך)
+  createdById         String
+  createdBy           AppUser  @relation("DispatchCreatedBy", fields: [createdById], references: [id])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  updatedById         String?
+
+  soldiers            VehicleAssignmentSoldier[]
+
+  @@index([battalionId, missionDate])
+  @@index([vehicleSerialUnitId])
+}
+
+model VehicleAssignmentSoldier {
+  id           String   @id @default(cuid())
+  assignmentId String
+  assignment   VehicleAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  soldierId    String
+  soldier      Soldier  @relation("SoldierDispatch", fields: [soldierId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+
+  @@unique([assignmentId, soldierId])
+  @@index([soldierId])
+}
+
 model CompanyItemBaseline {
   id                 String    @id @default(cuid())
   battalionId        String
@@ -629,6 +671,7 @@ model SerialUnit {
   storedItems      SerialUnit[]     @relation("SerialUnitVehicle")
   // אם זו יחידת רכב — מיקומי ציוד שמצביעים אליה
   asEquipmentLocations EquipmentLocation[] @relation("EquipmentLocationVehicle")
+  dispatchAssignments  VehicleAssignment[] @relation("VehicleAssignmentVehicle")
   locationId       String?
   location         StorageLocation? @relation(fields: [locationId], references: [id])
 

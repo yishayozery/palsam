@@ -24,6 +24,7 @@ export const NAV: NavItem[] = [
   // ===== ראשי =====
   { href: "/admin/battalions", label: "ניהול גדודים", icon: "🏛️", group: "ראשי", roles: ["SUPER_ADMIN"] },
   { href: "/dashboard", label: "דשבורד", icon: "📊", group: "ראשי", cap: "reports.view" },
+  { href: "/dispatch", label: "שבצ\"ק - שיבוץ רכבים", icon: "🚗", group: "ראשי", cap: "dispatch.manage" },
 
   // ===== פלסם (מפ"מ — אחראי מערכת בגדוד) =====
   { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "פלסם", cap: "battalion.profile" },
