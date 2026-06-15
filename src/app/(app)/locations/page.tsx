@@ -33,9 +33,18 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
   });
   // פריטים + המיקום הנוכחי שלהם ב-holder הזה
   const bId = user.battalionId!;
+  // 🆕 רק פריטים שיש להם תקן קבוע אצל ה-holder הזה (CompanyItemBaseline.permanentQuantity > 0)
+  // ככה מצמצמים את "פריטים במידוף" לציוד שמעניין את הפלוגה - לא כל קטלוג הגדוד.
+  const permanentItems = await prisma.companyItemBaseline.findMany({
+    where: { battalionId: bId, companyId: user.holderId, permanentQuantity: { gt: 0 } },
+    select: { itemTypeId: true },
+  });
+  const permanentItemIds = permanentItems.map((p) => p.itemTypeId);
+
   const [allItems, holderMappings] = await Promise.all([
+    permanentItemIds.length === 0 ? Promise.resolve([]) :
     prisma.itemType.findMany({
-      where: { battalionId: bId, active: true },
+      where: { battalionId: bId, active: true, id: { in: permanentItemIds } },
       orderBy: { name: "asc" },
       include: { category: { select: { warehouseType: true } } },
     }),
