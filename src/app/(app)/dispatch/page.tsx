@@ -95,6 +95,7 @@ export default async function DispatchPage() {
             departureTime: a.departureTime,
             createdByName: a.createdBy.fullName,
             createdAt: a.createdAt.toISOString(),
+            completedAt: a.completedAt?.toISOString() ?? null,
             soldiers: a.soldiers.map((s) => ({
               id: s.soldier.id,
               fullName: s.soldier.fullName,

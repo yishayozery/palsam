@@ -100,6 +100,33 @@ export async function saveAssignment(
   }
 }
 
+/** סימון/ביטול סימון של 'הסתיימה משימה'. */
+export async function toggleAssignmentComplete(
+  formData: FormData,
+): Promise<{ ok?: boolean; error?: string; completedAt?: string | null }> {
+  try {
+    const user = await requireCapability("dispatch.manage");
+    const id = String(formData.get("id") || "");
+    const setCompletedRaw = String(formData.get("completed") || "true");
+    const setCompleted = setCompletedRaw === "true";
+    if (!id) return { error: "חסר מזהה" };
+    const existing = await prisma.vehicleAssignment.findUnique({
+      where: { id }, select: { battalionId: true, completedAt: true },
+    });
+    if (!existing || existing.battalionId !== user.battalionId) return { error: "שיבוץ לא נמצא" };
+    const completedAt = setCompleted ? new Date() : null;
+    await prisma.vehicleAssignment.update({
+      where: { id },
+      data: { completedAt, completedById: setCompleted ? user.id : null },
+    });
+    await audit(user.id, setCompleted ? "MISSION_COMPLETE" : "MISSION_REOPEN", "VehicleAssignment", id);
+    revalidatePath("/dispatch");
+    return { ok: true, completedAt: completedAt?.toISOString() ?? null };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
 /** מחיקת שיבוץ. כל המשתמשים יכולים. */
 export async function deleteAssignment(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {

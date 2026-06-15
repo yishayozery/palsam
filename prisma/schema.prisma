@@ -432,10 +432,14 @@ model VehicleAssignment {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   updatedById         String?
+  // 🆕 סימון השלמת משימה - מתי הסתיימה. NULL = פעילה
+  completedAt         DateTime?
+  completedById       String?
 
   soldiers            VehicleAssignmentSoldier[]
 
   @@index([battalionId, missionDate])
+  @@index([battalionId, completedAt])
   @@index([vehicleSerialUnitId])
 }
 

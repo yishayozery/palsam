@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Badge, EmptyState } from "@/components/ui";
 import { useEscClose } from "@/lib/useEscClose";
-import { saveAssignment, deleteAssignment } from "./actions";
+import { saveAssignment, deleteAssignment, toggleAssignmentComplete } from "./actions";
 
 type Vehicle = {
   id: string; itemName: string; serialNumber: string;
@@ -26,6 +26,7 @@ type Assignment = {
   departureTime: string; // HH:mm
   createdByName: string;
   createdAt: string;
+  completedAt: string | null;
   soldiers: { id: string; fullName: string; personalNumber: string | null; companyName: string | null }[];
 };
 
@@ -43,6 +44,7 @@ export default function DispatchClient({
   const [busy, setBusy] = useState(false);
 
   // 🔍 סינונים בדף הראשי
+  const [tab, setTab] = useState<"active" | "completed">("active");
   const [listQuery, setListQuery] = useState("");
   const [listDateFrom, setListDateFrom] = useState("");
   const [listDateTo, setListDateTo] = useState("");
@@ -158,6 +160,21 @@ export default function DispatchClient({
     } finally { setBusy(false); }
   }
 
+  async function toggleComplete(id: string, currentlyCompleted: boolean) {
+    const setCompleted = !currentlyCompleted;
+    if (setCompleted && !confirm("לסמן את המשימה כהסתיימה?")) return;
+    if (!setCompleted && !confirm("להחזיר לרשימת הפעילות?")) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("id", id);
+      fd.append("completed", String(setCompleted));
+      const res = await toggleAssignmentComplete(fd);
+      if (res?.error) alert(res.error);
+      else router.refresh();
+    } finally { setBusy(false); }
+  }
+
   function buildWhatsAppText(a: Assignment): string {
     const dateStr = new Date(a.missionDate).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
     const vehicleLine = `רכב: ${a.vehicleName} ${a.vehicleSerial}` +
@@ -178,11 +195,18 @@ export default function DispatchClient({
     return lines.join("\n");
   }
 
-  // 🔍 סינון הרשימה
+  // 🆕 ספירות פעילים / הושלמו
+  const counts = useMemo(() => ({
+    active: assignments.filter((a) => !a.completedAt).length,
+    completed: assignments.filter((a) => !!a.completedAt).length,
+  }), [assignments]);
+
+  // 🔍 סינון הרשימה - מתחיל מטאב נוכחי
   const filteredAssignments = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7);
-    return assignments.filter((a) => {
+    const base = assignments.filter((a) => tab === "completed" ? !!a.completedAt : !a.completedAt);
+    return base.filter((a) => {
       // חיפוש טקסט חופשי - רכב/SN/חייל/מ.א./פלוגה
       if (listQuery.trim()) {
         const q = listQuery.toLowerCase();
@@ -206,19 +230,32 @@ export default function DispatchClient({
       }
       return true;
     });
-  }, [assignments, listQuery, listDateFrom, listDateTo, listTimeFilter]);
+  }, [assignments, tab, listQuery, listDateFrom, listDateTo, listTimeFilter]);
 
   const hasFilter = !!(listQuery || listDateFrom || listDateTo || listTimeFilter !== "all");
 
   return (
     <>
-      {/* כפתור יצירה */}
+      {/* כפתור יצירה + טאבים */}
       <div className="mb-3 flex items-center gap-3 flex-wrap">
         <button onClick={openNew}
           className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-4 py-2 text-sm font-medium">
           + שיבוץ חדש
         </button>
-        <span className="text-xs text-slate-500">{assignments.length} שיבוצים</span>
+        <div className="flex bg-slate-100 rounded-lg p-1 gap-1">
+          <button onClick={() => setTab("active")}
+            className={`text-sm rounded-md px-3 py-1 transition ${
+              tab === "active" ? "bg-white text-slate-900 shadow-sm font-medium" : "text-slate-600 hover:text-slate-900"
+            }`}>
+            📋 פעילות ({counts.active})
+          </button>
+          <button onClick={() => setTab("completed")}
+            className={`text-sm rounded-md px-3 py-1 transition ${
+              tab === "completed" ? "bg-white text-slate-900 shadow-sm font-medium" : "text-slate-600 hover:text-slate-900"
+            }`}>
+            ✓ הושלמו ({counts.completed})
+          </button>
+        </div>
       </div>
 
       {/* 🔍 פילטרים */}
@@ -282,8 +319,13 @@ export default function DispatchClient({
             const dateObj = new Date(a.missionDate);
             const today = new Date(); today.setHours(0, 0, 0, 0);
             const isPast = dateObj < today;
+            const isCompleted = !!a.completedAt;
+            const completedStr = a.completedAt
+              ? new Date(a.completedAt).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" }) +
+                " " + new Date(a.completedAt).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })
+              : null;
             return (
-              <Card key={a.id} className={`overflow-hidden ${isPast ? "opacity-60" : ""}`}>
+              <Card key={a.id} className={`overflow-hidden ${isCompleted ? "bg-emerald-50/30" : isPast ? "opacity-60" : ""}`}>
                 <div className="p-3 flex items-start gap-3 flex-wrap">
                   <div className="flex-1 min-w-44">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -291,13 +333,15 @@ export default function DispatchClient({
                       <span className="font-bold text-slate-800">{a.vehicleName}</span>
                       <span className="font-mono text-xs bg-slate-100 rounded px-1.5 py-0.5">{a.vehicleSerial}</span>
                       {a.companyName && <Badge className="bg-indigo-100 text-indigo-700">{a.companyName}</Badge>}
-                      {isPast && <Badge className="bg-slate-200 text-slate-600">עבר</Badge>}
+                      {isCompleted && <Badge className="bg-emerald-100 text-emerald-700">✓ הסתיימה</Badge>}
+                      {!isCompleted && isPast && <Badge className="bg-amber-100 text-amber-700">⚠️ לא נסגר</Badge>}
                     </div>
                     <div className="text-xs text-slate-600 mt-1 flex gap-3 flex-wrap">
                       <span>📅 <b>{dateStr}</b></span>
                       <span>⏰ <b>{a.departureTime}</b></span>
                       <span>👥 <b>{a.soldiers.length}</b> חיילים</span>
                       <span className="text-slate-400">· יצר: {a.createdByName}</span>
+                      {completedStr && <span className="text-emerald-700">· הסתיים: {completedStr}</span>}
                     </div>
                     <div className="text-xs text-slate-700 mt-1.5 flex gap-1 flex-wrap">
                       {a.soldiers.map((s) => (
@@ -307,7 +351,19 @@ export default function DispatchClient({
                       ))}
                     </div>
                   </div>
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-1.5 flex-wrap">
+                    {!isCompleted && (
+                      <button onClick={() => toggleComplete(a.id, false)} disabled={busy}
+                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded px-2.5 py-1.5 disabled:opacity-50">
+                        ✓ הסתיימה
+                      </button>
+                    )}
+                    {isCompleted && (
+                      <button onClick={() => toggleComplete(a.id, true)} disabled={busy}
+                        className="text-xs bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 rounded px-2.5 py-1.5">
+                        ↩ החזר לפעילות
+                      </button>
+                    )}
                     <button onClick={() => setShareOpenId(a.id)}
                       className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded px-2.5 py-1.5">
                       💬 שלח
