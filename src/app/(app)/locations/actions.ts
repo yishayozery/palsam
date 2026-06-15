@@ -137,21 +137,105 @@ export async function deleteEquipmentLocation(formData: FormData): Promise<{ ok?
   }
 }
 
-/** 🆕 הגדרת מיקום ציוד לכמות במלאי הפלוגה (StockBalance) */
+/** 🆕 העברת כמות בין מיקומים פיזיים של אותו (פריט × מחזיק × סטטוס).
+ *  ⚠️ אם היעד כבר קיים — מתאחד; אם המקור מתרוקן (ומיקום מוגדר) — נמחק.
+ *  משמש גם כדי לשנות מיקום של שורה: from=הנוכחי, to=החדש, quantity=הכל. */
+export async function moveStockToLocation(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireCapability("locations.manage");
+    if (!user.battalionId) return { error: "אינך משויך לגדוד" };
+    const stockBalanceId = String(formData.get("stockBalanceId") || "");
+    const toLocationIdRaw = String(formData.get("toLocationId") || "");
+    const toLocationId = toLocationIdRaw === "" ? null : toLocationIdRaw;
+    const quantity = parseInt(String(formData.get("quantity") || "0"), 10);
+    if (!stockBalanceId) return { error: "חסר מזהה שורה" };
+    if (!quantity || quantity <= 0) return { error: "כמות חייבת להיות חיובית" };
+
+    const sb = await prisma.stockBalance.findUnique({
+      where: { id: stockBalanceId },
+      select: { id: true, battalionId: true, itemTypeId: true, holderId: true, statusId: true, equipmentLocationId: true, quantity: true },
+    });
+    if (!sb || sb.battalionId !== user.battalionId) return { error: "מלאי לא בגדוד" };
+    if (sb.equipmentLocationId === toLocationId) return { error: "המיקום זהה" };
+    if (toLocationId) {
+      const loc = await prisma.equipmentLocation.findUnique({ where: { id: toLocationId }, select: { battalionId: true } });
+      if (!loc || loc.battalionId !== user.battalionId) return { error: "מיקום יעד לא נמצא" };
+    }
+    if (quantity > sb.quantity) return { error: `אין מספיק במקור (זמין: ${sb.quantity})` };
+
+    await prisma.$transaction(async (tx) => {
+      const fromNext = sb.quantity - quantity;
+      if (fromNext === 0 && sb.equipmentLocationId !== null) {
+        await tx.stockBalance.delete({ where: { id: sb.id } });
+      } else {
+        await tx.stockBalance.update({ where: { id: sb.id }, data: { quantity: fromNext } });
+      }
+      const target = await tx.stockBalance.findFirst({
+        where: {
+          itemTypeId: sb.itemTypeId, holderId: sb.holderId, statusId: sb.statusId,
+          equipmentLocationId: toLocationId,
+        },
+      });
+      if (target) {
+        await tx.stockBalance.update({ where: { id: target.id }, data: { quantity: target.quantity + quantity } });
+      } else {
+        await tx.stockBalance.create({
+          data: {
+            battalionId: user.battalionId!,
+            itemTypeId: sb.itemTypeId, holderId: sb.holderId, statusId: sb.statusId,
+            equipmentLocationId: toLocationId, quantity,
+          },
+        });
+      }
+    });
+    await audit(user.id, "MOVE_STOCK_LOCATION", "StockBalance", stockBalanceId, {
+      from: sb.equipmentLocationId, to: toLocationId, quantity,
+    });
+    revalidatePath("/my-inventory");
+    revalidatePath("/my-inventory/locations");
+    revalidatePath("/stock");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** 🆕 הגדרת מיקום ציוד לכמות במלאי הפלוגה (StockBalance) — שינוי מיקום של שורה שלמה.
+ *  שונה מ-move: אם היעד קיים, נכשל במקום למזג. שימוש בעיקר כברירת מחדל למיקום של שורה ללא מיקום.
+ *  📍 לפיצול בין מיקומים השתמש ב-moveStockToLocation. */
 export async function setStockEquipmentLocation(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
     const user = await requireCapability("locations.manage");
     const stockBalanceId = String(formData.get("stockBalanceId") || "");
     const equipmentLocationId = String(formData.get("equipmentLocationId") || "") || null;
-    const sb = await prisma.stockBalance.findUnique({ where: { id: stockBalanceId }, select: { battalionId: true } });
+    const sb = await prisma.stockBalance.findUnique({
+      where: { id: stockBalanceId },
+      select: { battalionId: true, itemTypeId: true, holderId: true, statusId: true, equipmentLocationId: true, quantity: true },
+    });
     if (!sb || sb.battalionId !== user.battalionId) return { error: "מלאי לא בגדוד" };
     if (equipmentLocationId) {
       const loc = await prisma.equipmentLocation.findUnique({ where: { id: equipmentLocationId }, select: { battalionId: true } });
       if (!loc || loc.battalionId !== user.battalionId) return { error: "מיקום לא נמצא" };
     }
-    await prisma.stockBalance.update({ where: { id: stockBalanceId }, data: { equipmentLocationId } });
-    await audit(user.id, "UPDATE_LOCATION", "StockBalance", stockBalanceId, { equipmentLocationId });
+    // אם יעד קיים → ממזג (משתמש ב-moveStockToLocation מוזרם)
+    const target = await prisma.stockBalance.findFirst({
+      where: {
+        itemTypeId: sb.itemTypeId, holderId: sb.holderId, statusId: sb.statusId,
+        equipmentLocationId: equipmentLocationId,
+        NOT: { id: stockBalanceId },
+      },
+    });
+    if (target) {
+      await prisma.$transaction(async (tx) => {
+        await tx.stockBalance.update({ where: { id: target.id }, data: { quantity: target.quantity + sb.quantity } });
+        await tx.stockBalance.delete({ where: { id: stockBalanceId } });
+      });
+    } else {
+      await prisma.stockBalance.update({ where: { id: stockBalanceId }, data: { equipmentLocationId } });
+    }
+    await audit(user.id, "UPDATE_LOCATION", "StockBalance", stockBalanceId, { equipmentLocationId, merged: !!target });
     revalidatePath("/my-inventory");
+    revalidatePath("/my-inventory/locations");
     revalidatePath("/stock");
     return { ok: true };
   } catch (e) {

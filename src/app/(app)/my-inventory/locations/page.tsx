@@ -153,16 +153,22 @@ export default async function CompanyLocationsPage({
         title="📍 מיקומי ציוד הפלוגה"
         subtitle={`${company?.name ?? ""} — לכל פריט (סריאלי או כמותי) מיקום פיזי: רכב, אוהל, ערמה.`}
         action={
-          <ManageLocationsModal
-            holderName={company?.name ?? ""}
-            locations={equipmentLocations.map((l) => ({
-              id: l.id, name: l.name,
-              vehicleSerialUnitId: l.vehicleSerialUnitId,
-              vehicleSerialNumber: l.vehicleSerialUnit?.serialNumber ?? null,
-              unitsCount: byLocation.get(l.id) ?? 0,
-            }))}
-            vehicles={vehicles.map((v) => ({ id: v.id, serialNumber: v.serialNumber, itemName: v.itemType.name }))}
-          />
+          <div className="flex gap-2 flex-wrap">
+            <a href="/my-inventory/locations/report" download
+              className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg px-3 py-2 text-xs">
+              📊 דוח מאוחד (Excel)
+            </a>
+            <ManageLocationsModal
+              holderName={company?.name ?? ""}
+              locations={equipmentLocations.map((l) => ({
+                id: l.id, name: l.name,
+                vehicleSerialUnitId: l.vehicleSerialUnitId,
+                vehicleSerialNumber: l.vehicleSerialUnit?.serialNumber ?? null,
+                unitsCount: byLocation.get(l.id) ?? 0,
+              }))}
+              vehicles={vehicles.map((v) => ({ id: v.id, serialNumber: v.serialNumber, itemName: v.itemType.name }))}
+            />
+          </div>
         }
       />
 

@@ -158,21 +158,22 @@ async function main() {
   });
   console.log(`✓ נוצרה תעודת INTAKE ${transfer.id.slice(-8).toUpperCase()} עם ${transferLinesData.length} שורות`);
 
-  // 9. StockBalance לכל פריט
+  // 9. StockBalance לכל פריט - בשורת ה-NULL location (הברירת מחדל)
   let balancesCreated = 0;
   for (const line of transferLinesData) {
-    await prisma.stockBalance.upsert({
-      where: {
-        itemTypeId_holderId_statusId: {
-          itemTypeId: line.itemTypeId, holderId: company.id, statusId: line.statusId,
-        },
-      },
-      create: {
-        battalionId: bId, itemTypeId: line.itemTypeId, holderId: company.id,
-        statusId: line.statusId, quantity: line.quantity,
-      },
-      update: { quantity: line.quantity },
+    const existing = await prisma.stockBalance.findFirst({
+      where: { itemTypeId: line.itemTypeId, holderId: company.id, statusId: line.statusId, equipmentLocationId: null },
     });
+    if (existing) {
+      await prisma.stockBalance.update({ where: { id: existing.id }, data: { quantity: line.quantity } });
+    } else {
+      await prisma.stockBalance.create({
+        data: {
+          battalionId: bId, itemTypeId: line.itemTypeId, holderId: company.id,
+          statusId: line.statusId, quantity: line.quantity,
+        },
+      });
+    }
     balancesCreated++;
   }
   console.log(`✓ ${balancesCreated} שורות StockBalance נוצרו ב-"${input.companyName}"`);

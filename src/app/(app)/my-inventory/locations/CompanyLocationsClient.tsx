@@ -7,6 +7,7 @@ import {
   setUnitEquipmentLocation,
   setStockEquipmentLocation,
   setSoldierItemPlacements,
+  moveStockToLocation,
 } from "../../locations/actions";
 
 type SerialItem = {
@@ -262,53 +263,37 @@ export default function CompanyLocationsClient({
         </Card>
       )}
 
-      {/* כמותי במלאי הפלוגה */}
-      {filteredCompanyQty.length > 0 && (
-        <Card className="overflow-hidden">
-          <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-            <h3 className="font-bold text-slate-700">📦 כמותי במלאי הפלוגה ({filteredCompanyQty.length})</h3>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {filteredCompanyQty.map((s) => {
-              const fb = feedback?.id === s.stockBalanceId ? feedback : null;
-              return (
-                <div key={s.stockBalanceId} className={`px-4 py-2.5 flex items-center gap-3 flex-wrap ${fb?.ok ? "bg-emerald-50" : ""}`}>
-                  <span className="text-lg">📦</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium">
-                      {s.itemName}
-                      {s.sku && <span className="text-[10px] text-slate-400 mr-2">{s.sku}</span>}
-                      <span className="text-[11px] bg-blue-100 text-blue-800 rounded px-1.5 py-0.5 mr-1">×{s.quantity} {s.unit}</span>
-                    </div>
-                    <div className="text-xs text-slate-500 mt-0.5">
-                      <span className={s.isLoss ? "text-rose-600 font-medium" : s.isWear ? "text-amber-600 font-medium" : ""}>
-                        {s.statusName}{s.isLoss && " 🔴"}{s.isWear && " 🟡"}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-[11px] text-slate-600 whitespace-nowrap">📍</label>
-                    <select value={s.equipmentLocationId ?? ""}
-                      onChange={(e) => changeStockLocation(s.stockBalanceId, e.target.value)}
-                      disabled={savingId === s.stockBalanceId || locations.length === 0}
-                      className={`rounded-lg border-2 px-2 py-1.5 text-sm min-w-44 ${
-                        !s.equipmentLocationId ? "border-rose-300 bg-rose-50" : "border-emerald-200 bg-white"
-                      } disabled:opacity-50`}>
-                      <option value="">— ללא מיקום —</option>
-                      {locations.map((l) => (
-                        <option key={l.id} value={l.id}>{l.isVehicle ? "🚙" : "📍"} {l.name}</option>
-                      ))}
-                    </select>
-                    {savingId === s.stockBalanceId && <span className="text-xs text-slate-500">שומר...</span>}
-                    {fb?.ok && <span className="text-xs text-emerald-700">✓</span>}
-                    {fb?.msg && <span className="text-xs text-rose-700" title={fb.msg}>⚠️</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
+      {/* כמותי במלאי הפלוגה - מקובץ לפי (item, status) להצגת פיצולים */}
+      {filteredCompanyQty.length > 0 && (() => {
+        const groups = new Map<string, QtyStock[]>();
+        for (const s of filteredCompanyQty) {
+          const k = `${s.itemTypeId}|${s.statusId}`;
+          const arr = groups.get(k) ?? [];
+          arr.push(s);
+          groups.set(k, arr);
+        }
+        const groupArr = Array.from(groups.values()).sort((a, b) => a[0].itemName.localeCompare(b[0].itemName));
+        return (
+          <Card className="overflow-hidden">
+            <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
+              <h3 className="font-bold text-slate-700">📦 כמותי במלאי הפלוגה ({groupArr.length} פריטים, {filteredCompanyQty.length} שורות)</h3>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {groupArr.map((rows) => (
+                <CompanyQtyGroup
+                  key={`${rows[0].itemTypeId}|${rows[0].statusId}`}
+                  rows={rows}
+                  locations={locations}
+                  feedback={feedback}
+                  savingId={savingId}
+                  onChange={(id, locId) => changeStockLocation(id, locId)}
+                  onSplit={() => router.refresh()}
+                />
+              ))}
+            </div>
+          </Card>
+        );
+      })()}
 
       {/* כמותי חתום על חיילים */}
       {filteredSignedQty.length > 0 && (
@@ -457,6 +442,121 @@ function SignedQtyRowEditor({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function CompanyQtyGroup({
+  rows, locations, feedback, savingId, onChange, onSplit,
+}: {
+  rows: QtyStock[];
+  locations: Location[];
+  feedback: { id: string; ok: boolean; msg?: string } | null;
+  savingId: string | null;
+  onChange: (id: string, locId: string) => void;
+  onSplit: () => void;
+}) {
+  const first = rows[0];
+  const total = rows.reduce((s, r) => s + r.quantity, 0);
+  const [splittingId, setSplittingId] = useState<string | null>(null);
+  const [splitQty, setSplitQty] = useState(1);
+  const [splitTo, setSplitTo] = useState("");
+  const [splitErr, setSplitErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function doSplit(sourceId: string, sourceQty: number) {
+    setSplitErr(null);
+    if (!splitTo) { setSplitErr("בחר מיקום יעד"); return; }
+    if (splitQty < 1 || splitQty > sourceQty) { setSplitErr("כמות לא חוקית"); return; }
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("stockBalanceId", sourceId);
+      fd.append("toLocationId", splitTo);
+      fd.append("quantity", String(splitQty));
+      const res = await moveStockToLocation(fd);
+      if (res?.error) setSplitErr(res.error);
+      else { setSplittingId(null); setSplitQty(1); setSplitTo(""); onSplit(); }
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="px-4 py-2.5">
+      <div className="flex items-center gap-3 flex-wrap mb-2">
+        <span className="text-lg">📦</span>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium">
+            {first.itemName}
+            {first.sku && <span className="text-[10px] text-slate-400 mr-2">{first.sku}</span>}
+            <span className="text-[11px] bg-blue-100 text-blue-800 rounded px-1.5 py-0.5 mr-1">×{total} {first.unit}</span>
+          </div>
+          <div className="text-xs text-slate-500 mt-0.5">
+            <span className={first.isLoss ? "text-rose-600 font-medium" : first.isWear ? "text-amber-600 font-medium" : ""}>
+              {first.statusName}{first.isLoss && " 🔴"}{first.isWear && " 🟡"}
+            </span>
+            {rows.length > 1 && <span className="mr-2 text-blue-700">📤 מפוצל ל-{rows.length} מיקומים</span>}
+          </div>
+        </div>
+      </div>
+      {/* כל שורת מיקום בנפרד */}
+      <div className="space-y-1.5 ms-7">
+        {rows.map((s) => {
+          const fb = feedback?.id === s.stockBalanceId ? feedback : null;
+          const canSplit = s.quantity > 1 && locations.length > 0;
+          const isSplitting = splittingId === s.stockBalanceId;
+          return (
+            <div key={s.stockBalanceId}>
+              <div className={`flex items-center gap-2 flex-wrap text-sm ${fb?.ok ? "bg-emerald-50 rounded p-1" : ""}`}>
+                <span className="font-mono text-slate-600 text-xs bg-slate-100 rounded px-2 py-0.5">×{s.quantity}</span>
+                <label className="text-[11px] text-slate-600 whitespace-nowrap">📍</label>
+                <select value={s.equipmentLocationId ?? ""}
+                  onChange={(e) => onChange(s.stockBalanceId, e.target.value)}
+                  disabled={savingId === s.stockBalanceId || locations.length === 0}
+                  className={`rounded-lg border-2 px-2 py-1 text-sm min-w-44 ${
+                    !s.equipmentLocationId ? "border-rose-300 bg-rose-50" : "border-emerald-200 bg-white"
+                  } disabled:opacity-50`}>
+                  <option value="">— ללא מיקום —</option>
+                  {locations.map((l) => (
+                    <option key={l.id} value={l.id}>{l.isVehicle ? "🚙" : "📍"} {l.name}</option>
+                  ))}
+                </select>
+                {canSplit && !isSplitting && (
+                  <button onClick={() => { setSplittingId(s.stockBalanceId); setSplitQty(1); setSplitTo(""); setSplitErr(null); }}
+                    className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg px-2 py-1">
+                    📤 פצל למיקום נוסף
+                  </button>
+                )}
+                {savingId === s.stockBalanceId && <span className="text-xs text-slate-500">שומר...</span>}
+                {fb?.ok && <span className="text-xs text-emerald-700">✓</span>}
+                {fb?.msg && <span className="text-xs text-rose-700" title={fb.msg}>⚠️</span>}
+              </div>
+              {isSplitting && (
+                <div className="mt-1.5 bg-blue-50 border border-blue-200 rounded-lg p-2 flex items-center gap-2 flex-wrap text-sm">
+                  <span className="text-xs text-slate-700">העבר</span>
+                  <input type="number" min={1} max={s.quantity - 1} value={splitQty}
+                    onChange={(e) => setSplitQty(Math.max(1, Math.min(s.quantity - 1, parseInt(e.target.value) || 1)))}
+                    className="w-20 rounded border border-slate-300 px-2 py-1 text-center" />
+                  <span className="text-xs text-slate-700">מתוך {s.quantity} ל-</span>
+                  <select value={splitTo} onChange={(e) => setSplitTo(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-1 text-sm">
+                    <option value="">— בחר יעד —</option>
+                    {locations.filter((l) => l.id !== s.equipmentLocationId).map((l) => (
+                      <option key={l.id} value={l.id}>{l.isVehicle ? "🚙" : "📍"} {l.name}</option>
+                    ))}
+                  </select>
+                  <button onClick={() => doSplit(s.stockBalanceId, s.quantity)} disabled={busy || !splitTo}
+                    className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-1 disabled:opacity-50">
+                    ✓ פצל
+                  </button>
+                  <button onClick={() => { setSplittingId(null); setSplitErr(null); }}
+                    className="text-xs text-slate-500">ביטול</button>
+                  {splitErr && <span className="text-xs text-rose-700 w-full mt-1">⚠️ {splitErr}</span>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

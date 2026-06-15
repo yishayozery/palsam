@@ -535,14 +535,15 @@ model StockBalance {
   status      ItemStatus       @relation(fields: [statusId], references: [id])
   locationId  String?
   location    StorageLocation? @relation(fields: [locationId], references: [id])
-  // 🆕 מיקום פיזי בשטח (אוהל / רכב / ערמה) — אופציונלי. שדה תיוג: שורה אחת לכל (holder, item, status) -
-  // המיקום הוא מאפיין של השורה, לא חלק מהמפתח. פיצול לכמה מיקומים יבוא כשלב הבא בעתיד.
+  // 🆕 מיקום פיזי בשטח (אוהל / רכב / ערמה) — חלק מהמפתח: שורה לכל (item, holder, status, location).
+  // מאפשר אותו פריט להיות פיזית במספר מיקומים בו זמנית (למשל אלונקה ברכבים שונים + מחסן).
+  // NULL = "ללא מיקום מוגדר" - שורה אחת בלבד כזאת לכל (item, holder, status) באכיפת DB (NULLS NOT DISTINCT).
   equipmentLocationId String?
   equipmentLocation   EquipmentLocation? @relation("EquipmentLocationStock", fields: [equipmentLocationId], references: [id], onDelete: SetNull)
   quantity    Int              @default(0)
   updatedAt   DateTime         @updatedAt
 
-  @@unique([itemTypeId, holderId, statusId])
+  @@unique([itemTypeId, holderId, statusId, equipmentLocationId])
   @@index([battalionId])
   @@index([holderId])
   @@index([equipmentLocationId])
