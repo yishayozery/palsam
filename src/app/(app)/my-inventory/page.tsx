@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requireCapability } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, Badge, EmptyState } from "@/components/ui";
@@ -7,6 +6,7 @@ import ReturnModal from "./ReturnModal";
 import SendToTanaModal from "../maintenance/SendToTanaModal";
 import { findTanaHolder } from "@/lib/tana";
 import { requiresPersonalId } from "@/lib/handover";
+import { getCompanyItemTotals } from "@/lib/company-stock-snapshot";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +43,7 @@ export default async function MyInventoryPage() {
   ]);
 
   // כל הפריטים שהפלוגה חתומה עליהם (currentHolderId = company)
-  const [serialUnits, balances, statuses] = await Promise.all([
+  const [serialUnits, balances, statuses, baselines, totalsMap] = await Promise.all([
     prisma.serialUnit.findMany({
       where: { battalionId: bId, currentHolderId: companyId },
       include: {
@@ -62,6 +62,11 @@ export default async function MyInventoryPage() {
       orderBy: { itemType: { name: "asc" } },
     }),
     prisma.itemStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.companyItemBaseline.findMany({
+      where: { battalionId: bId, companyId },
+      include: { itemType: { include: { category: true } } },
+    }),
+    getCompanyItemTotals(bId, companyId),
   ]);
 
   // קיבוץ לפי טיפוס מחסן
@@ -97,6 +102,59 @@ export default async function MyInventoryPage() {
               + balances.filter((b) => b.status.isWear || b.status.isLoss).reduce((s, b) => s + b.quantity, 0),
     signedOnSoldiers: serialUnits.filter((u) => u.signedSoldierId).length,
   };
+
+  // 🆕 טבלת תקן - כל פריט שיש לו בסיס > 0 או שיש לו כמות נוכחית
+  type StandardRow = {
+    itemTypeId: string;
+    itemName: string;
+    sku: string | null;
+    unit: string;
+    categoryName: string | null;
+    warehouseType: string | null;
+    baseline: number;
+    current: number;
+    diff: number; // חיובי = עודף לזיכוי, שלילי = חסר, אפס = מאוזן
+  };
+  const standardMap = new Map<string, StandardRow>();
+  // קודם כל הבסיסים
+  for (const b of baselines) {
+    standardMap.set(b.itemTypeId, {
+      itemTypeId: b.itemTypeId,
+      itemName: b.itemType.name,
+      sku: b.itemType.sku,
+      unit: b.itemType.unit,
+      categoryName: b.itemType.category?.name ?? null,
+      warehouseType: b.itemType.category?.warehouseType ?? null,
+      baseline: b.permanentQuantity,
+      current: totalsMap.get(b.itemTypeId) ?? 0,
+      diff: (totalsMap.get(b.itemTypeId) ?? 0) - b.permanentQuantity,
+    });
+  }
+  // לאחר מכן פריטים שיש כמות אבל אין להם בסיס (baseline=0)
+  for (const [itemTypeId, current] of totalsMap.entries()) {
+    if (standardMap.has(itemTypeId) || current === 0) continue;
+    // צריך לטעון את הפריט
+    const sample = serialUnits.find((u) => u.itemTypeId === itemTypeId)?.itemType
+      ?? balances.find((b) => b.itemTypeId === itemTypeId)?.itemType;
+    if (!sample) continue;
+    standardMap.set(itemTypeId, {
+      itemTypeId,
+      itemName: sample.name,
+      sku: sample.sku,
+      unit: sample.unit,
+      categoryName: sample.category?.name ?? null,
+      warehouseType: sample.category?.warehouseType ?? null,
+      baseline: 0,
+      current,
+      diff: current,
+    });
+  }
+  const standardRows = Array.from(standardMap.values()).sort((a, b) =>
+    a.itemName.localeCompare(b.itemName)
+  );
+  const shortage = standardRows.filter((r) => r.diff < 0); // חסר
+  const surplus = standardRows.filter((r) => r.diff > 0 && r.baseline > 0); // יש מה לזכות (עודף מעל תקן)
+  const balanced = standardRows.filter((r) => r.diff === 0 && r.baseline > 0); // מאוזן בדיוק לתקן
 
   const order = ["EQUIPMENT", "COMMS", "AMMO", "ARMORY", "VEHICLES", "MEDICAL", "GENERAL", "OTHER"];
   const sortedGroups = Array.from(groups.values()).sort((a, b) => {
@@ -159,7 +217,7 @@ export default async function MyInventoryPage() {
         }
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
         <Card className="p-3">
           <div className="text-xs text-slate-500">סה״כ פריטים</div>
           <div className="text-2xl font-bold mt-1">{totals.totalItems}</div>
@@ -172,7 +230,95 @@ export default async function MyInventoryPage() {
           <div className="text-xs text-slate-500">בלאי / אבוד</div>
           <div className="text-2xl font-bold mt-1 text-amber-600">{totals.defective}</div>
         </Card>
+        <Card className={`p-3 ${shortage.length > 0 ? "bg-rose-50 border-rose-200" : ""}`}>
+          <div className={`text-xs ${shortage.length > 0 ? "text-rose-700" : "text-slate-500"}`}>חסר מתקן 📌</div>
+          <div className={`text-2xl font-bold mt-1 ${shortage.length > 0 ? "text-rose-700" : "text-slate-400"}`}>{shortage.length}</div>
+          {shortage.length > 0 && <div className="text-[10px] text-rose-600 mt-0.5">פריטים תחת תקן</div>}
+        </Card>
+        <Card className={`p-3 ${surplus.length > 0 ? "bg-emerald-50 border-emerald-200" : ""}`}>
+          <div className={`text-xs ${surplus.length > 0 ? "text-emerald-700" : "text-slate-500"}`}>מותר לזכות ↩️</div>
+          <div className={`text-2xl font-bold mt-1 ${surplus.length > 0 ? "text-emerald-700" : "text-slate-400"}`}>{surplus.length}</div>
+          {surplus.length > 0 && <div className="text-[10px] text-emerald-600 mt-0.5">פריטים מעל תקן</div>}
+        </Card>
       </div>
+
+      {/* 📌 טבלת תקן הציוד */}
+      {standardRows.length > 0 && (
+        <Card className="overflow-hidden mb-4">
+          <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center gap-3 flex-wrap">
+            <h3 className="font-bold text-slate-700 flex items-center gap-2">
+              <span className="text-xl">📌</span>
+              תקן הציוד הפלוגתי
+            </h3>
+            <span className="text-xs text-slate-500">
+              {standardRows.length} פריטים · {balanced.length} מאוזנים · {shortage.length} חסרים · {surplus.length} מעל תקן
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="text-right p-2 font-medium text-xs text-slate-600">פריט</th>
+                  <th className="text-right p-2 font-medium text-xs text-slate-600">קטגוריה</th>
+                  <th className="text-right p-2 font-medium text-xs text-slate-600">📌 תקן</th>
+                  <th className="text-right p-2 font-medium text-xs text-slate-600">📦 יש</th>
+                  <th className="text-right p-2 font-medium text-xs text-slate-600">הפרש</th>
+                  <th className="text-right p-2 font-medium text-xs text-slate-600">מצב</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {standardRows.map((r) => {
+                  const rowClass = r.diff < 0 ? "bg-rose-50" : r.diff > 0 && r.baseline > 0 ? "bg-emerald-50" : "";
+                  return (
+                    <tr key={r.itemTypeId} className={rowClass}>
+                      <td className="p-2">
+                        <div className="font-medium">{r.itemName}</div>
+                        {r.sku && <div className="text-[11px] text-slate-500 font-mono">{r.sku}</div>}
+                      </td>
+                      <td className="p-2 text-xs text-slate-600">{r.categoryName ?? "—"}</td>
+                      <td className="p-2 font-mono">
+                        <span className="bg-slate-100 rounded px-2 py-0.5">{r.baseline}</span>
+                        <span className="text-[10px] text-slate-400 mr-1">{r.unit}</span>
+                      </td>
+                      <td className="p-2 font-mono">
+                        <span className="bg-blue-50 text-blue-700 rounded px-2 py-0.5">{r.current}</span>
+                        <span className="text-[10px] text-slate-400 mr-1">{r.unit}</span>
+                      </td>
+                      <td className="p-2 font-mono">
+                        {r.diff < 0 && <span className="text-rose-700 font-bold">{r.diff}</span>}
+                        {r.diff === 0 && <span className="text-slate-500">0</span>}
+                        {r.diff > 0 && <span className="text-emerald-700">+{r.diff}</span>}
+                      </td>
+                      <td className="p-2">
+                        {r.diff < 0 && r.baseline > 0 && (
+                          <Badge className="bg-rose-100 text-rose-700">
+                            ⚠️ חסר {Math.abs(r.diff)}
+                          </Badge>
+                        )}
+                        {r.diff === 0 && r.baseline > 0 && (
+                          <Badge className="bg-emerald-100 text-emerald-700">✓ מאוזן</Badge>
+                        )}
+                        {r.diff > 0 && r.baseline > 0 && (
+                          <Badge className="bg-emerald-100 text-emerald-700">↩️ ניתן לזכות {r.diff}</Badge>
+                        )}
+                        {r.baseline === 0 && (
+                          <Badge className="bg-slate-100 text-slate-600">
+                            ללא תקן · ניתן לזכות הכל
+                          </Badge>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="p-2.5 border-t border-slate-200 bg-slate-50 text-[11px] text-slate-600">
+            💡 <b>תקן</b> = הכמות שאמורה להישאר אצלכם גם אחרי תעסוקה (קבע ע&quot;י מפ&quot;ם).
+            לעדכון פנו למפ&quot;ם.
+          </div>
+        </Card>
+      )}
 
       {sortedGroups.length === 0 ? (
         <Card><EmptyState>אין מלאי בפלוגה. מקבלים ציוד דרך החתמת פלוגה ע״י קצין המחסן.</EmptyState></Card>
