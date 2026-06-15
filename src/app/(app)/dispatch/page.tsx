@@ -34,7 +34,12 @@ export default async function DispatchPage() {
     prisma.vehicleAssignment.findMany({
       where: { battalionId: bId },
       include: {
-        vehicleSerialUnit: { include: { itemType: { select: { name: true } } } },
+        vehicleSerialUnit: {
+          include: {
+            itemType: { select: { name: true } },
+            currentHolder: { select: { id: true, name: true, kind: true } },
+          },
+        },
         company: { select: { name: true } },
         createdBy: { select: { fullName: true } },
         soldiers: { include: { soldier: { select: { id: true, fullName: true, personalNumber: true, company: { select: { name: true } } } } } },
@@ -83,6 +88,8 @@ export default async function DispatchPage() {
             vehicleSerialUnitId: a.vehicleSerialUnitId,
             vehicleName: a.vehicleSerialUnit.itemType.name,
             vehicleSerial: a.vehicleSerialUnit.serialNumber,
+            vehicleCompanyName: a.vehicleSerialUnit.currentHolder?.kind === "COMPANY"
+              ? a.vehicleSerialUnit.currentHolder.name : null,
             companyName: a.company?.name ?? null,
             missionDate: a.missionDate.toISOString().slice(0, 10),
             departureTime: a.departureTime,

@@ -20,6 +20,7 @@ type Assignment = {
   vehicleSerialUnitId: string;
   vehicleName: string;
   vehicleSerial: string;
+  vehicleCompanyName: string | null; // הפלוגה שמחזיקה את הרכב
   companyName: string | null;
   missionDate: string; // YYYY-MM-DD
   departureTime: string; // HH:mm
@@ -47,6 +48,12 @@ export default function DispatchClient({
   const router = useRouter();
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // 🔍 סינונים בדף הראשי
+  const [listQuery, setListQuery] = useState("");
+  const [listDateFrom, setListDateFrom] = useState("");
+  const [listDateTo, setListDateTo] = useState("");
+  const [listTimeFilter, setListTimeFilter] = useState<"all" | "future" | "past" | "today" | "week">("all");
 
   // טפסי יצירה/עריכה
   const editing = editingId === "new"
@@ -158,27 +165,101 @@ export default function DispatchClient({
 
   function buildWhatsAppText(a: Assignment): string {
     const dateStr = new Date(a.missionDate).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const vehicleLine = `רכב: ${a.vehicleName} ${a.vehicleSerial}` +
+      (a.vehicleCompanyName ? ` (${a.vehicleCompanyName})` : "");
     const lines = [
       `🚗 שיבוץ רכב — ${dateStr} ${a.departureTime}`,
-      `רכב: ${a.vehicleName} ${a.vehicleSerial}`,
-      a.companyName ? `פלוגה: ${a.companyName}` : "",
+      vehicleLine,
       "",
       "חיילים:",
-      ...a.soldiers.map((s) => `• ${s.fullName}${s.personalNumber ? ` (${s.personalNumber})` : ""}`),
-    ].filter(Boolean);
+      ...a.soldiers.map((s) => {
+        const parts: string[] = [];
+        if (s.personalNumber) parts.push(s.personalNumber);
+        if (s.companyName) parts.push(s.companyName);
+        const suffix = parts.length > 0 ? ` (${parts.join(", ")})` : "";
+        return `• ${s.fullName}${suffix}`;
+      }),
+    ];
     return lines.join("\n");
   }
+
+  // 🔍 סינון הרשימה
+  const filteredAssignments = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7);
+    return assignments.filter((a) => {
+      // חיפוש טקסט חופשי - רכב/SN/חייל/מ.א./פלוגה
+      if (listQuery.trim()) {
+        const q = listQuery.toLowerCase();
+        const hay = [
+          a.vehicleName, a.vehicleSerial, a.vehicleCompanyName ?? "", a.companyName ?? "",
+          a.createdByName,
+          ...a.soldiers.flatMap((s) => [s.fullName, s.personalNumber ?? "", s.companyName ?? ""]),
+        ].join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      // טווח תאריכים
+      if (listDateFrom && a.missionDate < listDateFrom) return false;
+      if (listDateTo && a.missionDate > listDateTo) return false;
+      // פילטר מהיר תזמון
+      const d = new Date(a.missionDate);
+      switch (listTimeFilter) {
+        case "future": if (d < today) return false; break;
+        case "past": if (d >= today) return false; break;
+        case "today": if (d.toDateString() !== today.toDateString()) return false; break;
+        case "week": if (d < today || d > weekEnd) return false; break;
+      }
+      return true;
+    });
+  }, [assignments, listQuery, listDateFrom, listDateTo, listTimeFilter]);
+
+  const hasFilter = !!(listQuery || listDateFrom || listDateTo || listTimeFilter !== "all");
 
   return (
     <>
       {/* כפתור יצירה */}
-      <div className="mb-4 flex items-center gap-3 flex-wrap">
+      <div className="mb-3 flex items-center gap-3 flex-wrap">
         <button onClick={openNew}
           className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-4 py-2 text-sm font-medium">
           + שיבוץ חדש
         </button>
-        <span className="text-xs text-slate-500">{assignments.length} שיבוצים פעילים</span>
+        <span className="text-xs text-slate-500">{assignments.length} שיבוצים</span>
       </div>
+
+      {/* 🔍 פילטרים */}
+      {assignments.length > 0 && (
+        <Card className="p-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
+            <input value={listQuery} onChange={(e) => setListQuery(e.target.value)}
+              placeholder="🔍 רכב / חייל / מ.א. / פלוגה"
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+            <div className="flex items-center gap-1">
+              <label className="text-[11px] text-slate-500 whitespace-nowrap">מ-</label>
+              <input type="date" value={listDateFrom} onChange={(e) => setListDateFrom(e.target.value)}
+                className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+            </div>
+            <div className="flex items-center gap-1">
+              <label className="text-[11px] text-slate-500 whitespace-nowrap">עד-</label>
+              <input type="date" value={listDateTo} onChange={(e) => setListDateTo(e.target.value)}
+                className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+            </div>
+            {hasFilter && (
+              <button onClick={() => { setListQuery(""); setListDateFrom(""); setListDateTo(""); setListTimeFilter("all"); }}
+                className="rounded-lg border border-slate-300 text-sm hover:bg-slate-50">✕ נקה</button>
+            )}
+          </div>
+          <div className="flex gap-1.5 flex-wrap">
+            <FilterChip active={listTimeFilter === "all"} onClick={() => setListTimeFilter("all")}>הכל ({assignments.length})</FilterChip>
+            <FilterChip active={listTimeFilter === "today"} onClick={() => setListTimeFilter("today")} color="emerald">📅 היום</FilterChip>
+            <FilterChip active={listTimeFilter === "week"} onClick={() => setListTimeFilter("week")} color="blue">📆 השבוע</FilterChip>
+            <FilterChip active={listTimeFilter === "future"} onClick={() => setListTimeFilter("future")} color="blue">⏭️ עתידי</FilterChip>
+            <FilterChip active={listTimeFilter === "past"} onClick={() => setListTimeFilter("past")} color="slate">⏮️ עבר</FilterChip>
+            <span className="text-xs text-slate-500 self-center mr-auto">
+              {filteredAssignments.length} מתוך {assignments.length}
+            </span>
+          </div>
+        </Card>
+      )}
 
       {/* רשימת שיבוצים */}
       {assignments.length === 0 ? (
@@ -190,9 +271,18 @@ export default function DispatchClient({
             </div>
           </EmptyState>
         </Card>
+      ) : filteredAssignments.length === 0 ? (
+        <Card className="p-6">
+          <EmptyState>
+            <div className="text-center">
+              <p>אין שיבוצים תואמים לסינון.</p>
+              <p className="text-xs text-slate-500 mt-1">נסה לנקות פילטרים</p>
+            </div>
+          </EmptyState>
+        </Card>
       ) : (
         <div className="space-y-2">
-          {assignments.map((a) => {
+          {filteredAssignments.map((a) => {
             const dateStr = new Date(a.missionDate).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
             const dateObj = new Date(a.missionDate);
             const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -400,5 +490,20 @@ export default function DispatchClient({
         );
       })()}
     </>
+  );
+}
+
+function FilterChip({
+  children, active, onClick, color = "slate",
+}: { children: React.ReactNode; active: boolean; onClick: () => void; color?: "slate" | "emerald" | "blue" }) {
+  const colorMap = {
+    slate: active ? "bg-slate-800 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700",
+    emerald: active ? "bg-emerald-700 text-white" : "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200",
+    blue: active ? "bg-blue-700 text-white" : "bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200",
+  };
+  return (
+    <button onClick={onClick} className={`text-xs rounded-full px-3 py-1 transition ${colorMap[color]}`}>
+      {children}
+    </button>
   );
 }
