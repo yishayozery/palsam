@@ -3,9 +3,13 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
-import { setUnitEquipmentLocation } from "../../locations/actions";
+import {
+  setUnitEquipmentLocation,
+  setStockEquipmentLocation,
+  setSoldierItemPlacements,
+} from "../../locations/actions";
 
-type Item = {
+type SerialItem = {
   id: string; itemName: string; sku: string | null;
   serial: string; lotQuantity: number | null; isLot: boolean;
   warehouseType: string | null;
@@ -16,6 +20,37 @@ type Item = {
   equipmentLocationId: string | null;
   equipmentLocationName: string | null;
 };
+type QtyStock = {
+  stockBalanceId: string;
+  itemTypeId: string;
+  itemName: string;
+  sku: string | null;
+  unit: string;
+  statusId: string;
+  statusName: string;
+  isWear: boolean;
+  isLoss: boolean;
+  quantity: number;
+  equipmentLocationId: string | null;
+  equipmentLocationName: string | null;
+};
+type Placement = { equipmentLocationId: string; equipmentLocationName: string; quantity: number };
+type SignedQtyRow = {
+  soldierId: string;
+  soldierName: string;
+  soldierPN: string | null;
+  itemTypeId: string;
+  itemName: string;
+  sku: string | null;
+  unit: string;
+  statusId: string;
+  statusName: string;
+  isWear: boolean;
+  isLoss: boolean;
+  totalQuantity: number;
+  placements: Placement[];
+};
+type Soldier = { id: string; name: string; personalNumber: string | null };
 type Location = {
   id: string; name: string;
   vehicleSerial: string | null;
@@ -24,10 +59,13 @@ type Location = {
 };
 
 export default function CompanyLocationsClient({
-  items, locations, unassignedCount,
+  items, companyQtyStock, signedQtyRows, soldiers, locations, unassignedCount,
   initialQ, initialLoc, initialSigned,
 }: {
-  items: Item[];
+  items: SerialItem[];
+  companyQtyStock: QtyStock[];
+  signedQtyRows: SignedQtyRow[];
+  soldiers: Soldier[];
   locations: Location[];
   unassignedCount: number;
   initialQ: string; initialLoc: string; initialSigned: string;
@@ -36,60 +74,82 @@ export default function CompanyLocationsClient({
   const [q, setQ] = useState(initialQ);
   const [locFilter, setLocFilter] = useState(initialLoc);
   const [signedFilter, setSignedFilter] = useState(initialSigned);
+  const [soldierFilter, setSoldierFilter] = useState("");
+  const [itemFilter, setItemFilter] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ id: string; ok: boolean; msg?: string } | null>(null);
 
-  const filtered = useMemo(() => {
-    let list = items;
-    if (q.trim()) {
-      const s = q.toLowerCase();
-      list = list.filter((i) =>
-        i.itemName.toLowerCase().includes(s)
-        || (i.sku ?? "").toLowerCase().includes(s)
-        || i.serial.toLowerCase().includes(s)
-        || (i.signedSoldier?.name ?? "").toLowerCase().includes(s)
-        || (i.signedSoldier?.personalNumber ?? "").includes(s)
-      );
-    }
+  // רשימת פריטים ייחודית לבורר
+  const uniqueItemNames = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((i) => set.add(i.itemName));
+    companyQtyStock.forEach((i) => set.add(i.itemName));
+    signedQtyRows.forEach((i) => set.add(i.itemName));
+    return Array.from(set).sort();
+  }, [items, companyQtyStock, signedQtyRows]);
+
+  // טקסט חיפוש כללי + פילטרים
+  const matchesText = (text: string) => !q.trim() || text.toLowerCase().includes(q.toLowerCase());
+
+  const filteredSerial = items.filter((i) => {
+    if (!matchesText(`${i.itemName} ${i.sku ?? ""} ${i.serial} ${i.signedSoldier?.name ?? ""} ${i.signedSoldier?.personalNumber ?? ""}`)) return false;
+    if (locFilter === "__unassigned__" && i.equipmentLocationId) return false;
+    if (locFilter && locFilter !== "__unassigned__" && i.equipmentLocationId !== locFilter) return false;
+    if (signedFilter === "signed" && !i.signedSoldier) return false;
+    if (signedFilter === "unsigned" && i.signedSoldier) return false;
+    if (soldierFilter && i.signedSoldier?.id !== soldierFilter) return false;
+    if (itemFilter && i.itemName !== itemFilter) return false;
+    return true;
+  });
+
+  const filteredCompanyQty = companyQtyStock.filter((s) => {
+    if (!matchesText(`${s.itemName} ${s.sku ?? ""}`)) return false;
+    if (locFilter === "__unassigned__" && s.equipmentLocationId) return false;
+    if (locFilter && locFilter !== "__unassigned__" && s.equipmentLocationId !== locFilter) return false;
+    if (signedFilter === "signed") return false;
+    if (soldierFilter) return false;
+    if (itemFilter && s.itemName !== itemFilter) return false;
+    return true;
+  });
+
+  const filteredSignedQty = signedQtyRows.filter((r) => {
+    if (!matchesText(`${r.itemName} ${r.sku ?? ""} ${r.soldierName} ${r.soldierPN ?? ""}`)) return false;
+    if (signedFilter === "unsigned") return false;
+    if (soldierFilter && r.soldierId !== soldierFilter) return false;
+    if (itemFilter && r.itemName !== itemFilter) return false;
     if (locFilter === "__unassigned__") {
-      list = list.filter((i) => !i.equipmentLocationId);
+      const placed = r.placements.reduce((s, p) => s + p.quantity, 0);
+      if (placed === r.totalQuantity) return false;
     } else if (locFilter) {
-      list = list.filter((i) => i.equipmentLocationId === locFilter);
+      if (!r.placements.some((p) => p.equipmentLocationId === locFilter)) return false;
     }
-    if (signedFilter === "signed") list = list.filter((i) => !!i.signedSoldier);
-    else if (signedFilter === "unsigned") list = list.filter((i) => !i.signedSoldier);
-    return list;
-  }, [items, q, locFilter, signedFilter]);
+    return true;
+  });
 
-  // קיבוץ לפי שם הפריט - תצוגה ידידותית
-  const grouped = useMemo(() => {
-    const m = new Map<string, Item[]>();
-    for (const i of filtered) {
-      const k = i.itemName;
-      if (!m.has(k)) m.set(k, []);
-      m.get(k)!.push(i);
-    }
-    return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [filtered]);
+  const totalFiltered = filteredSerial.length + filteredCompanyQty.length + filteredSignedQty.length;
 
-  async function changeLocation(itemId: string, locationId: string) {
-    setSavingId(itemId);
-    setFeedback(null);
+  async function changeSerialLocation(itemId: string, locationId: string) {
+    setSavingId(itemId); setFeedback(null);
     try {
       const fd = new FormData();
       fd.append("serialUnitId", itemId);
       if (locationId) fd.append("equipmentLocationId", locationId);
       const res = await setUnitEquipmentLocation(fd);
-      if (res?.error) {
-        setFeedback({ id: itemId, ok: false, msg: res.error });
-      } else {
-        setFeedback({ id: itemId, ok: true });
-        router.refresh();
-      }
-    } finally {
-      setSavingId(null);
-      setTimeout(() => setFeedback(null), 2000);
-    }
+      if (res?.error) setFeedback({ id: itemId, ok: false, msg: res.error });
+      else { setFeedback({ id: itemId, ok: true }); router.refresh(); }
+    } finally { setSavingId(null); setTimeout(() => setFeedback(null), 2000); }
+  }
+
+  async function changeStockLocation(stockId: string, locationId: string) {
+    setSavingId(stockId); setFeedback(null);
+    try {
+      const fd = new FormData();
+      fd.append("stockBalanceId", stockId);
+      if (locationId) fd.append("equipmentLocationId", locationId);
+      const res = await setStockEquipmentLocation(fd);
+      if (res?.error) setFeedback({ id: stockId, ok: false, msg: res.error });
+      else { setFeedback({ id: stockId, ok: true }); router.refresh(); }
+    } finally { setSavingId(null); setTimeout(() => setFeedback(null), 2000); }
   }
 
   return (
@@ -99,7 +159,7 @@ export default function CompanyLocationsClient({
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => setLocFilter("")}
             className={`text-xs rounded-full px-3 py-1 ${!locFilter ? "bg-slate-800 text-white" : "bg-slate-100 hover:bg-slate-200"}`}>
-            הכל ({items.length})
+            הכל
           </button>
           <button onClick={() => setLocFilter("__unassigned__")}
             className={`text-xs rounded-full px-3 py-1 ${locFilter === "__unassigned__" ? "bg-rose-700 text-white" : "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200"}`}>
@@ -116,88 +176,285 @@ export default function CompanyLocationsClient({
 
       {/* פילטרים */}
       <Card className="p-3">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="🔍 שם פריט / SN / חייל / מ.א."
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+            placeholder="🔍 חיפוש חופשי" className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+          <select value={soldierFilter} onChange={(e) => setSoldierFilter(e.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+            <option value="">🪖 כל החיילים</option>
+            {soldiers.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}{s.personalNumber ? ` · ${s.personalNumber}` : ""}</option>
+            ))}
+          </select>
+          <select value={itemFilter} onChange={(e) => setItemFilter(e.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+            <option value="">📦 כל הפריטים</option>
+            {uniqueItemNames.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
           <select value={signedFilter} onChange={(e) => setSignedFilter(e.target.value)}
             className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
             <option value="">הכל</option>
             <option value="signed">🪖 חתום על חייל</option>
-            <option value="unsigned">📦 לא חתום (במחסן/פלוגה)</option>
+            <option value="unsigned">📦 לא חתום</option>
           </select>
-          {(q || locFilter || signedFilter) && (
-            <button onClick={() => { setQ(""); setLocFilter(""); setSignedFilter(""); }}
-              className="rounded-lg border border-slate-300 text-sm hover:bg-slate-50">✕ נקה פילטרים</button>
+          {(q || locFilter || signedFilter || soldierFilter || itemFilter) && (
+            <button onClick={() => { setQ(""); setLocFilter(""); setSignedFilter(""); setSoldierFilter(""); setItemFilter(""); }}
+              className="rounded-lg border border-slate-300 text-sm hover:bg-slate-50 lg:col-span-1">✕ נקה פילטרים</button>
           )}
-          <div className="sm:col-span-3 text-xs text-slate-500">
-            {filtered.length} פריטים מתוך {items.length}
+          <div className="sm:col-span-2 lg:col-span-4 text-xs text-slate-500">
+            {totalFiltered} פריטים מתוך {items.length + companyQtyStock.length + signedQtyRows.length}
           </div>
         </div>
       </Card>
 
-      {/* רשימת פריטים מקובצת */}
-      {grouped.length === 0 ? (
-        <Card className="p-10 text-center text-slate-400">אין פריטים מתאימים</Card>
-      ) : (
-        <div className="space-y-3">
-          {grouped.map(([itemName, units]) => (
-            <Card key={itemName} className="overflow-hidden">
-              <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-                <h3 className="font-bold text-slate-700">{itemName}</h3>
-                <span className="text-xs text-slate-500">{units.length} יחידות</span>
-              </div>
-              <div className="divide-y divide-slate-100">
-                {units.map((u) => {
-                  const fb = feedback?.id === u.id ? feedback : null;
-                  return (
-                    <div key={u.id} className={`px-4 py-2.5 flex items-center gap-3 flex-wrap ${fb?.ok ? "bg-emerald-50" : ""}`}>
-                      <span className="text-lg">{u.isLot ? "💣" : "🔫"}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-mono">
-                          {u.isLot ? `לוט: ${u.serial}${u.lotQuantity && u.lotQuantity > 1 ? ` × ${u.lotQuantity}` : ""}` : `SN: ${u.serial}`}
-                          {u.sku && <span className="text-[10px] text-slate-400 mr-2">{u.sku}</span>}
-                        </div>
-                        <div className="text-xs text-slate-500 flex flex-wrap gap-2 mt-0.5">
-                          <span className={u.isLoss ? "text-rose-600 font-medium" : u.isWear ? "text-amber-600 font-medium" : ""}>
-                            {u.statusName}{u.isLoss && " 🔴"}{u.isWear && " 🟡"}
-                          </span>
-                          {u.signedSoldier ? (
-                            <span className="text-blue-700">🪖 חתום: <b>{u.signedSoldier.name}</b>
-                              {u.signedSoldier.personalNumber && <span className="font-mono text-slate-400 mr-1">{u.signedSoldier.personalNumber}</span>}
-                            </span>
-                          ) : (
-                            <span className="text-slate-500">📦 לא חתום על חייל</span>
-                          )}
-                        </div>
-                      </div>
+      {totalFiltered === 0 && <Card className="p-10 text-center text-slate-400">אין פריטים מתאימים</Card>}
 
-                      {/* בורר מיקום - dropdown */}
-                      <div className="flex items-center gap-2">
-                        <label className="text-[11px] text-slate-600 whitespace-nowrap">📍 מיקום:</label>
-                        <select value={u.equipmentLocationId ?? ""}
-                          onChange={(e) => changeLocation(u.id, e.target.value)}
-                          disabled={savingId === u.id || locations.length === 0}
-                          className={`rounded-lg border-2 px-2 py-1.5 text-sm min-w-44 ${
-                            !u.equipmentLocationId ? "border-rose-300 bg-rose-50" : "border-emerald-200 bg-white"
-                          } disabled:opacity-50`}>
-                          <option value="">— ללא מיקום —</option>
-                          {locations.map((l) => (
-                            <option key={l.id} value={l.id}>
-                              {l.isVehicle ? "🚙" : "📍"} {l.name}
-                            </option>
-                          ))}
-                        </select>
-                        {savingId === u.id && <span className="text-xs text-slate-500">שומר...</span>}
-                        {fb?.ok && <span className="text-xs text-emerald-700">✓</span>}
-                        {fb?.msg && <span className="text-xs text-rose-700" title={fb.msg}>⚠️</span>}
-                      </div>
+      {/* סריאלי */}
+      {filteredSerial.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
+            <h3 className="font-bold text-slate-700">🔫 סריאלי / אצוות ({filteredSerial.length})</h3>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {filteredSerial.map((u) => {
+              const fb = feedback?.id === u.id ? feedback : null;
+              return (
+                <div key={u.id} className={`px-4 py-2.5 flex items-center gap-3 flex-wrap ${fb?.ok ? "bg-emerald-50" : ""}`}>
+                  <span className="text-lg">{u.isLot ? "💣" : "🔫"}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium">
+                      {u.itemName}
+                      {u.sku && <span className="text-[10px] text-slate-400 mr-2">{u.sku}</span>}
                     </div>
-                  );
-                })}
+                    <div className="text-xs text-slate-500 flex flex-wrap gap-2 mt-0.5">
+                      <span className="font-mono">{u.isLot ? `לוט: ${u.serial}` : `SN: ${u.serial}`}</span>
+                      <span className={u.isLoss ? "text-rose-600 font-medium" : u.isWear ? "text-amber-600 font-medium" : ""}>
+                        {u.statusName}{u.isLoss && " 🔴"}{u.isWear && " 🟡"}
+                      </span>
+                      {u.signedSoldier ? (
+                        <span className="text-blue-700">🪖 <b>{u.signedSoldier.name}</b>
+                          {u.signedSoldier.personalNumber && <span className="font-mono text-slate-400 mr-1">{u.signedSoldier.personalNumber}</span>}
+                        </span>
+                      ) : <span className="text-slate-500">📦 לא חתום</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[11px] text-slate-600 whitespace-nowrap">📍</label>
+                    <select value={u.equipmentLocationId ?? ""}
+                      onChange={(e) => changeSerialLocation(u.id, e.target.value)}
+                      disabled={savingId === u.id || locations.length === 0}
+                      className={`rounded-lg border-2 px-2 py-1.5 text-sm min-w-44 ${
+                        !u.equipmentLocationId ? "border-rose-300 bg-rose-50" : "border-emerald-200 bg-white"
+                      } disabled:opacity-50`}>
+                      <option value="">— ללא מיקום —</option>
+                      {locations.map((l) => (
+                        <option key={l.id} value={l.id}>{l.isVehicle ? "🚙" : "📍"} {l.name}</option>
+                      ))}
+                    </select>
+                    {savingId === u.id && <span className="text-xs text-slate-500">שומר...</span>}
+                    {fb?.ok && <span className="text-xs text-emerald-700">✓</span>}
+                    {fb?.msg && <span className="text-xs text-rose-700" title={fb.msg}>⚠️</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* כמותי במלאי הפלוגה */}
+      {filteredCompanyQty.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
+            <h3 className="font-bold text-slate-700">📦 כמותי במלאי הפלוגה ({filteredCompanyQty.length})</h3>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {filteredCompanyQty.map((s) => {
+              const fb = feedback?.id === s.stockBalanceId ? feedback : null;
+              return (
+                <div key={s.stockBalanceId} className={`px-4 py-2.5 flex items-center gap-3 flex-wrap ${fb?.ok ? "bg-emerald-50" : ""}`}>
+                  <span className="text-lg">📦</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium">
+                      {s.itemName}
+                      {s.sku && <span className="text-[10px] text-slate-400 mr-2">{s.sku}</span>}
+                      <span className="text-[11px] bg-blue-100 text-blue-800 rounded px-1.5 py-0.5 mr-1">×{s.quantity} {s.unit}</span>
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      <span className={s.isLoss ? "text-rose-600 font-medium" : s.isWear ? "text-amber-600 font-medium" : ""}>
+                        {s.statusName}{s.isLoss && " 🔴"}{s.isWear && " 🟡"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[11px] text-slate-600 whitespace-nowrap">📍</label>
+                    <select value={s.equipmentLocationId ?? ""}
+                      onChange={(e) => changeStockLocation(s.stockBalanceId, e.target.value)}
+                      disabled={savingId === s.stockBalanceId || locations.length === 0}
+                      className={`rounded-lg border-2 px-2 py-1.5 text-sm min-w-44 ${
+                        !s.equipmentLocationId ? "border-rose-300 bg-rose-50" : "border-emerald-200 bg-white"
+                      } disabled:opacity-50`}>
+                      <option value="">— ללא מיקום —</option>
+                      {locations.map((l) => (
+                        <option key={l.id} value={l.id}>{l.isVehicle ? "🚙" : "📍"} {l.name}</option>
+                      ))}
+                    </select>
+                    {savingId === s.stockBalanceId && <span className="text-xs text-slate-500">שומר...</span>}
+                    {fb?.ok && <span className="text-xs text-emerald-700">✓</span>}
+                    {fb?.msg && <span className="text-xs text-rose-700" title={fb.msg}>⚠️</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* כמותי חתום על חיילים */}
+      {filteredSignedQty.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
+            <h3 className="font-bold text-slate-700">🪖 כמותי חתום על חיילים ({filteredSignedQty.length})</h3>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {filteredSignedQty.map((r) => (
+              <SignedQtyRowEditor key={`${r.soldierId}|${r.itemTypeId}|${r.statusId}`}
+                row={r} locations={locations} onSaved={() => router.refresh()} />
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function SignedQtyRowEditor({
+  row, locations, onSaved,
+}: {
+  row: SignedQtyRow;
+  locations: Location[];
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [placements, setPlacements] = useState<Placement[]>(row.placements);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const placed = placements.reduce((s, p) => s + (p.quantity || 0), 0);
+  const remaining = row.totalQuantity - placed;
+
+  async function save() {
+    setBusy(true); setError(null);
+    try {
+      const fd = new FormData();
+      fd.append("soldierId", row.soldierId);
+      fd.append("itemTypeId", row.itemTypeId);
+      fd.append("statusId", row.statusId);
+      fd.append("placements", JSON.stringify(placements.filter((p) => p.quantity > 0)));
+      const res = await setSoldierItemPlacements(fd);
+      if (res?.error) setError(res.error);
+      else { setEditing(false); onSaved(); }
+    } finally { setBusy(false); }
+  }
+
+  function addPlacement() {
+    const used = new Set(placements.map((p) => p.equipmentLocationId));
+    const next = locations.find((l) => !used.has(l.id));
+    if (!next) return;
+    setPlacements([...placements, { equipmentLocationId: next.id, equipmentLocationName: next.name, quantity: 1 }]);
+  }
+
+  return (
+    <div className="px-4 py-2.5">
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-lg">🪖</span>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium">
+            {row.itemName}
+            {row.sku && <span className="text-[10px] text-slate-400 mr-2">{row.sku}</span>}
+            <span className="text-[11px] bg-blue-100 text-blue-800 rounded px-1.5 py-0.5 mr-1">×{row.totalQuantity} {row.unit}</span>
+          </div>
+          <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap gap-2">
+            <span className="text-blue-700"><b>{row.soldierName}</b>
+              {row.soldierPN && <span className="font-mono text-slate-400 mr-1">{row.soldierPN}</span>}
+            </span>
+            <span className={row.isLoss ? "text-rose-600 font-medium" : row.isWear ? "text-amber-600 font-medium" : ""}>
+              {row.statusName}{row.isLoss && " 🔴"}{row.isWear && " 🟡"}
+            </span>
+            {!editing && row.placements.length > 0 && (
+              <span className="text-emerald-700">
+                📍 {row.placements.map((p) => `${p.equipmentLocationName} ×${p.quantity}`).join(" / ")}
+              </span>
+            )}
+            {!editing && remaining > 0 && row.placements.length > 0 && (
+              <span className="text-rose-600">⚠️ {remaining} לא מוקצים</span>
+            )}
+            {!editing && row.placements.length === 0 && (
+              <span className="text-rose-600">⚠️ ללא מיקום</span>
+            )}
+          </div>
+        </div>
+        {!editing && (
+          <button onClick={() => setEditing(true)}
+            className="text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5">
+            📍 הגדר מיקום
+          </button>
+        )}
+      </div>
+
+      {editing && (
+        <div className="mt-3 bg-slate-50 rounded-lg p-3 space-y-2">
+          {placements.length === 0 ? (
+            <div className="text-xs text-slate-500">לחץ "+ הוסף מיקום" כדי להתחיל לשייך</div>
+          ) : (
+            placements.map((p, idx) => (
+              <div key={idx} className="flex items-center gap-2 flex-wrap">
+                <select value={p.equipmentLocationId}
+                  onChange={(e) => {
+                    const loc = locations.find((l) => l.id === e.target.value);
+                    const next = [...placements];
+                    next[idx] = { ...p, equipmentLocationId: e.target.value, equipmentLocationName: loc?.name ?? "" };
+                    setPlacements(next);
+                  }}
+                  className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                  {locations.map((l) => (
+                    <option key={l.id} value={l.id}>{l.isVehicle ? "🚙" : "📍"} {l.name}</option>
+                  ))}
+                </select>
+                <input type="number" min={1} max={row.totalQuantity} value={p.quantity}
+                  onChange={(e) => {
+                    const next = [...placements];
+                    next[idx] = { ...p, quantity: Math.max(0, parseInt(e.target.value) || 0) };
+                    setPlacements(next);
+                  }}
+                  className="w-20 rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-center" />
+                <span className="text-xs text-slate-500">{row.unit}</span>
+                <button onClick={() => setPlacements(placements.filter((_, i) => i !== idx))}
+                  className="text-rose-500 hover:text-rose-700 text-sm">✕</button>
               </div>
-            </Card>
-          ))}
+            ))
+          )}
+          <div className="flex items-center gap-2 flex-wrap pt-1">
+            <button onClick={addPlacement} disabled={placements.length >= locations.length}
+              className="text-xs rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50 px-3 py-1.5 disabled:opacity-50">
+              + הוסף מיקום
+            </button>
+            <span className="text-xs text-slate-500">
+              סך {placed} / {row.totalQuantity} {row.unit}
+              {remaining !== 0 && <span className={remaining > 0 ? "text-amber-600 mr-2" : "text-rose-600 mr-2"}>
+                ({remaining > 0 ? `נשארו ${remaining}` : `חורג ב-${Math.abs(remaining)}`})
+              </span>}
+            </span>
+          </div>
+          {error && <div className="text-xs text-rose-700 bg-rose-50 rounded p-2">⚠️ {error}</div>}
+          <div className="flex gap-2 pt-1">
+            <button onClick={save} disabled={busy || remaining < 0}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-1.5 text-sm disabled:opacity-50">
+              ✓ שמור
+            </button>
+            <button onClick={() => { setEditing(false); setPlacements(row.placements); setError(null); }}
+              className="rounded-lg border border-slate-300 px-4 py-1.5 text-sm">ביטול</button>
+          </div>
         </div>
       )}
     </div>

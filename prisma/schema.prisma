@@ -132,6 +132,7 @@ model Battalion {
   frequencies   CountFrequency[]
   itemTypes     ItemType[]
   stockBalances StockBalance[]
+  soldierItemLocations SoldierItemLocation[]
   serialUnits   SerialUnit[]
   kitInstances  KitInstance[]
   transfers     Transfer[]
@@ -334,6 +335,8 @@ model EquipmentLocation {
   updatedAt   DateTime @updatedAt
 
   serialUnits SerialUnit[] @relation("SerialUnitEquipmentLocation")
+  stockBalances StockBalance[] @relation("EquipmentLocationStock")
+  soldierItemLocations SoldierItemLocation[] @relation("EquipmentLocationSoldierItems")
 
   @@unique([holderId, name])
   @@index([battalionId])
@@ -390,6 +393,7 @@ model Soldier {
   signedKitInstances KitInstance[] @relation("KitInstanceSignedSoldier")
   transfersTo        Transfer[]    @relation("TransferToSoldier")
   signatures         Signature[]
+  itemLocations      SoldierItemLocation[] @relation("SoldierItemLocations")
   // מקושר למשתמש מערכת (קצין/רס"פ)
   appUser            AppUser?      @relation("SoldierAsUser")
 
@@ -428,6 +432,7 @@ model ItemStatus {
   serialUnits   SerialUnit[]
   stockBalances StockBalance[]
   transferLines TransferLine[]
+  soldierItemLocations SoldierItemLocation[]
 
   @@unique([battalionId, name])
 }
@@ -495,6 +500,7 @@ model ItemType {
   kitComponents KitComponent[] @relation("KitParent")
   usedInKits    KitComponent[] @relation("KitChild")
   kitInstances  KitInstance[]
+  soldierItemLocations SoldierItemLocation[]
   // מיקומים פר-holder (מאפשר אותו פריט במיקומים שונים בכל מחסן/פלוגה)
   holderLocations ItemHolderLocation[]
   inSignableKits SignableKitLine[] @relation("KitLineItem")
@@ -529,12 +535,45 @@ model StockBalance {
   status      ItemStatus       @relation(fields: [statusId], references: [id])
   locationId  String?
   location    StorageLocation? @relation(fields: [locationId], references: [id])
+  // 🆕 מיקום פיזי בשטח (אוהל / רכב / ערמה) — אופציונלי. שדה תיוג: שורה אחת לכל (holder, item, status) -
+  // המיקום הוא מאפיין של השורה, לא חלק מהמפתח. פיצול לכמה מיקומים יבוא כשלב הבא בעתיד.
+  equipmentLocationId String?
+  equipmentLocation   EquipmentLocation? @relation("EquipmentLocationStock", fields: [equipmentLocationId], references: [id], onDelete: SetNull)
   quantity    Int              @default(0)
   updatedAt   DateTime         @updatedAt
 
   @@unique([itemTypeId, holderId, statusId])
   @@index([battalionId])
   @@index([holderId])
+  @@index([equipmentLocationId])
+}
+
+/**
+ * מיקום של ציוד כמותי שחתום על חייל.
+ * כשחייל חתום על 3 פטישים, המערכת תאפשר לציין: 1 ברכב צ-12345, 2 באוהל מ"כ.
+ * הסכום של quantity ב-(soldier, item, status) צריך להיות שווה לכמות החתומה (SIGNOUT minus CHECKIN).
+ * השמירה נעשית ידנית מהמסך - לא מתעדכנת אוטומטית מהחתימה.
+ */
+model SoldierItemLocation {
+  id                  String   @id @default(cuid())
+  battalionId         String
+  battalion           Battalion @relation(fields: [battalionId], references: [id])
+  soldierId           String
+  soldier             Soldier  @relation("SoldierItemLocations", fields: [soldierId], references: [id], onDelete: Cascade)
+  itemTypeId          String
+  itemType            ItemType @relation(fields: [itemTypeId], references: [id], onDelete: Cascade)
+  statusId            String
+  status              ItemStatus @relation(fields: [statusId], references: [id])
+  equipmentLocationId String
+  equipmentLocation   EquipmentLocation @relation("EquipmentLocationSoldierItems", fields: [equipmentLocationId], references: [id], onDelete: Cascade)
+  quantity            Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([soldierId, itemTypeId, statusId, equipmentLocationId])
+  @@index([battalionId])
+  @@index([soldierId])
+  @@index([equipmentLocationId])
 }
 
 model SerialUnit {

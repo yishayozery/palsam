@@ -137,6 +137,92 @@ export async function deleteEquipmentLocation(formData: FormData): Promise<{ ok?
   }
 }
 
+/** 🆕 הגדרת מיקום ציוד לכמות במלאי הפלוגה (StockBalance) */
+export async function setStockEquipmentLocation(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireCapability("locations.manage");
+    const stockBalanceId = String(formData.get("stockBalanceId") || "");
+    const equipmentLocationId = String(formData.get("equipmentLocationId") || "") || null;
+    const sb = await prisma.stockBalance.findUnique({ where: { id: stockBalanceId }, select: { battalionId: true } });
+    if (!sb || sb.battalionId !== user.battalionId) return { error: "מלאי לא בגדוד" };
+    if (equipmentLocationId) {
+      const loc = await prisma.equipmentLocation.findUnique({ where: { id: equipmentLocationId }, select: { battalionId: true } });
+      if (!loc || loc.battalionId !== user.battalionId) return { error: "מיקום לא נמצא" };
+    }
+    await prisma.stockBalance.update({ where: { id: stockBalanceId }, data: { equipmentLocationId } });
+    await audit(user.id, "UPDATE_LOCATION", "StockBalance", stockBalanceId, { equipmentLocationId });
+    revalidatePath("/my-inventory");
+    revalidatePath("/stock");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/**
+ * 🆕 הגדרת/עדכון מיקום ציוד כמותי שחתום על חייל.
+ * מקבל רשימת (locationId, qty) - מחליף את כל ה-rows הקיימים של (soldier, item, status).
+ * הסכום חייב להיות שווה לכמות החתומה.
+ */
+export async function setSoldierItemPlacements(
+  formData: FormData,
+): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireCapability("locations.manage");
+    if (!user.battalionId) return { error: "אינך משויך לגדוד" };
+    const soldierId = String(formData.get("soldierId") || "");
+    const itemTypeId = String(formData.get("itemTypeId") || "");
+    const statusId = String(formData.get("statusId") || "");
+    const placementsRaw = String(formData.get("placements") || "");
+    if (!soldierId || !itemTypeId || !statusId) return { error: "חסרים פרמטרים" };
+
+    // placements = JSON של [{equipmentLocationId, quantity}]
+    let placements: { equipmentLocationId: string; quantity: number }[] = [];
+    try {
+      placements = JSON.parse(placementsRaw);
+    } catch { return { error: "פורמט שגוי" }; }
+
+    // אבטחה: החייל בגדוד של המשתמש
+    const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true, companyId: true } });
+    if (!soldier || soldier.battalionId !== user.battalionId) return { error: "חייל לא נמצא" };
+
+    // 🛡️ הסכום לא יכול להיות גדול מהכמות החתומה
+    const lines = await prisma.transferLine.findMany({
+      where: {
+        transfer: { battalionId: user.battalionId, status: "COMPLETED", type: { in: ["SIGNOUT", "CHECKIN"] }, toSoldierId: soldierId },
+        itemTypeId, statusId, serialUnitId: null,
+      },
+      include: { transfer: { select: { type: true } } },
+    });
+    const signedQty = lines.reduce((s, l) => s + (l.transfer.type === "SIGNOUT" ? l.quantity : -l.quantity), 0);
+    const totalToPlace = placements.reduce((s, p) => s + (p.quantity || 0), 0);
+    if (totalToPlace > signedQty) {
+      return { error: `סך המיקומים (${totalToPlace}) חורג מהכמות החתומה (${signedQty})` };
+    }
+    if (placements.some((p) => p.quantity < 0)) return { error: "כמות לא יכולה להיות שלילית" };
+
+    await prisma.$transaction(async (tx) => {
+      await tx.soldierItemLocation.deleteMany({ where: { soldierId, itemTypeId, statusId } });
+      for (const p of placements) {
+        if (p.quantity <= 0 || !p.equipmentLocationId) continue;
+        await tx.soldierItemLocation.create({
+          data: {
+            battalionId: user.battalionId!,
+            soldierId, itemTypeId, statusId,
+            equipmentLocationId: p.equipmentLocationId,
+            quantity: p.quantity,
+          },
+        });
+      }
+    });
+    await audit(user.id, "UPSERT", "SoldierItemLocation", `${soldierId}/${itemTypeId}/${statusId}`, { placements });
+    revalidatePath("/my-inventory");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
 /** הגדרת מיקום ציוד ליחידה סריאלית - גם חייל יכול דרך הtoken של החתימה שלו */
 export async function setUnitEquipmentLocation(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
