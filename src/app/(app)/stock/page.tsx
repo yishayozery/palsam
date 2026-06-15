@@ -62,11 +62,12 @@ export default async function StockPage({
   const items = await prisma.itemType.findMany({
     where: {
       battalionId: bId, active: true,
-      // 🛡️ סקופ קצין מחסן: מציגים כל פריט שיש לו יתרה כלשהי במחסניו (לא משנה מה הקטגוריה),
-      // כדי לכסות את המקרה של אותו פריט שמוחזק פיזית גם במחסן שלא תואם לקטגוריה שלו.
-      // הקטגוריה "הלא תואמת" תסומן בדגל ב-UI במקום להסתיר את הפריט.
+      // 🛡️ סקופ קצין מחסן: כל הפריטים מהקטגוריות התואמות לטיפוסי המחסנים שלו
+      // (גם בלי מלאי - אלה ה"קטלוג הצפוי" שלו), ובנוסף פריטים שיש לו פיזית מקטגוריה אחרת
+      // - הם יקבלו דגל "קטגוריה אחרת" בתצוגה.
       ...(isScoped ? {
         OR: [
+          { category: { warehouseType: { in: myWarehouseTypes as never[] } } },
           { stockBalances: { some: { holderId: { in: user.holderIds }, quantity: { gt: 0 } } } },
           { serialUnits: { some: { currentHolderId: { in: user.holderIds } } } },
         ],

@@ -193,6 +193,7 @@ export default function StockTable({
   const [cat, setCat] = useState(initialCategory);
   const [wh, setWh] = useState(hideWarehouseFilter ? "" : initialWarehouse);
   const [companyFilter, setCompanyFilter] = useState("");
+  const [onlyInStock, setOnlyInStock] = useState(false);
 
   // רשימת כל הפלוגות שיש להן ציוד באיזשהו פריט
   const allCompanies = (() => {
@@ -210,6 +211,7 @@ export default function StockTable({
     }
     if (cat && i.categoryId !== cat) return false;
     if (wh && i.warehouseType !== wh) return false;
+    if (onlyInStock && i.total === 0) return false;
     // כאשר נבחרת פלוגה - הצג רק פריטים שיש לה
     if (companyFilter) {
       const has = (i.companyBreakdown ?? []).find((c) => c.companyId === companyFilter);
@@ -270,8 +272,13 @@ export default function StockTable({
             {allCompanies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        {(search || cat || wh || companyFilter) && (
-          <button onClick={() => { setSearch(""); setCat(""); setWh(""); setCompanyFilter(""); }}
+        <label className="flex items-center gap-1.5 text-sm text-slate-700 self-end pb-2 cursor-pointer select-none">
+          <input type="checkbox" checked={onlyInStock} onChange={(e) => setOnlyInStock(e.target.checked)}
+            className="rounded border-slate-300" />
+          רק עם מלאי
+        </label>
+        {(search || cat || wh || companyFilter || onlyInStock) && (
+          <button onClick={() => { setSearch(""); setCat(""); setWh(""); setCompanyFilter(""); setOnlyInStock(false); }}
             className="text-sm text-slate-500 hover:text-slate-800 self-end pb-2">נקה</button>
         )}
         <span className="text-xs text-slate-500 self-end pb-2">{filtered.length} פריטים</span>
