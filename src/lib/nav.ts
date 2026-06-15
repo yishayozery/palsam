@@ -30,6 +30,7 @@ export const NAV: NavItem[] = [
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "פלסם", cap: "soldiers.roster" },
   { href: "/items", label: "הגדרות פריטים", icon: "🏷️", group: "פלסם", cap: "battalion.profile" },
   { href: "/stock", label: "מלאי הגדוד", icon: "📋", group: "פלסם", cap: "battalion.profile" },
+  { href: "/permanent-items", label: "ציוד קבוע פר פלוגה", icon: "📌", group: "פלסם", cap: "battalion.profile" },
   { href: "/signatures", label: "החתמות פלוגה", icon: "✍️", group: "פלסם", cap: "battalion.profile" },
   { href: "/warehouses", label: "מחסני הגדוד", icon: "🏪", group: "פלסם", cap: "battalion.profile" },
   { href: "/counts", label: "ספירות מלאי", icon: "🔢", group: "פלסם", cap: "battalion.profile" },

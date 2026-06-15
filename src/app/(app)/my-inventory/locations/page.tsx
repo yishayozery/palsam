@@ -147,6 +147,17 @@ export default async function CompanyLocationsPage({
     if (missing > 0) unassigned += missing;
   }
 
+  // 📊 דשבורד מיקומים - חישוב אחוז ציוד ממוקם
+  const placedTotal = Array.from(byLocation.values()).reduce((s, n) => s + n, 0);
+  const totalAllItems = placedTotal + unassigned;
+  const placedPct = totalAllItems === 0 ? 100 : Math.round((placedTotal / totalAllItems) * 100);
+  const dashboardLabel = placedPct === 100 ? "כל הציוד ממוקם 🎉" : placedPct >= 70 ? "ברוב הציוד יש מיקום" : "רוב הציוד עוד לא ממוקם";
+  const dashboardStyle = placedPct === 100
+    ? { card: "bg-emerald-50 border-emerald-300", text: "text-emerald-700", label: "text-emerald-900", track: "bg-emerald-200", bar: "bg-emerald-600" }
+    : placedPct >= 70
+      ? { card: "bg-amber-50 border-amber-300", text: "text-amber-700", label: "text-amber-900", track: "bg-amber-200", bar: "bg-amber-600" }
+      : { card: "bg-rose-50 border-rose-300", text: "text-rose-700", label: "text-rose-900", track: "bg-rose-200", bar: "bg-rose-600" };
+
   return (
     <div>
       <PageHeader
@@ -184,7 +195,22 @@ export default async function CompanyLocationsPage({
             </div>
           </EmptyState>
         </Card>
-      ) : null}
+      ) : (
+        <Card className={`p-4 mb-4 ${dashboardStyle.card}`}>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className={`text-3xl font-bold ${dashboardStyle.text}`}>{placedPct}%</div>
+            <div className="flex-1 min-w-44">
+              <div className={`text-sm font-medium ${dashboardStyle.label}`}>{dashboardLabel}</div>
+              <div className="text-xs text-slate-600 mt-0.5">
+                <b>{placedTotal}</b> מתוך <b>{totalAllItems}</b> פריטים ממוקמים, {unassigned} ללא מיקום
+              </div>
+              <div className={`mt-2 h-2 ${dashboardStyle.track} rounded-full overflow-hidden`}>
+                <div className={`h-full ${dashboardStyle.bar} rounded-full transition-all`} style={{ width: `${placedPct}%` }} />
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <CompanyLocationsClient
         items={serialUnits.map((u) => ({

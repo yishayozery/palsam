@@ -27,15 +27,27 @@ type CartQty = { type: "qty"; uid: number; itemTypeId: string; statusId: string;
 type CartItem = CartSerial | CartQty;
 let UID = 1;
 
+type Baseline = { companyId: string; itemTypeId: string; baseline: number };
+type Total = { companyId: string; itemTypeId: string; total: number };
+
 export default function CompanyCheckinModal({
   companies, serials, balances, statuses, requirePersonalId = false,
+  baselines = [], totals = [],
 }: {
   companies: Company[];
   serials: SerialAtCompany[];
   balances: QtyAtCompany[];
   statuses: Status[];
   requirePersonalId?: boolean;
+  baselines?: Baseline[];
+  totals?: Total[];
 }) {
+  // עזר: כמה מותר לזכות לפריט בפלוגה - max(0, current - baseline)
+  const allowedToReturn = (companyId: string, itemTypeId: string): { allowed: number; current: number; baseline: number } => {
+    const current = totals.find((t) => t.companyId === companyId && t.itemTypeId === itemTypeId)?.total ?? 0;
+    const baseline = baselines.find((b) => b.companyId === companyId && b.itemTypeId === itemTypeId)?.baseline ?? 0;
+    return { allowed: Math.max(0, current - baseline), current, baseline };
+  };
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [companyId, setCompanyId] = useState("");
@@ -290,17 +302,39 @@ export default function CompanyCheckinModal({
                 {pickerBalances.length > 0 && (
                   <>
                     <div className="text-[10px] font-semibold text-slate-500 uppercase px-2 pt-1">כמותי</div>
-                    {pickerBalances.map((b) => (
-                      <button key={`${b.itemTypeId}-${b.statusId}`} onClick={() => addQty(b)}
-                        className="w-full text-right p-2 rounded-lg border border-slate-200 hover:bg-purple-50 hover:border-purple-300 flex items-center gap-2 text-sm">
-                        <span className="text-lg">📦</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{b.itemName}</div>
-                          <div className="text-xs text-slate-500">{b.statusName} · זמין: {b.quantity} {b.unit}</div>
-                        </div>
-                        <span className="text-purple-600 font-bold">+</span>
-                      </button>
-                    ))}
+                    {pickerBalances.map((b) => {
+                      const a = allowedToReturn(companyId, b.itemTypeId);
+                      const blocked = a.allowed === 0;
+                      return (
+                        <button key={`${b.itemTypeId}-${b.statusId}`} onClick={() => !blocked && addQty(b)}
+                          disabled={blocked}
+                          className={`w-full text-right p-2 rounded-lg border flex items-center gap-2 text-sm ${
+                            blocked
+                              ? "border-rose-200 bg-rose-50 cursor-not-allowed opacity-70"
+                              : "border-slate-200 hover:bg-purple-50 hover:border-purple-300"
+                          }`}>
+                          <span className="text-lg">📦</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium truncate">{b.itemName}</div>
+                            <div className="text-xs text-slate-500">{b.statusName} · במלאי: {b.quantity} {b.unit}</div>
+                            <div className="text-[11px] mt-0.5">
+                              {a.baseline > 0 ? (
+                                <span className={blocked ? "text-rose-700 font-medium" : "text-amber-700"}>
+                                  📌 בסיס מפמ: {a.baseline} · זמין לזיכוי: <b>{a.allowed}</b>
+                                </span>
+                              ) : (
+                                <span className="text-emerald-600">📌 בלי בסיס - זמין לזיכוי: <b>{a.current}</b></span>
+                              )}
+                            </div>
+                          </div>
+                          {blocked ? (
+                            <span className="text-[10px] text-rose-700 font-bold">חסום</span>
+                          ) : (
+                            <span className="text-purple-600 font-bold">+</span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </>
                 )}
                 {pickerSerials.length > 0 && (

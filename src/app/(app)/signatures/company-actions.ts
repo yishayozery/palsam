@@ -252,6 +252,44 @@ export async function companyReturn(formData: FormData): Promise<{ ok?: boolean;
       return { error: "🔒 הגדוד דורש מ.א. בכל מסירה — חובה למלא מ.א. תקף (לפחות 5 ספרות)" };
     }
 
+    // 📌 ולידציה מול 'ציוד קבוע' — לא ניתן לזכות מתחת לבסיס שהמפמ הגדיר.
+    // אגרגציה לפי itemTypeId (לא תלוי סטטוס) - הבסיס אגרגטיבי.
+    {
+      const { getCompanyItemTotals } = await import("@/lib/company-stock-snapshot");
+      const totals = await getCompanyItemTotals(bId, companyId);
+      const baselines = await prisma.companyItemBaseline.findMany({
+        where: { battalionId: bId, companyId },
+        select: { itemTypeId: true, permanentQuantity: true },
+      });
+      const baselineMap = new Map(baselines.map((b) => [b.itemTypeId, b.permanentQuantity]));
+      // סך כמות לזיכוי פר itemTypeId (כמותי + סריאלי שמיועד לחזרה)
+      const returnByItem = new Map<string, number>();
+      for (const e of qtyEntries) returnByItem.set(e.itemTypeId, (returnByItem.get(e.itemTypeId) ?? 0) + e.qty);
+      if (serialIds.length > 0) {
+        const units = await prisma.serialUnit.findMany({
+          where: { id: { in: serialIds } },
+          select: { id: true, itemTypeId: true, lotQuantity: true },
+        });
+        for (const u of units) {
+          const partialLotQty = parseInt(String(formData.get(`lotQty:${u.id}`) || "0"), 10);
+          const lineQty = partialLotQty > 0 && partialLotQty < (u.lotQuantity ?? 1) ? partialLotQty : (u.lotQuantity ?? 1);
+          returnByItem.set(u.itemTypeId, (returnByItem.get(u.itemTypeId) ?? 0) + lineQty);
+        }
+      }
+      // בדיקת כל פריט מול הבסיס
+      for (const [itemTypeId, returnQty] of returnByItem.entries()) {
+        const current = totals.get(itemTypeId) ?? 0;
+        const baseline = baselineMap.get(itemTypeId) ?? 0;
+        const allowedToReturn = Math.max(0, current - baseline);
+        if (returnQty > allowedToReturn) {
+          const item = await prisma.itemType.findUnique({ where: { id: itemTypeId }, select: { name: true } });
+          return {
+            error: `📌 לא ניתן לזכות ${returnQty} יח' של "${item?.name ?? "?"}" — הבסיס שהמפמ הגדיר הוא ${baseline}, יש בפלוגה ${current}, זמין לזיכוי ${allowedToReturn}. כדי לזכות יותר — פנה למפמ לעדכן את הבסיס.`,
+          };
+        }
+      }
+    }
+
     // איתור מחסן יעד לפי קטגוריית הפריט
     const findDestWarehouse = async (itemTypeId: string): Promise<string | null> => {
       const item = await prisma.itemType.findUnique({ where: { id: itemTypeId }, include: { category: true } });

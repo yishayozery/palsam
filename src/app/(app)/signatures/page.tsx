@@ -120,6 +120,17 @@ export default async function SignaturesPage() {
     include: { itemType: true, status: true },
     orderBy: { itemType: { name: "asc" } },
   });
+  // 📌 בסיסים + כמות נוכחית פר (פלוגה, פריט) - לחישוב 'זמין לזיכוי'
+  const allBaselines = companyHolderIds.length === 0 ? [] : await prisma.companyItemBaseline.findMany({
+    where: { battalionId: bId, companyId: { in: companyHolderIds } },
+    select: { companyId: true, itemTypeId: true, permanentQuantity: true },
+  });
+  const { getCompanyItemTotals } = await import("@/lib/company-stock-snapshot");
+  const totalsByCompany = new Map<string, Map<string, number>>();
+  for (const cId of companyHolderIds) {
+    totalsByCompany.set(cId, await getCompanyItemTotals(bId, cId));
+  }
+
   const companyBalances = companyHolderIds.length === 0 ? [] : await prisma.stockBalance.findMany({
     where: {
       battalionId: bId,
@@ -301,6 +312,10 @@ export default async function SignaturesPage() {
                   }))}
                   statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, isWear: s.isWear, isLoss: s.isLoss }))}
                   requirePersonalId={requirePersonalIdFlag}
+                  baselines={allBaselines.map((b) => ({ companyId: b.companyId, itemTypeId: b.itemTypeId, baseline: b.permanentQuantity }))}
+                  totals={Array.from(totalsByCompany.entries()).flatMap(([companyId, m]) =>
+                    Array.from(m.entries()).map(([itemTypeId, total]) => ({ companyId, itemTypeId, total }))
+                  )}
                 />
               )}
               <CheckinModal

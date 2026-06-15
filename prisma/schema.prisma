@@ -133,6 +133,7 @@ model Battalion {
   itemTypes     ItemType[]
   stockBalances StockBalance[]
   soldierItemLocations SoldierItemLocation[]
+  companyItemBaselines CompanyItemBaseline[] @relation("BattalionBaselines")
   serialUnits   SerialUnit[]
   kitInstances  KitInstance[]
   transfers     Transfer[]
@@ -272,6 +273,7 @@ model Holder {
   countLines       CountLine[]
   secondarySoldiers Soldier[]        @relation("SoldierSecondary")
   discrepancies    Discrepancy[]
+  companyItemBaselines CompanyItemBaseline[] @relation("HolderBaselines")
   // קשרי מחסן↔פלוגה (איזה פלוגות המחסן עובד מולן)
   warehouseLinks   WarehouseCompany[] @relation("WarehouseSide")
   companyLinks     WarehouseCompany[] @relation("CompanySide")
@@ -401,6 +403,30 @@ model Soldier {
   @@index([companyId])
 }
 
+/**
+ * כמות בסיס פר (פלוגה, פריט) - הכמות שנשארת אצל הפלוגה גם אחרי תעסוקה.
+ * רק מפמ עורך. ברירת מחדל = 0 (כל הציוד מושאל וצריך לחזור).
+ * משמש כדי לאכוף בזיכוי: לא ניתן לזכות מתחת ל-baseline.
+ * אגרגטיבי - לא תלוי סטטוס (תקין/תקול/אובד).
+ */
+model CompanyItemBaseline {
+  id                 String    @id @default(cuid())
+  battalionId        String
+  battalion          Battalion @relation("BattalionBaselines", fields: [battalionId], references: [id], onDelete: Cascade)
+  companyId          String
+  company            Holder    @relation("HolderBaselines", fields: [companyId], references: [id], onDelete: Cascade)
+  itemTypeId         String
+  itemType           ItemType  @relation("ItemTypeBaselines", fields: [itemTypeId], references: [id], onDelete: Cascade)
+  permanentQuantity  Int       @default(0)
+  updatedAt          DateTime  @updatedAt
+  updatedById        String?
+
+  @@unique([companyId, itemTypeId])
+  @@index([battalionId])
+  @@index([companyId])
+  @@index([itemTypeId])
+}
+
 // ===================== מילונים (לפי גדוד) =====================
 
 model Category {
@@ -501,6 +527,7 @@ model ItemType {
   usedInKits    KitComponent[] @relation("KitChild")
   kitInstances  KitInstance[]
   soldierItemLocations SoldierItemLocation[]
+  companyBaselines CompanyItemBaseline[] @relation("ItemTypeBaselines")
   // מיקומים פר-holder (מאפשר אותו פריט במיקומים שונים בכל מחסן/פלוגה)
   holderLocations ItemHolderLocation[]
   inSignableKits SignableKitLine[] @relation("KitLineItem")
