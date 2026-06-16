@@ -21,6 +21,78 @@ export type SoldierEquipmentResult =
       weaponsEligibility: WeaponsEligibility; }
   | { ok: false; error: string };
 
+/** 🔫 חתימה על נוהל שמירת נשק ע"י החייל (דגל #4). */
+export async function signWeaponsAgreement(
+  formData: FormData,
+): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const ip = await getClientIp();
+    await checkRateLimit("weapons-agreement", ip, { max: 5, windowSec: 600 });
+
+    const soldierId = String(formData.get("soldierId") || "");
+    const personalNumber = String(formData.get("personalNumber") || "").replace(/\D/g, "");
+    if (!soldierId || !personalNumber) return { error: "פרמטרים חסרים" };
+
+    const s = await prisma.soldier.findUnique({
+      where: { id: soldierId },
+      select: { personalNumber: true, fullName: true, battalionId: true, weaponsAgreementSignedAt: true },
+    });
+    if (!s) return { error: "חייל לא נמצא" };
+    if (s.personalNumber !== personalNumber) return { error: "לא ניתן לעדכן עבור חייל אחר" };
+    if (s.weaponsAgreementSignedAt) return { ok: true };
+
+    await prisma.soldier.update({
+      where: { id: soldierId },
+      data: { weaponsAgreementSignedAt: new Date() },
+    });
+    await prisma.auditLog.create({
+      data: {
+        battalionId: s.battalionId, action: "WEAPONS_AGREEMENT_SIGNED",
+        entity: "Soldier", entityId: soldierId,
+        details: { soldierName: s.fullName, source: "my-equipment" },
+      },
+    });
+    revalidatePath("/my-equipment");
+    revalidatePath("/armory-ineligibility");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof RateLimitError) {
+      const min = Math.ceil(e.retryAfterSec / 60);
+      return { error: `🛡️ יותר מדי ניסיונות. נסה שוב בעוד ${min} דקות.` };
+    }
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** צפייה בצילום מסך של מבחן ארמון שהועלה. */
+export async function getArmoryTestImage(
+  formData: FormData,
+): Promise<{ imageData?: string; error?: string }> {
+  try {
+    const ip = await getClientIp();
+    await checkRateLimit("armory-test-view", ip, { max: 10, windowSec: 300 });
+
+    const soldierId = String(formData.get("soldierId") || "");
+    const personalNumber = String(formData.get("personalNumber") || "").replace(/\D/g, "");
+    if (!soldierId || !personalNumber) return { error: "פרמטרים חסרים" };
+
+    const s = await prisma.soldier.findUnique({
+      where: { id: soldierId },
+      select: { personalNumber: true, armoryTestProofImage: true },
+    });
+    if (!s) return { error: "חייל לא נמצא" };
+    if (s.personalNumber !== personalNumber) return { error: "לא ניתן לצפות עבור חייל אחר" };
+    if (!s.armoryTestProofImage) return { error: "לא נמצאה תמונה" };
+    return { imageData: s.armoryTestProofImage };
+  } catch (e) {
+    if (e instanceof RateLimitError) {
+      const min = Math.ceil(e.retryAfterSec / 60);
+      return { error: `🛡️ יותר מדי בקשות. נסה שוב בעוד ${min} דקות.` };
+    }
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
 /** העלאת צילום מסך של מבחן ע"י החייל (דגל #3). */
 export async function uploadArmoryTestProof(
   formData: FormData,

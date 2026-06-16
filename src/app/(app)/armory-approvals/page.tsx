@@ -11,11 +11,10 @@ export default async function ArmoryApprovalsPage() {
 
   const soldiers = await prisma.soldier.findMany({
     where: { battalionId: bId, active: true },
-    include: {
-      company: { select: { name: true } },
-    },
+    include: { company: { select: { name: true } } },
     orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }],
   });
+  const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { armoryTestUrl: true } });
 
   // משלימים שמות מאשרים
   const approverIds = soldiers.map((s) => s.weaponsApprovedById).filter((x): x is string => !!x);
@@ -26,21 +25,24 @@ export default async function ArmoryApprovalsPage() {
   return (
     <div>
       <PageHeader
-        title='🔫 אישור חיילים לחימוש'
-        subtitle='מג"ד / סמג"ד מאשרים זכאות חיילים לקבל נשק. תנאי מוקדם: אישור שלישות.'
+        title='🔫 אישור חיילים לנשק'
+        subtitle='מג"ד / סמג"ד מאשרים חיילים לקבלת נשק. תנאי מוקדם: אישור שלישות.'
       />
 
       {soldiers.length === 0 ? (
         <Card className="p-6"><EmptyState>אין חיילים פעילים בגדוד</EmptyState></Card>
       ) : (
         <ApprovalsClient
+          armoryTestUrl={battalion?.armoryTestUrl ?? null}
           soldiers={soldiers.map((s) => ({
             id: s.id,
             fullName: s.fullName,
             personalNumber: s.personalNumber,
+            phone: s.phone,
             companyName: s.company?.name ?? null,
             enlisted: s.enlisted,
             enlistedAt: s.enlistedAt?.toISOString() ?? null,
+            armoryTestDone: !!s.armoryTestProofAt,
             weaponsApprovedAt: s.weaponsApprovedAt?.toISOString() ?? null,
             weaponsApprovedByName: s.weaponsApprovedById
               ? approvers.find((a) => a.id === s.weaponsApprovedById)?.fullName ?? null

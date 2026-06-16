@@ -83,7 +83,7 @@ export async function createSignout(formData: FormData) {
           if (s === "enlisted") return "אישור שלישות (פנה לשליש)";
           if (s === "weaponsApproved") return 'אישור מג"ד/סמג"ד';
           if (s === "armoryTestSubmitted") return "העלאת צילום של מבחן נוהל הארמון";
-          if (s === "weaponsAgreementSigned") return "חתימה על נוהל שמירת נשק (תתבצע בארמון)";
+          if (s === "weaponsAgreementSigned") return "חתימה על נוהל שמירת נשק (דרך הלינק לחייל)";
           return s;
         }).join(" + ");
         throw new Error(`🚫 לא ניתן להחתים על נשק. החייל חסר: ${missing}`);
@@ -247,6 +247,23 @@ export async function completeSignature(token: string, signatureData: string) {
   });
 
   await audit(null, "SIGN", "Signature", sig.id, { soldierId });
+
+  // 🔫 חתימה על נוהל שמירת נשק — נחתם אוטומטית כשהחייל חותם על נשק בארמון
+  if (soldierId) {
+    const { areAnyItemsArmory } = await import("@/lib/weapons-eligibility");
+    const itemTypeIds = sig.transfer!.lines.map((l) => l.itemTypeId);
+    if (await areAnyItemsArmory(itemTypeIds)) {
+      const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { weaponsAgreementSignedAt: true } });
+      if (soldier && !soldier.weaponsAgreementSignedAt) {
+        await prisma.soldier.update({
+          where: { id: soldierId },
+          data: { weaponsAgreementSignedAt: new Date() },
+        });
+        await audit(null, "WEAPONS_AGREEMENT_SIGNED", "Soldier", soldierId, { reason: "חתימה אוטומטית עם קבלת נשק" });
+      }
+    }
+  }
+
   revalidatePath("/signatures");
   return { ok: true };
 }

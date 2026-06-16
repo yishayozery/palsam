@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { lookupSoldierEquipment, uploadArmoryTestProof, type SoldierEquipmentResult } from "./actions";
+import { lookupSoldierEquipment, uploadArmoryTestProof, signWeaponsAgreement, getArmoryTestImage, type SoldierEquipmentResult } from "./actions";
 
 export default function MyEquipmentClient() {
   const [pn, setPn] = useState("");
@@ -139,10 +139,8 @@ export default function MyEquipmentClient() {
                 ? `הועלה ב-${new Date(e.armoryTestSubmittedAt).toLocaleDateString("he-IL")}`
                 : "עוד לא הועלה צילום מסך"}
               extra={
-                !e.armoryTestSubmitted && (
-                  <ArmoryTestUploader soldierId={result.soldierId} personalNumber={result.soldier.personalNumber ?? ""}
-                    testUrl={e.armoryTestUrl} onUploaded={() => window.location.reload()} />
-                )
+                <ArmoryTestUploader soldierId={result.soldierId} personalNumber={result.soldier.personalNumber ?? ""}
+                  testUrl={e.armoryTestUrl} alreadyUploaded={e.armoryTestSubmitted} onUploaded={() => window.location.reload()} />
               }
             />
             <ChecklistRow
@@ -150,7 +148,13 @@ export default function MyEquipmentClient() {
               title="חתימה על נוהל שמירה"
               detail={e.weaponsAgreementSigned && e.weaponsAgreementSignedAt
                 ? `נחתם ב-${new Date(e.weaponsAgreementSignedAt).toLocaleDateString("he-IL")}`
-                : "תתבצע אוטומטית כשמגיע לארמון לקבל נשק"}
+                : "קרא את הנוהל וחתום"}
+              extra={
+                !e.weaponsAgreementSigned && (
+                  <WeaponsAgreementSign soldierId={result.soldierId} personalNumber={result.soldier.personalNumber ?? ""}
+                    onSigned={() => window.location.reload()} />
+                )
+              }
             />
           </div>
           {!checklistDone && (
@@ -210,12 +214,16 @@ function ChecklistRow({ done, title, detail, extra }: { done: boolean; title: st
   );
 }
 
-function ArmoryTestUploader({ soldierId, personalNumber, testUrl, onUploaded }: {
-  soldierId: string; personalNumber: string; testUrl: string | null; onUploaded: () => void;
+function ArmoryTestUploader({ soldierId, personalNumber, testUrl, alreadyUploaded, onUploaded }: {
+  soldierId: string; personalNumber: string; testUrl: string | null; alreadyUploaded: boolean; onUploaded: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [showImage, setShowImage] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [loadingImage, setLoadingImage] = useState(false);
+  const [showReupload, setShowReupload] = useState(false);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -244,6 +252,21 @@ function ArmoryTestUploader({ soldierId, personalNumber, testUrl, onUploaded }: 
     } finally { setBusy(false); }
   }
 
+  async function viewImage() {
+    setLoadingImage(true);
+    try {
+      const fd = new FormData();
+      fd.append("soldierId", soldierId);
+      fd.append("personalNumber", personalNumber);
+      const res = await getArmoryTestImage(fd);
+      if (res?.error) setErr(res.error);
+      else if (res?.imageData) { setImageUrl(res.imageData); setShowImage(true); }
+      else setErr("לא נמצאה תמונה");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "שגיאה");
+    } finally { setLoadingImage(false); }
+  }
+
   return (
     <div className="mt-2 flex flex-col gap-2">
       {testUrl && (
@@ -252,12 +275,95 @@ function ArmoryTestUploader({ soldierId, personalNumber, testUrl, onUploaded }: 
           🔗 פתח את המבחן
         </a>
       )}
-      <button onClick={() => fileRef.current?.click()} disabled={busy}
-        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-2 font-medium disabled:opacity-50">
-        {busy ? "מעלה..." : "📤 העלה צילום של מבחן שעברתי"}
-      </button>
+      {alreadyUploaded ? (
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={viewImage} disabled={loadingImage}
+            className="text-xs bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-1.5 font-medium disabled:opacity-50">
+            {loadingImage ? "טוען..." : "🖼️ צפה בתמונה"}
+          </button>
+          <button onClick={() => setShowReupload(true)}
+            className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded px-3 py-1.5">
+            🔄 העלה תמונה אחרת
+          </button>
+        </div>
+      ) : (
+        <button onClick={() => fileRef.current?.click()} disabled={busy}
+          className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-2 font-medium disabled:opacity-50">
+          {busy ? "מעלה..." : "📤 העלה צילום של מבחן שעברתי"}
+        </button>
+      )}
+      {showReupload && (
+        <button onClick={() => fileRef.current?.click()} disabled={busy}
+          className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-2 font-medium disabled:opacity-50">
+          {busy ? "מעלה..." : "📤 בחר תמונה חדשה"}
+        </button>
+      )}
       <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+      {showImage && imageUrl && (
+        <div className="relative">
+          <button onClick={() => setShowImage(false)}
+            className="absolute top-1 left-1 bg-black/60 text-white rounded-full w-6 h-6 text-xs z-10">✕</button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={imageUrl} alt="צילום מבחן ארמון" className="rounded-lg border border-slate-300 max-w-full max-h-80" />
+        </div>
+      )}
       {err && <div className="text-[11px] text-rose-700 bg-rose-50 rounded p-1.5">⚠️ {err}</div>}
+    </div>
+  );
+}
+
+function WeaponsAgreementSign({ soldierId, personalNumber, onSigned }: {
+  soldierId: string; personalNumber: string; onSigned: () => void;
+}) {
+  const [showAgreement, setShowAgreement] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function handleSign() {
+    setBusy(true); setErr(null);
+    try {
+      const fd = new FormData();
+      fd.append("soldierId", soldierId);
+      fd.append("personalNumber", personalNumber);
+      const res = await signWeaponsAgreement(fd);
+      if (res?.error) setErr(res.error);
+      else onSigned();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "שגיאה");
+    } finally { setBusy(false); }
+  }
+
+  if (!showAgreement) {
+    return (
+      <button onClick={() => setShowAgreement(true)}
+        className="mt-2 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded px-3 py-2 font-medium">
+        📋 קרא וחתום על נוהל שמירת נשק
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-2 bg-rose-50 border-2 border-rose-300 rounded-xl p-3">
+      <div className="text-[11px] font-bold text-rose-900 mb-1.5">🔫 נוהל שמירת נשק</div>
+      <div className="text-sm text-slate-800 space-y-1 leading-relaxed">
+        <p>אני מתחייב/ת בזאת כי:</p>
+        <p>1. קיבלתי הדרכה בנושא נוהל שמירת נשק ותחמושת.</p>
+        <p>2. אשמור את הנשק בצורה בטוחה ומאובטחת בכל עת.</p>
+        <p>3. לא אעביר את הנשק לאדם אחר ללא אישור בכתב.</p>
+        <p>4. אדווח מיידית על כל אובדן, גניבה, או תקלה.</p>
+        <p>5. אחזיר את הנשק במצב תקין עם סיום השימוש.</p>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button onClick={() => setShowAgreement(false)}
+          className="flex-1 text-xs border border-slate-300 rounded px-3 py-2">
+          ביטול
+        </button>
+        <button onClick={handleSign} disabled={busy}
+          className="flex-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-2 font-bold disabled:opacity-50">
+          {busy ? "שולח..." : "✓ קראתי ואני מסכים/ה"}
+        </button>
+      </div>
+      {err && <div className="text-[11px] text-rose-700 mt-2">⚠️ {err}</div>}
     </div>
   );
 }

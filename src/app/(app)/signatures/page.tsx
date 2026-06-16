@@ -334,9 +334,11 @@ export default async function SignaturesPage() {
               <SignoutModal
                 companies={companiesForFilter}
                 lockCompanyId={isCompanyRep ? user.holderId : null}
+                isArmory={!!(await prisma.holder.findFirst({ where: { id: user.holderId ?? "__", warehouseType: "ARMORY" } }))}
                 soldiers={soldiers.map((s) => {
                   const c = companiesForFilter.find((x) => x.id === s.companyId);
-                  return { id: s.id, name: s.fullName, pn: s.personalNumber, companyId: s.companyId, companyName: c?.name ?? null, enlisted: s.enlisted };
+                  const armoryEligible = !!s.enlisted && !!s.weaponsApprovedAt && !!s.armoryTestProofAt && !!s.weaponsAgreementSignedAt;
+                  return { id: s.id, name: s.fullName, pn: s.personalNumber, companyId: s.companyId, companyName: c?.name ?? null, enlisted: s.enlisted, armoryEligible };
                 })}
                 units={availableUnits.map((u) => ({
                   id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber,

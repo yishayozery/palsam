@@ -34,6 +34,35 @@ export async function approveSoldierForWeapons(
   }
 }
 
+/** 🔫 אישור המוני — כל הממתינים בבת אחת. */
+export async function bulkApproveForWeapons(): Promise<{ ok?: boolean; count?: number; error?: string }> {
+  try {
+    const user = await requireCapability("weapons.approve");
+    const bId = user.battalionId!;
+
+    const pending = await prisma.soldier.findMany({
+      where: { battalionId: bId, active: true, enlisted: true, weaponsApprovedAt: null },
+      select: { id: true, fullName: true },
+    });
+    if (pending.length === 0) return { ok: true, count: 0 };
+
+    await prisma.soldier.updateMany({
+      where: { id: { in: pending.map((s) => s.id) } },
+      data: { weaponsApprovedAt: new Date(), weaponsApprovedById: user.id },
+    });
+    await audit(user.id, "BULK_APPROVE_WEAPONS", "Battalion", bId, {
+      count: pending.length,
+      names: pending.map((s) => s.fullName),
+    });
+    revalidatePath("/armory-approvals");
+    revalidatePath("/armory-ineligibility");
+    revalidatePath("/my-equipment");
+    return { ok: true, count: pending.length };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
 /** ביטול אישור (אם בטעות אושר חייל לא נכון). */
 export async function revokeSoldierWeaponsApproval(
   formData: FormData,

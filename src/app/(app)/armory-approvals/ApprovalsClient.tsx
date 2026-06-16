@@ -3,15 +3,35 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Badge } from "@/components/ui";
-import { approveSoldierForWeapons, revokeSoldierWeaponsApproval } from "./actions";
+import { approveSoldierForWeapons, revokeSoldierWeaponsApproval, bulkApproveForWeapons } from "./actions";
 
 type Soldier = {
-  id: string; fullName: string; personalNumber: string | null;
+  id: string; fullName: string; personalNumber: string | null; phone: string | null;
   companyName: string | null; enlisted: boolean; enlistedAt: string | null;
+  armoryTestDone: boolean;
   weaponsApprovedAt: string | null; weaponsApprovedByName: string | null;
 };
 
-export default function ApprovalsClient({ soldiers }: { soldiers: Soldier[] }) {
+const MY_EQUIPMENT_URL = "https://palsam.vercel.app/my-equipment";
+
+function buildWhatsAppUrl(soldier: Soldier, armoryTestUrl: string | null) {
+  const lines = [
+    `היי ${soldier.fullName},`,
+    "",
+    "כדי לקבל נשק, צריך להשלים את התהליך:",
+    `1. היכנס ללינק: ${MY_EQUIPMENT_URL}`,
+    `2. הזן שם מלא + מספר אישי`,
+    ...(armoryTestUrl ? [`3. עבור את המבחן: ${armoryTestUrl}`] : []),
+    `${armoryTestUrl ? "4" : "3"}. העלה צילום מסך של המבחן שעברת`,
+    "",
+    "בהצלחה! 🔫",
+  ];
+  const phone = soldier.phone?.replace(/\D/g, "") ?? "";
+  const intlPhone = phone.startsWith("0") ? `972${phone.slice(1)}` : phone;
+  return `https://wa.me/${intlPhone}?text=${encodeURIComponent(lines.join("\n"))}`;
+}
+
+export default function ApprovalsClient({ soldiers, armoryTestUrl }: { soldiers: Soldier[]; armoryTestUrl: string | null }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "pending" | "approved" | "blocked">("pending");
@@ -33,6 +53,16 @@ export default function ApprovalsClient({ soldiers }: { soldiers: Soldier[] }) {
     blocked: soldiers.filter((s) => !s.enlisted).length,
   };
 
+  async function bulkApprove() {
+    if (!confirm(`לאשר את כל ${counts.pending} החיילים הממתינים?`)) return;
+    setBusy("bulk");
+    try {
+      const res = await bulkApproveForWeapons();
+      if (res?.error) alert(res.error);
+      else { alert(`✅ אושרו ${res.count} חיילים`); router.refresh(); }
+    } finally { setBusy(null); }
+  }
+
   async function approve(id: string) {
     setBusy(id);
     try {
@@ -42,7 +72,7 @@ export default function ApprovalsClient({ soldiers }: { soldiers: Soldier[] }) {
     } finally { setBusy(null); }
   }
   async function revoke(id: string) {
-    if (!confirm("לבטל אישור חימוש לחייל?")) return;
+    if (!confirm("לבטל אישור נשק לחייל?")) return;
     setBusy(id);
     try {
       const fd = new FormData(); fd.append("soldierId", id);
@@ -71,6 +101,12 @@ export default function ApprovalsClient({ soldiers }: { soldiers: Soldier[] }) {
             הכל ({soldiers.length})
           </FilterChip>
         </div>
+        {counts.pending > 0 && (
+          <button onClick={bulkApprove} disabled={busy === "bulk"}
+            className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50">
+            {busy === "bulk" ? "מאשר..." : `✓ אשר את כל ${counts.pending} הממתינים`}
+          </button>
+        )}
       </Card>
 
       {filtered.length === 0 ? (
@@ -95,7 +131,7 @@ export default function ApprovalsClient({ soldiers }: { soldiers: Soldier[] }) {
                     )}
                     {s.weaponsApprovedAt && (
                       <span className="text-emerald-700">
-                        ✓ אושר לחימוש {new Date(s.weaponsApprovedAt).toLocaleDateString("he-IL")}
+                        ✓ אושר לנשק {new Date(s.weaponsApprovedAt).toLocaleDateString("he-IL")}
                         {s.weaponsApprovedByName && ` ע"י ${s.weaponsApprovedByName}`}
                       </span>
                     )}
@@ -104,8 +140,14 @@ export default function ApprovalsClient({ soldiers }: { soldiers: Soldier[] }) {
                 {s.enlisted && !s.weaponsApprovedAt && (
                   <button onClick={() => approve(s.id)} disabled={busy === s.id}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-1.5 text-sm font-medium disabled:opacity-50">
-                    {busy === s.id ? "..." : "✓ אשר לחימוש"}
+                    {busy === s.id ? "..." : "✓ אשר לנשק"}
                   </button>
+                )}
+                {s.weaponsApprovedAt && !s.armoryTestDone && s.phone && (
+                  <a href={buildWhatsAppUrl(s, armoryTestUrl)} target="_blank" rel="noopener noreferrer"
+                    className="text-xs bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-lg px-3 py-1.5">
+                    📲 שלח לינק
+                  </a>
                 )}
                 {s.weaponsApprovedAt && (
                   <button onClick={() => revoke(s.id)} disabled={busy === s.id}

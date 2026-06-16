@@ -4,7 +4,7 @@ import { useState, useMemo, useRef } from "react";
 import { createSignout } from "./actions";
 import { useEscClose } from "@/lib/useEscClose";
 
-type Soldier = { id: string; name: string; pn: string | null; companyId?: string | null; companyName?: string | null; enlisted?: boolean };
+type Soldier = { id: string; name: string; pn: string | null; companyId?: string | null; companyName?: string | null; enlisted?: boolean; armoryEligible?: boolean };
 type Company = { id: string; name: string };
 type Unit = { id: string; itemTypeId: string; itemName: string; serial: string; status: string; statusId: string; lotQuantity: number | null; trackLocation?: boolean };
 type Balance = { itemTypeId: string; itemName: string; unit: string; status: string; statusId: string; quantity: number; trackLocation?: boolean };
@@ -19,12 +19,13 @@ type CartQty = { type: "qty"; itemTypeId: string; itemName: string; unit: string
 type CartItem = CartSerial | CartQty;
 
 export default function SignoutModal({
-  soldiers, companies = [], balances = [], units, kits, vehicles, equipmentLocations = [], lockCompanyId,
+  soldiers, companies = [], balances = [], units, kits, vehicles, equipmentLocations = [], lockCompanyId, isArmory = false,
 }: {
   soldiers: Soldier[]; companies?: Company[]; balances?: Balance[];
   units: Unit[]; kits: Kit[]; vehicles: Vehicle[];
   equipmentLocations?: EquipLocation[];
   lockCompanyId?: string | null;
+  isArmory?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [soldierId, setSoldierId] = useState("");
@@ -62,6 +63,7 @@ export default function SignoutModal({
   // חיילים מסוננים — לפי פלוגה+חיפוש
   const filteredSoldiers = useMemo(() => {
     return soldiers.filter((s) => {
+      if (isArmory && !s.armoryEligible) return false;
       if (companyFilter && s.companyId !== companyFilter) return false;
       if (soldierSearch.trim()) {
         const q = soldierSearch.trim().toLowerCase();
@@ -69,7 +71,7 @@ export default function SignoutModal({
       }
       return true;
     }).slice(0, 200);
-  }, [soldiers, companyFilter, soldierSearch]);
+  }, [soldiers, companyFilter, soldierSearch, isArmory]);
 
   // פריטים זמינים — סריאלי + כמותי, מסוננים לפי חיפוש; ומסירים אלו שכבר בעגלה
   const cartSerialIds = new Set(cart.filter((c) => c.type === "serial").map((c) => (c as CartSerial).unitId));
@@ -336,7 +338,11 @@ export default function SignoutModal({
                 ))}
               </select>
               {filteredSoldiers.length === 0 && (
-                <p className="text-[10px] text-rose-600 mt-1">⚠️ אין חיילים. הקם חיילים ב<a href="/soldiers" className="underline">חיילי הפלוגה</a> או <a href="/roster" target="_blank" className="underline">רוסטר השלישות</a>.</p>
+                <p className="text-[10px] text-rose-600 mt-1">
+                  {isArmory
+                    ? <>⚠️ אין חיילים שהשלימו את תהליך הנשק. בדוק ב<a href="/armory-ineligibility" className="underline">דוח זכאות נשק</a>.</>
+                    : <>⚠️ אין חיילים. הקם חיילים ב<a href="/soldiers" className="underline">חיילי הפלוגה</a> או <a href="/roster" target="_blank" className="underline">רוסטר השלישות</a>.</>}
+                </p>
               )}
             </div>
           </div>

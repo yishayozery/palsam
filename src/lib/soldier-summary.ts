@@ -5,6 +5,7 @@ export type SoldierEquipmentSummary = {
   soldier: { id: string; fullName: string; personalNumber: string | null; companyName: string | null; phone: string | null };
   serials: { itemName: string; sku: string | null; serial: string; lotQuantity: number | null; statusName: string; isWear: boolean; isLoss: boolean }[];
   qty: { itemName: string; sku: string | null; unit: string; statusName: string; quantity: number }[];
+  weaponsEligibility?: { enlisted: boolean; weaponsApproved: boolean; armoryTestSubmitted: boolean; weaponsAgreementSigned: boolean; isFullyEligible: boolean };
 };
 
 /** מחזיר רשימת כל הציוד שחתום על חייל (סריאלי + כמותי), מאוגרגג. */
@@ -48,6 +49,11 @@ export async function getSoldierEquipmentSummary(soldierId: string): Promise<Sol
   const qty = Array.from(qtyMap.values()).filter((q) => q.quantity > 0)
     .sort((a, b) => a.itemName.localeCompare(b.itemName));
 
+  const enlisted = !!soldier.enlisted;
+  const weaponsApproved = !!soldier.weaponsApprovedAt;
+  const armoryTestSubmitted = !!soldier.armoryTestProofAt;
+  const weaponsAgreementSigned = !!soldier.weaponsAgreementSignedAt;
+
   return {
     soldier: {
       id: soldier.id, fullName: soldier.fullName,
@@ -60,6 +66,10 @@ export async function getSoldierEquipmentSummary(soldierId: string): Promise<Sol
       statusName: u.status.name, isWear: u.status.isWear, isLoss: u.status.isLoss,
     })),
     qty,
+    weaponsEligibility: {
+      enlisted, weaponsApproved, armoryTestSubmitted, weaponsAgreementSigned,
+      isFullyEligible: enlisted && weaponsApproved && armoryTestSubmitted && weaponsAgreementSigned,
+    },
   };
 }
 
@@ -87,6 +97,19 @@ export function formatSoldierSummaryForWhatsApp(s: SoldierEquipmentSummary, opts
     for (const q of s.qty) {
       const wear = q.statusName !== "תקין" ? ` (${q.statusName})` : "";
       lines.push(`• ${q.itemName} × ${q.quantity} ${q.unit}${wear}`);
+    }
+  }
+  if (s.weaponsEligibility) {
+    lines.push("");
+    const e = s.weaponsEligibility;
+    lines.push(`🔫 זכאות לנשק: ${e.isFullyEligible ? "✅ זכאי" : "❌ לא זכאי"}`);
+    if (!e.isFullyEligible) {
+      const missing: string[] = [];
+      if (!e.enlisted) missing.push("שלישות");
+      if (!e.weaponsApproved) missing.push('אישור מג"ד');
+      if (!e.armoryTestSubmitted) missing.push("מבחן ארמון");
+      if (!e.weaponsAgreementSigned) missing.push("נוהל שמירה");
+      lines.push(`חסר: ${missing.join(", ")}`);
     }
   }
   return lines.join("\n");

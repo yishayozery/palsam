@@ -28,8 +28,8 @@ export const NAV: NavItem[] = [
   { href: "/dispatch", label: "שבצ\"ק - שיבוץ רכבים", icon: "🚗", group: "ראשי", cap: "dispatch.manage" },
 
   // ===== פיקוד גדוד =====
-  { href: "/armory-approvals", label: "אישור חיילים לחימוש", icon: "🔫", group: "פיקוד גדוד", cap: "weapons.approve" },
-  { href: "/armory-ineligibility", label: "דוח זכאות נשק", icon: "📊", group: "פיקוד גדוד", cap: "weapons.view" },
+  { href: "/armory-approvals", label: "אישור חיילים לנשק", icon: "🔫", group: "פיקוד גדוד", cap: "weapons.approve" },
+  { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "פיקוד גדוד", cap: "weapons.view" },
 
   // ===== פלסם (מפ"מ — אחראי מערכת בגדוד) =====
   { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "פלסם", cap: "battalion.profile" },
@@ -73,6 +73,7 @@ export const NAV: NavItem[] = [
   // החתמת חיילים נפרדת
   { href: "/donations", label: "מלאי תרומה", icon: "🎁", group: "המחסנים שלי", cap: "donations.manage" },
   { href: "/soldiers", label: "חיילים", icon: "🪖", group: "המחסנים שלי", cap: "company.manage" },
+  { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "המחסנים שלי", cap: "weapons.view" },
 
   // ===== דוחות ובקרה =====
   { href: "/reports", label: "דוחות", icon: "📈", group: "דוחות ובקרה", cap: "reports.view" },
