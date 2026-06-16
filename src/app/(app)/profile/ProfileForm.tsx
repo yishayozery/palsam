@@ -9,6 +9,7 @@ const initial: ProfileState = {};
 type B = {
   name: string; code: string; brigade: string | null; commander: string | null; motto: string | null; notes: string | null; logoData: string | null;
   requirePersonalIdOnHandover: boolean;
+  notificationEmail: string | null;
 };
 
 export default function ProfileForm({ battalion }: { battalion: B }) {
@@ -85,6 +86,25 @@ export default function ProfileForm({ battalion }: { battalion: B }) {
             </div>
           </div>
         </label>
+
+        {/* 📧 מייל לגיבוי תנועות */}
+        <div className="mt-3 p-3 rounded-lg border border-slate-200">
+          <label className="block text-sm font-medium text-slate-800 mb-1">
+            📧 מייל לגיבוי תנועות (אופציונלי)
+          </label>
+          <input
+            type="email"
+            name="notificationEmail"
+            defaultValue={battalion.notificationEmail ?? ""}
+            placeholder="palsam-backup@battalion.com"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          />
+          <div className="text-xs text-slate-500 mt-1.5">
+            אם מוגדר — כל פעולה מבצעית (חתימה, זיכוי, החתמה, מסירה, שיבוץ, שליחה לטנא) תישלח אוטומטית
+            לכתובת זו. שירות המייל מתפעל ע&quot;י Resend. אם השדה ריק או שאין מפתח API מוגדר, הפעולות
+            עדיין מתבצעות אך לא נשלח מייל.
+          </div>
+        </div>
       </div>
       <div className="flex items-center justify-end gap-3">
         {state.ok && <span className="text-sm text-emerald-600">נשמר ✓</span>}

@@ -121,6 +121,7 @@ model Battalion {
   active    Boolean  @default(true)
   // הגדרות גדוד
   requirePersonalIdOnHandover Boolean @default(false) // לחייב מספר אישי בכל מסירה
+  notificationEmail           String? // אם מוגדר → מייל אוטומטי על כל פעולה מבצעית (חתימה/זיכוי/מסירה/שיבוץ)
   createdAt DateTime @default(now())
 
   users         AppUser[]

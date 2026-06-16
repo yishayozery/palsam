@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash } from "crypto";
 import { prisma } from "./prisma";
+import { shouldNotifyEmail, notifyTransactionEmail } from "./email";
 
 function computeHash(prev: string | null, payload: object): string {
   const h = createHash("sha256");
@@ -50,6 +51,11 @@ export async function audit(
         prevHash, hash,
       },
     });
+
+    // 📧 התראה במייל לפעולות מבצעיות (אם מוגדר notificationEmail בגדוד)
+    if (battalionId && shouldNotifyEmail(action, entity)) {
+      void notifyTransactionEmail({ battalionId, userId, action, entity, entityId, details });
+    }
   } catch {
     // לוג כשל ביומן לא יפיל פעולה עסקית
   }

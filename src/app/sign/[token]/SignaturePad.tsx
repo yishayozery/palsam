@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { completeSignature } from "@/app/(app)/signatures/actions";
+import { completeSignature, getPostSignatureShareData } from "@/app/(app)/signatures/actions";
 import { completeCompanySignature } from "@/app/(app)/signatures/company-actions";
 
 export default function SignaturePad({
@@ -21,7 +21,8 @@ export default function SignaturePad({
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
-  const [countdown, setCountdown] = useState(3);
+  const [countdown, setCountdown] = useState(10);
+  const [whatsappText, setWhatsappText] = useState<string | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -81,13 +82,24 @@ export default function SignaturePad({
       ? await completeCompanySignature(token, data)
       : await completeSignature(token, data);
     setSubmitting(false);
-    if (res.ok) setDone(true);
+    if (res.ok) {
+      setDone(true);
+      // 📲 טעינה אוטומטית של summary לשיתוף WhatsApp (רק לחתימת חייל)
+      if (!isCompanySign) {
+        try {
+          const share = await getPostSignatureShareData(token);
+          if (share.ok) setWhatsappText(share.whatsappText);
+        } catch {}
+      }
+    }
     else setError(res.error || "שגיאה");
   };
 
-  // אוטו-ניווט לדף הראשי אחרי 3 שניות
+  // אוטו-ניווט לדף הראשי - דיליי ארוך יותר אם יש WhatsApp share זמין
   useEffect(() => {
     if (!done) return;
+    // אם יש WhatsApp - לא לעשות auto-redirect, נותנים לחייל זמן
+    if (whatsappText) return;
     const interval = setInterval(() => {
       setCountdown((c) => {
         if (c <= 1) {
@@ -99,19 +111,40 @@ export default function SignaturePad({
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [done, router]);
+  }, [done, router, whatsappText]);
 
   if (done) {
+    const waUrl = whatsappText ? `https://wa.me/?text=${encodeURIComponent(whatsappText)}` : null;
     return (
       <div className="text-center py-6">
         <div className="text-6xl mb-3">✅</div>
         <p className="font-bold text-emerald-700 text-xl">החתימה נקלטה בהצלחה!</p>
         <p className="text-sm text-slate-500 mt-2">תודה, {soldierName}.</p>
-        <p className="text-xs text-slate-400 mt-4">
-          חוזר לדף הראשי בעוד <b className="text-emerald-700">{countdown}</b> שניות...
-        </p>
+
+        {whatsappText && (
+          <div className="mt-4 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-right">
+            <div className="text-xs font-bold text-emerald-900 mb-2">📋 סיכום כל הציוד שחתום עליך:</div>
+            <pre className="bg-white border border-slate-200 rounded p-2 text-xs whitespace-pre-wrap font-sans max-h-40 overflow-y-auto">{whatsappText}</pre>
+            <div className="flex gap-2 mt-2">
+              <a href={waUrl!} target="_blank" rel="noopener noreferrer"
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg py-2 text-sm font-bold text-center">
+                📲 שתף ב-WhatsApp
+              </a>
+              <button onClick={() => navigator.clipboard.writeText(whatsappText)}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                📋 העתק
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!whatsappText && (
+          <p className="text-xs text-slate-400 mt-4">
+            חוזר לדף הראשי בעוד <b className="text-emerald-700">{countdown}</b> שניות...
+          </p>
+        )}
         <button onClick={() => router.push("/")}
-          className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-6 py-2 text-sm font-medium">
+          className="mt-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-6 py-2 text-sm font-medium">
           → חזרה עכשיו
         </button>
       </div>

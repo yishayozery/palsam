@@ -8,7 +8,31 @@ import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { requiresPersonalId } from "@/lib/handover";
+import { getSoldierEquipmentSummary, formatSoldierSummaryForWhatsApp, type SoldierEquipmentSummary } from "@/lib/soldier-summary";
 import type { SignatureMethod } from "@/generated/prisma";
+
+/** מחזיר את ה-summary של חייל אחרי חתימה - לשליחה ב-WhatsApp. ציבורי דרך token. */
+export async function getPostSignatureShareData(
+  token: string,
+): Promise<{ ok: true; summary: SoldierEquipmentSummary; whatsappText: string } | { ok: false; error: string }> {
+  try {
+    const sig = await prisma.signature.findUnique({
+      where: { token },
+      select: { soldierId: true, status: true },
+    });
+    if (!sig) return { ok: false, error: "החתימה לא נמצאה" };
+    if (!sig.soldierId) return { ok: false, error: "סוג חתימה לא נתמך לסיכום" };
+    if (sig.status !== "SIGNED") return { ok: false, error: "החתימה עדיין לא בוצעה" };
+    const summary = await getSoldierEquipmentSummary(sig.soldierId);
+    if (!summary) return { ok: false, error: "חייל לא נמצא" };
+    const whatsappText = formatSoldierSummaryForWhatsApp(summary, {
+      headerTitle: "📋 סיכום ציוד חתום על החייל (לאחר חתימה)",
+    });
+    return { ok: true, summary, whatsappText };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
 
 /** יצירת החתמה (SIGNOUT): מחזיק ◄ חייל. */
 export async function createSignout(formData: FormData) {
