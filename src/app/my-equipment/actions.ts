@@ -1,13 +1,71 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, getClientIp, RateLimitError } from "@/lib/rate-limit";
 
+export type WeaponsEligibility = {
+  enlisted: boolean; enlistedAt: string | null; enlistedByName: string | null;
+  weaponsApproved: boolean; weaponsApprovedAt: string | null; weaponsApprovedByName: string | null;
+  armoryTestSubmitted: boolean; armoryTestSubmittedAt: string | null;
+  weaponsAgreementSigned: boolean; weaponsAgreementSignedAt: string | null;
+  armoryTestUrl: string | null;
+};
+
 export type SoldierEquipmentResult =
-  | { ok: true; soldier: { fullName: string; personalNumber: string | null; companyName: string | null; battalionName: string };
+  | { ok: true;
+      soldierId: string;
+      soldier: { fullName: string; personalNumber: string | null; companyName: string | null; battalionName: string };
       serials: { itemName: string; sku: string | null; serial: string; lotQuantity: number | null; statusName: string; isWear: boolean; isLoss: boolean; signedAt: string | null; signedBy: string | null }[];
-      qty: { itemName: string; sku: string | null; unit: string; statusName: string; quantity: number; lastSignedAt: string | null; lastSignedBy: string | null }[]; }
+      qty: { itemName: string; sku: string | null; unit: string; statusName: string; quantity: number; lastSignedAt: string | null; lastSignedBy: string | null }[];
+      weaponsEligibility: WeaponsEligibility; }
   | { ok: false; error: string };
+
+/** העלאת צילום מסך של מבחן ע"י החייל (דגל #3). */
+export async function uploadArmoryTestProof(
+  formData: FormData,
+): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const ip = await getClientIp();
+    await checkRateLimit("armory-test-upload", ip, { max: 5, windowSec: 600 });
+
+    const soldierId = String(formData.get("soldierId") || "");
+    const personalNumber = String(formData.get("personalNumber") || "").replace(/\D/g, "");
+    const imageData = String(formData.get("imageData") || "");
+    if (!soldierId || !personalNumber) return { error: "פרמטרים חסרים" };
+    if (!imageData.startsWith("data:image/")) return { error: "פורמט תמונה לא תקין" };
+    if (imageData.length > 2_000_000) return { error: "התמונה גדולה מדי (מקסימום 2MB)" };
+
+    // אימות שהחייל הוא אכן זה (PN תואם)
+    const s = await prisma.soldier.findUnique({
+      where: { id: soldierId },
+      select: { personalNumber: true, fullName: true, battalionId: true },
+    });
+    if (!s) return { error: "חייל לא נמצא" };
+    if (s.personalNumber !== personalNumber) return { error: "לא ניתן לעדכן עבור חייל אחר" };
+
+    await prisma.soldier.update({
+      where: { id: soldierId },
+      data: { armoryTestProofImage: imageData, armoryTestProofAt: new Date() },
+    });
+    await prisma.auditLog.create({
+      data: {
+        battalionId: s.battalionId, action: "ARMORY_TEST_PROOF_UPLOAD",
+        entity: "Soldier", entityId: soldierId,
+        details: { soldierName: s.fullName },
+      },
+    });
+    revalidatePath("/my-equipment");
+    revalidatePath("/armory/ineligibility-report");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof RateLimitError) {
+      const min = Math.ceil(e.retryAfterSec / 60);
+      return { error: `🛡️ יותר מדי העלאות. נסה שוב בעוד ${min} דקות.` };
+    }
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
 
 /**
  * חיפוש ציבורי של ציוד חתום על חייל לפי מ.א. + שם.
@@ -86,8 +144,33 @@ export async function lookupSoldierEquipment(formData: FormData): Promise<Soldie
     }
     const qty = Array.from(qtyMap.values()).filter((q) => q.quantity > 0).sort((a, b) => a.itemName.localeCompare(b.itemName));
 
+    // 🔫 סטטוס תהליך נשק - לתצוגה
+    const enlistedByName = soldier.enlistedById
+      ? (await prisma.appUser.findUnique({ where: { id: soldier.enlistedById }, select: { fullName: true } }))?.fullName ?? null
+      : null;
+    const weaponsApprovedByName = soldier.weaponsApprovedById
+      ? (await prisma.appUser.findUnique({ where: { id: soldier.weaponsApprovedById }, select: { fullName: true } }))?.fullName ?? null
+      : null;
+    const battalionArmoryTestUrl = soldier.battalion
+      ? (await prisma.battalion.findUnique({ where: { id: soldier.battalionId }, select: { armoryTestUrl: true } }))?.armoryTestUrl ?? null
+      : null;
+
     return {
       ok: true,
+      soldierId: soldier.id, // לאקציות נוספות
+      weaponsEligibility: {
+        enlisted: !!soldier.enlisted,
+        enlistedAt: soldier.enlistedAt?.toISOString() ?? null,
+        enlistedByName,
+        weaponsApproved: !!soldier.weaponsApprovedAt,
+        weaponsApprovedAt: soldier.weaponsApprovedAt?.toISOString() ?? null,
+        weaponsApprovedByName,
+        armoryTestSubmitted: !!soldier.armoryTestProofAt,
+        armoryTestSubmittedAt: soldier.armoryTestProofAt?.toISOString() ?? null,
+        weaponsAgreementSigned: !!soldier.weaponsAgreementSignedAt,
+        weaponsAgreementSignedAt: soldier.weaponsAgreementSignedAt?.toISOString() ?? null,
+        armoryTestUrl: battalionArmoryTestUrl,
+      },
       soldier: {
         fullName: soldier.fullName,
         personalNumber: soldier.personalNumber,

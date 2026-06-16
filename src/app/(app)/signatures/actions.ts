@@ -61,6 +61,36 @@ export async function createSignout(formData: FormData) {
     }
   }
 
+  // 🔫 ולידציית נשק - אם פריט כלשהו מ-ARMORY, בודקים את 4 התנאים:
+  // שלישות + אישור מג"ד/סמג"ד + העלאת צילום מבחן + חתימה על נוהל (שלוש אלה האחרונים זה תהליך נשק)
+  {
+    const allItemTypeIds: string[] = [];
+    if (serialIds.length > 0) {
+      const units = await prisma.serialUnit.findMany({ where: { id: { in: serialIds } }, select: { itemTypeId: true } });
+      units.forEach((u) => allItemTypeIds.push(u.itemTypeId));
+    }
+    for (const q of qtyItems) if (q) allItemTypeIds.push(q);
+    if (kitId) {
+      const kitItems = await prisma.signableKitLine.findMany({ where: { kitId }, select: { itemTypeId: true } });
+      kitItems.forEach((k) => allItemTypeIds.push(k.itemTypeId));
+    }
+    const { areAnyItemsArmory, getSoldierWeaponsEligibility } = await import("@/lib/weapons-eligibility");
+    if (await areAnyItemsArmory(allItemTypeIds)) {
+      const elig = await getSoldierWeaponsEligibility(soldierId);
+      if (!elig) throw new Error("חייל לא נמצא");
+      if (!elig.isFullyEligible) {
+        const missing = elig.missingSteps.map((s) => {
+          if (s === "enlisted") return "אישור שלישות (פנה לשליש)";
+          if (s === "weaponsApproved") return 'אישור מג"ד/סמג"ד';
+          if (s === "armoryTestSubmitted") return "העלאת צילום של מבחן נוהל הארמון";
+          if (s === "weaponsAgreementSigned") return "חתימה על נוהל שמירת נשק (תתבצע בארמון)";
+          return s;
+        }).join(" + ");
+        throw new Error(`🚫 לא ניתן להחתים על נשק. החייל חסר: ${missing}`);
+      }
+    }
+  }
+
   // אם נבחרה ערכה — נוסיף את הפריטים הכמותיים שלה כשורות העברה
   const kitLines = kitId
     ? await prisma.signableKitLine.findMany({ where: { kitId }, include: { itemType: true } })
@@ -307,7 +337,19 @@ export async function checkinSerial(formData: FormData) {
   });
 
   await audit(user.id, "CHECKIN", "SerialUnit", serialUnitId, { soldier: su.signedSoldier?.fullName, partial: isPartial ? partialLotQty : null });
+
+  // 🔫 איפוס דגלי נשק אם החייל החזיר את הנשק האחרון
+  if (su.signedSoldierId && !isPartial) {
+    const { soldierHasAnyWeapons, resetSoldierWeaponsFlags } = await import("@/lib/weapons-eligibility");
+    const stillHas = await soldierHasAnyWeapons(su.signedSoldierId);
+    if (!stillHas) {
+      await resetSoldierWeaponsFlags(su.signedSoldierId);
+      await audit(user.id, "RESET_WEAPONS_FLAGS", "Soldier", su.signedSoldierId, { reason: "החזיר נשק אחרון" });
+    }
+  }
+
   revalidatePath("/signatures");
+  revalidatePath("/my-equipment");
 }
 
 /** זיכוי כמותי של חייל: יוצר CHECKIN, מחזיר StockBalance למחסן. */
