@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import SignaturePad from "./SignaturePad";
 import CenteredWithRedirect from "./CenteredWithRedirect";
+import { WEAPONS_AGREEMENT_TITLE, WEAPONS_AGREEMENT_CLAUSES, WEAPONS_AGREEMENT_FOOTER } from "@/lib/weapons-agreement-text";
 
 export const dynamic = "force-dynamic";
 
@@ -82,18 +83,15 @@ export default async function PublicSignPage({
           {sig.transfer?.fromHolder?.warehouseType === "ARMORY" && !isCompanySign && (
             <div className="mb-4 bg-rose-50 border-2 border-rose-300 rounded-xl p-3">
               <div className="text-[11px] font-bold text-rose-900 mb-1.5 uppercase tracking-wide">
-                🔫 נוהל שמירת נשק
+                🔫 {WEAPONS_AGREEMENT_TITLE}
               </div>
-              <div className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed space-y-1">
-                <p>אני מתחייב/ת בזאת כי:</p>
-                <p>1. קיבלתי הדרכה בנושא נוהל שמירת נשק ותחמושת.</p>
-                <p>2. אשמור את הנשק בצורה בטוחה ומאובטחת בכל עת.</p>
-                <p>3. לא אעביר את הנשק לאדם אחר ללא אישור בכתב.</p>
-                <p>4. אדווח מיידית על כל אובדן, גניבה, או תקלה.</p>
-                <p>5. אחזיר את הנשק במצב תקין עם סיום השימוש.</p>
+              <div className="text-[13px] text-slate-800 leading-relaxed space-y-1.5">
+                {WEAPONS_AGREEMENT_CLAUSES.map((c, i) => (
+                  <p key={i}>{i + 1}. {c}</p>
+                ))}
               </div>
               <div className="text-[11px] text-rose-700 mt-2 pt-2 border-t border-rose-200">
-                ⚠️ החתימה למטה מהווה אישור שקראת ואתה מתחייב לנוהל שמירת הנשק.
+                {WEAPONS_AGREEMENT_FOOTER}
               </div>
             </div>
           )}

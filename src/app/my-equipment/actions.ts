@@ -31,7 +31,9 @@ export async function signWeaponsAgreement(
 
     const soldierId = String(formData.get("soldierId") || "");
     const personalNumber = String(formData.get("personalNumber") || "").replace(/\D/g, "");
+    const signatureData = String(formData.get("signatureData") || "");
     if (!soldierId || !personalNumber) return { error: "פרמטרים חסרים" };
+    if (!signatureData.startsWith("data:image/")) return { error: "חתימה חסרה — נא לחתום בתיבה" };
 
     const s = await prisma.soldier.findUnique({
       where: { id: soldierId },
@@ -43,7 +45,7 @@ export async function signWeaponsAgreement(
 
     await prisma.soldier.update({
       where: { id: soldierId },
-      data: { weaponsAgreementSignedAt: new Date() },
+      data: { weaponsAgreementSignedAt: new Date(), weaponsAgreementSignature: signatureData },
     });
     await prisma.auditLog.create({
       data: {

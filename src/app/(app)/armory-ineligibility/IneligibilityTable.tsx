@@ -81,9 +81,17 @@ export default function IneligibilityTable({ rows, armoryTestUrl }: { rows: Row[
                     )}
                   </Td>
                   <Td>
-                    {!r.isFullyEligible && r.phone && r.approved && !r.test && (
-                      <IneligibilityActions soldierName={r.name} phone={r.phone} armoryTestUrl={armoryTestUrl} />
-                    )}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {r.agreement && (
+                        <a href={`/weapons-agreement/${r.id}`} target="_blank" rel="noopener noreferrer"
+                          className="text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded px-2 py-1" title="צפה בנוהל חתום">
+                          📄
+                        </a>
+                      )}
+                      {!r.isFullyEligible && r.phone && r.approved && !r.test && (
+                        <IneligibilityActions soldierName={r.name} phone={r.phone} armoryTestUrl={armoryTestUrl} />
+                      )}
+                    </div>
                   </Td>
                 </tr>
               ))}

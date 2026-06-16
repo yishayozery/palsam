@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { lookupSoldierEquipment, uploadArmoryTestProof, signWeaponsAgreement, getArmoryTestImage, type SoldierEquipmentResult } from "./actions";
+import { WEAPONS_AGREEMENT_TITLE, WEAPONS_AGREEMENT_CLAUSES, WEAPONS_AGREEMENT_FOOTER } from "@/lib/weapons-agreement-text";
 
 export default function MyEquipmentClient() {
   const [pn, setPn] = useState("");
@@ -152,7 +153,7 @@ export default function MyEquipmentClient() {
               extra={
                 !e.weaponsAgreementSigned && (
                   <WeaponsAgreementSign soldierId={result.soldierId} personalNumber={result.soldier.personalNumber ?? ""}
-                    onSigned={() => window.location.reload()} />
+                    soldierName={result.soldier.fullName} onSigned={() => window.location.reload()} />
                 )
               }
             />
@@ -312,19 +313,59 @@ function ArmoryTestUploader({ soldierId, personalNumber, testUrl, alreadyUploade
   );
 }
 
-function WeaponsAgreementSign({ soldierId, personalNumber, onSigned }: {
-  soldierId: string; personalNumber: string; onSigned: () => void;
+function WeaponsAgreementSign({ soldierId, personalNumber, soldierName, onSigned }: {
+  soldierId: string; personalNumber: string; soldierName: string; onSigned: () => void;
 }) {
   const [showAgreement, setShowAgreement] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const hasDrawn = useRef(false);
+
+  useEffect(() => {
+    if (!showAgreement) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#1e293b";
+
+    const pos = (e: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (e.clientX - rect.left) * (canvas.width / rect.width),
+        y: (e.clientY - rect.top) * (canvas.height / rect.height),
+      };
+    };
+    const down = (e: PointerEvent) => { drawing.current = true; hasDrawn.current = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
+    const move = (e: PointerEvent) => { if (!drawing.current) return; e.preventDefault(); const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); };
+    const up = () => { drawing.current = false; };
+
+    canvas.addEventListener("pointerdown", down);
+    canvas.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    return () => { canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+  }, [showAgreement]);
+
+  function clearCanvas() {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    hasDrawn.current = false;
+  }
 
   async function handleSign() {
+    if (!hasDrawn.current) { setErr("נא לחתום בתיבה למטה"); return; }
     setBusy(true); setErr(null);
     try {
+      const signatureData = canvasRef.current!.toDataURL("image/png");
       const fd = new FormData();
       fd.append("soldierId", soldierId);
       fd.append("personalNumber", personalNumber);
+      fd.append("signatureData", signatureData);
       const res = await signWeaponsAgreement(fd);
       if (res?.error) setErr(res.error);
       else onSigned();
@@ -344,15 +385,35 @@ function WeaponsAgreementSign({ soldierId, personalNumber, onSigned }: {
 
   return (
     <div className="mt-2 bg-rose-50 border-2 border-rose-300 rounded-xl p-3">
-      <div className="text-[11px] font-bold text-rose-900 mb-1.5">🔫 נוהל שמירת נשק</div>
-      <div className="text-sm text-slate-800 space-y-1 leading-relaxed">
-        <p>אני מתחייב/ת בזאת כי:</p>
-        <p>1. קיבלתי הדרכה בנושא נוהל שמירת נשק ותחמושת.</p>
-        <p>2. אשמור את הנשק בצורה בטוחה ומאובטחת בכל עת.</p>
-        <p>3. לא אעביר את הנשק לאדם אחר ללא אישור בכתב.</p>
-        <p>4. אדווח מיידית על כל אובדן, גניבה, או תקלה.</p>
-        <p>5. אחזיר את הנשק במצב תקין עם סיום השימוש.</p>
+      <div className="text-xs font-bold text-rose-900 mb-2">🔫 {WEAPONS_AGREEMENT_TITLE}</div>
+      <div className="text-[13px] text-slate-800 space-y-1.5 leading-relaxed">
+        {WEAPONS_AGREEMENT_CLAUSES.map((c, i) => (
+          <p key={i}>{i + 1}. {c}</p>
+        ))}
       </div>
+      <div className="text-[11px] text-rose-700 mt-2 pt-2 border-t border-rose-200">
+        {WEAPONS_AGREEMENT_FOOTER}
+      </div>
+
+      <div className="mt-3 bg-white border border-slate-200 rounded-lg p-2.5">
+        <div className="text-[11px] text-slate-600 mb-1 flex justify-between">
+          <span>פרטי המצהיר/ה:</span>
+        </div>
+        <div className="text-sm text-slate-800 mb-2">
+          <span className="font-bold">{soldierName}</span>
+          <span className="font-mono text-xs text-slate-500 mr-2">מ.א. {personalNumber}</span>
+        </div>
+        <div className="text-[11px] text-slate-500 mb-1">חתימה:</div>
+        <canvas ref={canvasRef} width={380} height={120}
+          className="w-full border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 touch-none" />
+        <button onClick={clearCanvas} type="button"
+          className="text-[11px] text-slate-500 hover:text-slate-700 mt-1">
+          ↻ נקה חתימה
+        </button>
+      </div>
+
+      {err && <div className="text-[11px] text-rose-700 bg-rose-100 rounded p-1.5 mt-2">⚠️ {err}</div>}
+
       <div className="mt-3 flex gap-2">
         <button onClick={() => setShowAgreement(false)}
           className="flex-1 text-xs border border-slate-300 rounded px-3 py-2">
@@ -360,10 +421,9 @@ function WeaponsAgreementSign({ soldierId, personalNumber, onSigned }: {
         </button>
         <button onClick={handleSign} disabled={busy}
           className="flex-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-2 font-bold disabled:opacity-50">
-          {busy ? "שולח..." : "✓ קראתי ואני מסכים/ה"}
+          {busy ? "שולח..." : "✓ חתימה ואישור"}
         </button>
       </div>
-      {err && <div className="text-[11px] text-rose-700 mt-2">⚠️ {err}</div>}
     </div>
   );
 }
