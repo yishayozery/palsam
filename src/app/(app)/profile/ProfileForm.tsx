@@ -10,6 +10,7 @@ type B = {
   name: string; code: string; brigade: string | null; commander: string | null; motto: string | null; notes: string | null; logoData: string | null;
   requirePersonalIdOnHandover: boolean;
   notificationEmail: string | null;
+  armoryTestUrl: string | null;
 };
 
 export default function ProfileForm({ battalion }: { battalion: B }) {
@@ -86,6 +87,23 @@ export default function ProfileForm({ battalion }: { battalion: B }) {
             </div>
           </div>
         </label>
+
+        {/* 🔫 לינק למבחן נוהל ארמון */}
+        <div className="mt-3 p-3 rounded-lg border border-slate-200">
+          <label className="block text-sm font-medium text-slate-800 mb-1">
+            🔫 לינק למבחן נוהל ארמון (אופציונלי)
+          </label>
+          <input
+            type="url"
+            name="armoryTestUrl"
+            defaultValue={battalion.armoryTestUrl ?? ""}
+            placeholder="https://forms.google.com/..."
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          />
+          <div className="text-xs text-slate-500 mt-1.5">
+            יוצג לחיילים ב-/my-equipment כקישור לפתיחה. החייל יעשה את המבחן ויעלה צילום מסך.
+          </div>
+        </div>
 
         {/* 📧 מייל לגיבוי תנועות */}
         <div className="mt-3 p-3 rounded-lg border border-slate-200">

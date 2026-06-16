@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { lookupSoldierEquipment, type SoldierEquipmentResult } from "./actions";
+import { useState, useRef } from "react";
+import { lookupSoldierEquipment, uploadArmoryTestProof, type SoldierEquipmentResult } from "./actions";
 
 export default function MyEquipmentClient() {
   const [pn, setPn] = useState("");
@@ -23,6 +23,8 @@ export default function MyEquipmentClient() {
 
   if (result?.ok) {
     const total = result.serials.length + result.qty.length;
+    const e = result.weaponsEligibility;
+    const checklistDone = e.enlisted && e.weaponsApproved && e.armoryTestSubmitted && e.weaponsAgreementSigned;
     return (
       <>
         <div className="bg-white rounded-2xl shadow-lg p-5 mb-3">
@@ -105,6 +107,59 @@ export default function MyEquipmentClient() {
           </div>
         )}
 
+        {/* 🔫 תהליך קבלת נשק */}
+        <div className="bg-white rounded-2xl shadow-lg p-5 mt-3">
+          <h2 className="font-bold text-slate-800 mb-3">
+            🔫 תהליך קבלת נשק
+            <span className={`mr-2 text-xs font-normal px-2 py-0.5 rounded ${
+              checklistDone ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+            }`}>
+              {checklistDone ? "✓ זכאי" : "⚠️ לא זכאי"}
+            </span>
+          </h2>
+          <div className="space-y-2 text-sm">
+            <ChecklistRow
+              done={e.enlisted}
+              title="אישור שלישות"
+              detail={e.enlisted && e.enlistedAt
+                ? `אושר ב-${new Date(e.enlistedAt).toLocaleDateString("he-IL")}${e.enlistedByName ? ` ע"י ${e.enlistedByName}` : ""}`
+                : "פנה לשליש הגדוד"}
+            />
+            <ChecklistRow
+              done={e.weaponsApproved}
+              title='אישור מג"ד / סמג"ד'
+              detail={e.weaponsApproved && e.weaponsApprovedAt
+                ? `אושר ב-${new Date(e.weaponsApprovedAt).toLocaleDateString("he-IL")}${e.weaponsApprovedByName ? ` ע"י ${e.weaponsApprovedByName}` : ""}`
+                : 'פנה למג"ד או לסמג"ד הגדוד'}
+            />
+            <ChecklistRow
+              done={e.armoryTestSubmitted}
+              title="מבחן נוהל ארמון"
+              detail={e.armoryTestSubmitted && e.armoryTestSubmittedAt
+                ? `הועלה ב-${new Date(e.armoryTestSubmittedAt).toLocaleDateString("he-IL")}`
+                : "עוד לא הועלה צילום מסך"}
+              extra={
+                !e.armoryTestSubmitted && (
+                  <ArmoryTestUploader soldierId={result.soldierId} personalNumber={result.soldier.personalNumber ?? ""}
+                    testUrl={e.armoryTestUrl} onUploaded={() => window.location.reload()} />
+                )
+              }
+            />
+            <ChecklistRow
+              done={e.weaponsAgreementSigned}
+              title="חתימה על נוהל שמירה"
+              detail={e.weaponsAgreementSigned && e.weaponsAgreementSignedAt
+                ? `נחתם ב-${new Date(e.weaponsAgreementSignedAt).toLocaleDateString("he-IL")}`
+                : "תתבצע אוטומטית כשמגיע לארמון לקבל נשק"}
+            />
+          </div>
+          {!checklistDone && (
+            <p className="text-xs text-amber-700 mt-3 bg-amber-50 border border-amber-200 rounded p-2">
+              🚫 כדי לחתום על נשק, השלם את כל השלבים למעלה.
+            </p>
+          )}
+        </div>
+
         <p className="text-[11px] text-slate-400 text-center mt-4">
           📋 לפרטים מלאים או תיקון - פנה לרס&quot;פ הפלוגה
         </p>
@@ -139,5 +194,70 @@ export default function MyEquipmentClient() {
         הבדיקה דורשת שם מלא + מספר אישי תואמים. מוגבל ל-10 בדיקות / 5 דקות.
       </p>
     </form>
+  );
+}
+
+function ChecklistRow({ done, title, detail, extra }: { done: boolean; title: string; detail: string; extra?: React.ReactNode }) {
+  return (
+    <div className={`flex items-start gap-3 rounded-lg p-2.5 ${done ? "bg-emerald-50" : "bg-rose-50"}`}>
+      <span className="text-xl">{done ? "✅" : "❌"}</span>
+      <div className="flex-1 min-w-0">
+        <div className={`font-medium text-sm ${done ? "text-emerald-900" : "text-rose-900"}`}>{title}</div>
+        <div className={`text-xs ${done ? "text-emerald-700" : "text-rose-700"}`}>{detail}</div>
+        {extra}
+      </div>
+    </div>
+  );
+}
+
+function ArmoryTestUploader({ soldierId, personalNumber, testUrl, onUploaded }: {
+  soldierId: string; personalNumber: string; testUrl: string | null; onUploaded: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true); setErr(null);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("קריאת קובץ נכשלה"));
+        reader.readAsDataURL(file);
+      });
+      if (dataUrl.length > 2_000_000) {
+        setErr("התמונה גדולה מדי (מקס 2MB). דחס/חתוך לפני ההעלאה.");
+        return;
+      }
+      const fd = new FormData();
+      fd.append("soldierId", soldierId);
+      fd.append("personalNumber", personalNumber);
+      fd.append("imageData", dataUrl);
+      const res = await uploadArmoryTestProof(fd);
+      if (res?.error) setErr(res.error);
+      else onUploaded();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "שגיאה");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="mt-2 flex flex-col gap-2">
+      {testUrl && (
+        <a href={testUrl} target="_blank" rel="noopener noreferrer"
+          className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded px-3 py-1.5 inline-block text-center">
+          🔗 פתח את המבחן
+        </a>
+      )}
+      <button onClick={() => fileRef.current?.click()} disabled={busy}
+        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-2 font-medium disabled:opacity-50">
+        {busy ? "מעלה..." : "📤 העלה צילום של מבחן שעברתי"}
+      </button>
+      <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+      {err && <div className="text-[11px] text-rose-700 bg-rose-50 rounded p-1.5">⚠️ {err}</div>}
+    </div>
   );
 }

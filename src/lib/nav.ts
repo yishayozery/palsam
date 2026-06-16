@@ -27,6 +27,10 @@ export const NAV: NavItem[] = [
   { href: "/dashboard", label: "דשבורד", icon: "📊", group: "ראשי", cap: "reports.view" },
   { href: "/dispatch", label: "שבצ\"ק - שיבוץ רכבים", icon: "🚗", group: "ראשי", cap: "dispatch.manage" },
 
+  // ===== פיקוד גדוד =====
+  { href: "/armory-approvals", label: "אישור חיילים לחימוש", icon: "🔫", group: "פיקוד גדוד", cap: "weapons.approve" },
+  { href: "/armory-ineligibility", label: "דוח זכאות נשק", icon: "📊", group: "פיקוד גדוד", cap: "weapons.view" },
+
   // ===== פלסם (מפ"מ — אחראי מערכת בגדוד) =====
   { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "פלסם", cap: "battalion.profile" },
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "פלסם", cap: "soldiers.roster" },
