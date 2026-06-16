@@ -80,6 +80,12 @@ const MATRIX: Record<Role, Capability[]> = {
     "dispatch.manage",
   ],
   VIEWER: ["reports.view", "dispatch.manage"],
+  SHALISH: [
+    "soldiers.roster",
+    "reports.view",
+    "dispatch.manage",
+    "weapons.view",
+  ],
   // 🆕 מג"ד: צפייה מלאה (כמו מפ"מ) - ללא יכולת לערוך/להקים, פלוס אישור חימוש
   MAGAD: [
     "reports.view",
@@ -126,6 +132,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   WAREHOUSE_MANAGER: "קצין מחסן",
   COMPANY_REP: 'רס"פ פלוגתי',
   VIEWER: "צופה",
+  SHALISH: "שליש גדודי",
   MAGAD: 'מג"ד',
   SAMAGAD: 'סמג"ד',
 };

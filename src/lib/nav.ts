@@ -12,13 +12,14 @@ export type NavItem = {
 
 /** איזה תפקיד שייך לאיזו קבוצה. סינון ברמת הקבוצה — מונע "דלף" של פריטים בין תפקידים. */
 export const GROUP_ROLES: Record<string, Role[]> = {
-  "ראשי": ["SUPER_ADMIN", "BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER", "MAGAD", "SAMAGAD"],
-  "עזרה": ["SUPER_ADMIN", "BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER", "MAGAD", "SAMAGAD"],
+  "ראשי": ["SUPER_ADMIN", "BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER", "MAGAD", "SAMAGAD", "SHALISH"],
+  "עזרה": ["SUPER_ADMIN", "BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER", "MAGAD", "SAMAGAD", "SHALISH"],
   "פלסם": ["BATTALION_ADMIN"],
+  "שלישות": ["SHALISH"],
   "המחסנים שלי": ["WAREHOUSE_MANAGER", "BATTALION_ADMIN"],
   "הפלוגה שלי": ["COMPANY_REP"],
   "פיקוד גדוד": ["MAGAD", "SAMAGAD", "BATTALION_ADMIN"], // אישור חיילים לחימוש + דוחות
-  "דוחות ובקרה": ["BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER", "MAGAD", "SAMAGAD"],
+  "דוחות ובקרה": ["BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER", "MAGAD", "SAMAGAD", "SHALISH"],
 };
 
 export const NAV: NavItem[] = [
@@ -30,6 +31,10 @@ export const NAV: NavItem[] = [
   // ===== פיקוד גדוד =====
   { href: "/armory-approvals", label: "אישור חיילים לנשק", icon: "🔫", group: "פיקוד גדוד", cap: "weapons.approve" },
   { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "פיקוד גדוד", cap: "weapons.view" },
+
+  // ===== שלישות (שליש גדודי — ניהול חיילים + גיוס) =====
+  { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "שלישות", cap: "soldiers.roster" },
+  { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "שלישות", cap: "weapons.view" },
 
   // ===== פלסם (מפ"מ — אחראי מערכת בגדוד) =====
   { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "פלסם", cap: "battalion.profile" },

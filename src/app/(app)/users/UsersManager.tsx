@@ -14,9 +14,10 @@ type User = {
   active: boolean; passwordSet: boolean; inviteToken: string | null;
 };
 
-const ROLE_OPTS = ["BATTALION_ADMIN", "MAGAD", "SAMAGAD", "VIEWER"] as const;
+const ROLE_OPTS = ["BATTALION_ADMIN", "SHALISH", "MAGAD", "SAMAGAD", "VIEWER"] as const;
 const BUILTIN_LABELS: Record<string, string> = {
   BATTALION_ADMIN: 'מפ״מ (הכל)',
+  SHALISH: "שליש גדודי (שלישות + גיוס)",
   MAGAD: 'מג"ד (צפייה + אישור נשק)',
   SAMAGAD: 'סמג"ד (צפייה + אישור נשק)',
   VIEWER: "צופה (קריאה בלבד)",

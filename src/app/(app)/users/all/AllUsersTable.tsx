@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
 import { regenerateInvite, toggleUser } from "../actions";
 
-type Role = "SUPER_ADMIN" | "BATTALION_ADMIN" | "WAREHOUSE_MANAGER" | "COMPANY_REP" | "VIEWER" | "MAGAD" | "SAMAGAD";
+type Role = "SUPER_ADMIN" | "BATTALION_ADMIN" | "WAREHOUSE_MANAGER" | "COMPANY_REP" | "VIEWER" | "SHALISH" | "MAGAD" | "SAMAGAD";
 type User = {
   id: string;
   fullName: string;
