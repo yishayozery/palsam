@@ -12,12 +12,13 @@ export type NavItem = {
 
 /** איזה תפקיד שייך לאיזו קבוצה. סינון ברמת הקבוצה — מונע "דלף" של פריטים בין תפקידים. */
 export const GROUP_ROLES: Record<string, Role[]> = {
-  "ראשי": ["SUPER_ADMIN", "BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"],
-  "עזרה": ["SUPER_ADMIN", "BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"],
+  "ראשי": ["SUPER_ADMIN", "BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER", "MAGAD", "SAMAGAD"],
+  "עזרה": ["SUPER_ADMIN", "BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER", "MAGAD", "SAMAGAD"],
   "פלסם": ["BATTALION_ADMIN"],
   "המחסנים שלי": ["WAREHOUSE_MANAGER", "BATTALION_ADMIN"],
   "הפלוגה שלי": ["COMPANY_REP"],
-  "דוחות ובקרה": ["BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"],
+  "פיקוד גדוד": ["MAGAD", "SAMAGAD", "BATTALION_ADMIN"], // אישור חיילים לחימוש + דוחות
+  "דוחות ובקרה": ["BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER", "MAGAD", "SAMAGAD"],
 };
 
 export const NAV: NavItem[] = [

@@ -14,7 +14,7 @@ type User = {
   id: string;
   fullName: string;
   username: string;
-  role: "SUPER_ADMIN" | "BATTALION_ADMIN" | "WAREHOUSE_MANAGER" | "COMPANY_REP" | "VIEWER";
+  role: "SUPER_ADMIN" | "BATTALION_ADMIN" | "WAREHOUSE_MANAGER" | "COMPANY_REP" | "VIEWER" | "MAGAD" | "SAMAGAD";
   phone: string | null;
   title?: string | null;
   passwordSet: boolean;

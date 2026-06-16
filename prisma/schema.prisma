@@ -19,7 +19,9 @@ enum Role {
   BATTALION_ADMIN // מפמ — אחראי מערכת בגדוד
   WAREHOUSE_MANAGER // מנהל מחסן (קל"ג/קשר"ג/בונקר/ארמון) — לפי המחסן שלו
   COMPANY_REP // נציג פלוגה
-  VIEWER // צופה (מג"ד/סמג"ד) — קריאה בלבד ברמת גדוד
+  VIEWER // צופה — קריאה בלבד ברמת גדוד
+  MAGAD // מג"ד - מפקד הגדוד. צפייה מלאה + אישור חיילים לחימוש.
+  SAMAGAD // סמג"ד - סגן מפקד הגדוד. אותן הרשאות כמו מג"ד.
 }
 
 enum HolderKind {
@@ -122,6 +124,7 @@ model Battalion {
   // הגדרות גדוד
   requirePersonalIdOnHandover Boolean @default(false) // לחייב מספר אישי בכל מסירה
   notificationEmail           String? // אם מוגדר → מייל אוטומטי על כל פעולה מבצעית (חתימה/זיכוי/מסירה/שיבוץ)
+  armoryTestUrl               String? // קישור למבחן נוהל ארמון חיצוני (אם יש)
   createdAt DateTime @default(now())
 
   users         AppUser[]
@@ -395,6 +398,16 @@ model Soldier {
   enlisted       Boolean   @default(false)
   enlistedAt     DateTime?
   enlistedById   String?
+  // 🔫 תהליך קבלת נשק: 3 דגלים שצריכים להיות מסומנים. מתאפסים בהחזרת הנשק האחרון.
+  // דגל 1: מג"ד/סמג"ד אישרו את החייל לחימוש
+  weaponsApprovedAt   DateTime?
+  weaponsApprovedById String?
+  // דגל 2: חייל העלה צילום מסך של מבחן נוהל הארמון
+  armoryTestProofImage String? // data URL של הצילום
+  armoryTestProofAt    DateTime?
+  // דגל 3: חתימה דיגיטלית על נוהל שמירת נשק (נחתם בארמון בזמן קבלת הנשק הראשון)
+  weaponsAgreementSignedAt   DateTime?
+  weaponsAgreementSignature  String? // data URL של החתימה
   createdAt      DateTime  @default(now())
 
   signedSerialUnits  SerialUnit[]  @relation("SerialUnitSignedSoldier")

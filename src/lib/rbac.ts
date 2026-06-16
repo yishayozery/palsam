@@ -23,7 +23,9 @@ export type Capability =
   | "maintenance.manage" // טנא: ניהול ציוד תקול ותיקונים
   | "reports.view" // דשבורד ודוחות
   | "audit.view" // יומן פעולות
-  | "dispatch.manage"; // שבצ"ק - יצירה/עריכה של שיבוצי רכב
+  | "dispatch.manage" // שבצ"ק - יצירה/עריכה של שיבוצי רכב
+  | "weapons.approve" // 🔫 אישור חייל לחימוש (מג"ד/סמג"ד)
+  | "weapons.view"; // צפייה בדוח זכאות נשק
 
 const MATRIX: Record<Role, Capability[]> = {
   SUPER_ADMIN: ["battalions.manage", "users.manage", "reports.view", "audit.view"],
@@ -46,6 +48,8 @@ const MATRIX: Record<Role, Capability[]> = {
     "reports.view",
     "audit.view",
     "dispatch.manage",
+    "weapons.approve",
+    "weapons.view",
   ],
   WAREHOUSE_MANAGER: [
     "warehouse.operate",
@@ -62,6 +66,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "gaps.resolve",
     "reports.view",
     "dispatch.manage",
+    "weapons.view", // קצין הארמון רואה את דוח הזכאות (לדעת מי לחתום)
   ],
   COMPANY_REP: [
     "company.manage",
@@ -75,6 +80,36 @@ const MATRIX: Record<Role, Capability[]> = {
     "dispatch.manage",
   ],
   VIEWER: ["reports.view", "dispatch.manage"],
+  // 🆕 מג"ד: צפייה מלאה (כמו מפ"מ) - ללא יכולת לערוך/להקים, פלוס אישור חימוש
+  MAGAD: [
+    "reports.view",
+    "audit.view",
+    "battalion.profile", // צפייה בפרופיל הגדוד (read-only enforcement in UI/actions)
+    "soldiers.roster", // צפייה ברוסטר
+    "signatures.manage", // צפייה בהחתמות
+    "counts.manage",
+    "counts.execute",
+    "gaps.resolve",
+    "maintenance.manage",
+    "dispatch.manage",
+    "weapons.approve",
+    "weapons.view",
+  ],
+  // 🆕 סמג"ד: אותן הרשאות כמו מג"ד
+  SAMAGAD: [
+    "reports.view",
+    "audit.view",
+    "battalion.profile",
+    "soldiers.roster",
+    "signatures.manage",
+    "counts.manage",
+    "counts.execute",
+    "gaps.resolve",
+    "maintenance.manage",
+    "dispatch.manage",
+    "weapons.approve",
+    "weapons.view",
+  ],
 };
 
 export function can(role: Role, cap: Capability): boolean {
@@ -91,6 +126,8 @@ export const ROLE_LABELS: Record<Role, string> = {
   WAREHOUSE_MANAGER: "קצין מחסן",
   COMPANY_REP: 'רס"פ פלוגתי',
   VIEWER: "צופה",
+  MAGAD: 'מג"ד',
+  SAMAGAD: 'סמג"ד',
 };
 
 export const WAREHOUSE_TYPE_LABELS: Record<WarehouseType, string> = {

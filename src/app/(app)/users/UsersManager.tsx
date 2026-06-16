@@ -14,9 +14,12 @@ type User = {
   active: boolean; passwordSet: boolean; inviteToken: string | null;
 };
 
-const ROLE_OPTS = ["BATTALION_ADMIN", "VIEWER"] as const;
+const ROLE_OPTS = ["BATTALION_ADMIN", "MAGAD", "SAMAGAD", "VIEWER"] as const;
 const BUILTIN_LABELS: Record<string, string> = {
-  BATTALION_ADMIN: 'מפ״מ (הכל)', VIEWER: "צופה (קריאה בלבד)",
+  BATTALION_ADMIN: 'מפ״מ (הכל)',
+  MAGAD: 'מג"ד (צפייה + אישור נשק)',
+  SAMAGAD: 'סמג"ד (צפייה + אישור נשק)',
+  VIEWER: "צופה (קריאה בלבד)",
 };
 
 function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
