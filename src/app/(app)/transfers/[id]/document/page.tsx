@@ -19,7 +19,7 @@ export default async function TransferDocumentPage({
     where: { id },
     include: {
       battalion: true,
-      fromHolder: true,
+      fromHolder: true, // כולל signatureClause
       toHolder: true,
       toSoldier: true,
       createdBy: true,
@@ -106,6 +106,16 @@ export default async function TransferDocumentPage({
             ))}
           </tbody>
         </table>
+
+        {/* 📝 תניית חתימה (אם הוגדרה ב-fromHolder) */}
+        {t.fromHolder?.signatureClause && (
+          <div className="mt-8 border-2 border-slate-800 rounded-lg p-4 bg-slate-50 print:bg-white">
+            <div className="text-xs font-bold text-slate-800 mb-2 uppercase tracking-wide">
+              📝 הצהרת חייל / תניית חתימה
+            </div>
+            <pre className="text-sm text-slate-800 whitespace-pre-wrap font-sans leading-relaxed">{t.fromHolder.signatureClause}</pre>
+          </div>
+        )}
 
         {/* חתימות */}
         <div className="grid grid-cols-2 gap-8 mt-10 text-sm">

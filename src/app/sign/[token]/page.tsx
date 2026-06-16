@@ -17,7 +17,12 @@ export default async function PublicSignPage({
       battalion: true,
       soldier: true,
       signerUser: { include: { holder: true } },
-      transfer: { include: { lines: { include: { itemType: true, serialUnit: true } } } },
+      transfer: {
+        include: {
+          lines: { include: { itemType: true, serialUnit: true } },
+          fromHolder: { select: { signatureClause: true, name: true, warehouseType: true } },
+        },
+      },
     },
   });
 
@@ -72,6 +77,21 @@ export default async function PublicSignPage({
               </div>
             ))}
           </div>
+
+          {/* 📝 תניית חתימה - חייב לקרוא לפני שחותם */}
+          {sig.transfer?.fromHolder?.signatureClause && (
+            <div className="mb-4 bg-amber-50 border-2 border-amber-300 rounded-xl p-3">
+              <div className="text-[11px] font-bold text-amber-900 mb-1.5 uppercase tracking-wide">
+                📝 הצהרת חייל ({sig.transfer.fromHolder.name})
+              </div>
+              <pre className="text-sm text-slate-800 whitespace-pre-wrap font-sans leading-relaxed">
+                {sig.transfer.fromHolder.signatureClause}
+              </pre>
+              <div className="text-[11px] text-amber-700 mt-2 pt-2 border-t border-amber-200">
+                ⚠️ קרא בעיון. החתימה למטה מאשרת שקראת ואתה מסכים לתנאים.
+              </div>
+            </div>
+          )}
 
           <SignaturePad token={token} soldierName={signerName} isCompanySign={isCompanySign} />
         </div>
