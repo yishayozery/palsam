@@ -5,6 +5,7 @@ import { can } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card, Table, Th, Td, EmptyState, StatCard } from "@/components/ui";
 import SignatureClauseEditor from "./SignatureClauseEditor";
+import WeaponsAgreementEditor from "./WeaponsAgreementEditor";
 import { WAREHOUSE_TYPE_LABELS, WAREHOUSE_TYPE_ICON } from "@/lib/rbac";
 import { TRACKING_METHOD } from "@/lib/labels";
 import type { WarehouseType } from "@/generated/prisma";
@@ -118,6 +119,15 @@ export default async function WarehouseDetailPage({
         initial={warehouse.signatureClause}
         readOnly={!isManager && user.role !== "BATTALION_ADMIN"}
       />
+
+      {/* 🔫 נוהל שמירת נשק - רק לארמון */}
+      {wtype === "ARMORY" && (
+        <WeaponsAgreementEditor
+          warehouseId={warehouse.id}
+          initial={warehouse.weaponsAgreementText}
+          readOnly={!isManager && user.role !== "BATTALION_ADMIN"}
+        />
+      )}
 
       {/* כפתורי פעולה */}
       <div className="flex flex-wrap gap-2 mb-5">

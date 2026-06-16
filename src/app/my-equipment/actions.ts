@@ -10,6 +10,7 @@ export type WeaponsEligibility = {
   armoryTestSubmitted: boolean; armoryTestSubmittedAt: string | null;
   weaponsAgreementSigned: boolean; weaponsAgreementSignedAt: string | null;
   armoryTestUrl: string | null;
+  customAgreementText: string | null;
 };
 
 export type SoldierEquipmentResult =
@@ -228,6 +229,11 @@ export async function lookupSoldierEquipment(formData: FormData): Promise<Soldie
     const battalionArmoryTestUrl = soldier.battalion
       ? (await prisma.battalion.findUnique({ where: { id: soldier.battalionId }, select: { armoryTestUrl: true } }))?.armoryTestUrl ?? null
       : null;
+    const armoryHolder = await prisma.holder.findFirst({
+      where: { battalionId: soldier.battalionId, warehouseType: "ARMORY", active: true },
+      select: { weaponsAgreementText: true },
+    });
+    const customAgreementText = armoryHolder?.weaponsAgreementText ?? null;
 
     return {
       ok: true,
@@ -244,6 +250,7 @@ export async function lookupSoldierEquipment(formData: FormData): Promise<Soldie
         weaponsAgreementSigned: !!soldier.weaponsAgreementSignedAt,
         weaponsAgreementSignedAt: soldier.weaponsAgreementSignedAt?.toISOString() ?? null,
         armoryTestUrl: battalionArmoryTestUrl,
+        customAgreementText,
       },
       soldier: {
         fullName: soldier.fullName,

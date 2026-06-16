@@ -261,6 +261,8 @@ model Holder {
   active        Boolean        @default(true)
   // 📝 תניית חתימה (text חופשי) - מוצגת ב-/sign/[token] וב-PDF כשמחתימים מהמחסן הזה
   signatureClause String?
+  // 🔫 נוהל שמירת נשק (טקסט חופשי) — לארמון. אם ריק, נוסח ברירת מחדל
+  weaponsAgreementText String?
   createdAt     DateTime       @default(now())
 
   users            AppUser[]          @relation("HolderUsers")

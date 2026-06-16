@@ -21,7 +21,7 @@ export default async function PublicSignPage({
       transfer: {
         include: {
           lines: { include: { itemType: true, serialUnit: true } },
-          fromHolder: { select: { signatureClause: true, name: true, warehouseType: true } },
+          fromHolder: { select: { signatureClause: true, weaponsAgreementText: true, name: true, warehouseType: true } },
         },
       },
     },
@@ -86,9 +86,10 @@ export default async function PublicSignPage({
                 🔫 {WEAPONS_AGREEMENT_TITLE}
               </div>
               <div className="text-[13px] text-slate-800 leading-relaxed space-y-1.5">
-                {WEAPONS_AGREEMENT_CLAUSES.map((c, i) => (
-                  <p key={i}>{i + 1}. {c}</p>
-                ))}
+                {sig.transfer.fromHolder.weaponsAgreementText
+                  ? sig.transfer.fromHolder.weaponsAgreementText.split("\n").filter(Boolean).map((line, i) => <p key={i}>{line}</p>)
+                  : WEAPONS_AGREEMENT_CLAUSES.map((c, i) => <p key={i}>{i + 1}. {c}</p>)
+                }
               </div>
               <div className="text-[11px] text-rose-700 mt-2 pt-2 border-t border-rose-200">
                 {WEAPONS_AGREEMENT_FOOTER}

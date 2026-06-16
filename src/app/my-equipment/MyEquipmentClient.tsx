@@ -10,8 +10,9 @@ export default function MyEquipmentClient() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<SoldierEquipmentResult | null>(null);
 
-  async function lookup(e: React.FormEvent) {
-    e.preventDefault();
+  async function lookup(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!pn || !name) return;
     setBusy(true);
     try {
       const fd = new FormData();
@@ -21,6 +22,8 @@ export default function MyEquipmentClient() {
       setResult(res);
     } finally { setBusy(false); }
   }
+
+  async function refetch() { await lookup(); }
 
   if (result?.ok) {
     const total = result.serials.length + result.qty.length;
@@ -141,7 +144,7 @@ export default function MyEquipmentClient() {
                 : "עוד לא הועלה צילום מסך"}
               extra={
                 <ArmoryTestUploader soldierId={result.soldierId} personalNumber={result.soldier.personalNumber ?? ""}
-                  testUrl={e.armoryTestUrl} alreadyUploaded={e.armoryTestSubmitted} onUploaded={() => window.location.reload()} />
+                  testUrl={e.armoryTestUrl} alreadyUploaded={e.armoryTestSubmitted} onUploaded={() => refetch()} />
               }
             />
             <ChecklistRow
@@ -153,7 +156,7 @@ export default function MyEquipmentClient() {
               extra={
                 !e.weaponsAgreementSigned && (
                   <WeaponsAgreementSign soldierId={result.soldierId} personalNumber={result.soldier.personalNumber ?? ""}
-                    soldierName={result.soldier.fullName} onSigned={() => window.location.reload()} />
+                    soldierName={result.soldier.fullName} customAgreementText={e.customAgreementText} onSigned={() => refetch()} />
                 )
               }
             />
@@ -313,8 +316,8 @@ function ArmoryTestUploader({ soldierId, personalNumber, testUrl, alreadyUploade
   );
 }
 
-function WeaponsAgreementSign({ soldierId, personalNumber, soldierName, onSigned }: {
-  soldierId: string; personalNumber: string; soldierName: string; onSigned: () => void;
+function WeaponsAgreementSign({ soldierId, personalNumber, soldierName, customAgreementText, onSigned }: {
+  soldierId: string; personalNumber: string; soldierName: string; customAgreementText?: string | null; onSigned: () => void;
 }) {
   const [showAgreement, setShowAgreement] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -387,9 +390,10 @@ function WeaponsAgreementSign({ soldierId, personalNumber, soldierName, onSigned
     <div className="mt-2 bg-rose-50 border-2 border-rose-300 rounded-xl p-3">
       <div className="text-xs font-bold text-rose-900 mb-2">🔫 {WEAPONS_AGREEMENT_TITLE}</div>
       <div className="text-[13px] text-slate-800 space-y-1.5 leading-relaxed">
-        {WEAPONS_AGREEMENT_CLAUSES.map((c, i) => (
-          <p key={i}>{i + 1}. {c}</p>
-        ))}
+        {customAgreementText
+          ? customAgreementText.split("\n").filter(Boolean).map((line, i) => <p key={i}>{line}</p>)
+          : WEAPONS_AGREEMENT_CLAUSES.map((c, i) => <p key={i}>{i + 1}. {c}</p>)
+        }
       </div>
       <div className="text-[11px] text-rose-700 mt-2 pt-2 border-t border-rose-200">
         {WEAPONS_AGREEMENT_FOOTER}

@@ -21,6 +21,11 @@ export default async function WeaponsAgreementPage({
   if (!soldier || !soldier.weaponsAgreementSignedAt) notFound();
 
   const unitName = soldier.battalion?.name || "גדוד";
+  const armoryHolder = await prisma.holder.findFirst({
+    where: { battalionId: soldier.battalionId, warehouseType: "ARMORY", active: true },
+    select: { weaponsAgreementText: true },
+  });
+  const customText = armoryHolder?.weaponsAgreementText ?? null;
 
   return (
     <div>
@@ -55,12 +60,17 @@ export default async function WeaponsAgreementPage({
 
         {/* סעיפים */}
         <div className="text-sm leading-relaxed space-y-3 mb-8">
-          {WEAPONS_AGREEMENT_CLAUSES.map((c, i) => (
-            <div key={i} className="flex gap-2">
-              <span className="font-bold text-slate-600 shrink-0">{i + 1}.</span>
-              <span>{c}</span>
-            </div>
-          ))}
+          {customText
+            ? customText.split("\n").filter(Boolean).map((line, i) => (
+              <div key={i} className="flex gap-2"><span>{line}</span></div>
+            ))
+            : WEAPONS_AGREEMENT_CLAUSES.map((c, i) => (
+              <div key={i} className="flex gap-2">
+                <span className="font-bold text-slate-600 shrink-0">{i + 1}.</span>
+                <span>{c}</span>
+              </div>
+            ))
+          }
         </div>
 
         <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded p-2 mb-6">

@@ -11,7 +11,13 @@ export default async function IneligibilityReportPage() {
 
   const soldiers = await prisma.soldier.findMany({
     where: { battalionId: bId, active: true },
-    include: { company: { select: { name: true } } },
+    include: {
+      company: { select: { name: true } },
+      signedSerialUnits: {
+        where: { currentHolder: { warehouseType: "ARMORY" } },
+        select: { id: true },
+      },
+    },
     orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }],
   });
   const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { armoryTestUrl: true } });
@@ -34,6 +40,7 @@ export default async function IneligibilityReportPage() {
       agreement: !!s.weaponsAgreementSignedAt,
       missing,
       isFullyEligible: missing.length === 0,
+      weaponsCount: s.signedSerialUnits.length,
     };
   });
 

@@ -8,6 +8,7 @@ type Row = {
   id: string; name: string; pn: string | null; phone: string | null;
   company: string; enlisted: boolean; approved: boolean; test: boolean;
   agreement: boolean; missing: string[]; isFullyEligible: boolean;
+  weaponsCount: number;
 };
 
 export default function IneligibilityTable({ rows, armoryTestUrl }: { rows: Row[]; armoryTestUrl: string | null }) {
@@ -67,31 +68,42 @@ export default function IneligibilityTable({ rows, armoryTestUrl }: { rows: Row[
                   <Td>
                     <div className="font-medium">{r.name}</div>
                     {r.pn && <div className="text-[11px] text-slate-500 font-mono">{r.pn}</div>}
+                    {r.weaponsCount > 0 && (
+                      <div className="text-[10px] text-blue-600 mt-0.5">🔫 {r.weaponsCount} פריטי נשק חתומים</div>
+                    )}
                   </Td>
                   <Td className="text-xs">{r.company}</Td>
                   <Td>{r.enlisted ? "✅" : "❌"}</Td>
                   <Td>{r.approved ? "✅" : "❌"}</Td>
-                  <Td>{r.test ? "✅" : "❌"}</Td>
-                  <Td>{r.agreement ? "✅" : "❌"}</Td>
+                  <Td>
+                    {r.test ? "✅" : "❌"}
+                    {r.test && (
+                      <a href={`/weapons-agreement/${r.id}?tab=test`} target="_blank" rel="noopener noreferrer"
+                        className="block text-[10px] text-blue-600 hover:underline">צפה</a>
+                    )}
+                    {!r.test && armoryTestUrl && (
+                      <a href={armoryTestUrl} target="_blank" rel="noopener noreferrer"
+                        className="block text-[10px] text-blue-600 hover:underline">קישור למבחן</a>
+                    )}
+                  </Td>
+                  <Td>
+                    {r.agreement ? "✅" : "❌"}
+                    {r.agreement && (
+                      <a href={`/weapons-agreement/${r.id}`} target="_blank" rel="noopener noreferrer"
+                        className="block text-[10px] text-blue-600 hover:underline">צפה בנוהל</a>
+                    )}
+                  </Td>
                   <Td>
                     {r.isFullyEligible ? (
                       <Badge className="bg-emerald-100 text-emerald-700">✓ זכאי</Badge>
                     ) : (
-                      <Badge className="bg-rose-100 text-rose-700">חסר: {r.missing.join(", ")}</Badge>
+                      <Badge className="bg-rose-100 text-rose-700">✗ לא זכאי</Badge>
                     )}
                   </Td>
                   <Td>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {r.agreement && (
-                        <a href={`/weapons-agreement/${r.id}`} target="_blank" rel="noopener noreferrer"
-                          className="text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded px-2 py-1" title="צפה בנוהל חתום">
-                          📄
-                        </a>
-                      )}
-                      {!r.isFullyEligible && r.phone && r.approved && !r.test && (
-                        <IneligibilityActions soldierName={r.name} phone={r.phone} armoryTestUrl={armoryTestUrl} />
-                      )}
-                    </div>
+                    {!r.isFullyEligible && r.phone && r.approved && !r.test && (
+                      <IneligibilityActions soldierName={r.name} phone={r.phone} armoryTestUrl={armoryTestUrl} />
+                    )}
                   </Td>
                 </tr>
               ))}
