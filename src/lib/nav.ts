@@ -30,8 +30,13 @@ export const NAV: NavItem[] = [
 
   // ===== פיקוד גדוד =====
   { href: "/armory-approvals", label: "אישור חיילים לנשק", icon: "🔫", group: "פיקוד גדוד", cap: "weapons.approve" },
-  { href: "/armory-allocations", label: "הקצאות ארמון לפלוגות", icon: "📦", group: "פיקוד גדוד", cap: "weapons.approve" },
+  { href: "/armory-allocations", label: "הקצאה לפלוגה", icon: "📦", group: "פיקוד גדוד", cap: "weapons.approve" },
   { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "פיקוד גדוד", cap: "weapons.view" },
+
+  // ===== נוכחות =====
+  { href: "/attendance", label: "נוכחות חיילים", icon: "📋", group: "הפלוגה שלי", cap: "attendance.manage" },
+  { href: "/attendance", label: "נוכחות חיילים", icon: "📋", group: "פיקוד גדוד", cap: "attendance.view" },
+  { href: "/attendance-settings", label: "הגדרות נוכחות", icon: "⚙️", group: "פלסם", cap: "battalion.profile" },
 
   // ===== שלישות (שליש גדודי — ניהול חיילים + גיוס) =====
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "שלישות", cap: "soldiers.roster" },

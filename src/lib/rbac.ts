@@ -25,7 +25,9 @@ export type Capability =
   | "audit.view" // יומן פעולות
   | "dispatch.manage" // שבצ"ק - יצירה/עריכה של שיבוצי רכב
   | "weapons.approve" // 🔫 אישור חייל לחימוש (מג"ד/סמג"ד)
-  | "weapons.view"; // צפייה בדוח זכאות נשק
+  | "weapons.view" // צפייה בדוח זכאות נשק
+  | "attendance.manage" // עריכת נוכחות חיילים
+  | "attendance.view"; // צפייה בנוכחות
 
 const MATRIX: Record<Role, Capability[]> = {
   SUPER_ADMIN: ["battalions.manage", "users.manage", "reports.view", "audit.view"],
@@ -50,6 +52,8 @@ const MATRIX: Record<Role, Capability[]> = {
     "dispatch.manage",
     "weapons.approve",
     "weapons.view",
+    "attendance.manage",
+    "attendance.view",
   ],
   WAREHOUSE_MANAGER: [
     "warehouse.operate",
@@ -78,6 +82,8 @@ const MATRIX: Record<Role, Capability[]> = {
     "counts.execute",
     "reports.view",
     "dispatch.manage",
+    "attendance.manage",
+    "attendance.view",
   ],
   VIEWER: ["reports.view", "dispatch.manage"],
   SHALISH: [
@@ -90,9 +96,9 @@ const MATRIX: Record<Role, Capability[]> = {
   MAGAD: [
     "reports.view",
     "audit.view",
-    "battalion.profile", // צפייה בפרופיל הגדוד (read-only enforcement in UI/actions)
-    "soldiers.roster", // צפייה ברוסטר
-    "signatures.manage", // צפייה בהחתמות
+    "battalion.profile",
+    "soldiers.roster",
+    "signatures.manage",
     "counts.manage",
     "counts.execute",
     "gaps.resolve",
@@ -100,6 +106,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "dispatch.manage",
     "weapons.approve",
     "weapons.view",
+    "attendance.view",
   ],
   // 🆕 סמג"ד: אותן הרשאות כמו מג"ד
   SAMAGAD: [
@@ -115,6 +122,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "dispatch.manage",
     "weapons.approve",
     "weapons.view",
+    "attendance.view",
   ],
 };
 

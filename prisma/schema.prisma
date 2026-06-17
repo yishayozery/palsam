@@ -152,6 +152,8 @@ model Battalion {
   discrepancies Discrepancy[]
   auditLogs     AuditLog[]
   equipmentLocations EquipmentLocation[]
+  squads             Squad[]
+  attendanceStatuses AttendanceStatus[]
 }
 
 // ===================== משתמשים =====================
@@ -288,6 +290,7 @@ model Holder {
   discrepancies    Discrepancy[]
   companyItemBaselines CompanyItemBaseline[] @relation("HolderBaselines")
   companyAllocations   CompanyAllocation[]  @relation("HolderAllocations")
+  squads               Squad[]
   dispatchAssignments VehicleAssignment[] @relation("CompanyDispatch")
   // קשרי מחסן↔פלוגה (איזה פלוגות המחסן עובד מולן)
   warehouseLinks   WarehouseCompany[] @relation("WarehouseSide")
@@ -393,7 +396,9 @@ model Soldier {
   lastName       String?
   personalNumber String? // אופציונלי — אפשר ליצור חייל בלעדיו ולעדכן בהמשך
   phone          String?
-  platoon        String? // מחלקה בתוך הפלוגה
+  platoon        String? // מחלקה בתוך הפלוגה (טקסט חופשי — לתאימות לאחור)
+  squadId        String?
+  squad          Squad?    @relation(fields: [squadId], references: [id])
   companyId      String?
   company        Holder?   @relation(fields: [companyId], references: [id])
   // שיוך משני — מחסן שהחייל גם משתייך אליו (למשל חייל ארמון שגם בפלוגה א')
@@ -415,6 +420,8 @@ model Soldier {
   // דגל 3: חתימה דיגיטלית על נוהל שמירת נשק (נחתם בארמון בזמן קבלת הנשק הראשון)
   weaponsAgreementSignedAt   DateTime?
   weaponsAgreementSignature  String? // data URL של החתימה
+  // גיוס
+  callupClosedAt DateTime? // תאריך סגירת גיוס
   createdAt      DateTime  @default(now())
 
   signedSerialUnits  SerialUnit[]  @relation("SerialUnitSignedSoldier")
@@ -423,11 +430,14 @@ model Soldier {
   signatures         Signature[]
   itemLocations      SoldierItemLocation[] @relation("SoldierItemLocations")
   dispatchAssignments VehicleAssignmentSoldier[] @relation("SoldierDispatch")
+  attendancePlans    AttendancePlan[]
+  attendanceRecords  AttendanceRecord[]
   // מקושר למשתמש מערכת (קצין/רס"פ)
   appUser            AppUser?      @relation("SoldierAsUser")
 
   @@unique([battalionId, personalNumber])
   @@index([companyId])
+  @@index([squadId])
 }
 
 /**
@@ -1048,4 +1058,77 @@ model RateLimitHit {
 
   @@index([scope, key, createdAt])
   @@index([createdAt]) // לניקוי תקופתי
+}
+
+// ===================== מחלקות (Squads) =====================
+
+model Squad {
+  id          String   @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  companyId   String
+  company     Holder   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  soldiers    Soldier[]
+
+  @@unique([companyId, name])
+  @@index([battalionId])
+  @@index([companyId])
+}
+
+// ===================== נוכחות (Attendance) =====================
+
+model AttendanceStatus {
+  id          String   @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  name        String   // למשל: נוכח, חופשה, מחלה, ח.מ., וכו'
+  color       String   @default("#10b981") // hex color
+  icon        String?  // emoji
+  isPresent   Boolean  @default(false) // האם נחשב "נוכח" לצורך חישוב אחוז
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  plans       AttendancePlan[]
+  records     AttendanceRecord[]
+
+  @@unique([battalionId, name])
+  @@index([battalionId])
+}
+
+model AttendancePlan {
+  id          String   @id @default(cuid())
+  soldierId   String
+  soldier     Soldier  @relation(fields: [soldierId], references: [id], onDelete: Cascade)
+  date        DateTime @db.Date
+  statusId    String
+  status      AttendanceStatus @relation(fields: [statusId], references: [id])
+  note        String?
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([soldierId, date])
+  @@index([soldierId])
+  @@index([date])
+}
+
+model AttendanceRecord {
+  id          String   @id @default(cuid())
+  soldierId   String
+  soldier     Soldier  @relation(fields: [soldierId], references: [id], onDelete: Cascade)
+  date        DateTime @db.Date
+  statusId    String
+  status      AttendanceStatus @relation(fields: [statusId], references: [id])
+  note        String?
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([soldierId, date])
+  @@index([soldierId])
+  @@index([date])
 }

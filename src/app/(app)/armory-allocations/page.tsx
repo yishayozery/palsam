@@ -5,14 +5,9 @@ import AllocationsClient from "./AllocationsClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function ArmoryAllocationsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ companyId?: string }>;
-}) {
+export default async function ArmoryAllocationsPage() {
   const user = await requireCapability("weapons.approve");
   const bId = user.battalionId!;
-  const sp = await searchParams;
 
   const companies = await prisma.holder.findMany({
     where: { battalionId: bId, kind: "COMPANY", active: true },
@@ -23,20 +18,16 @@ export default async function ArmoryAllocationsPage({
   if (companies.length === 0) {
     return (
       <div>
-        <PageHeader title="🔫 הקצאת ציוד ארמון לפלוגות" subtitle="הגדר כמה מכל פריט ארמוני מגיע לכל פלוגה" />
+        <PageHeader title="📦 הקצאה לפלוגה" subtitle="הגדר כמה מכל פריט מגיע לכל פלוגה" />
         <Card className="p-6"><EmptyState>אין פלוגות פעילות בגדוד.</EmptyState></Card>
       </div>
     );
   }
 
-  const selectedCompanyId = sp.companyId && companies.some((c) => c.id === sp.companyId)
-    ? sp.companyId
-    : companies[0].id;
-
   const items = await prisma.itemType.findMany({
-    where: { battalionId: bId, active: true, category: { warehouseType: "ARMORY" } },
+    where: { battalionId: bId, active: true },
     orderBy: [{ category: { name: "asc" } }, { name: "asc" }],
-    select: { id: true, name: true, sku: true, trackingMethod: true },
+    select: { id: true, name: true, sku: true, trackingMethod: true, category: { select: { name: true } } },
   });
 
   const allocations = await prisma.companyAllocation.findMany({
@@ -44,12 +35,11 @@ export default async function ArmoryAllocationsPage({
     select: { companyId: true, itemTypeId: true, quantity: true, blockOnExceed: true },
   });
 
-  // ספירת חתומים על חיילים פר פלוגה + פריט (מהארמון)
+  // ספירת חתומים על חיילים פר פלוגה + פריט
   const signedUnits = await prisma.serialUnit.findMany({
     where: {
       battalionId: bId,
       signedSoldierId: { not: null },
-      itemType: { category: { warehouseType: "ARMORY" } },
     },
     select: {
       itemTypeId: true,
@@ -74,15 +64,14 @@ export default async function ArmoryAllocationsPage({
   return (
     <div>
       <PageHeader
-        title="🔫 הקצאת ציוד ארמון לפלוגות"
-        subtitle='הגדר כמה מכל פריט ארמוני מגיע לכל פלוגה. בהחתמה, המערכת תחסום אם חרגו מההקצאה. מנוהל ע"י מג"ד/סמג"ד/מפ"מ.'
+        title="📦 הקצאה לפלוגה"
+        subtitle='הגדר כמה מכל פריט מגיע לכל פלוגה. בהחתמה המערכת תחסום או תתריע לפי ההגדרה. מנוהל ע"י מג"ד/סמג"ד/מפ"מ.'
       />
       <AllocationsClient
         items={items}
         companies={companies}
         allocations={allocations}
         signedCounts={signedCounts}
-        selectedCompanyId={selectedCompanyId}
       />
     </div>
   );
