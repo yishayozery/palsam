@@ -20,7 +20,10 @@ export default async function IneligibilityReportPage() {
     },
     orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }],
   });
-  const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { armoryTestUrl: true } });
+  const armoryHolder = await prisma.holder.findFirst({
+    where: { battalionId: bId, warehouseType: "ARMORY", active: true },
+    select: { armoryTestUrl: true },
+  });
 
   const rows = soldiers.map((s) => {
     const missing: string[] = [];
@@ -93,7 +96,7 @@ export default async function IneligibilityReportPage() {
         </Card>
       </div>
 
-      <IneligibilityTable rows={rows} armoryTestUrl={battalion?.armoryTestUrl ?? null} />
+      <IneligibilityTable rows={rows} armoryTestUrl={armoryHolder?.armoryTestUrl ?? null} />
     </div>
   );
 }

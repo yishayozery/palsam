@@ -92,7 +92,7 @@ const GUIDES: RoleGuide[] = [
       },
       {
         icon: "🔧",
-        title: "ציוד תקול / טנא (/maintenance)",
+        title: "סטטוס רכבים (טנא) (/maintenance)",
         steps: [
           { title: "צפייה בכל הרכבים בגדוד + סטטוס" },
           { title: "ראייה של מה שאצל הטנא + סיבה" },
@@ -248,7 +248,7 @@ const GUIDES: RoleGuide[] = [
     sections: [
       {
         icon: "🔧",
-        title: "ציוד תקול / טנא (/maintenance)",
+        title: "סטטוס רכבים (טנא) (/maintenance)",
         steps: [
           { title: "אינדיקטור — אנחנו רואים מה כעת אצל הטנא + הסיבה לתקלה" },
           { title: 'כפתור "✓ תוקן + החזרה" → בחר פריטים → יעד (מחסן/פלוגה) → סטטוס (תקין/עדיין תקול)' },

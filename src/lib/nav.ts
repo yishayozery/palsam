@@ -30,6 +30,7 @@ export const NAV: NavItem[] = [
 
   // ===== פיקוד גדוד =====
   { href: "/armory-approvals", label: "אישור חיילים לנשק", icon: "🔫", group: "פיקוד גדוד", cap: "weapons.approve" },
+  { href: "/armory-allocations", label: "הקצאות ארמון לפלוגות", icon: "📦", group: "פיקוד גדוד", cap: "weapons.approve" },
   { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "פיקוד גדוד", cap: "weapons.view" },
 
   // ===== שלישות (שליש גדודי — ניהול חיילים + גיוס) =====
@@ -47,7 +48,7 @@ export const NAV: NavItem[] = [
   { href: "/warehouses", label: "מחסני הגדוד", icon: "🏪", group: "פלסם", cap: "battalion.profile" },
   { href: "/counts", label: "ספירות מלאי", icon: "🔢", group: "פלסם", cap: "battalion.profile" },
   { href: "/counts/plans", label: "תכניות ספירה", icon: "📋", group: "פלסם", cap: "counts.manage" },
-  { href: "/maintenance", label: "ציוד תקול / טנא", icon: "🔧", group: "פלסם", cap: "maintenance.manage" },
+  { href: "/maintenance", label: "סטטוס רכבים (טנא)", icon: "🔧", group: "פלסם", cap: "maintenance.manage" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "פלסם", cap: "battalion.profile" },
 
   // ===== הפלוגה שלי (רס"פ פלוגה — תפעול ברמת פלוגה) =====

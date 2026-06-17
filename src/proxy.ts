@@ -1,8 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_PREFIXES = ["/login", "/sign", "/invite", "/_next", "/favicon", "/api/sign", "/my-equipment"];
+const ALLOWED_COUNTRIES = new Set(["IL"]);
 
 export function proxy(req: NextRequest) {
+  // 🌍 Geo-restriction: Israel only (Vercel provides x-vercel-ip-country)
+  const country = req.headers.get("x-vercel-ip-country");
+  if (country && !ALLOWED_COUNTRIES.has(country)) {
+    return new NextResponse("🚫 Access restricted to Israel only.\nגישה מוגבלת לישראל בלבד.", {
+      status: 403,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+
   const { pathname } = req.nextUrl;
 
   // נתיבים ציבוריים (התחברות + דפי החתמה לחיילים)

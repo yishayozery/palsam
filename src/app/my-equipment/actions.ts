@@ -16,7 +16,7 @@ export type WeaponsEligibility = {
 export type SoldierEquipmentResult =
   | { ok: true;
       soldierId: string;
-      soldier: { fullName: string; personalNumber: string | null; companyName: string | null; battalionName: string };
+      soldier: { fullName: string; personalNumber: string | null; companyName: string | null; battalionName: string; battalionLogo: string | null };
       serials: { itemName: string; sku: string | null; serial: string; lotQuantity: number | null; statusName: string; isWear: boolean; isLoss: boolean; signedAt: string | null; signedBy: string | null }[];
       qty: { itemName: string; sku: string | null; unit: string; statusName: string; quantity: number; lastSignedAt: string | null; lastSignedBy: string | null }[];
       weaponsEligibility: WeaponsEligibility; }
@@ -159,7 +159,7 @@ export async function lookupSoldierEquipment(formData: FormData): Promise<Soldie
 
     const soldier = await prisma.soldier.findFirst({
       where: { personalNumber, active: true },
-      include: { battalion: { select: { name: true } }, company: { select: { name: true } } },
+      include: { battalion: { select: { name: true, logoData: true } }, company: { select: { name: true } } },
     });
     if (!soldier) return { ok: false, error: "לא נמצא חייל עם מספר אישי זה" };
 
@@ -226,12 +226,9 @@ export async function lookupSoldierEquipment(formData: FormData): Promise<Soldie
     const weaponsApprovedByName = soldier.weaponsApprovedById
       ? (await prisma.appUser.findUnique({ where: { id: soldier.weaponsApprovedById }, select: { fullName: true } }))?.fullName ?? null
       : null;
-    const battalionArmoryTestUrl = soldier.battalion
-      ? (await prisma.battalion.findUnique({ where: { id: soldier.battalionId }, select: { armoryTestUrl: true } }))?.armoryTestUrl ?? null
-      : null;
     const armoryHolder = await prisma.holder.findFirst({
       where: { battalionId: soldier.battalionId, warehouseType: "ARMORY", active: true },
-      select: { weaponsAgreementText: true },
+      select: { weaponsAgreementText: true, armoryTestUrl: true },
     });
     const customAgreementText = armoryHolder?.weaponsAgreementText ?? null;
 
@@ -249,7 +246,7 @@ export async function lookupSoldierEquipment(formData: FormData): Promise<Soldie
         armoryTestSubmittedAt: soldier.armoryTestProofAt?.toISOString() ?? null,
         weaponsAgreementSigned: !!soldier.weaponsAgreementSignedAt,
         weaponsAgreementSignedAt: soldier.weaponsAgreementSignedAt?.toISOString() ?? null,
-        armoryTestUrl: battalionArmoryTestUrl,
+        armoryTestUrl: armoryHolder?.armoryTestUrl ?? null,
         customAgreementText,
       },
       soldier: {
@@ -257,6 +254,7 @@ export async function lookupSoldierEquipment(formData: FormData): Promise<Soldie
         personalNumber: soldier.personalNumber,
         companyName: soldier.company?.name ?? null,
         battalionName: soldier.battalion?.name ?? "",
+        battalionLogo: soldier.battalion?.logoData ?? null,
       },
       serials: serialUnits.map((u) => {
         const meta = lastSignByUnit.get(u.id);

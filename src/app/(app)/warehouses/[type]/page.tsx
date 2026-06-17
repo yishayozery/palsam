@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card, Table, Th, Td, EmptyState, StatCard } from "@/components/ui";
 import SignatureClauseEditor from "./SignatureClauseEditor";
 import WeaponsAgreementEditor from "./WeaponsAgreementEditor";
+import ArmoryTestUrlEditor from "./ArmoryTestUrlEditor";
 import { WAREHOUSE_TYPE_LABELS, WAREHOUSE_TYPE_ICON } from "@/lib/rbac";
 import { TRACKING_METHOD } from "@/lib/labels";
 import type { WarehouseType } from "@/generated/prisma";
@@ -120,13 +121,20 @@ export default async function WarehouseDetailPage({
         readOnly={!isManager && user.role !== "BATTALION_ADMIN"}
       />
 
-      {/* 🔫 נוהל שמירת נשק - רק לארמון */}
+      {/* 🔫 נוהל שמירת נשק + קישור למבחן - רק לארמון */}
       {wtype === "ARMORY" && (
-        <WeaponsAgreementEditor
-          warehouseId={warehouse.id}
-          initial={warehouse.weaponsAgreementText}
-          readOnly={!isManager && user.role !== "BATTALION_ADMIN"}
-        />
+        <>
+          <ArmoryTestUrlEditor
+            warehouseId={warehouse.id}
+            initial={warehouse.armoryTestUrl}
+            readOnly={!isManager && user.role !== "BATTALION_ADMIN"}
+          />
+          <WeaponsAgreementEditor
+            warehouseId={warehouse.id}
+            initial={warehouse.weaponsAgreementText}
+            readOnly={!isManager && user.role !== "BATTALION_ADMIN"}
+          />
+        </>
       )}
 
       {/* כפתורי פעולה */}

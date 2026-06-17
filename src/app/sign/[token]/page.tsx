@@ -67,14 +67,22 @@ export default async function PublicSignPage({
         </div>
 
         <div className="p-5">
-          <h2 className="text-sm font-semibold text-slate-700 mb-2">פריטים:</h2>
+          <h2 className="text-sm font-semibold text-slate-700 mb-2">📋 פירוט הציוד להחתמה:</h2>
           <div className="space-y-1.5 mb-5">
             {sig.transfer?.lines.map((l) => (
-              <div key={l.id} className="flex justify-between text-sm bg-slate-50 rounded-lg px-3 py-2">
-                <span className="font-medium">{l.itemType.name}</span>
-                <span className="font-mono text-xs text-slate-500">
-                  {l.serialUnit?.serialNumber ?? `×${l.quantity}`}
-                </span>
+              <div key={l.id} className="bg-slate-50 rounded-lg px-3 py-2.5 border border-slate-200">
+                <div className="flex justify-between items-start">
+                  <span className="font-bold text-sm text-slate-800">{l.itemType.name}</span>
+                  {!l.serialUnit && <span className="font-mono text-xs bg-blue-100 text-blue-800 rounded px-1.5 py-0.5">×{l.quantity}</span>}
+                </div>
+                {l.serialUnit && (
+                  <div className="text-xs font-mono text-indigo-700 mt-0.5 bg-indigo-50 rounded px-2 py-0.5 inline-block">
+                    SN: {l.serialUnit.serialNumber}
+                    {l.serialUnit.lotQuantity && l.serialUnit.lotQuantity > 1 && (
+                      <span className="text-slate-500 mr-1">× {l.serialUnit.lotQuantity}</span>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

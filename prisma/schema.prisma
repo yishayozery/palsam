@@ -139,6 +139,7 @@ model Battalion {
   stockBalances StockBalance[]
   soldierItemLocations SoldierItemLocation[]
   companyItemBaselines CompanyItemBaseline[] @relation("BattalionBaselines")
+  companyAllocations   CompanyAllocation[]  @relation("BattalionAllocations")
   vehicleAssignments   VehicleAssignment[] @relation("BattalionDispatch")
   serialUnits   SerialUnit[]
   kitInstances  KitInstance[]
@@ -264,6 +265,7 @@ model Holder {
   signatureClause String?
   // 🔫 נוהל שמירת נשק (טקסט חופשי) — לארמון. אם ריק, נוסח ברירת מחדל
   weaponsAgreementText String?
+  armoryTestUrl        String?
   createdAt     DateTime       @default(now())
 
   users            AppUser[]          @relation("HolderUsers")
@@ -285,6 +287,7 @@ model Holder {
   secondarySoldiers Soldier[]        @relation("SoldierSecondary")
   discrepancies    Discrepancy[]
   companyItemBaselines CompanyItemBaseline[] @relation("HolderBaselines")
+  companyAllocations   CompanyAllocation[]  @relation("HolderAllocations")
   dispatchAssignments VehicleAssignment[] @relation("CompanyDispatch")
   // קשרי מחסן↔פלוגה (איזה פלוגות המחסן עובד מולן)
   warehouseLinks   WarehouseCompany[] @relation("WarehouseSide")
@@ -493,6 +496,26 @@ model CompanyItemBaseline {
   @@index([itemTypeId])
 }
 
+// הקצאת ציוד ארמון לפלוגה (כמה מגיע מכל פריט). מנוהל ע"י מגד/סמגד/מפמ.
+model CompanyAllocation {
+  id          String    @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation("BattalionAllocations", fields: [battalionId], references: [id], onDelete: Cascade)
+  companyId   String
+  company     Holder    @relation("HolderAllocations", fields: [companyId], references: [id], onDelete: Cascade)
+  itemTypeId  String
+  itemType    ItemType  @relation("ItemTypeAllocations", fields: [itemTypeId], references: [id], onDelete: Cascade)
+  quantity       Int       @default(0)
+  blockOnExceed  Boolean   @default(true) // true = חסום החתמה בחריגה, false = התראה בלבד
+  updatedAt      DateTime  @updatedAt
+  updatedById    String?
+
+  @@unique([companyId, itemTypeId])
+  @@index([battalionId])
+  @@index([companyId])
+  @@index([itemTypeId])
+}
+
 // ===================== מילונים (לפי גדוד) =====================
 
 model Category {
@@ -593,7 +616,8 @@ model ItemType {
   usedInKits    KitComponent[] @relation("KitChild")
   kitInstances  KitInstance[]
   soldierItemLocations SoldierItemLocation[]
-  companyBaselines CompanyItemBaseline[] @relation("ItemTypeBaselines")
+  companyBaselines   CompanyItemBaseline[] @relation("ItemTypeBaselines")
+  companyAllocations CompanyAllocation[]  @relation("ItemTypeAllocations")
   // מיקומים פר-holder (מאפשר אותו פריט במיקומים שונים בכל מחסן/פלוגה)
   holderLocations ItemHolderLocation[]
   inSignableKits SignableKitLine[] @relation("KitLineItem")

@@ -91,6 +91,38 @@ export async function createSignout(formData: FormData) {
     }
   }
 
+  // 📦 בדיקת הקצאות ארמון — אם מחתימים מארמון, וודא שהפלוגה לא חרגה מההקצאה
+  if (user.holderId) {
+    const holderInfo = await prisma.holder.findUnique({ where: { id: user.holderId }, select: { warehouseType: true } });
+    if (holderInfo?.warehouseType === "ARMORY") {
+      const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { companyId: true, company: { select: { name: true } } } });
+      if (soldier?.companyId) {
+        const allItemTypeIds: string[] = [];
+        if (serialIds.length > 0) {
+          const units = await prisma.serialUnit.findMany({ where: { id: { in: serialIds } }, select: { itemTypeId: true, lotQuantity: true } });
+          for (const u of units) allItemTypeIds.push(u.itemTypeId);
+        }
+        for (const q of qtyItems) if (q) allItemTypeIds.push(q);
+        const uniqueItemTypes = [...new Set(allItemTypeIds)];
+        const allocations = await prisma.companyAllocation.findMany({
+          where: { companyId: soldier.companyId, itemTypeId: { in: uniqueItemTypes } },
+        });
+        if (allocations.length > 0) {
+          for (const alloc of allocations) {
+            const currentSigned = await prisma.serialUnit.count({
+              where: { itemTypeId: alloc.itemTypeId, signedSoldier: { companyId: soldier.companyId } },
+            });
+            const newCount = allItemTypeIds.filter((id) => id === alloc.itemTypeId).length;
+            if (currentSigned + newCount > alloc.quantity && alloc.blockOnExceed) {
+              const item = await prisma.itemType.findUnique({ where: { id: alloc.itemTypeId }, select: { name: true } });
+              throw new Error(`📦 חריגה מהקצאה: ${soldier.company?.name ?? "פלוגה"} מוקצה ${alloc.quantity} × ${item?.name ?? "פריט"}, כבר חתום ${currentSigned}, מנסה להוסיף ${newCount}`);
+            }
+          }
+        }
+      }
+    }
+  }
+
   // אם נבחרה ערכה — נוסיף את הפריטים הכמותיים שלה כשורות העברה
   const kitLines = kitId
     ? await prisma.signableKitLine.findMany({ where: { kitId }, include: { itemType: true } })

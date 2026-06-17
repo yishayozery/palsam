@@ -22,7 +22,6 @@ export default async function ProfilePage() {
             motto: battalion.motto, notes: battalion.notes, logoData: battalion.logoData,
             requirePersonalIdOnHandover: battalion.requirePersonalIdOnHandover,
             notificationEmail: battalion.notificationEmail,
-            armoryTestUrl: battalion.armoryTestUrl,
           }}
         />
       </Card>
