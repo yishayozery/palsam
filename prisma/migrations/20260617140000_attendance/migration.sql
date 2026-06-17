@@ -1,6 +1,6 @@
--- AlterTable: add callupClosedAt + squadId to Soldier
-ALTER TABLE "Soldier" ADD COLUMN "callupClosedAt" TIMESTAMP(3);
-ALTER TABLE "Soldier" ADD COLUMN "squadId" TEXT;
+-- AlterTable: add callupClosedAt + squadId to Soldier (IF NOT EXISTS for idempotency after db push)
+ALTER TABLE "Soldier" ADD COLUMN IF NOT EXISTS "callupClosedAt" TIMESTAMP(3);
+ALTER TABLE "Soldier" ADD COLUMN IF NOT EXISTS "squadId" TEXT;
 
 -- CreateTable: Squad
 CREATE TABLE "Squad" (
