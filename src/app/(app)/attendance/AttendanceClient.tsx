@@ -3,7 +3,8 @@
 import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
-import { saveAttendance } from "./actions";
+import { saveAttendance, assignSquad } from "./actions";
+import { upsertSquad, deleteSquad } from "../attendance-settings/actions";
 import type { DayInfo } from "@/lib/hebrew-dates";
 
 type SoldierRow = {
@@ -116,6 +117,10 @@ export default function AttendanceClient({
 
   // Context menu
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; soldierId: string; date: string } | null>(null);
+  const [showSquadMgr, setShowSquadMgr] = useState(false);
+  const [newSquadName, setNewSquadName] = useState("");
+  const [squadError, setSquadError] = useState<string | null>(null);
+  const [squadSaving, setSquadSaving] = useState(false);
 
   function handleContextMenu(e: React.MouseEvent, soldierId: string, date: string) {
     e.preventDefault();
@@ -194,6 +199,60 @@ export default function AttendanceClient({
           </div>
         </div>
       </Card>
+
+      {/* Squad management */}
+      {canManage && (
+        <div className="mb-3">
+          <button onClick={() => setShowSquadMgr(!showSquadMgr)}
+            className="text-xs text-slate-500 hover:text-slate-700 mb-1">
+            {showSquadMgr ? "▲ הסתר ניהול מחלקות" : "▼ ניהול מחלקות"}
+          </button>
+          {showSquadMgr && (
+            <Card className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-bold text-slate-700">🪖 מחלקות — {companyName}</h3>
+              </div>
+              {squadError && (
+                <div className="bg-rose-50 text-rose-700 rounded px-2 py-1 text-xs mb-2">{squadError}
+                  <button onClick={() => setSquadError(null)} className="mr-2 text-rose-400">✕</button>
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2 mb-2">
+                {squads.map((sq) => (
+                  <span key={sq.id} className="inline-flex items-center gap-1 bg-slate-100 rounded-lg px-2 py-1 text-xs">
+                    {sq.name}
+                    <button onClick={async () => {
+                      if (!confirm(`למחוק את "${sq.name}"?`)) return;
+                      const res = await deleteSquad(sq.id);
+                      if (res?.error) { setSquadError(res.error); return; }
+                      router.refresh();
+                    }} className="text-rose-400 hover:text-rose-600 text-[10px]">✕</button>
+                  </span>
+                ))}
+                {squads.length === 0 && <span className="text-xs text-slate-400">אין מחלקות</span>}
+              </div>
+              <div className="flex gap-2 items-center">
+                <input value={newSquadName} onChange={(e) => setNewSquadName(e.target.value)}
+                  placeholder="שם מחלקה חדשה" className="rounded border border-slate-300 px-2 py-1 text-sm flex-1 max-w-48" />
+                <button disabled={squadSaving || !newSquadName.trim()} onClick={async () => {
+                  setSquadSaving(true); setSquadError(null);
+                  const fd = new FormData();
+                  fd.append("companyId", selectedCompanyId);
+                  fd.append("name", newSquadName.trim());
+                  fd.append("sortOrder", String(squads.length));
+                  const res = await upsertSquad(fd);
+                  setSquadSaving(false);
+                  if (res?.error) { setSquadError(res.error); return; }
+                  setNewSquadName("");
+                  router.refresh();
+                }} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-1 text-xs disabled:opacity-50">
+                  ＋ הוסף
+                </button>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* Legend */}
       <div className="flex flex-wrap gap-2 mb-3">

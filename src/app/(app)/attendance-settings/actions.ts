@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireCapability } from "@/lib/guard";
+import { requireCapability, requireUser } from "@/lib/guard";
+import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 
 export async function upsertAttendanceStatus(
@@ -79,7 +80,7 @@ export async function upsertSquad(
   formData: FormData,
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireCapability("battalion.profile");
+    const user = await requireUser();
     const bId = user.battalionId!;
     const id = String(formData.get("id") || "");
     const companyId = String(formData.get("companyId") || "");
@@ -88,7 +89,14 @@ export async function upsertSquad(
 
     if (!companyId || !name) return { error: "פלוגה ושם חובה" };
 
+    const isBattalionAdmin = can(user.role, "battalion.profile");
+    const isCompanyRep = user.role === "COMPANY_REP" && user.holderIds.includes(companyId);
+    if (!isBattalionAdmin && !isCompanyRep) return { error: "אין הרשאה" };
+
     if (id) {
+      const existing = await prisma.squad.findUnique({ where: { id }, select: { companyId: true } });
+      if (!existing) return { error: "מחלקה לא נמצאה" };
+      if (!isBattalionAdmin && !user.holderIds.includes(existing.companyId)) return { error: "אין הרשאה" };
       await prisma.squad.update({
         where: { id },
         data: { name, sortOrder },
@@ -100,6 +108,7 @@ export async function upsertSquad(
     }
 
     revalidatePath("/attendance-settings");
+    revalidatePath("/attendance");
     return { ok: true };
   } catch (e: unknown) {
     if (e instanceof Error && e.message.includes("Unique constraint"))
@@ -112,11 +121,19 @@ export async function deleteSquad(
   id: string,
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
-    await requireCapability("battalion.profile");
+    const user = await requireUser();
+    const squad = await prisma.squad.findUnique({ where: { id }, select: { companyId: true } });
+    if (!squad) return { error: "לא נמצא" };
+
+    const isBattalionAdmin = can(user.role, "battalion.profile");
+    const isCompanyRep = user.role === "COMPANY_REP" && user.holderIds.includes(squad.companyId);
+    if (!isBattalionAdmin && !isCompanyRep) return { error: "אין הרשאה" };
+
     const assigned = await prisma.soldier.count({ where: { squadId: id } });
     if (assigned > 0) return { error: `לא ניתן למחוק — ${assigned} חיילים משויכים. העבר אותם קודם.` };
     await prisma.squad.delete({ where: { id } });
     revalidatePath("/attendance-settings");
+    revalidatePath("/attendance");
     return { ok: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "שגיאה" };
