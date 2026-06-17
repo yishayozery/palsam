@@ -42,7 +42,7 @@ export function getDaysForRange(startDate: string, days: number): DayInfo[] {
 
     const events = HebrewCalendar.getHolidaysOnDate(hd, true) ?? [];
     const majorHoliday = events.find(
-      (e) => e.getFlags() & (flags.MAJOR_FLAG | flags.YOM_TOV_ENDS | flags.CHAG),
+      (e) => e.getFlags() & (flags.CHAG | flags.YOM_TOV_ENDS | flags.MAJOR_FAST | flags.LIGHT_CANDLES),
     );
     const holiday = majorHoliday?.renderBrief("he") ?? null;
     const isShabbat = d.getDay() === 6;

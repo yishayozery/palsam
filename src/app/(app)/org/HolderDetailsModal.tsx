@@ -7,6 +7,7 @@ import type { WarehouseType } from "@/generated/prisma";
 import { inviteHolderUser, updateHolderUser, removeHolderUser } from "./actions";
 import HolderLogoForm from "./HolderLogoForm";
 import { createSoldier } from "../roster/actions";
+import { updateNotificationEmails } from "../warehouses/[type]/actions";
 import UserActions from "./UserActions";
 import { useEscClose } from "@/lib/useEscClose";
 
@@ -29,6 +30,7 @@ export type HolderRowDetail = {
   active: boolean;
   warehouseType?: WarehouseType | null;
   logoData?: string | null;
+  notificationEmails?: string | null;
   users: User[];
   soldiers?: SoldierRefDetail[];
 };
@@ -351,6 +353,63 @@ function EditUserRow({ user, onDone }: { user: User; onDone: () => void }) {
   );
 }
 
+function NotificationEmailsInline({ holderId, initial }: { holderId: string; initial: string | null }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(initial ?? "");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const emails = initial ? initial.split(",").map((e) => e.trim()).filter(Boolean) : [];
+
+  async function save() {
+    setBusy(true);
+    const fd = new FormData();
+    fd.append("holderId", holderId);
+    fd.append("emails", value.trim());
+    await updateNotificationEmails(fd);
+    setBusy(false);
+    setEditing(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  }
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-sm font-semibold text-amber-900">📧 התראות מייל</span>
+        {!editing && (
+          <button onClick={() => setEditing(true)} className="text-xs text-amber-700 hover:underline">
+            {emails.length > 0 ? "✎ ערוך" : "＋ הגדר"}
+          </button>
+        )}
+      </div>
+      {emails.length > 0 && !editing && (
+        <div className="flex flex-wrap gap-1">
+          {emails.map((e) => (
+            <span key={e} className="text-[11px] bg-amber-100 text-amber-800 rounded-full px-2 py-0.5">{e}</span>
+          ))}
+        </div>
+      )}
+      {!editing && emails.length === 0 && <p className="text-xs text-amber-700">לא מוגדרים כרגע</p>}
+      {editing && (
+        <div className="space-y-2 mt-1">
+          <input value={value} onChange={(e) => setValue(e.target.value)}
+            placeholder="mail1@example.com, mail2@example.com"
+            className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" dir="ltr" />
+          <div className="flex gap-2">
+            <button onClick={save} disabled={busy}
+              className="bg-emerald-600 text-white rounded px-3 py-1 text-xs disabled:opacity-50">
+              {busy ? "..." : "💾 שמור"}
+            </button>
+            <button onClick={() => { setEditing(false); setValue(initial ?? ""); }}
+              className="text-xs text-slate-500">ביטול</button>
+          </div>
+        </div>
+      )}
+      {saved && <span className="text-xs text-emerald-700">✓ נשמר</span>}
+    </div>
+  );
+}
+
 export default function HolderDetailsModal({ row, kind, onClose, baseUrl = "" }: { row: HolderRowDetail; kind: "WAREHOUSE" | "COMPANY"; onClose: () => void; baseUrl?: string }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [soldierAddOpen, setSoldierAddOpen] = useState(false);
@@ -384,6 +443,8 @@ export default function HolderDetailsModal({ row, kind, onClose, baseUrl = "" }:
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* סמל פלוגה/מחסן */}
           <HolderLogoForm holderId={row.id} kind={kind} initial={row.logoData ?? null} />
+          {/* התראות מייל */}
+          <NotificationEmailsInline holderId={row.id} initial={row.notificationEmails ?? null} />
           {/* בעלי תפקיד */}
           <div>
             <h4 className="font-bold text-slate-700 mb-2 flex items-center justify-between">

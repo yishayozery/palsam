@@ -125,6 +125,7 @@ model Battalion {
   // הגדרות גדוד
   requirePersonalIdOnHandover Boolean @default(false) // לחייב מספר אישי בכל מסירה
   notificationEmail           String? // אם מוגדר → מייל אוטומטי על כל פעולה מבצעית (חתימה/זיכוי/מסירה/שיבוץ)
+  emailToBattalion            Boolean @default(true) // האם לשלוח התראות גם למייל הגדוד (בנוסף למחסן/פלוגה)
   armoryTestUrl               String? // קישור למבחן נוהל ארמון חיצוני (אם יש)
   createdAt DateTime @default(now())
 
@@ -268,6 +269,7 @@ model Holder {
   // 🔫 נוהל שמירת נשק (טקסט חופשי) — לארמון. אם ריק, נוסח ברירת מחדל
   weaponsAgreementText String?
   armoryTestUrl        String?
+  notificationEmails   String?  // כתובות מייל להתראות (מופרדות בפסיקים)
   createdAt     DateTime       @default(now())
 
   users            AppUser[]          @relation("HolderUsers")

@@ -10,6 +10,7 @@ type B = {
   name: string; code: string; brigade: string | null; commander: string | null; motto: string | null; notes: string | null; logoData: string | null;
   requirePersonalIdOnHandover: boolean;
   notificationEmail: string | null;
+  emailToBattalion: boolean;
 };
 
 export default function ProfileForm({ battalion }: { battalion: B }) {
@@ -105,6 +106,22 @@ export default function ProfileForm({ battalion }: { battalion: B }) {
             עדיין מתבצעות אך לא נשלח מייל.
           </div>
         </div>
+
+        <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg hover:bg-slate-50 border border-slate-200 mt-3">
+          <input
+            type="checkbox"
+            name="emailToBattalion"
+            defaultChecked={battalion.emailToBattalion}
+            className="mt-0.5"
+          />
+          <div>
+            <div className="font-medium text-sm text-slate-800">שלח התראות גם למייל הגדוד</div>
+            <div className="text-xs text-slate-500 mt-0.5">
+              כשמופעל — מייל הגדוד למעלה יקבל העתק של כל ההתראות המבצעיות מכל המחסנים והפלוגות.
+              ניתן להגדיר מיילים נפרדים בכל מחסן/פלוגה בעמוד המחסן.
+            </div>
+          </div>
+        </label>
       </div>
       <div className="flex items-center justify-end gap-3">
         {state.ok && <span className="text-sm text-emerald-600">נשמר ✓</span>}

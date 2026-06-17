@@ -7,7 +7,7 @@ import { prisma } from "./prisma";
  * עוקפת בשקט אם החסרים מוגדרים (לא שוברת פעולות עסקיות).
  */
 export async function sendEmail(opts: {
-  to: string;
+  to: string | string[];
   subject: string;
   text: string;
   html?: string;
@@ -16,12 +16,15 @@ export async function sendEmail(opts: {
   const from = process.env.EMAIL_FROM ?? "PALSAM <onboarding@resend.dev>";
   if (!apiKey) return { ok: false, error: "missing RESEND_API_KEY" };
 
+  const recipients = Array.isArray(opts.to) ? opts.to : [opts.to];
+  if (recipients.length === 0) return { ok: true };
+
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from, to: opts.to, subject: opts.subject,
+        from, to: recipients, subject: opts.subject,
         text: opts.text,
         ...(opts.html ? { html: opts.html } : {}),
       }),
@@ -61,7 +64,13 @@ export function shouldNotifyEmail(action: string, entity: string): boolean {
   return NOTIFY_ACTIONS.has(action) && NOTIFY_ENTITIES.has(entity);
 }
 
-/** שליחת התראה מבצעית למייל הגדוד - לא חוסמת אם נכשלת. */
+/** פירוק שדה notificationEmails מופרד בפסיקים לרשימה */
+function parseEmails(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  return raw.split(",").map((e) => e.trim()).filter((e) => e.includes("@"));
+}
+
+/** שליחת התראה מבצעית — למחסן/פלוגה הרלוונטיים + לגדוד אם מוגדר. */
 export async function notifyTransactionEmail(params: {
   battalionId: string;
   userId: string | null;
@@ -69,19 +78,19 @@ export async function notifyTransactionEmail(params: {
   entity: string;
   entityId?: string | null;
   details?: unknown;
+  holderId?: string | null;
 }): Promise<void> {
   try {
     const battalion = await prisma.battalion.findUnique({
       where: { id: params.battalionId },
-      select: { name: true, code: true, notificationEmail: true },
+      select: { name: true, code: true, notificationEmail: true, emailToBattalion: true },
     });
-    if (!battalion?.notificationEmail) return;
+    if (!battalion) return;
 
     const user = params.userId ? await prisma.appUser.findUnique({
       where: { id: params.userId }, select: { fullName: true, title: true },
     }) : null;
 
-    const ts = new Date().toISOString();
     const dateStr = new Date().toLocaleString("he-IL", { dateStyle: "short", timeStyle: "medium" });
     const subject = `[${battalion.code}] ${params.action} ${params.entity} — ${dateStr}`;
     const detailsJson = JSON.stringify(params.details ?? {}, null, 2);
@@ -95,15 +104,79 @@ export async function notifyTransactionEmail(params: {
       ``,
       `--- פרטים ---`,
       detailsJson,
-      ``,
-      `--- meta ---`,
-      `timestamp: ${ts}`,
-      `entityId: ${params.entityId ?? "n/a"}`,
     ].join("\n");
 
-    // לא ממתינים - לא חוסם פעולה עסקית
-    void sendEmail({ to: battalion.notificationEmail, subject, text });
+    // אסוף את כל הנמענים
+    const allRecipients = new Set<string>();
+
+    // 1. מייל הגדוד (אם emailToBattalion פעיל)
+    if (battalion.emailToBattalion && battalion.notificationEmail) {
+      allRecipients.add(battalion.notificationEmail);
+    }
+
+    // 2. מיילים של המחסן/פלוגה המעורבים
+    if (params.holderId) {
+      const holder = await prisma.holder.findUnique({
+        where: { id: params.holderId },
+        select: { notificationEmails: true },
+      });
+      for (const email of parseEmails(holder?.notificationEmails)) {
+        allRecipients.add(email);
+      }
+    }
+
+    // 3. אם יש entityId שמצביע על Transfer — שלח גם ל-from/to holders
+    if (params.entity === "Transfer" || params.entity === "Signature") {
+      const holderIds = await resolveHolderIds(params.entity, params.entityId);
+      if (holderIds.length > 0) {
+        const holders = await prisma.holder.findMany({
+          where: { id: { in: holderIds } },
+          select: { notificationEmails: true },
+        });
+        for (const h of holders) {
+          for (const email of parseEmails(h.notificationEmails)) {
+            allRecipients.add(email);
+          }
+        }
+      }
+    }
+
+    if (allRecipients.size === 0) return;
+
+    void sendEmail({ to: [...allRecipients], subject, text });
   } catch {
     // לא מפיל שום פעולה אם המייל נכשל
   }
+}
+
+/** מצא holder IDs מתוך entity כדי לשלוח מייל למחסנים/פלוגות המעורבים */
+async function resolveHolderIds(entity: string, entityId: string | null | undefined): Promise<string[]> {
+  if (!entityId) return [];
+  try {
+    if (entity === "Transfer") {
+      const t = await prisma.transfer.findUnique({
+        where: { id: entityId },
+        select: { fromHolderId: true, toHolderId: true, toSoldier: { select: { companyId: true } } },
+      });
+      if (!t) return [];
+      const ids: string[] = [];
+      if (t.fromHolderId) ids.push(t.fromHolderId);
+      if (t.toHolderId) ids.push(t.toHolderId);
+      if (t.toSoldier?.companyId) ids.push(t.toSoldier.companyId);
+      return ids;
+    }
+    if (entity === "Signature") {
+      const s = await prisma.signature.findUnique({
+        where: { id: entityId },
+        select: { transfer: { select: { fromHolderId: true, toHolderId: true } }, soldier: { select: { companyId: true } } },
+      });
+      if (!s) return [];
+      const ids: string[] = [];
+      if (s.transfer?.fromHolderId) ids.push(s.transfer.fromHolderId);
+      if (s.transfer?.toHolderId) ids.push(s.transfer.toHolderId);
+      if (s.soldier?.companyId) ids.push(s.soldier.companyId);
+      return ids;
+    }
+  } catch { /* ignore */ }
+  return [];
 }

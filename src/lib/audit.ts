@@ -18,6 +18,7 @@ export async function audit(
   entity: string,
   entityId?: string | null,
   details?: unknown,
+  holderId?: string | null,
 ): Promise<void> {
   try {
     let battalionId: string | undefined;
@@ -54,7 +55,7 @@ export async function audit(
 
     // 📧 התראה במייל לפעולות מבצעיות (אם מוגדר notificationEmail בגדוד)
     if (battalionId && shouldNotifyEmail(action, entity)) {
-      void notifyTransactionEmail({ battalionId, userId, action, entity, entityId, details });
+      void notifyTransactionEmail({ battalionId, userId, action, entity, entityId, details, holderId });
     }
   } catch {
     // לוג כשל ביומן לא יפיל פעולה עסקית

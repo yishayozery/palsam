@@ -69,6 +69,37 @@ export async function updateArmoryTestUrl(
   }
 }
 
+/** עדכון כתובות מייל להתראות. מפ"מ או קצין המחסן. */
+export async function updateNotificationEmails(
+  formData: FormData,
+): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireUser();
+    const holderId = String(formData.get("holderId") || "");
+    const raw = String(formData.get("emails") || "").trim();
+    const emails = raw ? raw.split(",").map((e) => e.trim()).filter((e) => e.includes("@")).join(", ") : null;
+    if (!holderId) return { error: "חסר מזהה" };
+
+    const wh = await prisma.holder.findUnique({
+      where: { id: holderId },
+      select: { battalionId: true },
+    });
+    if (!wh || wh.battalionId !== user.battalionId) return { error: "לא נמצא" };
+
+    const isMafam = user.role === "BATTALION_ADMIN" && can(user.role, "battalion.profile");
+    const isWHManager = user.role === "WAREHOUSE_MANAGER" && user.holderIds.includes(holderId);
+    const isCompanyRep = user.role === "COMPANY_REP" && user.holderIds.includes(holderId);
+    if (!isMafam && !isWHManager && !isCompanyRep) return { error: "אין הרשאה" };
+
+    await prisma.holder.update({ where: { id: holderId }, data: { notificationEmails: emails } });
+    await audit(user.id, "UPDATE", "Holder", holderId, { notificationEmails: emails });
+    revalidatePath("/warehouses");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
 /** עדכון תניית חתימה למחסן. רק מפ"מ או קצין המחסן. */
 export async function updateSignatureClause(
   formData: FormData,

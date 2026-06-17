@@ -7,6 +7,7 @@ import { PageHeader, Badge, Card, Table, Th, Td, EmptyState, StatCard } from "@/
 import SignatureClauseEditor from "./SignatureClauseEditor";
 import WeaponsAgreementEditor from "./WeaponsAgreementEditor";
 import ArmoryTestUrlEditor from "./ArmoryTestUrlEditor";
+import NotificationEmailsEditor from "./NotificationEmailsEditor";
 import { WAREHOUSE_TYPE_LABELS, WAREHOUSE_TYPE_ICON } from "@/lib/rbac";
 import { TRACKING_METHOD } from "@/lib/labels";
 import type { WarehouseType } from "@/generated/prisma";
@@ -118,6 +119,14 @@ export default async function WarehouseDetailPage({
         warehouseId={warehouse.id}
         warehouseName={warehouse.name}
         initial={warehouse.signatureClause}
+        readOnly={!isManager && user.role !== "BATTALION_ADMIN"}
+      />
+
+      {/* 📧 התראות מייל */}
+      <NotificationEmailsEditor
+        holderId={warehouse.id}
+        holderName={warehouse.name}
+        initial={warehouse.notificationEmails}
         readOnly={!isManager && user.role !== "BATTALION_ADMIN"}
       />
 
