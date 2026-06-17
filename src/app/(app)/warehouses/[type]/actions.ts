@@ -44,7 +44,8 @@ export async function updateArmoryTestUrl(
   try {
     const user = await requireUser();
     const warehouseId = String(formData.get("warehouseId") || "");
-    const raw = String(formData.get("armoryTestUrl") || "").trim();
+    let raw = String(formData.get("armoryTestUrl") || "").trim();
+    if (raw && !/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
     const armoryTestUrl = raw === "" ? null : raw;
     if (!warehouseId) return { error: "חסר מזהה מחסן" };
 

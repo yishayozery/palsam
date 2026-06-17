@@ -318,7 +318,7 @@ function ArmoryTestUploader({ soldierId, personalNumber, testUrl, alreadyUploade
   return (
     <div className="mt-2 flex flex-col gap-2">
       {testUrl && (
-        <a href={testUrl} target="_blank" rel="noopener noreferrer"
+        <a href={/^https?:\/\//i.test(testUrl) ? testUrl : `https://${testUrl}`} target="_blank" rel="noopener noreferrer"
           className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded px-3 py-1.5 inline-block text-center">
           🔗 פתח את המבחן
         </a>
