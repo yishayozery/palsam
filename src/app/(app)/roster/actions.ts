@@ -14,6 +14,7 @@ export async function createSoldier(formData: FormData) {
   const personalNumber = String(formData.get("personalNumber") || "").trim().replace(/\D/g, "");
   const phone = String(formData.get("phone") || "").trim() || null;
   const companyId = String(formData.get("companyId") || "") || null;
+  const squadId = String(formData.get("squadId") || "") || null;
   const platoon = String(formData.get("platoon") || "").trim() || null;
   const enlistNow = formData.get("enlistNow") === "on";
 
@@ -33,7 +34,7 @@ export async function createSoldier(formData: FormData) {
     data: {
       battalionId: bId, fullName, firstName, lastName,
       personalNumber: personalNumber || null,
-      phone, companyId, platoon, active: true,
+      phone, companyId, squadId, platoon, active: true,
       enlisted: enlistNow,
       enlistedAt: enlistNow ? new Date() : null,
       enlistedById: enlistNow ? user.id : null,
@@ -51,6 +52,7 @@ export async function updateSoldier(formData: FormData) {
   const lastName = String(formData.get("lastName") || "").trim();
   const phone = String(formData.get("phone") || "").trim() || null;
   const companyId = String(formData.get("companyId") || "") || null;
+  const squadId = String(formData.get("squadId") || "") || null;
   const platoon = String(formData.get("platoon") || "").trim() || null;
   if (!firstName || !lastName) throw new Error("שם פרטי + שם משפחה חובה");
 
@@ -59,7 +61,7 @@ export async function updateSoldier(formData: FormData) {
 
   await prisma.soldier.update({
     where: { id },
-    data: { firstName, lastName, fullName: `${firstName} ${lastName}`, phone, companyId, platoon },
+    data: { firstName, lastName, fullName: `${firstName} ${lastName}`, phone, companyId, squadId, platoon },
   });
   await audit(user.id, "UPDATE_SOLDIER", "Soldier", id);
   revalidatePath("/roster");

@@ -14,7 +14,7 @@ export default async function RosterPage({
   const bId = user.battalionId!;
   const { q = "", company = "", status = "" } = await searchParams;
 
-  const [companies, soldiers] = await Promise.all([
+  const [companies, soldiers, squads] = await Promise.all([
     prisma.holder.findMany({
       where: { battalionId: bId, kind: "COMPANY", active: true },
       orderBy: { name: "asc" },
@@ -25,8 +25,14 @@ export default async function RosterPage({
       orderBy: [{ enlisted: "asc" }, { companyId: "asc" }, { lastName: "asc" }, { fullName: "asc" }],
       include: {
         company: { select: { name: true } },
+        squad: { select: { id: true, name: true } },
         _count: { select: { signedSerialUnits: true, signedKitInstances: true } },
       },
+    }),
+    prisma.squad.findMany({
+      where: { battalionId: bId },
+      orderBy: [{ companyId: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, companyId: true },
     }),
   ]);
 
@@ -61,11 +67,13 @@ export default async function RosterPage({
           id: s.id, firstName: s.firstName, lastName: s.lastName, fullName: s.fullName,
           personalNumber: s.personalNumber, phone: s.phone,
           companyId: s.companyId, companyName: s.company?.name ?? null,
-          platoon: s.platoon, enlisted: s.enlisted, active: s.active,
+          platoon: s.platoon, squadId: s.squadId, squadName: s.squad?.name ?? null,
+          enlisted: s.enlisted, active: s.active,
           signedCount: s._count.signedSerialUnits + s._count.signedKitInstances,
           enlistedAt: s.enlistedAt?.toISOString() ?? null,
         }))}
         companies={companies}
+        squads={squads}
         initialQ={q}
         initialCompany={company}
         initialStatus={status}

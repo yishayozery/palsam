@@ -6,15 +6,19 @@ import { createSoldier, updateSoldier, enlistSoldier, unenlistSoldier, deactivat
 import { importSoldiersRoster, seedSampleSoldiers } from "./import-actions";
 
 type Company = { id: string; name: string };
+type SquadOption = { id: string; name: string; companyId: string };
 type Soldier = {
   id: string; firstName: string | null; lastName: string | null; fullName: string;
   personalNumber: string | null; phone: string | null;
   companyId: string | null; companyName: string | null; platoon: string | null;
+  squadId: string | null; squadName: string | null;
   enlisted: boolean; active: boolean; signedCount: number; enlistedAt: string | null;
 };
 
-function AddForm({ companies, onDone }: { companies: Company[]; onDone: () => void }) {
+function AddForm({ companies, squads, onDone }: { companies: Company[]; squads: SquadOption[]; onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState("");
+  const companySquads = squads.filter((s) => s.companyId === selectedCompany);
   async function submit(fd: FormData) {
     setError(null);
     try { await createSoldier(fd); onDone(); }
@@ -36,14 +40,22 @@ function AddForm({ companies, onDone }: { companies: Company[]; onDone: () => vo
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs text-slate-600 mb-1">פלוגה *</label>
-          <select name="companyId" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <select name="companyId" required value={selectedCompany}
+            onChange={(e) => setSelectedCompany(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <option value="">— בחר —</option>
             {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-xs text-slate-600 mb-1">מחלקה (אופציונלי)</label>
-          <input name="platoon" placeholder="א/ב/ג" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <label className="block text-xs text-slate-600 mb-1">מחלקה</label>
+          <select name="squadId" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="">— ללא —</option>
+            {companySquads.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          {selectedCompany && companySquads.length === 0 && (
+            <p className="text-[10px] text-slate-400 mt-1">אין מחלקות מוגדרות לפלוגה זו</p>
+          )}
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -73,8 +85,10 @@ function AddForm({ companies, onDone }: { companies: Company[]; onDone: () => vo
   );
 }
 
-function EditForm({ soldier, companies, onDone }: { soldier: Soldier; companies: Company[]; onDone: () => void }) {
+function EditForm({ soldier, companies, squads, onDone }: { soldier: Soldier; companies: Company[]; squads: SquadOption[]; onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState(soldier.companyId ?? "");
+  const companySquads = squads.filter((s) => s.companyId === selectedCompany);
   async function submit(fd: FormData) {
     setError(null);
     try { await updateSoldier(fd); onDone(); }
@@ -97,20 +111,25 @@ function EditForm({ soldier, companies, onDone }: { soldier: Soldier; companies:
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-slate-600 mb-1">נייד</label>
-          <input name="phone" defaultValue={soldier.phone ?? ""} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </div>
-        <div>
           <label className="block text-xs text-slate-600 mb-1">פלוגה</label>
-          <select name="companyId" defaultValue={soldier.companyId ?? ""} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <select name="companyId" value={selectedCompany}
+            onChange={(e) => setSelectedCompany(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <option value="">— ללא —</option>
             {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
+        <div>
+          <label className="block text-xs text-slate-600 mb-1">נייד</label>
+          <input name="phone" defaultValue={soldier.phone ?? ""} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </div>
       </div>
       <div>
         <label className="block text-xs text-slate-600 mb-1">מחלקה</label>
-        <input name="platoon" defaultValue={soldier.platoon ?? ""} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        <select name="squadId" defaultValue={soldier.squadId ?? ""} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <option value="">— ללא —</option>
+          {companySquads.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
       </div>
       <div className="flex justify-end gap-2 pt-2">
         <button type="button" onClick={onDone} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
@@ -120,8 +139,8 @@ function EditForm({ soldier, companies, onDone }: { soldier: Soldier; companies:
   );
 }
 
-export default function RosterTable({ soldiers, companies, initialQ, initialCompany, initialStatus }: {
-  soldiers: Soldier[]; companies: Company[]; initialQ: string; initialCompany: string; initialStatus: string;
+export default function RosterTable({ soldiers, companies, squads, initialQ, initialCompany, initialStatus }: {
+  soldiers: Soldier[]; companies: Company[]; squads: SquadOption[]; initialQ: string; initialCompany: string; initialStatus: string;
 }) {
   const [q, setQ] = useState(initialQ);
   const [company, setCompany] = useState(initialCompany);
@@ -256,7 +275,7 @@ export default function RosterTable({ soldiers, companies, initialQ, initialComp
               <tr key={s.id} className={!s.active ? "opacity-50" : ""}>
                 <Td>
                   <div className="font-medium">{s.fullName}</div>
-                  {s.platoon && <div className="text-xs text-slate-400">מחלקה: {s.platoon}</div>}
+                  {s.squadName && <div className="text-xs text-slate-400">🪖 {s.squadName}</div>}
                 </Td>
                 <Td className="font-mono text-xs">{s.personalNumber ?? <span className="text-slate-300">—</span>}</Td>
                 <Td>{s.companyName ?? <span className="text-slate-300">—</span>}</Td>
@@ -309,7 +328,7 @@ export default function RosterTable({ soldiers, companies, initialQ, initialComp
               <h3 className="font-bold text-slate-800">הוספת חייל</h3>
               <button onClick={() => setAddOpen(false)} className="text-slate-400 hover:text-slate-700 text-xl">✕</button>
             </div>
-            <AddForm companies={companies} onDone={() => setAddOpen(false)} />
+            <AddForm companies={companies} squads={squads} onDone={() => setAddOpen(false)} />
           </div>
         </div>
       )}
@@ -321,7 +340,7 @@ export default function RosterTable({ soldiers, companies, initialQ, initialComp
               <h3 className="font-bold text-slate-800">עריכת חייל</h3>
               <button onClick={() => setEditId(null)} className="text-slate-400 hover:text-slate-700 text-xl">✕</button>
             </div>
-            <EditForm soldier={editSoldier} companies={companies} onDone={() => setEditId(null)} />
+            <EditForm soldier={editSoldier} companies={companies} squads={squads} onDone={() => setEditId(null)} />
           </div>
         </div>
       )}

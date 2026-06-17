@@ -155,6 +155,23 @@ export default function AttendanceClient({
 
   return (
     <>
+      {/* Mode toggle — prominent */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="flex rounded-xl overflow-hidden border-2 border-slate-200 text-sm font-bold">
+          <a href={`?companyId=${selectedCompanyId}&start=${startDate}&mode=plan`}
+            className={`px-5 py-2.5 flex items-center gap-2 transition-colors ${mode === "plan" ? "bg-blue-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+            📝 תוכנית עבודה
+          </a>
+          <a href={`?companyId=${selectedCompanyId}&start=${startDate}&mode=record`}
+            className={`px-5 py-2.5 flex items-center gap-2 transition-colors ${mode === "record" ? "bg-emerald-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+            ✅ ביצוע בפועל
+          </a>
+        </div>
+        <div className={`text-xs rounded-lg px-3 py-1.5 ${mode === "plan" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}>
+          {mode === "plan" ? "מתכננים מראש את מצב הנוכחות" : "מדווחים על מצב בפועל"}
+        </div>
+      </div>
+
       {/* Controls */}
       <Card className="p-3 mb-4">
         <div className="flex items-center gap-3 flex-wrap">
@@ -171,31 +188,23 @@ export default function AttendanceClient({
             </form>
           )}
 
-          <div className="flex bg-slate-100 rounded-lg p-0.5 text-sm">
-            <a href={`?companyId=${selectedCompanyId}&start=${startDate}&mode=plan`}
-              className={`px-3 py-1 rounded-md transition-colors ${mode === "plan" ? "bg-white shadow text-blue-700 font-bold" : "text-slate-600"}`}>
-              📝 תוכנית
-            </a>
-            <a href={`?companyId=${selectedCompanyId}&start=${startDate}&mode=record`}
-              className={`px-3 py-1 rounded-md transition-colors ${mode === "record" ? "bg-white shadow text-emerald-700 font-bold" : "text-slate-600"}`}>
-              ✅ ביצוע
-            </a>
-          </div>
-
-          <div className="flex items-center gap-1">
-            <button onClick={() => shiftDays(-7)} className="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50">◀ שבוע</button>
-            <button onClick={() => shiftDays(-1)} className="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50">◀</button>
+          {/* Date navigation */}
+          <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-200">
+            <button onClick={() => shiftDays(-7)} className="rounded bg-white border border-slate-200 px-2 py-1 text-xs hover:bg-slate-100 font-medium">◀ שבוע</button>
+            <button onClick={() => shiftDays(-1)} className="rounded bg-white border border-slate-200 px-2 py-1 text-xs hover:bg-slate-100">◀ יום</button>
             <button onClick={() => {
               const t = new Date();
               const s = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
               router.push(`?companyId=${selectedCompanyId}&start=${s}&mode=${mode}`);
-            }} className="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50 font-medium">היום</button>
-            <button onClick={() => shiftDays(1)} className="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50">▶</button>
-            <button onClick={() => shiftDays(7)} className="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50">שבוע ▶</button>
+            }} className="rounded bg-blue-600 text-white px-3 py-1 text-xs font-bold hover:bg-blue-700">📅 היום</button>
+            <button onClick={() => shiftDays(1)} className="rounded bg-white border border-slate-200 px-2 py-1 text-xs hover:bg-slate-100">יום ▶</button>
+            <button onClick={() => shiftDays(7)} className="rounded bg-white border border-slate-200 px-2 py-1 text-xs hover:bg-slate-100 font-medium">שבוע ▶</button>
           </div>
 
-          <div className="text-xs text-slate-500 mr-auto">
-            {companyName} — נוכחות היום: <b className="text-emerald-700">{todayStat.present}</b>/{todayStat.total}
+          <div className="text-sm text-slate-600 mr-auto flex items-center gap-2">
+            <span className="font-medium">{companyName}</span>
+            <span className="text-slate-300">|</span>
+            <span>נוכחות היום: <b className="text-emerald-700">{todayStat.present}</b>/{todayStat.total}</span>
           </div>
         </div>
       </Card>
