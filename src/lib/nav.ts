@@ -41,6 +41,7 @@ export const NAV: NavItem[] = [
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "פלסם", cap: "soldiers.roster" },
   { href: "/items", label: "הגדרות פריטים", icon: "🏷️", group: "פלסם", cap: "battalion.profile" },
   { href: "/stock", label: "מלאי הגדוד", icon: "📋", group: "פלסם", cap: "battalion.profile" },
+  { href: "/stock/serials", label: "דוח סריאלי", icon: "🔍", group: "פלסם", cap: "battalion.profile" },
   { href: "/permanent-items", label: "ציוד קבוע פר פלוגה", icon: "📌", group: "פלסם", cap: "battalion.profile" },
   { href: "/signatures", label: "החתמות פלוגה", icon: "✍️", group: "פלסם", cap: "battalion.profile" },
   { href: "/warehouses", label: "מחסני הגדוד", icon: "🏪", group: "פלסם", cap: "battalion.profile" },
@@ -68,6 +69,7 @@ export const NAV: NavItem[] = [
   { href: "/reps", label: "נציגי פלוגות", icon: "🤝", group: "המחסנים שלי", cap: "reps.manage" },
   { href: "/items", label: "הגדרת פריטים", icon: "🏷️", group: "המחסנים שלי", cap: "catalog.manage" },
   { href: "/stock", label: "מלאי המחסן", icon: "📋", group: "המחסנים שלי", cap: "warehouse.operate" },
+  { href: "/stock/serials", label: "דוח סריאלי", icon: "🔍", group: "המחסנים שלי", cap: "warehouse.operate" },
   // 🆕 כפתור עבודה מול החטיבה - קבלה / זיכוי / החלפת בלאי
   { href: "/stock/brigade", label: "מול החטיבה", icon: "🤝", group: "המחסנים שלי", cap: "warehouse.operate" },
   // ⚠️ /kits הוסר מהתפריט - הקישור עבר לכפתור בתוך /stock ('ערכת החתמה')

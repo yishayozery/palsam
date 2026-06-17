@@ -8,7 +8,7 @@ import { cancelSignatureForm } from "./actions";
 import SignoutModal from "./SignoutModal";
 import CompanySignModal from "./CompanySignModal";
 import CheckinModal from "./CheckinModal";
-import CheckinControls from "./CheckinControls";
+
 import CompanyCheckinModal from "./CompanyCheckinModal";
 import { ROLE_LABELS } from "@/lib/rbac";
 
@@ -213,7 +213,7 @@ export default async function SignaturesPage() {
         : isWM && wmSignedSerialIds
           ? { battalionId: bId, signedSoldierId: { not: null }, id: { in: [...wmSignedSerialIds] } }
           : { battalionId: bId, signedSoldierId: { not: null }, ...holderFilter },
-      include: { itemType: true, status: true, signedSoldier: true, currentHolder: true },
+      include: { itemType: true, status: true, signedSoldier: true, currentHolder: true, equipmentLocation: { select: { name: true } } },
       orderBy: { signedSoldier: { fullName: "asc" } },
     }),
     prisma.soldier.findMany({ where: soldierWhere, orderBy: { fullName: "asc" } }),
@@ -415,7 +415,7 @@ export default async function SignaturesPage() {
         )}
       </Card>
 
-      {/* פריטים חתומים — זיכוי מהיר */}
+      {/* פריטים חתומים — מידע בלבד */}
       <h2 className="font-bold text-slate-700 mb-2">ציוד חתום על חיילים</h2>
       <Card>
         {signedUnits.length === 0 ? (
@@ -424,7 +424,7 @@ export default async function SignaturesPage() {
           <Table>
             <thead>
               <tr>
-                <Th>חייל</Th><Th>פריט</Th><Th>מס׳ סריאלי</Th><Th>מיקום פיזי</Th><Th>סטטוס</Th><Th>פעולות</Th>
+                <Th>חייל</Th><Th>פריט</Th><Th>מס׳ סריאלי</Th><Th>מיקום פיזי</Th><Th>סטטוס</Th>
               </tr>
             </thead>
             <tbody>
@@ -433,21 +433,8 @@ export default async function SignaturesPage() {
                   <Td className="font-medium text-blue-700">{u.signedSoldier?.fullName}</Td>
                   <Td>{u.itemType.name}</Td>
                   <Td className="font-mono text-xs">{u.serialNumber}</Td>
-                  <Td className="text-slate-500">{u.physicalLocation ?? "—"}</Td>
+                  <Td className="text-slate-500">{u.equipmentLocation?.name ?? u.physicalLocation ?? "—"}</Td>
                   <Td><Badge>{u.status.name}</Badge></Td>
-                  <Td>
-                    {canSign && (
-                      <CheckinControls
-                        serialUnitId={u.id}
-                        trackLocation={u.itemType.trackLocation}
-                        currentLocationId={u.equipmentLocationId ?? null}
-                        equipmentLocations={allCompanyLocations
-                          .filter((l) => l.holderId === u.signedSoldier?.companyId)
-                          .map((l) => ({ id: l.id, name: l.name, isVehicle: !!l.vehicleSerialUnitId }))}
-                        statuses={statuses.map((st) => ({ id: st.id, name: st.name }))}
-                      />
-                    )}
-                  </Td>
                 </tr>
               ))}
             </tbody>

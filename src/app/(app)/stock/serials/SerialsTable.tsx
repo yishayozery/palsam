@@ -41,6 +41,7 @@ export default function SerialsTable({ units, allLocations, initialQ, initialSta
   const [itemFilter, setItemFilter] = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
+  const [signedFilter, setSignedFilter] = useState(initialSigned);
 
   // רשימות יחודיות לפילטרים
   const allItems = useMemo(() => {
@@ -72,18 +73,21 @@ export default function SerialsTable({ units, allLocations, initialQ, initialSta
       if (companyFilter && u.companyId !== companyFilter) return false;
       if (locationFilter && u.equipmentLocationId !== locationFilter) return false;
       if (statusFilter && u.statusId !== statusFilter) return false;
+      if (signedFilter === "yes" && !u.signedSoldierName) return false;
+      if (signedFilter === "no" && u.signedSoldierName) return false;
       if (q.trim()) {
         const qq = q.trim().toLowerCase();
         return u.serialNumber.toLowerCase().includes(qq)
           || u.itemName.toLowerCase().includes(qq)
           || (u.sku ?? "").toLowerCase().includes(qq)
-          || (u.signedSoldierName ?? "").toLowerCase().includes(qq);
+          || (u.signedSoldierName ?? "").toLowerCase().includes(qq)
+          || (u.holderName ?? "").toLowerCase().includes(qq);
       }
       return true;
     });
-  }, [units, q, itemFilter, companyFilter, locationFilter, statusFilter]);
+  }, [units, q, itemFilter, companyFilter, locationFilter, statusFilter, signedFilter]);
 
-  const hasFilters = q || itemFilter || companyFilter || locationFilter || statusFilter;
+  const hasFilters = q || itemFilter || companyFilter || locationFilter || statusFilter || signedFilter;
 
   async function changeLocation(unitId: string, equipmentLocationId: string) {
     setSavingId(unitId); setFeedback(null);
@@ -104,11 +108,11 @@ export default function SerialsTable({ units, allLocations, initialQ, initialSta
     <>
       <Card className="p-3 mb-3 bg-slate-50">
         <div className="text-xs font-semibold text-slate-700 mb-2">🔍 חיפוש מהיר — הזן SN/אצווה אפילו חלקית, או סנן לפי פילטרים</div>
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-2">
           <div className="md:col-span-3 lg:col-span-2">
-            <label className="block text-[11px] text-slate-500 mb-1">מספר סריאל / אצווה (חלקי)</label>
+            <label className="block text-[11px] text-slate-500 mb-1">חיפוש חופשי</label>
             <input value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder="לדוגמה: 12345 או PRC710 או מתאם"
+              placeholder="סריאלי / אצווה / שם פריט / חייל / מחזיק"
               className="w-full rounded-lg border-2 border-blue-300 px-3 py-2 text-sm" />
           </div>
           <div>
@@ -145,9 +149,18 @@ export default function SerialsTable({ units, allLocations, initialQ, initialSta
               ))}
             </select>
           </div>
+          <div>
+            <label className="block text-[11px] text-slate-500 mb-1">חתום</label>
+            <select value={signedFilter} onChange={(e) => setSignedFilter(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              <option value="">הכל</option>
+              <option value="yes">חתום על חייל</option>
+              <option value="no">לא חתום</option>
+            </select>
+          </div>
           <div className="flex items-end gap-2">
             {hasFilters && (
-              <button onClick={() => { setQ(""); setItemFilter(""); setCompanyFilter(""); setLocationFilter(""); setStatusFilter(""); }}
+              <button onClick={() => { setQ(""); setItemFilter(""); setCompanyFilter(""); setLocationFilter(""); setStatusFilter(""); setSignedFilter(""); }}
                 className="rounded-lg border border-slate-300 px-3 py-2 text-xs hover:bg-white">✕ נקה</button>
             )}
             <span className="text-xs text-slate-600 self-end pb-2 font-semibold">{filtered.length} תוצאות</span>
@@ -161,7 +174,7 @@ export default function SerialsTable({ units, allLocations, initialQ, initialSta
         ) : (
           <Table>
             <thead>
-              <tr><Th>מס׳ סריאל / אצווה</Th><Th>פריט</Th><Th>סטטוס</Th><Th>מיקום</Th><Th>פלוגה</Th><Th>חתום על</Th></tr>
+              <tr><Th>מס׳ סריאל / אצווה</Th><Th>פריט</Th><Th>סטטוס</Th><Th>מחזיק</Th><Th>מיקום</Th><Th>חתום על</Th></tr>
             </thead>
             <tbody>
               {filtered.map((u) => {
@@ -218,7 +231,12 @@ export default function SerialsTable({ units, allLocations, initialQ, initialSta
                         );
                       })()}
                     </Td>
-                    <Td className="text-xs">{u.companyName ?? <span className="text-slate-300">—</span>}</Td>
+                    <Td className="text-xs">
+                      {u.signedSoldierName
+                        ? <span className="text-indigo-600 font-medium">{u.companyName ?? "פלוגה"}</span>
+                        : <span className="text-slate-600">{u.holderName ?? "—"}</span>
+                      }
+                    </Td>
                     <Td className="text-xs">
                       {u.signedSoldierName ? (
                         <span className="text-blue-600">
