@@ -85,6 +85,12 @@ export async function unenlistSoldier(formData: FormData) {
   const id = String(formData.get("id") || "");
   const s = await prisma.soldier.findUnique({ where: { id } });
   if (!s || s.battalionId !== user.battalionId) return;
+
+  const signedCount = await prisma.serialUnit.count({ where: { signedSoldierId: id } });
+  if (signedCount > 0) {
+    throw new Error(`לא ניתן לבטל אישור — החייל חתום על ${signedCount} פריטי ציוד. יש לזכות את הציוד תחילה.`);
+  }
+
   await prisma.soldier.update({
     where: { id },
     data: { enlisted: false, enlistedAt: null, enlistedById: null },
@@ -98,6 +104,14 @@ export async function deactivateSoldier(formData: FormData) {
   const id = String(formData.get("id") || "");
   const s = await prisma.soldier.findUnique({ where: { id } });
   if (!s || s.battalionId !== user.battalionId) return;
+
+  if (s.active) {
+    const signedCount = await prisma.serialUnit.count({ where: { signedSoldierId: id } });
+    if (signedCount > 0) {
+      throw new Error(`לא ניתן להשבית — החייל חתום על ${signedCount} פריטי ציוד. יש לזכות את הציוד תחילה.`);
+    }
+  }
+
   await prisma.soldier.update({ where: { id }, data: { active: !s.active } });
   await audit(user.id, "TOGGLE_SOLDIER", "Soldier", id, { active: !s.active });
   revalidatePath("/roster");

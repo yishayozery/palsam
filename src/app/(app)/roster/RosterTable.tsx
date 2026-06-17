@@ -133,6 +133,7 @@ export default function RosterTable({ soldiers, companies, initialQ, initialComp
   const [importBusy, setImportBusy] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; errors: string[] } | null>(null);
   const [seedBusy, setSeedBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -236,6 +237,13 @@ export default function RosterTable({ soldiers, companies, initialQ, initialComp
         )}
       </Card>
 
+      {actionError && (
+        <div className="mb-3 bg-rose-50 border border-rose-300 rounded-lg p-3 text-sm text-rose-800 flex items-center justify-between">
+          <span>⚠️ {actionError}</span>
+          <button onClick={() => setActionError(null)} className="text-rose-500 hover:text-rose-700 text-xs">✕</button>
+        </div>
+      )}
+
       <Card>
         <Table>
           <thead>
@@ -270,13 +278,19 @@ export default function RosterTable({ soldiers, companies, initialQ, initialComp
                       </form>
                     )}
                     {s.enlisted && (
-                      <form action={unenlistSoldier}>
+                      <form action={async (fd) => {
+                        try { await unenlistSoldier(fd); setActionError(null); }
+                        catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
+                      }}>
                         <input type="hidden" name="id" value={s.id} />
                         <button className="text-xs text-amber-600 hover:text-amber-800">בטל אישור</button>
                       </form>
                     )}
                     <button onClick={() => setEditId(s.id)} className="text-xs text-slate-500 hover:text-slate-800">✎</button>
-                    <form action={deactivateSoldier}>
+                    <form action={async (fd) => {
+                      try { await deactivateSoldier(fd); setActionError(null); }
+                      catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
+                    }}>
                       <input type="hidden" name="id" value={s.id} />
                       <button className="text-xs text-rose-500 hover:text-rose-700" title={s.active ? "השבת" : "הפעל"}>{s.active ? "🚫" : "↻"}</button>
                     </form>
