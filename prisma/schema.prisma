@@ -405,6 +405,7 @@ model Soldier {
   // דגל 1: מג"ד/סמג"ד אישרו את החייל לחימוש
   weaponsApprovedAt   DateTime?
   weaponsApprovedById String?
+  weaponsApprovalSignature String? // חתימה דיגיטלית של המאשר (מג"ד/סמג"ד/מפ"מ)
   // דגל 2: חייל העלה צילום מסך של מבחן נוהל הארמון
   armoryTestProofImage String? // data URL של הצילום
   armoryTestProofAt    DateTime?

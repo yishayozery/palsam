@@ -12,7 +12,9 @@ export async function approveSoldierForWeapons(
   try {
     const user = await requireCapability("weapons.approve");
     const soldierId = String(formData.get("soldierId") || "");
+    const signatureData = String(formData.get("signatureData") || "");
     if (!soldierId) return { error: "חסר מזהה חייל" };
+    if (!signatureData.startsWith("data:image/")) return { error: "חתימה חסרה — נא לחתום בתיבה" };
 
     const s = await prisma.soldier.findUnique({
       where: { id: soldierId }, select: { battalionId: true, enlisted: true, fullName: true },
@@ -22,7 +24,7 @@ export async function approveSoldierForWeapons(
 
     await prisma.soldier.update({
       where: { id: soldierId },
-      data: { weaponsApprovedAt: new Date(), weaponsApprovedById: user.id },
+      data: { weaponsApprovedAt: new Date(), weaponsApprovedById: user.id, weaponsApprovalSignature: signatureData },
     });
     await audit(user.id, "APPROVE_WEAPONS", "Soldier", soldierId, { name: s.fullName });
     revalidatePath("/armory-approvals");
@@ -35,10 +37,14 @@ export async function approveSoldierForWeapons(
 }
 
 /** 🔫 אישור המוני — כל הממתינים בבת אחת. */
-export async function bulkApproveForWeapons(): Promise<{ ok?: boolean; count?: number; error?: string }> {
+export async function bulkApproveForWeapons(
+  formData: FormData,
+): Promise<{ ok?: boolean; count?: number; error?: string }> {
   try {
     const user = await requireCapability("weapons.approve");
     const bId = user.battalionId!;
+    const signatureData = String(formData.get("signatureData") || "");
+    if (!signatureData.startsWith("data:image/")) return { error: "חתימה חסרה — נא לחתום בתיבה" };
 
     const pending = await prisma.soldier.findMany({
       where: { battalionId: bId, active: true, enlisted: true, weaponsApprovedAt: null },
@@ -48,7 +54,7 @@ export async function bulkApproveForWeapons(): Promise<{ ok?: boolean; count?: n
 
     await prisma.soldier.updateMany({
       where: { id: { in: pending.map((s) => s.id) } },
-      data: { weaponsApprovedAt: new Date(), weaponsApprovedById: user.id },
+      data: { weaponsApprovedAt: new Date(), weaponsApprovedById: user.id, weaponsApprovalSignature: signatureData },
     });
     await audit(user.id, "BULK_APPROVE_WEAPONS", "Battalion", bId, {
       count: pending.length,

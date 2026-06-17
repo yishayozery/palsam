@@ -34,6 +34,7 @@ export default async function ArmoryApprovalsPage() {
       ) : (
         <ApprovalsClient
           armoryTestUrl={battalion?.armoryTestUrl ?? null}
+          approverName={user.fullName}
           soldiers={soldiers.map((s) => ({
             id: s.id,
             fullName: s.fullName,

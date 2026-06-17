@@ -21,6 +21,9 @@ export default async function WeaponsAgreementPage({
   if (!soldier || !soldier.weaponsAgreementSignedAt) notFound();
 
   const unitName = soldier.battalion?.name || "גדוד";
+  const approver = soldier.weaponsApprovedById
+    ? await prisma.appUser.findUnique({ where: { id: soldier.weaponsApprovedById }, select: { fullName: true, title: true } })
+    : null;
   const armoryHolder = await prisma.holder.findFirst({
     where: { battalionId: soldier.battalionId, warehouseType: "ARMORY", active: true },
     select: { weaponsAgreementText: true },
@@ -99,15 +102,43 @@ export default async function WeaponsAgreementPage({
             </div>
           </div>
 
-          {/* חתימה דיגיטלית */}
+          {/* חתימה דיגיטלית של החייל */}
           {soldier.weaponsAgreementSignature && (
             <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
-              <div className="text-xs text-slate-500 mb-1">חתימה דיגיטלית:</div>
+              <div className="text-xs text-slate-500 mb-1">חתימת החייל/ת:</div>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={soldier.weaponsAgreementSignature} alt="חתימה" className="max-h-24 object-contain" />
+              <img src={soldier.weaponsAgreementSignature} alt="חתימת חייל" className="max-h-24 object-contain" />
             </div>
           )}
         </div>
+
+        {/* פרטי המאשר */}
+        {(approver || soldier.weaponsApprovedAt) && (
+          <div className="border-t-2 border-slate-800 pt-4 mt-6">
+            <div className="text-sm font-bold mb-3">אישור מפקד:</div>
+            <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+              <div>
+                <span className="text-slate-500">שם המאשר: </span>
+                <span className="font-bold">{approver?.fullName ?? "—"}</span>
+              </div>
+              <div>
+                <span className="text-slate-500">תפקיד: </span>
+                <span>{approver?.title ?? 'מג"ד / סמג"ד / מפ"מ'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500">תאריך אישור: </span>
+                <span className="font-mono">{soldier.weaponsApprovedAt?.toLocaleDateString("he-IL") ?? "—"}</span>
+              </div>
+            </div>
+            {soldier.weaponsApprovalSignature && (
+              <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+                <div className="text-xs text-slate-500 mb-1">חתימת המאשר:</div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={soldier.weaponsApprovalSignature} alt="חתימת מאשר" className="max-h-24 object-contain" />
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="text-[10px] text-slate-400 text-center mt-8 pt-4 border-t border-slate-200 print:mt-12">
           מסמך זה הופק אוטומטית ע&quot;י מערכת PALSAM · {unitName} · {new Date().toLocaleDateString("he-IL")}

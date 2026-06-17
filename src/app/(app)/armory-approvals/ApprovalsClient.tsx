@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Badge } from "@/components/ui";
 import { approveSoldierForWeapons, revokeSoldierWeaponsApproval, bulkApproveForWeapons } from "./actions";
@@ -31,11 +31,12 @@ function buildWhatsAppUrl(soldier: Soldier, armoryTestUrl: string | null) {
   return `https://wa.me/${intlPhone}?text=${encodeURIComponent(lines.join("\n"))}`;
 }
 
-export default function ApprovalsClient({ soldiers, armoryTestUrl }: { soldiers: Soldier[]; armoryTestUrl: string | null }) {
+export default function ApprovalsClient({ soldiers, armoryTestUrl, approverName }: { soldiers: Soldier[]; armoryTestUrl: string | null; approverName: string }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "pending" | "approved" | "blocked">("pending");
   const [busy, setBusy] = useState<string | null>(null);
+  const [signFor, setSignFor] = useState<string | null>(null); // soldierId or "bulk"
 
   const filtered = useMemo(() => {
     return soldiers.filter((s) => {
@@ -53,24 +54,29 @@ export default function ApprovalsClient({ soldiers, armoryTestUrl }: { soldiers:
     blocked: soldiers.filter((s) => !s.enlisted).length,
   };
 
-  async function bulkApprove() {
-    if (!confirm(`לאשר את כל ${counts.pending} החיילים הממתינים?`)) return;
-    setBusy("bulk");
-    try {
-      const res = await bulkApproveForWeapons();
-      if (res?.error) alert(res.error);
-      else { alert(`✅ אושרו ${res.count} חיילים`); router.refresh(); }
-    } finally { setBusy(null); }
+  async function submitApproval(signatureData: string) {
+    if (!signFor) return;
+    if (signFor === "bulk") {
+      setBusy("bulk");
+      try {
+        const fd = new FormData();
+        fd.append("signatureData", signatureData);
+        const res = await bulkApproveForWeapons(fd);
+        if (res?.error) alert(res.error);
+        else { alert(`✅ אושרו ${res.count} חיילים`); router.refresh(); }
+      } finally { setBusy(null); setSignFor(null); }
+    } else {
+      setBusy(signFor);
+      try {
+        const fd = new FormData();
+        fd.append("soldierId", signFor);
+        fd.append("signatureData", signatureData);
+        const res = await approveSoldierForWeapons(fd);
+        if (res?.error) alert(res.error); else router.refresh();
+      } finally { setBusy(null); setSignFor(null); }
+    }
   }
 
-  async function approve(id: string) {
-    setBusy(id);
-    try {
-      const fd = new FormData(); fd.append("soldierId", id);
-      const res = await approveSoldierForWeapons(fd);
-      if (res?.error) alert(res.error); else router.refresh();
-    } finally { setBusy(null); }
-  }
   async function revoke(id: string) {
     if (!confirm("לבטל אישור נשק לחייל?")) return;
     setBusy(id);
@@ -81,8 +87,23 @@ export default function ApprovalsClient({ soldiers, armoryTestUrl }: { soldiers:
     } finally { setBusy(null); }
   }
 
+  const signTarget = signFor === "bulk"
+    ? `כל ${counts.pending} הממתינים`
+    : soldiers.find((s) => s.id === signFor)?.fullName ?? "";
+
   return (
     <>
+      {/* חלונית חתימה */}
+      {signFor && (
+        <SignatureModal
+          approverName={approverName}
+          targetName={signTarget}
+          onSign={submitApproval}
+          onCancel={() => setSignFor(null)}
+          busy={!!busy}
+        />
+      )}
+
       <Card className="p-3 mb-3">
         <input value={q} onChange={(e) => setQ(e.target.value)}
           placeholder="🔍 חיפוש - שם / מ.א. / פלוגה"
@@ -102,7 +123,7 @@ export default function ApprovalsClient({ soldiers, armoryTestUrl }: { soldiers:
           </FilterChip>
         </div>
         {counts.pending > 0 && (
-          <button onClick={bulkApprove} disabled={busy === "bulk"}
+          <button onClick={() => setSignFor("bulk")} disabled={!!busy}
             className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50">
             {busy === "bulk" ? "מאשר..." : `✓ אשר את כל ${counts.pending} הממתינים`}
           </button>
@@ -138,7 +159,7 @@ export default function ApprovalsClient({ soldiers, armoryTestUrl }: { soldiers:
                   </div>
                 </div>
                 {s.enlisted && !s.weaponsApprovedAt && (
-                  <button onClick={() => approve(s.id)} disabled={busy === s.id}
+                  <button onClick={() => setSignFor(s.id)} disabled={!!busy}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-1.5 text-sm font-medium disabled:opacity-50">
                     {busy === s.id ? "..." : "✓ אשר לנשק"}
                   </button>
@@ -150,7 +171,7 @@ export default function ApprovalsClient({ soldiers, armoryTestUrl }: { soldiers:
                   </a>
                 )}
                 {s.weaponsApprovedAt && (
-                  <button onClick={() => revoke(s.id)} disabled={busy === s.id}
+                  <button onClick={() => revoke(s.id)} disabled={!!busy}
                     className="text-xs bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-lg px-3 py-1.5">
                     ביטול
                   </button>
@@ -164,6 +185,96 @@ export default function ApprovalsClient({ soldiers, armoryTestUrl }: { soldiers:
         </Card>
       )}
     </>
+  );
+}
+
+function SignatureModal({ approverName, targetName, onSign, onCancel, busy }: {
+  approverName: string; targetName: string;
+  onSign: (signatureData: string) => void; onCancel: () => void; busy: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const hasDrawn = useRef(false);
+
+  const setupCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#1e293b";
+
+    const pos = (e: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (e.clientX - rect.left) * (canvas.width / rect.width),
+        y: (e.clientY - rect.top) * (canvas.height / rect.height),
+      };
+    };
+    const down = (e: PointerEvent) => { drawing.current = true; hasDrawn.current = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
+    const move = (e: PointerEvent) => { if (!drawing.current) return; e.preventDefault(); const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); };
+    const up = () => { drawing.current = false; };
+    canvas.addEventListener("pointerdown", down);
+    canvas.addEventListener("pointermove", move);
+    canvas.addEventListener("pointerup", up);
+    canvas.addEventListener("pointerleave", up);
+    return () => {
+      canvas.removeEventListener("pointerdown", down);
+      canvas.removeEventListener("pointermove", move);
+      canvas.removeEventListener("pointerup", up);
+      canvas.removeEventListener("pointerleave", up);
+    };
+  }, []);
+
+  useEffect(() => setupCanvas(), [setupCanvas]);
+
+  function clearCanvas() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    hasDrawn.current = false;
+  }
+
+  function submit() {
+    if (!hasDrawn.current) { alert("נא לחתום בתיבה"); return; }
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    onSign(canvas.toDataURL("image/png"));
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5" dir="rtl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-bold text-slate-800 mb-1">🔫 אישור חייל לנשק</h3>
+        <p className="text-sm text-slate-600 mb-3">
+          אני, <span className="font-bold">{approverName}</span>, מאשר/ת את <span className="font-bold text-emerald-700">{targetName}</span> לחימוש.
+        </p>
+
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3">
+          <div className="text-xs text-slate-500 mb-1">חתימת המאשר/ת:</div>
+          <canvas ref={canvasRef} width={380} height={120}
+            className="w-full border-2 border-dashed border-slate-300 rounded-lg bg-white touch-none cursor-crosshair" />
+          <button onClick={clearCanvas} type="button"
+            className="text-[11px] text-slate-500 hover:text-slate-700 mt-1">
+            ↻ נקה חתימה
+          </button>
+        </div>
+
+        <div className="flex gap-2">
+          <button onClick={submit} disabled={busy}
+            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50">
+            {busy ? "מאשר..." : "✓ חתום ואשר"}
+          </button>
+          <button onClick={onCancel} disabled={busy}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm">
+            ביטול
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
