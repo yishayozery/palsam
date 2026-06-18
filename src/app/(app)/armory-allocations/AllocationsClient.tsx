@@ -383,90 +383,164 @@ function ItemGroup({
           📁 {category}
         </td>
       </tr>
-      {items.map((item) => {
-        const block = blockMap.get(item.id) ?? true;
-        const whAvail = warehouseMap.get(item.id) ?? 0;
-        return (
-          <tr key={item.id} className="border-b border-slate-100 hover:bg-blue-50/30">
-            <td className="px-3 py-2 sticky right-0 bg-white z-10 border-l border-slate-100">
-              <div className="font-medium text-slate-800 text-xs">{item.name}</div>
-              {item.sku && <div className="text-[10px] font-mono text-slate-400">{item.sku}</div>}
+      {items.map((item) => (
+        <ItemRow
+          key={item.id}
+          item={item}
+          companies={companies}
+          allocMap={allocMap}
+          signedMap={signedMap}
+          warehouseMap={warehouseMap}
+          companyStockMap={companyStockMap}
+          blockMap={blockMap}
+          saving={saving}
+          saveAlloc={saveAlloc}
+          toggleBlock={toggleBlock}
+        />
+      ))}
+    </>
+  );
+}
+
+/* ── Single Item Row with real-time over-allocation check ── */
+
+function ItemRow({
+  item, companies, allocMap, signedMap, warehouseMap, companyStockMap, blockMap, saving, saveAlloc, toggleBlock,
+}: {
+  item: Item;
+  companies: Company[];
+  allocMap: Map<string, { quantity: number; blockOnExceed: boolean }>;
+  signedMap: Map<string, number>;
+  warehouseMap: Map<string, number>;
+  companyStockMap: Map<string, number>;
+  blockMap: Map<string, boolean>;
+  saving: string | null;
+  saveAlloc: (companyId: string, itemTypeId: string, quantity: number, blockOnExceed: boolean) => Promise<void>;
+  toggleBlock: (itemId: string, newBlock: boolean) => Promise<void>;
+}) {
+  const block = blockMap.get(item.id) ?? true;
+  const whAvail = warehouseMap.get(item.id) ?? 0;
+
+  // Local edits: track unsaved values per company for real-time total calculation
+  const [localEdits, setLocalEdits] = useState<Map<string, number>>(new Map());
+  const [overAlert, setOverAlert] = useState<string | null>(null);
+
+  const getQty = (companyId: string) => {
+    if (localEdits.has(companyId)) return localEdits.get(companyId)!;
+    return allocMap.get(`${companyId}:${item.id}`)?.quantity ?? 0;
+  };
+
+  const totalAlloc = companies.reduce((sum, c) => sum + getQty(c.id), 0);
+  const overAlloc = totalAlloc > 0 && totalAlloc > whAvail;
+
+  function handleChange(companyId: string, value: number) {
+    const next = new Map(localEdits);
+    next.set(companyId, value);
+    setLocalEdits(next);
+
+    // Calculate new total with this edit
+    const newTotal = companies.reduce((sum, c) => {
+      if (c.id === companyId) return sum + value;
+      if (next.has(c.id)) return sum + next.get(c.id)!;
+      return sum + (allocMap.get(`${c.id}:${item.id}`)?.quantity ?? 0);
+    }, 0);
+
+    if (newTotal > whAvail && whAvail > 0) {
+      setOverAlert(`⚠️ סה״כ הקצאה (${newTotal}) חורגת מהמלאי הזמין (${whAvail})`);
+    } else if (newTotal > whAvail && whAvail === 0) {
+      setOverAlert(`⚠️ סה״כ הקצאה ${newTotal} — אין מלאי זמין כרגע במחסנים`);
+    } else {
+      setOverAlert(null);
+    }
+  }
+
+  function handleBlur(companyId: string) {
+    const v = getQty(companyId);
+    const saved = allocMap.get(`${companyId}:${item.id}`)?.quantity ?? 0;
+    if (v !== saved) {
+      saveAlloc(companyId, item.id, v, block);
+    }
+    const next = new Map(localEdits);
+    next.delete(companyId);
+    setLocalEdits(next);
+  }
+
+  return (
+    <>
+      <tr className="border-b border-slate-100 hover:bg-blue-50/30">
+        <td className="px-3 py-2 sticky right-0 bg-white z-10 border-l border-slate-100">
+          <div className="font-medium text-slate-800 text-xs">{item.name}</div>
+          {item.sku && <div className="text-[10px] font-mono text-slate-400">{item.sku}</div>}
+        </td>
+        <td className="px-1 py-1.5 text-center border-l border-slate-100">
+          <div className="flex flex-col items-center">
+            <span className={`text-xs font-mono font-bold ${whAvail > 0 ? "text-blue-600" : "text-slate-300"}`}>
+              {whAvail}
+            </span>
+            {overAlloc && (
+              <span className="text-[9px] text-amber-600 font-medium">
+                הוקצו {totalAlloc}
+              </span>
+            )}
+          </div>
+        </td>
+        {companies.map((c) => {
+          const cellKey = `${c.id}:${item.id}`;
+          const qty = getQty(c.id);
+          const signed = signedMap.get(cellKey) ?? 0;
+          const inCompany = companyStockMap.get(cellKey) ?? 0;
+          const exceeded = qty > 0 && signed > qty;
+          const full = qty > 0 && signed === qty;
+          const isSaving = saving === cellKey;
+          return (
+            <td key={c.id} className="px-1 py-1.5 text-center border-l border-slate-100">
+              <div className="flex flex-col items-center gap-0.5">
+                <input
+                  type="number"
+                  min={0}
+                  value={qty}
+                  disabled={isSaving}
+                  onChange={(e) => handleChange(c.id, parseInt(e.target.value, 10) || 0)}
+                  onBlur={() => handleBlur(c.id)}
+                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                  className={`w-16 rounded border px-1 py-0.5 text-xs text-center font-mono disabled:opacity-50 focus:border-blue-400 focus:ring-1 focus:ring-blue-200 ${
+                    exceeded ? "border-rose-300 bg-rose-50" : full ? "border-amber-300 bg-amber-50" : "border-slate-200"
+                  }`}
+                />
+                <div className="flex items-center gap-1 text-[10px] font-mono">
+                  <span className={`font-bold ${exceeded ? "text-rose-600" : full ? "text-amber-600" : signed > 0 ? "text-emerald-600" : "text-slate-300"}`}>
+                    חתום {signed}
+                  </span>
+                  {inCompany > 0 && (
+                    <span className="text-slate-400">| פלוגה {inCompany}</span>
+                  )}
+                </div>
+              </div>
             </td>
-            <td className="px-1 py-1.5 text-center border-l border-slate-100">
-              {(() => {
-                const totalAlloc = companies.reduce((sum, c) => sum + (allocMap.get(`${c.id}:${item.id}`)?.quantity ?? 0), 0);
-                const overAlloc = totalAlloc > 0 && totalAlloc > whAvail;
-                return (
-                  <div className="flex flex-col items-center">
-                    <span className={`text-xs font-mono font-bold ${whAvail > 0 ? "text-blue-600" : "text-slate-300"}`}>
-                      {whAvail}
-                    </span>
-                    {overAlloc && (
-                      <span className="text-[9px] text-amber-600 font-medium" title={`סה״כ הוקצו ${totalAlloc} אבל זמין רק ${whAvail}`}>
-                        ⚠️ הוקצו {totalAlloc}
-                      </span>
-                    )}
-                  </div>
-                );
-              })()}
-            </td>
-            {companies.map((c) => {
-              const cellKey = `${c.id}:${item.id}`;
-              const alloc = allocMap.get(cellKey);
-              const qty = alloc?.quantity ?? 0;
-              const signed = signedMap.get(cellKey) ?? 0;
-              const inCompany = companyStockMap.get(cellKey) ?? 0;
-              const exceeded = qty > 0 && signed > qty;
-              const full = qty > 0 && signed === qty;
-              const isSaving = saving === cellKey;
-              return (
-                <td key={c.id} className="px-1 py-1.5 text-center border-l border-slate-100">
-                  <div className="flex flex-col items-center gap-0.5">
-                    <input
-                      type="number"
-                      min={0}
-                      defaultValue={qty}
-                      disabled={isSaving}
-                      onBlur={(e) => {
-                        const v = parseInt(e.target.value, 10) || 0;
-                        if (v !== qty) saveAlloc(c.id, item.id, v, block);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                      }}
-                      className={`w-16 rounded border px-1 py-0.5 text-xs text-center font-mono disabled:opacity-50 focus:border-blue-400 focus:ring-1 focus:ring-blue-200 ${
-                        exceeded ? "border-rose-300 bg-rose-50" : full ? "border-amber-300 bg-amber-50" : "border-slate-200"
-                      }`}
-                    />
-                    <div className="flex items-center gap-1 text-[10px] font-mono">
-                      <span className={`font-bold ${exceeded ? "text-rose-600" : full ? "text-amber-600" : signed > 0 ? "text-emerald-600" : "text-slate-300"}`}>
-                        חתום {signed}
-                      </span>
-                      {inCompany > 0 && (
-                        <span className="text-slate-400">| פלוגה {inCompany}</span>
-                      )}
-                    </div>
-                  </div>
-                </td>
-              );
-            })}
-            <td className="px-1 py-1.5 text-center">
-              <button
-                onClick={() => toggleBlock(item.id, !block)}
-                disabled={saving !== null}
-                className={`text-[10px] rounded-full px-2 py-0.5 font-medium transition-colors ${
-                  block
-                    ? "bg-rose-100 text-rose-700 hover:bg-rose-200"
-                    : "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                } disabled:opacity-50`}
-                title={block ? "חריגה תחסום החתמה" : "חריגה תציג התראה בלבד"}
-              >
-                {block ? "🚫 חסום" : "⚠️ התראה"}
-              </button>
-            </td>
-          </tr>
-        );
-      })}
+          );
+        })}
+        <td className="px-1 py-1.5 text-center">
+          <button
+            onClick={() => toggleBlock(item.id, !block)}
+            disabled={saving !== null}
+            className={`text-[10px] rounded-full px-2 py-0.5 font-medium transition-colors ${
+              block
+                ? "bg-rose-100 text-rose-700 hover:bg-rose-200"
+                : "bg-amber-100 text-amber-700 hover:bg-amber-200"
+            } disabled:opacity-50`}
+            title={block ? "חריגה תחסום החתמה" : "חריגה תציג התראה בלבד"}
+          >
+            {block ? "🚫 חסום" : "⚠️ התראה"}
+          </button>
+        </td>
+      </tr>
+      {overAlert && (
+        <tr>
+          <td colSpan={companies.length + 3} className="bg-amber-50 px-3 py-1.5 text-xs text-amber-700 font-medium border-b border-amber-200">
+            {overAlert}
+          </td>
+        </tr>
+      )}
     </>
   );
 }
