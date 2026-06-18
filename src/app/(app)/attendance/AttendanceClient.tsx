@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import { saveAttendance, assignSquad } from "./actions";
@@ -112,7 +112,6 @@ export default function AttendanceClient({
     return groups;
   }, [soldiers, squads]);
 
-  // Attendance percentage per squad
   const today = new Date().toISOString().slice(0, 10);
 
   // Context menu
@@ -138,24 +137,74 @@ export default function AttendanceClient({
 
   const companyName = companies.find((c) => c.id === selectedCompanyId)?.name ?? "";
 
-  // Compute presence stats for today
-  const todayStat = useMemo(() => {
-    let present = 0;
-    let total = 0;
-    for (const s of soldiers) {
-      total++;
-      const st = getStatus(s.id, today);
-      if (st) {
+  // === Dashboard stats ===
+  const dashStats = useMemo(() => {
+    const computeForSoldiers = (list: SoldierRow[]) => {
+      const total = list.length;
+      let present = 0;
+      let absent = 0;
+      let unmarked = 0;
+      for (const s of list) {
+        const st = getStatus(s.id, today);
+        if (!st) { unmarked++; continue; }
         const status = statuses.find((x) => x.id === st);
         if (status?.isPresent) present++;
+        else absent++;
       }
+      const pct = total > 0 ? Math.round((present / total) * 100) : 0;
+      return { total, present, absent, unmarked, pct };
+    };
+
+    const all = computeForSoldiers(soldiers);
+    const bySquad = grouped.map((g) => ({
+      squad: g.squad,
+      ...computeForSoldiers(g.soldiers),
+    }));
+
+    return { all, bySquad };
+  }, [soldiers, grouped, statuses, getStatus, today]);
+
+  // Daily summary: count present soldiers per day
+  const dailySummary = useMemo(() => {
+    return days.map((d) => {
+      let present = 0;
+      let marked = 0;
+      for (const s of soldiers) {
+        const st = getStatus(s.id, d.date);
+        if (st) {
+          marked++;
+          const status = statuses.find((x) => x.id === st);
+          if (status?.isPresent) present++;
+        }
+      }
+      return { date: d.date, present, marked, total: soldiers.length };
+    });
+  }, [days, soldiers, statuses, getStatus]);
+
+  // Squad subtotals per day
+  const squadDailySummary = useMemo(() => {
+    const result = new Map<string, { present: number; total: number }[]>();
+    for (const g of grouped) {
+      const key = g.squad?.id ?? "__none__";
+      const dayCounts = days.map((d) => {
+        let present = 0;
+        for (const s of g.soldiers) {
+          const st = getStatus(s.id, d.date);
+          if (st) {
+            const status = statuses.find((x) => x.id === st);
+            if (status?.isPresent) present++;
+          }
+        }
+        return { present, total: g.soldiers.length };
+      });
+      result.set(key, dayCounts);
     }
-    return { present, total };
-  }, [soldiers, statuses, getStatus, today]);
+    return result;
+  }, [grouped, days, statuses, getStatus]);
 
   return (
     <>
-      {/* Mode toggle — prominent */}
+      {/* Mode toggle */}
       <div className="flex items-center gap-3 mb-4">
         <div className="flex rounded-xl overflow-hidden border-2 border-slate-200 text-sm font-bold">
           <a href={`?companyId=${selectedCompanyId}&start=${startDate}&mode=plan`}
@@ -171,6 +220,46 @@ export default function AttendanceClient({
           {mode === "plan" ? "מתכננים מראש את מצב הנוכחות" : "מדווחים על מצב בפועל"}
         </div>
       </div>
+
+      {/* Dashboard */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <Card className="p-3 text-center">
+          <div className="text-[10px] text-slate-500 mb-1">סה״כ חיילים</div>
+          <div className="text-2xl font-bold text-slate-800">{dashStats.all.total}</div>
+        </Card>
+        <Card className="p-3 text-center">
+          <div className="text-[10px] text-slate-500 mb-1">נוכחים היום</div>
+          <div className="text-2xl font-bold text-emerald-600">{dashStats.all.present}</div>
+          <div className="text-xs text-emerald-500 font-bold">{dashStats.all.pct}%</div>
+        </Card>
+        <Card className="p-3 text-center">
+          <div className="text-[10px] text-slate-500 mb-1">חסרים</div>
+          <div className="text-2xl font-bold text-amber-600">{dashStats.all.absent}</div>
+        </Card>
+        <Card className="p-3 text-center">
+          <div className="text-[10px] text-slate-500 mb-1">לא סומנו</div>
+          <div className="text-2xl font-bold text-slate-400">{dashStats.all.unmarked}</div>
+        </Card>
+      </div>
+
+      {/* Per-squad dashboard */}
+      {dashStats.bySquad.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {dashStats.bySquad.map((sq) => (
+            <div key={sq.squad?.id ?? "none"}
+              className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs flex items-center gap-3 min-w-[140px]">
+              <div>
+                <div className="font-bold text-slate-700">{sq.squad?.name ?? "ללא מחלקה"}</div>
+                <div className="text-slate-400">{sq.total} חיילים</div>
+              </div>
+              <div className="mr-auto text-left">
+                <div className="font-bold text-emerald-600 text-sm">{sq.present}/{sq.total}</div>
+                <div className={`font-bold ${sq.pct >= 80 ? "text-emerald-500" : sq.pct >= 50 ? "text-amber-500" : "text-rose-500"}`}>{sq.pct}%</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Controls */}
       <Card className="p-3 mb-4">
@@ -188,7 +277,6 @@ export default function AttendanceClient({
             </form>
           )}
 
-          {/* Date navigation */}
           <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-200">
             <button onClick={() => shiftDays(-7)} className="rounded bg-white border border-slate-200 px-2 py-1 text-xs hover:bg-slate-100 font-medium">◀ שבוע</button>
             <button onClick={() => shiftDays(-1)} className="rounded bg-white border border-slate-200 px-2 py-1 text-xs hover:bg-slate-100">◀ יום</button>
@@ -201,11 +289,7 @@ export default function AttendanceClient({
             <button onClick={() => shiftDays(7)} className="rounded bg-white border border-slate-200 px-2 py-1 text-xs hover:bg-slate-100 font-medium">שבוע ▶</button>
           </div>
 
-          <div className="text-sm text-slate-600 mr-auto flex items-center gap-2">
-            <span className="font-medium">{companyName}</span>
-            <span className="text-slate-300">|</span>
-            <span>נוכחות היום: <b className="text-emerald-700">{todayStat.present}</b>/{todayStat.total}</span>
-          </div>
+          <div className="text-sm text-slate-600 mr-auto font-medium">{companyName}</div>
         </div>
       </Card>
 
@@ -277,7 +361,6 @@ export default function AttendanceClient({
       <Card className="overflow-x-auto">
         <table className="text-[11px] border-collapse w-full" onClick={() => setCtxMenu(null)}>
           <thead>
-            {/* Day of week row */}
             <tr className="bg-slate-50">
               <th className="sticky right-0 bg-slate-50 z-20 text-right px-2 py-1 min-w-[140px] border-b border-slate-200" rowSpan={3}>חייל</th>
               {days.map((d) => (
@@ -286,7 +369,6 @@ export default function AttendanceClient({
                 </th>
               ))}
             </tr>
-            {/* Gregorian date row */}
             <tr className="bg-slate-50">
               {days.map((d) => (
                 <th key={d.date + "-greg"} className={`text-center px-0.5 py-0.5 font-mono font-bold ${d.date === today ? "bg-blue-100 text-blue-800" : d.isShabbat || d.isHoliday ? "text-slate-400" : "text-slate-700"}`}>
@@ -294,7 +376,6 @@ export default function AttendanceClient({
                 </th>
               ))}
             </tr>
-            {/* Hebrew date row */}
             <tr className="bg-slate-50 border-b-2 border-slate-200">
               {days.map((d) => (
                 <th key={d.date + "-heb"} className="text-center px-0 py-0.5 text-[9px] text-slate-400 font-normal whitespace-nowrap" title={d.holiday ?? undefined}>
@@ -304,54 +385,107 @@ export default function AttendanceClient({
             </tr>
           </thead>
           <tbody>
-            {grouped.map((g) => (
-              <>
-                {g.squad && (
-                  <tr key={`sq-${g.squad.id}`}>
-                    <td colSpan={days.length + 1} className="bg-slate-100 px-2 py-1 font-bold text-[10px] text-slate-600 border-t border-slate-200">
-                      🪖 {g.squad.name}
-                    </td>
-                  </tr>
-                )}
-                {g.soldiers.map((soldier) => (
-                  <tr key={soldier.id} className="border-b border-slate-50 hover:bg-blue-50/20">
-                    <td className="sticky right-0 bg-white z-10 px-2 py-1.5 border-l border-slate-100">
-                      <div className="font-medium text-slate-800 truncate max-w-[130px]">{soldier.fullName}</div>
-                      {soldier.personalNumber && (
-                        <div className="text-[9px] font-mono text-slate-400">{soldier.personalNumber}</div>
-                      )}
-                    </td>
-                    {days.map((d) => {
-                      const statusId = getStatus(soldier.id, d.date);
-                      const status = statusId ? statuses.find((s) => s.id === statusId) : null;
-                      const isPending = pendingChanges.has(`${soldier.id}:${d.date}`);
-                      const isWeekend = d.isShabbat || d.isHoliday;
-                      return (
-                        <td
-                          key={d.date}
-                          onClick={() => cycleStatus(soldier.id, d.date)}
-                          onContextMenu={(e) => handleContextMenu(e, soldier.id, d.date)}
-                          className={`text-center cursor-pointer select-none transition-colors border-l border-slate-50
-                            ${d.date === today ? "bg-blue-50" : isWeekend ? "bg-slate-50/50" : ""}
-                            ${isPending ? "ring-2 ring-inset ring-amber-400" : ""}
-                            hover:bg-slate-100`}
-                          title={`${soldier.fullName} — ${d.date}${status ? ` — ${status.name}` : ""}`}
-                        >
-                          {status ? (
-                            <span className="text-sm leading-none" style={{ color: status.color }}>
-                              {status.icon || "●"}
-                            </span>
-                          ) : (
-                            <span className="text-slate-200">·</span>
-                          )}
+            {grouped.map((g) => {
+              const squadKey = g.squad?.id ?? "__none__";
+              const squadDays = squadDailySummary.get(squadKey);
+              return (
+                <React.Fragment key={squadKey}>
+                  {g.squad && (
+                    <tr key={`sq-${g.squad.id}`}>
+                      <td className="sticky right-0 bg-slate-100 z-10 px-2 py-1.5 font-bold text-[11px] text-slate-700 border-t-2 border-slate-300">
+                        🪖 {g.squad.name} <span className="font-normal text-slate-400">({g.soldiers.length})</span>
+                      </td>
+                      {squadDays?.map((sc, i) => (
+                        <td key={days[i].date} className={`text-center text-[10px] font-bold border-t-2 border-slate-300 ${days[i].date === today ? "bg-blue-50" : "bg-slate-100"} ${sc.present === sc.total && sc.total > 0 ? "text-emerald-600" : sc.present === 0 && sc.total > 0 ? "text-rose-400" : "text-slate-400"}`}>
+                          {sc.present > 0 || sc.total > 0 ? `${sc.present}` : ""}
                         </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </>
-            ))}
+                      ))}
+                    </tr>
+                  )}
+                  {!g.squad && g.soldiers.length > 0 && grouped.length > 1 && (
+                    <tr>
+                      <td className="sticky right-0 bg-slate-100 z-10 px-2 py-1.5 font-bold text-[11px] text-slate-500 border-t-2 border-slate-300">
+                        ללא מחלקה <span className="font-normal text-slate-400">({g.soldiers.length})</span>
+                      </td>
+                      {squadDays?.map((sc, i) => (
+                        <td key={days[i].date} className={`text-center text-[10px] font-bold border-t-2 border-slate-300 ${days[i].date === today ? "bg-blue-50" : "bg-slate-100"} text-slate-400`}>
+                          {sc.present > 0 ? `${sc.present}` : ""}
+                        </td>
+                      ))}
+                    </tr>
+                  )}
+                  {g.soldiers.map((soldier) => (
+                    <tr key={soldier.id} className="border-b border-slate-50 hover:bg-blue-50/20">
+                      <td className="sticky right-0 bg-white z-10 px-2 py-1.5 border-l border-slate-100">
+                        <div className="font-medium text-slate-800 truncate max-w-[130px]">{soldier.fullName}</div>
+                        {soldier.personalNumber && (
+                          <div className="text-[9px] font-mono text-slate-400">{soldier.personalNumber}</div>
+                        )}
+                      </td>
+                      {days.map((d) => {
+                        const statusId = getStatus(soldier.id, d.date);
+                        const status = statusId ? statuses.find((s) => s.id === statusId) : null;
+                        const isPending = pendingChanges.has(`${soldier.id}:${d.date}`);
+                        const isWeekend = d.isShabbat || d.isHoliday;
+                        return (
+                          <td
+                            key={d.date}
+                            onClick={() => cycleStatus(soldier.id, d.date)}
+                            onContextMenu={(e) => handleContextMenu(e, soldier.id, d.date)}
+                            className={`text-center cursor-pointer select-none transition-colors border-l border-slate-50
+                              ${d.date === today ? "bg-blue-50" : isWeekend ? "bg-slate-50/50" : ""}
+                              ${isPending ? "ring-2 ring-inset ring-amber-400" : ""}
+                              hover:bg-slate-100`}
+                            title={`${soldier.fullName} — ${d.date}${status ? ` — ${status.name}` : ""}`}
+                          >
+                            {status ? (
+                              <span className="text-sm leading-none" style={{ color: status.color }}>
+                                {status.icon || "●"}
+                              </span>
+                            ) : (
+                              <span className="text-slate-200">·</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </React.Fragment>
+              );
+            })}
           </tbody>
+          {/* Daily summary footer */}
+          <tfoot>
+            <tr className="border-t-2 border-slate-300 bg-emerald-50">
+              <td className="sticky right-0 bg-emerald-50 z-10 px-2 py-2 font-bold text-xs text-emerald-800">
+                סה״כ נוכחים
+              </td>
+              {dailySummary.map((ds) => {
+                const pct = ds.total > 0 ? Math.round((ds.present / ds.total) * 100) : 0;
+                return (
+                  <td key={ds.date} className={`text-center font-bold text-xs py-2 ${ds.date === today ? "bg-emerald-100" : ""}`}>
+                    <div className={`${pct >= 80 ? "text-emerald-700" : pct >= 50 ? "text-amber-600" : "text-rose-600"}`}>
+                      {ds.present}
+                    </div>
+                    <div className="text-[9px] text-slate-400 font-normal">/{ds.total}</div>
+                  </td>
+                );
+              })}
+            </tr>
+            <tr className="bg-slate-50">
+              <td className="sticky right-0 bg-slate-50 z-10 px-2 py-1 text-[10px] text-slate-500">
+                % נוכחות
+              </td>
+              {dailySummary.map((ds) => {
+                const pct = ds.total > 0 ? Math.round((ds.present / ds.total) * 100) : 0;
+                return (
+                  <td key={ds.date} className={`text-center text-[10px] font-bold py-1 ${ds.date === today ? "bg-blue-50" : ""} ${pct >= 80 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-rose-500"}`}>
+                    {ds.marked > 0 ? `${pct}%` : "—"}
+                  </td>
+                );
+              })}
+            </tr>
+          </tfoot>
         </table>
       </Card>
 
