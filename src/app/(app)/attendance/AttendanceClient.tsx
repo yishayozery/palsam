@@ -38,6 +38,7 @@ export default function AttendanceClient({
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [pendingChanges, setPendingChanges] = useState<Map<string, string | null>>(new Map());
+  const [selectedSquadId, setSelectedSquadId] = useState<string>("");
 
   const data = mode === "plan" ? plans : records;
 
@@ -90,12 +91,18 @@ export default function AttendanceClient({
     router.refresh();
   }
 
+  // Filter soldiers by selected squad
+  const filteredSoldiers = useMemo(() => {
+    if (!selectedSquadId) return soldiers;
+    return soldiers.filter((s) => s.squadId === selectedSquadId);
+  }, [soldiers, selectedSquadId]);
+
   // Group soldiers by squad
   const grouped = useMemo(() => {
     const groups: { squad: Squad | null; soldiers: SoldierRow[] }[] = [];
     const noSquad: SoldierRow[] = [];
     const squadMap = new Map<string, SoldierRow[]>();
-    for (const s of soldiers) {
+    for (const s of filteredSoldiers) {
       if (s.squadId) {
         const arr = squadMap.get(s.squadId) ?? [];
         arr.push(s);
@@ -110,7 +117,7 @@ export default function AttendanceClient({
     }
     if (noSquad.length > 0) groups.push({ squad: null, soldiers: noSquad });
     return groups;
-  }, [soldiers, squads]);
+  }, [filteredSoldiers, squads]);
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -155,21 +162,21 @@ export default function AttendanceClient({
       return { total, present, absent, unmarked, pct };
     };
 
-    const all = computeForSoldiers(soldiers);
+    const all = computeForSoldiers(filteredSoldiers);
     const bySquad = grouped.map((g) => ({
       squad: g.squad,
       ...computeForSoldiers(g.soldiers),
     }));
 
     return { all, bySquad };
-  }, [soldiers, grouped, statuses, getStatus, today]);
+  }, [filteredSoldiers, grouped, statuses, getStatus, today]);
 
   // Daily summary: count present soldiers per day
   const dailySummary = useMemo(() => {
     return days.map((d) => {
       let present = 0;
       let marked = 0;
-      for (const s of soldiers) {
+      for (const s of filteredSoldiers) {
         const st = getStatus(s.id, d.date);
         if (st) {
           marked++;
@@ -177,7 +184,7 @@ export default function AttendanceClient({
           if (status?.isPresent) present++;
         }
       }
-      return { date: d.date, present, marked, total: soldiers.length };
+      return { date: d.date, present, marked, total: filteredSoldiers.length };
     });
   }, [days, soldiers, statuses, getStatus]);
 
@@ -275,6 +282,18 @@ export default function AttendanceClient({
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </form>
+          )}
+
+          {squads.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-slate-700">מחלקה:</label>
+              <select value={selectedSquadId}
+                onChange={(e) => setSelectedSquadId(e.target.value)}
+                className="rounded-lg border-2 border-slate-300 px-3 py-1.5 text-sm">
+                <option value="">כל המחלקות</option>
+                {squads.map((sq) => <option key={sq.id} value={sq.id}>{sq.name}</option>)}
+              </select>
+            </div>
           )}
 
           <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-200">
