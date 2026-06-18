@@ -393,9 +393,22 @@ function ItemGroup({
               {item.sku && <div className="text-[10px] font-mono text-slate-400">{item.sku}</div>}
             </td>
             <td className="px-1 py-1.5 text-center border-l border-slate-100">
-              <span className={`text-xs font-mono font-bold ${whAvail > 0 ? "text-blue-600" : "text-slate-300"}`}>
-                {whAvail}
-              </span>
+              {(() => {
+                const totalAlloc = companies.reduce((sum, c) => sum + (allocMap.get(`${c.id}:${item.id}`)?.quantity ?? 0), 0);
+                const overAlloc = totalAlloc > 0 && totalAlloc > whAvail;
+                return (
+                  <div className="flex flex-col items-center">
+                    <span className={`text-xs font-mono font-bold ${whAvail > 0 ? "text-blue-600" : "text-slate-300"}`}>
+                      {whAvail}
+                    </span>
+                    {overAlloc && (
+                      <span className="text-[9px] text-amber-600 font-medium" title={`סה״כ הוקצו ${totalAlloc} אבל זמין רק ${whAvail}`}>
+                        ⚠️ הוקצו {totalAlloc}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </td>
             {companies.map((c) => {
               const cellKey = `${c.id}:${item.id}`;
