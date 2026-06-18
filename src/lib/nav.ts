@@ -32,7 +32,7 @@ export const NAV: NavItem[] = [
   { href: "/permanent-items", label: "ציוד קבוע לפלוגה", icon: "📌", group: "ראשי", cap: "battalion.profile" },
   { href: "/armory-allocations", label: "הקצאות לפלוגה", icon: "📦", group: "ראשי", cap: "weapons.approve" },
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "ראשי", cap: "dispatch.manage" },
-  { href: "/maintenance", label: "תקלת רכב — העברה לטנא", icon: "🔧", group: "ראשי", cap: "maintenance.manage" },
+  { href: "/maintenance", label: "סטטוס רכבים", icon: "🔧", group: "ראשי", cap: "maintenance.manage" },
   // ===== ניהול שוטף (מפמ + מגד + סמגד) =====
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "ניהול שוטף", cap: "dispatch.manage" },
   { href: "/attendance", label: "נוכחות חיילים", icon: "📋", group: "ניהול שוטף", cap: "attendance.view" },
