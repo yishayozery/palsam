@@ -309,6 +309,13 @@ export default function AttendanceClient({
           </div>
 
           <div className="text-sm text-slate-600 mr-auto font-medium">{companyName}</div>
+
+          {canManage && (
+            <a href="/attendance-settings"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors font-medium">
+              ⚙️ הגדרות נוכחות
+            </a>
+          )}
         </div>
       </Card>
 
