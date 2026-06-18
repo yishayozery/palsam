@@ -14,11 +14,12 @@ export type NavItem = {
 export const GROUP_ROLES: Record<string, Role[]> = {
   "ראשי": ["SUPER_ADMIN", "BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER", "MAGAD", "SAMAGAD", "SHALISH"],
   "עזרה": ["SUPER_ADMIN", "BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER", "MAGAD", "SAMAGAD", "SHALISH"],
-  "פלסם": ["BATTALION_ADMIN"],
   "שלישות": ["SHALISH"],
-  "המחסנים שלי": ["WAREHOUSE_MANAGER", "BATTALION_ADMIN"],
+  "ניהול שוטף": ["BATTALION_ADMIN", "MAGAD", "SAMAGAD"],
+  "ארמון": ["BATTALION_ADMIN", "MAGAD", "SAMAGAD"],
+  "מחסנים": ["BATTALION_ADMIN", "MAGAD", "SAMAGAD"],
+  "המחסנים שלי": ["WAREHOUSE_MANAGER"],
   "הפלוגה שלי": ["COMPANY_REP"],
-  "פיקוד גדוד": ["MAGAD", "SAMAGAD", "BATTALION_ADMIN"], // אישור חיילים לחימוש + דוחות
   "דוחות ובקרה": ["BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER", "MAGAD", "SAMAGAD", "SHALISH"],
 };
 
@@ -26,74 +27,66 @@ export const NAV: NavItem[] = [
   // ===== ראשי =====
   { href: "/admin/battalions", label: "ניהול גדודים", icon: "🏛️", group: "ראשי", roles: ["SUPER_ADMIN"] },
   { href: "/dashboard", label: "דשבורד", icon: "📊", group: "ראשי", cap: "reports.view" },
-  { href: "/dispatch", label: "שבצ\"ק - שיבוץ רכבים", icon: "🚗", group: "ראשי", cap: "dispatch.manage" },
+  { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "ראשי", cap: "battalion.profile" },
+  { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "ראשי", cap: "soldiers.roster" },
+  { href: "/permanent-items", label: "ציוד קבוע לפלוגה", icon: "📌", group: "ראשי", cap: "battalion.profile" },
+  { href: "/armory-allocations", label: "הקצאות לפלוגה", icon: "📦", group: "ראשי", cap: "weapons.approve" },
+  { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "ראשי", cap: "dispatch.manage" },
+  // ===== ניהול שוטף (מפמ + מגד + סמגד) =====
+  { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "ניהול שוטף", cap: "dispatch.manage" },
+  { href: "/attendance", label: "נוכחות חיילים", icon: "📋", group: "ניהול שוטף", cap: "attendance.view" },
+  { href: "/maintenance", label: "סטטוס רכבים", icon: "🔧", group: "ניהול שוטף", cap: "maintenance.manage" },
 
-  // ===== פיקוד גדוד =====
-  { href: "/armory-approvals", label: "אישור חיילים לנשק", icon: "🔫", group: "פיקוד גדוד", cap: "weapons.approve" },
-  { href: "/armory-allocations", label: "הקצאה לפלוגה", icon: "📦", group: "פיקוד גדוד", cap: "weapons.approve" },
-  { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "פיקוד גדוד", cap: "weapons.view" },
+  // ===== ארמון (מפמ + מגד + סמגד) =====
+  { href: "/armory-approvals", label: "אישור חיילים לנשק", icon: "🔫", group: "ארמון", cap: "weapons.approve" },
+  { href: "/armory-ineligibility", label: "דוח תהליך זכאות", icon: "📊", group: "ארמון", cap: "weapons.view" },
 
-  // ===== נוכחות =====
-  { href: "/attendance", label: "נוכחות חיילים", icon: "📋", group: "הפלוגה שלי", cap: "attendance.manage" },
-  { href: "/attendance", label: "נוכחות חיילים", icon: "📋", group: "פיקוד גדוד", cap: "attendance.view" },
-  { href: "/attendance-settings", label: "הגדרות נוכחות", icon: "⚙️", group: "פלסם", cap: "battalion.profile" },
+  // ===== מחסנים (מפמ + מגד + סמגד) =====
+  { href: "/warehouses", label: "מחסני הגדוד", icon: "🏪", group: "מחסנים", cap: "battalion.profile" },
+  { href: "/items", label: "הגדרות פריטים", icon: "🏷️", group: "מחסנים", cap: "battalion.profile" },
+  { href: "/stock/brigade", label: "החתמות/זיכויי חטיבה", icon: "🤝", group: "מחסנים", cap: "warehouse.operate" },
+  { href: "/stock", label: "מלאי", icon: "📋", group: "מחסנים", cap: "battalion.profile" },
+  { href: "/signatures", label: "החתמת פלוגה", icon: "✍️", group: "מחסנים", cap: "signatures.manage" },
+  { href: "/counts", label: "ספירת מלאי", icon: "🔢", group: "מחסנים", cap: "counts.manage" },
+  { href: "/gaps", label: "פערים מספירות מלאי", icon: "⚠️", group: "מחסנים", cap: "battalion.profile" },
 
   // ===== שלישות (שליש גדודי — ניהול חיילים + גיוס) =====
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "שלישות", cap: "soldiers.roster" },
   { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "שלישות", cap: "weapons.view" },
-
-  // ===== פלסם (מפ"מ — אחראי מערכת בגדוד) =====
-  { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "פלסם", cap: "battalion.profile" },
-  { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "פלסם", cap: "soldiers.roster" },
-  { href: "/items", label: "הגדרות פריטים", icon: "🏷️", group: "פלסם", cap: "battalion.profile" },
-  { href: "/stock", label: "מלאי הגדוד", icon: "📋", group: "פלסם", cap: "battalion.profile" },
-  { href: "/stock/serials", label: "דוח סריאלי", icon: "🔍", group: "פלסם", cap: "battalion.profile" },
-  { href: "/permanent-items", label: "ציוד קבוע פר פלוגה", icon: "📌", group: "פלסם", cap: "battalion.profile" },
-  { href: "/signatures", label: "החתמות פלוגה", icon: "✍️", group: "פלסם", cap: "battalion.profile" },
-  { href: "/warehouses", label: "מחסני הגדוד", icon: "🏪", group: "פלסם", cap: "battalion.profile" },
-  { href: "/counts", label: "ספירות מלאי", icon: "🔢", group: "פלסם", cap: "battalion.profile" },
-  { href: "/counts/plans", label: "תכניות ספירה", icon: "📋", group: "פלסם", cap: "counts.manage" },
-  { href: "/maintenance", label: "סטטוס רכבים (טנא)", icon: "🔧", group: "פלסם", cap: "maintenance.manage" },
-  { href: "/gaps", label: "פערים", icon: "⚠️", group: "פלסם", cap: "battalion.profile" },
+  { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "שלישות", cap: "dispatch.manage" },
 
   // ===== הפלוגה שלי (רס"פ פלוגה — תפעול ברמת פלוגה) =====
-  // סדר: דשבורד → חיילים → תרומות → מלאי הפלוגה (זיכוי בתוכו) → החתמות → ספירה → פערים → מידוף
-  // (דשבורד מופיע ב"ראשי" — תצוגה משתנה אוטומטית לפי תפקיד)
+  { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "הפלוגה שלי", cap: "dispatch.manage" },
   { href: "/soldiers", label: "חיילי הפלוגה", icon: "🪖", group: "הפלוגה שלי", cap: "company.manage" },
+  { href: "/attendance", label: "נוכחות חיילים", icon: "📋", group: "הפלוגה שלי", cap: "attendance.manage" },
   { href: "/donations", label: "תרומות פלוגתיות", icon: "🎁", group: "הפלוגה שלי", cap: "donations.manage" },
   { href: "/my-inventory", label: "מלאי הפלוגה", icon: "📦", group: "הפלוגה שלי", cap: "company.manage" },
   { href: "/my-inventory/locations", label: "מיקומי ציוד", icon: "📍", group: "הפלוגה שלי", cap: "company.manage" },
   { href: "/transfers", label: "קבלות ממתינות", icon: "📥", group: "הפלוגה שלי", cap: "transfer.approve" },
   { href: "/signatures", label: "החתמת/זיכוי חייל", icon: "✍️", group: "הפלוגה שלי", cap: "signatures.manage" },
   { href: "/counts", label: "ספירת מלאי", icon: "🔢", group: "הפלוגה שלי", cap: "counts.execute" },
-  { href: "/counts/plans", label: "תכניות ספירה", icon: "📋", group: "הפלוגה שלי", cap: "counts.manage" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "הפלוגה שלי", cap: "company.manage" },
   { href: "/locations?tab=items", label: "מחסני ימ\"ח", icon: "🗄️", group: "הפלוגה שלי", cap: "locations.manage" },
 
   // ===== המחסנים שלי (קצין מחסן — תפעול שוטף) =====
-  // סדר לפי שלבי העבודה: נציגים → פריטים → מלאי → ערכות → מידוף → החתמות → ספירות → פערים
+  { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "המחסנים שלי", cap: "dispatch.manage" },
   { href: "/reps", label: "נציגי פלוגות", icon: "🤝", group: "המחסנים שלי", cap: "reps.manage" },
   { href: "/items", label: "הגדרת פריטים", icon: "🏷️", group: "המחסנים שלי", cap: "catalog.manage" },
   { href: "/stock", label: "מלאי המחסן", icon: "📋", group: "המחסנים שלי", cap: "warehouse.operate" },
-  { href: "/stock/serials", label: "דוח סריאלי", icon: "🔍", group: "המחסנים שלי", cap: "warehouse.operate" },
-  // 🆕 כפתור עבודה מול החטיבה - קבלה / זיכוי / החלפת בלאי
-  { href: "/stock/brigade", label: "מול החטיבה", icon: "🤝", group: "המחסנים שלי", cap: "warehouse.operate" },
-  // ⚠️ /kits הוסר מהתפריט - הקישור עבר לכפתור בתוך /stock ('ערכת החתמה')
+  { href: "/stock/brigade", label: "החתמות/זיכויי חטיבה", icon: "🤝", group: "המחסנים שלי", cap: "warehouse.operate" },
   { href: "/signatures", label: "החתמות (חיילים/פלוגות)", icon: "✍️", group: "המחסנים שלי", cap: "signatures.manage" },
   { href: "/counts", label: "ספירות מלאי", icon: "🔢", group: "המחסנים שלי", cap: "counts.execute" },
-  { href: "/counts/plans", label: "תכניות ספירה", icon: "📋", group: "המחסנים שלי", cap: "counts.manage" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "המחסנים שלי", cap: "gaps.resolve" },
-  // החתמת חיילים נפרדת
   { href: "/donations", label: "מלאי תרומה", icon: "🎁", group: "המחסנים שלי", cap: "donations.manage" },
   { href: "/soldiers", label: "חיילים", icon: "🪖", group: "המחסנים שלי", cap: "company.manage" },
   { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "המחסנים שלי", cap: "weapons.view" },
 
   // ===== דוחות ובקרה =====
   { href: "/reports", label: "דוחות", icon: "📈", group: "דוחות ובקרה", cap: "reports.view" },
-  { href: "/history", label: "היסטוריה גלובלית", icon: "📜", group: "דוחות ובקרה", cap: "reports.view" },
+  { href: "/history", label: "היסטוריה", icon: "📜", group: "דוחות ובקרה", cap: "reports.view" },
   { href: "/audit", label: "יומן פעולות", icon: "🧾", group: "דוחות ובקרה", cap: "audit.view" },
 
   // ===== עזרה =====
-  { href: "/security", label: "🔐 אבטחה אישית (2FA)", icon: "🔐", group: "עזרה" },
+  { href: "/security", label: "🔐 אבטחה (2FA)", icon: "🔐", group: "עזרה" },
   { href: "/help", label: "מקראת השימוש", icon: "📖", group: "עזרה" },
 ];
