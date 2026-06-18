@@ -61,6 +61,44 @@ export default async function ArmoryAllocationsPage() {
     signedCounts.push({ companyId, itemTypeId, count });
   }
 
+  // מלאי זמין במחסנים (לא חתום)
+  const warehouseStock = await prisma.stockBalance.findMany({
+    where: {
+      battalionId: bId,
+      holder: { kind: "WAREHOUSE" },
+      quantity: { gt: 0 },
+    },
+    select: { itemTypeId: true, quantity: true },
+  });
+  const stockMap: { itemTypeId: string; available: number }[] = [];
+  const sMap = new Map<string, number>();
+  for (const s of warehouseStock) {
+    sMap.set(s.itemTypeId, (sMap.get(s.itemTypeId) ?? 0) + s.quantity);
+  }
+  for (const [itemTypeId, available] of sMap) {
+    stockMap.push({ itemTypeId, available });
+  }
+
+  // מלאי בפלוגות (StockBalance per company)
+  const companyStock = await prisma.stockBalance.findMany({
+    where: {
+      battalionId: bId,
+      holder: { kind: "COMPANY" },
+      quantity: { gt: 0 },
+    },
+    select: { itemTypeId: true, holderId: true, quantity: true },
+  });
+  const companyStockCounts: { companyId: string; itemTypeId: string; count: number }[] = [];
+  const csMap = new Map<string, number>();
+  for (const s of companyStock) {
+    const key = `${s.holderId}:${s.itemTypeId}`;
+    csMap.set(key, (csMap.get(key) ?? 0) + s.quantity);
+  }
+  for (const [key, count] of csMap) {
+    const [companyId, itemTypeId] = key.split(":");
+    companyStockCounts.push({ companyId, itemTypeId, count });
+  }
+
   return (
     <div>
       <PageHeader
@@ -72,6 +110,8 @@ export default async function ArmoryAllocationsPage() {
         companies={companies}
         allocations={allocations}
         signedCounts={signedCounts}
+        warehouseStock={stockMap}
+        companyStock={companyStockCounts}
       />
     </div>
   );
