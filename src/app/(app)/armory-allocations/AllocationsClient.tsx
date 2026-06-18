@@ -5,18 +5,25 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import { upsertAllocation } from "./actions";
 
-type Item = { id: string; name: string; sku: string | null; trackingMethod: string; category: { name: string } | null };
+type Item = { id: string; name: string; sku: string | null; trackingMethod: string; categoryId: string | null; category: { name: string; warehouseType: string } | null };
 type Company = { id: string; name: string };
+type CategoryInfo = { id: string; name: string; warehouseType: string };
 type AllocationRow = { companyId: string; itemTypeId: string; quantity: number; blockOnExceed: boolean };
 type SignedCount = { companyId: string; itemTypeId: string; count: number };
 type StockEntry = { itemTypeId: string; available: number };
 type CompanyStockEntry = { companyId: string; itemTypeId: string; count: number };
 
+const WT_LABELS: Record<string, string> = {
+  EQUIPMENT: "קל״ג", COMMS: "קשר״ג", AMMO: "בונקר", ARMORY: "ארמון",
+  VEHICLES: "רכב", MEDICAL: "רפואה", GENERAL: "כללי",
+};
+
 export default function AllocationsClient({
-  items, companies, allocations, signedCounts, warehouseStock, companyStock,
+  items, companies, categories, allocations, signedCounts, warehouseStock, companyStock,
 }: {
   items: Item[];
   companies: Company[];
+  categories: CategoryInfo[];
   allocations: AllocationRow[];
   signedCounts: SignedCount[];
   warehouseStock: StockEntry[];
@@ -24,8 +31,8 @@ export default function AllocationsClient({
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState<string | null>(null);
-  const [showAll, setShowAll] = useState(false);
   const [search, setSearch] = useState("");
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const allocMap = useMemo(() => {
     const m = new Map<string, { quantity: number; blockOnExceed: boolean }>();
@@ -59,15 +66,16 @@ export default function AllocationsClient({
     return m;
   }, [allocations]);
 
-  const hasAllocation = useCallback((itemId: string) => {
-    return companies.some((c) => {
-      const a = allocMap.get(`${c.id}:${itemId}`);
-      return a && a.quantity > 0;
-    });
-  }, [companies, allocMap]);
+  const allocatedItemIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const a of allocations) {
+      if (a.quantity > 0) s.add(a.itemTypeId);
+    }
+    return s;
+  }, [allocations]);
 
-  const visibleItems = useMemo(() => {
-    let list = showAll ? items : items.filter((i) => hasAllocation(i.id));
+  const allocatedItems = useMemo(() => {
+    let list = items.filter((i) => allocatedItemIds.has(i.id));
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter((i) =>
@@ -77,12 +85,12 @@ export default function AllocationsClient({
       );
     }
     return list;
-  }, [items, showAll, hasAllocation, search]);
+  }, [items, allocatedItemIds, search]);
 
   const grouped = useMemo(() => {
     const groups: { category: string; items: Item[] }[] = [];
     let current: { category: string; items: Item[] } | null = null;
-    for (const item of visibleItems) {
+    for (const item of allocatedItems) {
       const cat = item.category?.name ?? "ללא קטגוריה";
       if (!current || current.category !== cat) {
         current = { category: cat, items: [] };
@@ -91,7 +99,7 @@ export default function AllocationsClient({
       current.items.push(item);
     }
     return groups;
-  }, [visibleItems]);
+  }, [allocatedItems]);
 
   async function saveAlloc(companyId: string, itemTypeId: string, quantity: number, blockOnExceed: boolean) {
     const key = `${companyId}:${itemTypeId}`;
@@ -109,6 +117,12 @@ export default function AllocationsClient({
     }
   }
 
+  async function addItem(itemId: string) {
+    // Add with quantity=1 for first company to create the allocation row
+    await saveAlloc(companies[0].id, itemId, 1, true);
+    setShowAddModal(false);
+  }
+
   async function toggleBlock(itemId: string, newBlock: boolean) {
     const promises = companies
       .map((c) => {
@@ -120,51 +134,51 @@ export default function AllocationsClient({
     await Promise.all(promises);
   }
 
-  const allocatedCount = items.filter((i) => hasAllocation(i.id)).length;
-
   return (
     <>
+      {/* Toolbar */}
       <Card className="p-3 mb-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700 transition-colors"
+          >
+            + הוסף פריט
+          </button>
+          <div className="flex items-center gap-2 flex-1 min-w-[180px]">
             <span className="text-sm text-slate-500">🔍</span>
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="חיפוש לפי שם פריט, מק״ט, קטגוריה..."
+              placeholder="סינון לפי שם / מק״ט..."
               className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
             />
             {search && (
               <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-600 text-sm">✕</button>
             )}
           </div>
-          <span className="text-sm text-slate-600">
-            {allocatedCount} פריטים עם הקצאה מתוך {items.length}
+          <span className="text-sm text-slate-500">
+            {allocatedItemIds.size} פריטים עם הקצאה
           </span>
-          <button
-            onClick={() => setShowAll(!showAll)}
-            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-          >
-            {showAll ? "🔽 הצג רק מוקצים" : `📋 הצג את כל ${items.length} הפריטים`}
-          </button>
         </div>
       </Card>
 
-      <Card className="overflow-x-auto relative">
+      {/* Main table */}
+      <Card className="overflow-auto relative max-h-[75vh]">
         <table className="w-full text-sm border-collapse min-w-[600px]">
           <thead className="sticky top-0 z-20">
             <tr className="bg-slate-100 border-b-2 border-slate-300">
               <th className="text-right px-3 py-2.5 font-bold text-slate-700 sticky right-0 bg-slate-100 z-30 min-w-[180px] border-l border-slate-200">
                 פריט
               </th>
-              <th className="text-center px-2 py-2.5 font-semibold text-slate-500 min-w-[70px] border-l border-slate-200">
+              <th className="text-center px-2 py-2.5 font-semibold text-slate-500 min-w-[65px] border-l border-slate-200">
                 <div className="text-[10px]">במחסנים</div>
-                <div className="text-[9px] text-slate-400">(זמין)</div>
               </th>
               {companies.map((c) => (
-                <th key={c.id} className="text-center px-2 py-2.5 font-bold text-slate-700 min-w-[100px] border-l border-slate-200">
-                  {c.name}
+                <th key={c.id} className="text-center px-2 py-2.5 font-bold text-slate-700 min-w-[110px] border-l border-slate-200">
+                  <div>{c.name}</div>
+                  <div className="text-[9px] font-normal text-slate-400">הקצאה | חתום | בפלוגה</div>
                 </th>
               ))}
               <th className="text-center px-2 py-2.5 font-bold text-slate-700 min-w-[80px]">
@@ -184,7 +198,6 @@ export default function AllocationsClient({
                 warehouseMap={warehouseMap}
                 companyStockMap={companyStockMap}
                 blockMap={blockMap}
-                hasAllocation={hasAllocation}
                 saving={saving}
                 saveAlloc={saveAlloc}
                 toggleBlock={toggleBlock}
@@ -192,24 +205,164 @@ export default function AllocationsClient({
             ))}
           </tbody>
         </table>
-        {visibleItems.length === 0 && (
+        {allocatedItems.length === 0 && (
           <div className="p-8 text-center text-slate-400">
-            {search ? `לא נמצאו פריטים ל-"${search}"` : 'אין הקצאות. לחץ "הצג את כל הפריטים" כדי להתחיל להגדיר.'}
+            {search ? `לא נמצאו פריטים ל-"${search}"` : 'אין הקצאות עדיין. לחץ "+ הוסף פריט" כדי להתחיל.'}
           </div>
         )}
       </Card>
 
       <Card className="p-3 mt-3 bg-blue-50 border-blue-200 text-xs text-blue-900">
-        💡 הזן כמות מוקצית לכל פלוגה. המספר שמתחת מראה <strong>חתום/מוקצה</strong>.
-        &nbsp;🚫 = חסום (לא ניתן להחתים מעבר) &nbsp;⚠️ = התרעה (מציג אזהרה אבל מאפשר).
-        &nbsp;הכמות &quot;בפלוגה&quot; כוללת מלאי שבפלוגה שלא חתום על חייל.
+        💡 לחץ <strong>+ הוסף פריט</strong> כדי להגדיר הקצאה חדשה. בכל תא: כמות מוקצית למעלה, מתחת — חתום ומלאי בפלוגה.
+        &nbsp;🚫 חסום = לא ניתן להחתים מעבר למכסה &nbsp;⚠️ התרעה = אזהרה בלבד.
       </Card>
+
+      {/* Add Item Modal */}
+      {showAddModal && (
+        <AddItemModal
+          items={items}
+          categories={categories}
+          allocatedItemIds={allocatedItemIds}
+          onAdd={addItem}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
     </>
   );
 }
 
+/* ── Add Item Modal ── */
+
+function AddItemModal({
+  items, categories, allocatedItemIds, onAdd, onClose,
+}: {
+  items: Item[];
+  categories: CategoryInfo[];
+  allocatedItemIds: Set<string>;
+  onAdd: (itemId: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterWt, setFilterWt] = useState("");
+  const [adding, setAdding] = useState<string | null>(null);
+
+  const available = useMemo(() => {
+    let list = items.filter((i) => !allocatedItemIds.has(i.id));
+    if (filterWt) {
+      list = list.filter((i) => i.category?.warehouseType === filterWt);
+    }
+    if (filterCategory) {
+      list = list.filter((i) => i.categoryId === filterCategory);
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((i) =>
+        i.name.toLowerCase().includes(q) ||
+        (i.sku && i.sku.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [items, allocatedItemIds, search, filterCategory, filterWt]);
+
+  const filteredCategories = useMemo(() => {
+    if (!filterWt) return categories;
+    return categories.filter((c) => c.warehouseType === filterWt);
+  }, [categories, filterWt]);
+
+  const wtOptions = useMemo(() => {
+    const types = new Set(categories.map((c) => c.warehouseType));
+    return Array.from(types).sort();
+  }, [categories]);
+
+  async function handleAdd(itemId: string) {
+    setAdding(itemId);
+    await onAdd(itemId);
+    setAdding(null);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center pt-[10vh]" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[70vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="p-4 border-b border-slate-200">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-slate-800">הוסף פריט להקצאה</h3>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+          </div>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="חיפוש לפי שם / מק״ט..."
+            autoFocus
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-200 mb-2"
+          />
+          <div className="flex gap-2">
+            <select
+              value={filterWt}
+              onChange={(e) => { setFilterWt(e.target.value); setFilterCategory(""); }}
+              className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs flex-1"
+            >
+              <option value="">כל המחסנים</option>
+              {wtOptions.map((wt) => (
+                <option key={wt} value={wt}>{WT_LABELS[wt] || wt}</option>
+              ))}
+            </select>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs flex-1"
+            >
+              <option value="">כל הקטגוריות</option>
+              {filteredCategories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {available.length === 0 ? (
+            <div className="p-6 text-center text-slate-400 text-sm">
+              {search || filterCategory || filterWt ? "לא נמצאו פריטים" : "כל הפריטים כבר עם הקצאה"}
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {available.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => handleAdd(item.id)}
+                  disabled={adding !== null}
+                  className="w-full text-right rounded-lg px-3 py-2 hover:bg-blue-50 transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-slate-800">{item.name}</div>
+                    <div className="text-[10px] text-slate-400">
+                      {item.category?.name && <span>{item.category.name}</span>}
+                      {item.sku && <span className="font-mono mr-2">{item.sku}</span>}
+                    </div>
+                  </div>
+                  {adding === item.id ? (
+                    <span className="text-xs text-slate-400">מוסיף...</span>
+                  ) : (
+                    <span className="text-emerald-600 text-lg">+</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="p-3 border-t border-slate-100 text-center text-xs text-slate-400">
+          {available.length} פריטים זמינים להוספה
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Item Group (category rows in table) ── */
+
 function ItemGroup({
-  category, items, companies, allocMap, signedMap, warehouseMap, companyStockMap, blockMap, hasAllocation, saving, saveAlloc, toggleBlock,
+  category, items, companies, allocMap, signedMap, warehouseMap, companyStockMap, blockMap, saving, saveAlloc, toggleBlock,
 }: {
   category: string;
   items: Item[];
@@ -219,7 +372,6 @@ function ItemGroup({
   warehouseMap: Map<string, number>;
   companyStockMap: Map<string, number>;
   blockMap: Map<string, boolean>;
-  hasAllocation: (id: string) => boolean;
   saving: string | null;
   saveAlloc: (companyId: string, itemTypeId: string, quantity: number, blockOnExceed: boolean) => Promise<void>;
   toggleBlock: (itemId: string, newBlock: boolean) => Promise<void>;
@@ -273,35 +425,31 @@ function ItemGroup({
                         exceeded ? "border-rose-300 bg-rose-50" : full ? "border-amber-300 bg-amber-50" : "border-slate-200"
                       }`}
                     />
-                    {(qty > 0 || signed > 0 || inCompany > 0) && (
-                      <div className="flex flex-col items-center">
-                        <span className={`text-[10px] font-mono font-bold ${exceeded ? "text-rose-600" : full ? "text-amber-600" : "text-emerald-600"}`}>
-                          {signed}/{qty || "—"}
-                        </span>
-                        {inCompany > 0 && (
-                          <span className="text-[9px] text-slate-400">בפלוגה: {inCompany}</span>
-                        )}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1 text-[10px] font-mono">
+                      <span className={`font-bold ${exceeded ? "text-rose-600" : full ? "text-amber-600" : signed > 0 ? "text-emerald-600" : "text-slate-300"}`}>
+                        חתום {signed}
+                      </span>
+                      {inCompany > 0 && (
+                        <span className="text-slate-400">| פלוגה {inCompany}</span>
+                      )}
+                    </div>
                   </div>
                 </td>
               );
             })}
             <td className="px-1 py-1.5 text-center">
-              {hasAllocation(item.id) && (
-                <button
-                  onClick={() => toggleBlock(item.id, !block)}
-                  disabled={saving !== null}
-                  className={`text-[10px] rounded-full px-2 py-0.5 font-medium transition-colors ${
-                    block
-                      ? "bg-rose-100 text-rose-700 hover:bg-rose-200"
-                      : "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                  } disabled:opacity-50`}
-                  title={block ? "חריגה תחסום החתמה" : "חריגה תציג התראה בלבד"}
-                >
-                  {block ? "🚫 חסום" : "⚠️ התראה"}
-                </button>
-              )}
+              <button
+                onClick={() => toggleBlock(item.id, !block)}
+                disabled={saving !== null}
+                className={`text-[10px] rounded-full px-2 py-0.5 font-medium transition-colors ${
+                  block
+                    ? "bg-rose-100 text-rose-700 hover:bg-rose-200"
+                    : "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                } disabled:opacity-50`}
+                title={block ? "חריגה תחסום החתמה" : "חריגה תציג התראה בלבד"}
+              >
+                {block ? "🚫 חסום" : "⚠️ התראה"}
+              </button>
             </td>
           </tr>
         );

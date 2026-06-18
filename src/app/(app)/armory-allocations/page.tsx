@@ -27,7 +27,13 @@ export default async function ArmoryAllocationsPage() {
   const items = await prisma.itemType.findMany({
     where: { battalionId: bId, active: true },
     orderBy: [{ category: { name: "asc" } }, { name: "asc" }],
-    select: { id: true, name: true, sku: true, trackingMethod: true, category: { select: { name: true } } },
+    select: { id: true, name: true, sku: true, trackingMethod: true, categoryId: true, category: { select: { name: true, warehouseType: true } } },
+  });
+
+  const categories = await prisma.category.findMany({
+    where: { battalionId: bId, active: true },
+    orderBy: [{ warehouseType: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, warehouseType: true },
   });
 
   const allocations = await prisma.companyAllocation.findMany({
@@ -108,6 +114,7 @@ export default async function ArmoryAllocationsPage() {
       <AllocationsClient
         items={items}
         companies={companies}
+        categories={categories}
         allocations={allocations}
         signedCounts={signedCounts}
         warehouseStock={stockMap}
