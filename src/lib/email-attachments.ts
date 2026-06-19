@@ -47,9 +47,10 @@ function senderName(t: TransferWithDetails): string {
 function buildSubject(t: TransferWithDetails): string {
   const code = t.battalion?.code ?? "";
   const action = TRANSFER_TYPE[t.type] ?? t.type;
+  const from = senderName(t);
   const target = recipientName(t);
   const docNumber = t.id.slice(-8).toUpperCase();
-  return `[${code}] ${action} — ${target} · ${docNumber}`;
+  return `[${code}] ${action} · ${from} → ${target} · ${docNumber}`;
 }
 
 function sanitizeFilename(s: string): string {
