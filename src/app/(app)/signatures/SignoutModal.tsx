@@ -19,16 +19,17 @@ type CartQty = { type: "qty"; itemTypeId: string; itemName: string; unit: string
 type CartItem = CartSerial | CartQty;
 
 export default function SignoutModal({
-  soldiers, companies = [], balances = [], units, kits, vehicles, equipmentLocations = [], lockCompanyId, isArmory = false,
+  soldiers, companies = [], balances = [], units, kits, vehicles, equipmentLocations = [], lockCompanyId, isArmory = false, reopenForSoldierId,
 }: {
   soldiers: Soldier[]; companies?: Company[]; balances?: Balance[];
   units: Unit[]; kits: Kit[]; vehicles: Vehicle[];
   equipmentLocations?: EquipLocation[];
   lockCompanyId?: string | null;
   isArmory?: boolean;
+  reopenForSoldierId?: string | null;
 }) {
-  const [open, setOpen] = useState(false);
-  const [soldierId, setSoldierId] = useState("");
+  const [open, setOpen] = useState(!!reopenForSoldierId);
+  const [soldierId, setSoldierId] = useState(reopenForSoldierId ?? "");
   const [companyFilter, setCompanyFilter] = useState(lockCompanyId ?? "");
   const [soldierSearch, setSoldierSearch] = useState("");
   const [itemSearch, setItemSearch] = useState("");
@@ -523,17 +524,24 @@ export default function SignoutModal({
               {availableBalances.length > 0 && (
                 <div>
                   <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-2 pb-1">כמותי — לחץ + להוספה</div>
-                  {availableBalances.map((b) => (
-                    <button key={`${b.itemTypeId}-${b.statusId}`} onClick={() => addQty(b)}
-                      className="w-full text-right bg-white border border-slate-200 rounded-lg p-2 mb-1 hover:bg-emerald-50 hover:border-emerald-300 transition flex items-center gap-2 group">
-                      <span className="text-lg">📦</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate">{b.itemName}</div>
-                        <div className="text-xs text-slate-500">{b.status} · זמין: <b>{b.quantity}</b> {b.unit}</div>
-                      </div>
-                      <span className="text-emerald-600 font-bold text-lg group-hover:scale-110 transition">+</span>
-                    </button>
-                  ))}
+                  {availableBalances.map((b) => {
+                    const inCart = cart.find((c) => c.type === "qty" && c.itemTypeId === b.itemTypeId && c.statusId === b.statusId) as CartQty | undefined;
+                    return (
+                      <button key={`${b.itemTypeId}-${b.statusId}`} onClick={() => addQty(b)}
+                        className={`w-full text-right border rounded-lg p-2 mb-1 transition flex items-center gap-2 group ${inCart ? "bg-emerald-50 border-emerald-400 ring-1 ring-emerald-300" : "bg-white border-slate-200 hover:bg-emerald-50 hover:border-emerald-300"}`}>
+                        <span className="text-lg">📦</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">{b.itemName}</div>
+                          <div className="text-xs text-slate-500">{b.status} · זמין: <b>{b.quantity}</b> {b.unit}</div>
+                        </div>
+                        {inCart ? (
+                          <span className="text-[10px] bg-emerald-600 text-white rounded-full px-2 py-0.5 font-bold">בעגלה ×{inCart.quantity}</span>
+                        ) : (
+                          <span className="text-emerald-600 font-bold text-lg group-hover:scale-110 transition">+</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
@@ -542,9 +550,10 @@ export default function SignoutModal({
                   <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-2 pb-1 pt-1">סריאלי / אצוות — לחץ להוספה</div>
                   {availableUnits.map((u) => {
                     const isLot = !!u.lotQuantity && u.lotQuantity > 1;
+                    const serialInCart = cart.some((c) => c.type === "serial" && (c as CartSerial).unitId === u.id);
                     return (
-                      <button key={u.id} onClick={() => addSerial(u)}
-                        className={`w-full text-right bg-white border rounded-lg p-2 mb-1 hover:bg-blue-50 transition flex items-center gap-2 group ${isLot ? "border-orange-300 hover:border-orange-400" : "border-slate-200 hover:border-blue-300"}`}>
+                      <button key={u.id} onClick={() => { if (!serialInCart) addSerial(u); }}
+                        className={`w-full text-right border rounded-lg p-2 mb-1 transition flex items-center gap-2 group ${serialInCart ? "bg-emerald-50 border-emerald-400 ring-1 ring-emerald-300" : isLot ? "bg-white border-orange-300 hover:border-orange-400 hover:bg-blue-50" : "bg-white border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>
                         <span className="text-lg">{isLot ? "💣" : "🔫"}</span>
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-sm truncate">
@@ -553,7 +562,11 @@ export default function SignoutModal({
                           </div>
                           <div className="text-xs text-slate-500 font-mono truncate">{isLot ? `לוט: ${u.serial}` : `SN: ${u.serial}`} · {u.status}</div>
                         </div>
-                        <span className={`font-bold text-lg group-hover:scale-110 transition ${isLot ? "text-orange-600" : "text-blue-600"}`}>+</span>
+                        {serialInCart ? (
+                          <span className="text-[10px] bg-emerald-600 text-white rounded-full px-2 py-0.5 font-bold shrink-0">✓ בעגלה</span>
+                        ) : (
+                          <span className={`font-bold text-lg group-hover:scale-110 transition ${isLot ? "text-orange-600" : "text-blue-600"}`}>+</span>
+                        )}
                       </button>
                     );
                   })}

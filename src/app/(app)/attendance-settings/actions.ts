@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireCapability, requireUser } from "@/lib/guard";
+import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 
@@ -10,7 +10,9 @@ export async function upsertAttendanceStatus(
   formData: FormData,
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireCapability("battalion.profile");
+    const user = await requireUser();
+    if (!can(user.role, "attendance.manage") && !can(user.role, "battalion.profile"))
+      return { error: "אין הרשאה" };
     const bId = user.battalionId!;
     const id = String(formData.get("id") || "");
     const name = String(formData.get("name") || "").trim();
@@ -47,7 +49,9 @@ export async function deleteAttendanceStatus(
   id: string,
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireCapability("battalion.profile");
+    const user = await requireUser();
+    if (!can(user.role, "attendance.manage") && !can(user.role, "battalion.profile"))
+      return { error: "אין הרשאה" };
     const used = await prisma.attendancePlan.count({ where: { statusId: id } })
       + await prisma.attendanceRecord.count({ where: { statusId: id } });
     if (used > 0) return { error: "לא ניתן למחוק סטטוס שנמצא בשימוש. ניתן לכבות אותו." };
@@ -65,7 +69,9 @@ export async function toggleAttendanceStatus(
   active: boolean,
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
-    await requireCapability("battalion.profile");
+    const user = await requireUser();
+    if (!can(user.role, "attendance.manage") && !can(user.role, "battalion.profile"))
+      return { error: "אין הרשאה" };
     await prisma.attendanceStatus.update({ where: { id }, data: { active } });
     revalidatePath("/attendance-settings");
     return { ok: true };

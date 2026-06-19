@@ -31,14 +31,12 @@ type SquadRow = {
 };
 
 const PRESET_STATUSES = [
-  { name: "נוכח", color: "#10b981", icon: "✅", isPresent: true },
-  { name: "חופשה", color: "#6366f1", icon: "🏖️", isPresent: false },
-  { name: "מחלה", color: "#f59e0b", icon: "🤒", isPresent: false },
-  { name: 'ח.מ. (חופשה מיוחדת)', color: "#8b5cf6", icon: "📋", isPresent: false },
-  { name: "מילואים", color: "#3b82f6", icon: "🎖️", isPresent: false },
+  { name: "יום הגעה", color: "#10b981", icon: "⬅️", isPresent: true },
+  { name: "נוכח", color: "#22c55e", icon: "✅", isPresent: true },
+  { name: "יום יציאה", color: "#f59e0b", icon: "➡️", isPresent: false },
+  { name: "חופש סבב", color: "#6366f1", icon: "🔄", isPresent: false },
+  { name: "מחלה", color: "#ef4444", icon: "🏥", isPresent: false },
   { name: "קורס", color: "#0ea5e9", icon: "📚", isPresent: false },
-  { name: "עצור/כלוא", color: "#ef4444", icon: "🔒", isPresent: false },
-  { name: 'נפקד (נע"ל)', color: "#dc2626", icon: "❌", isPresent: false },
 ];
 
 export default function AttendanceSettingsClient({

@@ -440,9 +440,9 @@ export async function checkinQuantity(formData: FormData) {
 }
 
 /** ביטול ציבורי לפי token — מאפשר לחייל/נמען לבטל לפני שחתם */
-export async function cancelSignatureByToken(token: string): Promise<{ ok?: boolean; error?: string }> {
+export async function cancelSignatureByToken(token: string): Promise<{ ok?: boolean; error?: string; soldierId?: string }> {
   try {
-    const sig = await prisma.signature.findUnique({ where: { token }, select: { id: true, status: true, transferId: true } });
+    const sig = await prisma.signature.findUnique({ where: { token }, select: { id: true, status: true, transferId: true, soldierId: true } });
     if (!sig) return { error: "לא נמצא" };
     if (sig.status !== "PENDING") return { error: "לא ניתן לבטל" };
     await prisma.$transaction(async (tx) => {
@@ -452,6 +452,45 @@ export async function cancelSignatureByToken(token: string): Promise<{ ok?: bool
       }
     });
     revalidatePath("/signatures");
+    return { ok: true, soldierId: sig.soldierId ?? undefined };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** הסרת שורת פריט מהחתמה ממתינה (לפני חתימה) */
+export async function removeTransferLineByToken(token: string, lineId: string): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const sig = await prisma.signature.findUnique({
+      where: { token },
+      select: { status: true, transferId: true },
+    });
+    if (!sig || sig.status !== "PENDING" || !sig.transferId) return { error: "לא ניתן לערוך" };
+    const line = await prisma.transferLine.findUnique({ where: { id: lineId } });
+    if (!line || line.transferId !== sig.transferId) return { error: "שורה לא נמצאה" };
+    const remaining = await prisma.transferLine.count({ where: { transferId: sig.transferId } });
+    if (remaining <= 1) return { error: "לא ניתן להסיר את הפריט האחרון. בטל את ההחתמה במקום." };
+    await prisma.transferLine.delete({ where: { id: lineId } });
+    revalidatePath(`/sign/${token}`);
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** עדכון כמות בשורת פריט בהחתמה ממתינה (לפני חתימה) */
+export async function updateTransferLineQtyByToken(token: string, lineId: string, newQty: number): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    if (newQty < 1) return { error: "כמות חייבת להיות לפחות 1" };
+    const sig = await prisma.signature.findUnique({
+      where: { token },
+      select: { status: true, transferId: true },
+    });
+    if (!sig || sig.status !== "PENDING" || !sig.transferId) return { error: "לא ניתן לערוך" };
+    const line = await prisma.transferLine.findUnique({ where: { id: lineId } });
+    if (!line || line.transferId !== sig.transferId) return { error: "שורה לא נמצאה" };
+    await prisma.transferLine.update({ where: { id: lineId }, data: { quantity: newQty } });
+    revalidatePath(`/sign/${token}`);
     return { ok: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "שגיאה" };

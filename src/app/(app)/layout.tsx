@@ -111,6 +111,7 @@ export default async function AppLayout({
     </>
   );
 
+  const holderLabel = userHolder ? `${userHolder.kind === "COMPANY" ? "🪖" : "🏪"} ${userHolder.name}` : null;
   const headerBrand = (
     <div className="flex items-center gap-2 min-w-0">
       {battalion?.logoData ? (
@@ -119,7 +120,12 @@ export default async function AppLayout({
       ) : (
         <span className="text-xl shrink-0">🛡️</span>
       )}
-      <span className="font-bold text-sm truncate">{unitName}</span>
+      <div className="min-w-0">
+        <div className="font-bold text-sm truncate leading-tight">{unitName}</div>
+        <div className="text-[10px] text-slate-300 truncate leading-tight">
+          {user.fullName}{holderLabel ? ` · ${holderLabel}` : ""}
+        </div>
+      </div>
     </div>
   );
 

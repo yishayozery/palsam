@@ -375,11 +375,12 @@ export default function AttendanceClient({
       )}
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-2 mb-3">
+      <div className="flex flex-wrap gap-1.5 mb-3 bg-white rounded-lg border border-slate-200 px-3 py-2">
+        <span className="text-[10px] text-slate-500 font-bold ml-2 self-center">מקרא:</span>
         {statuses.map((s) => (
-          <span key={s.id} className="inline-flex items-center gap-1 text-[10px] rounded-full px-2 py-0.5 border"
-            style={{ borderColor: s.color, color: s.color }}>
-            {s.icon} {s.name}
+          <span key={s.id} className="inline-flex items-center gap-1 text-[11px] rounded-lg px-2 py-1 font-medium"
+            style={{ backgroundColor: s.color + "18", color: s.color, border: `1px solid ${s.color}40` }}>
+            <span className="text-sm">{s.icon}</span> {s.name}
           </span>
         ))}
       </div>
@@ -466,7 +467,8 @@ export default function AttendanceClient({
                             title={`${soldier.fullName} — ${d.date}${status ? ` — ${status.name}` : ""}`}
                           >
                             {status ? (
-                              <span className="text-sm leading-none" style={{ color: status.color }}>
+                              <span className="text-base md:text-sm leading-none" style={{ color: status.color }}
+                                title={status.name}>
                                 {status.icon || "●"}
                               </span>
                             ) : (

@@ -1,4 +1,6 @@
-import { requireCapability } from "@/lib/guard";
+import { requireUser } from "@/lib/guard";
+import { can } from "@/lib/rbac";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card } from "@/components/ui";
 import AttendanceSettingsClient from "./AttendanceSettingsClient";
@@ -6,7 +8,8 @@ import AttendanceSettingsClient from "./AttendanceSettingsClient";
 export const dynamic = "force-dynamic";
 
 export default async function AttendanceSettingsPage() {
-  const user = await requireCapability("battalion.profile");
+  const user = await requireUser();
+  if (!can(user.role, "attendance.manage") && !can(user.role, "battalion.profile")) redirect("/");
   const bId = user.battalionId!;
 
   const statuses = await prisma.attendanceStatus.findMany({

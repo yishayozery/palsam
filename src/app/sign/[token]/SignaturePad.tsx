@@ -73,7 +73,7 @@ export default function SignaturePad({
     const res = await cancelSignatureByToken(token);
     setCancelling(false);
     if (res.ok) {
-      router.push("/signatures");
+      router.push(res.soldierId ? `/signatures?reopenFor=${res.soldierId}` : "/signatures");
     } else {
       setError(res.error || "שגיאה בביטול");
     }
@@ -188,7 +188,7 @@ export default function SignaturePad({
       </div>
       <button onClick={handleCancel} disabled={cancelling}
         className="w-full mt-2 rounded-lg border border-slate-200 py-2 text-xs text-slate-500 hover:bg-slate-50 hover:text-slate-700 disabled:opacity-50">
-        {cancelling ? "מבטל..." : "← שכחתי פריט? ביטול וחזרה לבחירת ציוד"}
+        {cancelling ? "מבטל..." : "← ביטול וחזרה לבחירת ציוד"}
       </button>
     </div>
   );
