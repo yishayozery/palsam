@@ -82,6 +82,7 @@ export const NAV: NavItem[] = [
   // ===== דוחות ובקרה =====
   { href: "/reports", label: "דוחות", icon: "📈", group: "דוחות ובקרה", cap: "reports.view" },
   { href: "/history", label: "היסטוריה", icon: "📜", group: "דוחות ובקרה", cap: "reports.view" },
+  { href: "/backup", label: "בדיקת גיבוי", icon: "📂", group: "דוחות ובקרה", cap: "reports.view" },
   { href: "/audit", label: "יומן פעולות", icon: "🧾", group: "דוחות ובקרה", cap: "audit.view" },
 
   // ===== עזרה =====

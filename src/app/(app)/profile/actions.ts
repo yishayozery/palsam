@@ -21,12 +21,13 @@ export async function updateProfile(
   const notes = String(formData.get("notes") || "").trim() || null;
   const requirePersonalIdOnHandover = formData.get("requirePersonalIdOnHandover") === "on";
   const notificationEmail = String(formData.get("notificationEmail") || "").trim() || null;
-  const emailToBattalion = formData.get("emailToBattalion") === "on";
+  const emailToBattalion = notificationEmail ? true : formData.get("emailToBattalion") === "on";
   const rawLogo = String(formData.get("logoData") || "");
   const logoData = rawLogo === "__CLEAR__" ? null : rawLogo.startsWith("data:image") ? rawLogo : undefined;
 
   if (!name) return { error: "שם הגדוד חובה" };
   if (!code) return { error: "קוד הגדוד חובה" };
+  if (!notificationEmail) return { error: "מייל לגיבוי תנועות חובה" };
   if (brigade && !/^\d+$/.test(brigade)) return { error: "מספר חטיבה חייב להכיל ספרות בלבד" };
 
   // בדיקת ייחודיות לקוד (אם השתנה)

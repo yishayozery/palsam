@@ -89,21 +89,21 @@ export default function ProfileForm({ battalion }: { battalion: B }) {
         </label>
 
         {/* 📧 מייל לגיבוי תנועות */}
-        <div className="mt-3 p-3 rounded-lg border border-slate-200">
+        <div className="mt-3 p-3 rounded-lg border border-amber-300 bg-amber-50">
           <label className="block text-sm font-medium text-slate-800 mb-1">
-            📧 מייל לגיבוי תנועות (אופציונלי)
+            📧 מייל לגיבוי תנועות <span className="text-rose-600">*</span>
           </label>
           <input
             type="email"
             name="notificationEmail"
+            required
             defaultValue={battalion.notificationEmail ?? ""}
             placeholder="palsam-backup@battalion.com"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           />
           <div className="text-xs text-slate-500 mt-1.5">
-            אם מוגדר — כל פעולה מבצעית (חתימה, זיכוי, החתמה, מסירה, שיבוץ, שליחה לטנא) תישלח אוטומטית
-            לכתובת זו. שירות המייל מתפעל ע&quot;י Resend. אם השדה ריק או שאין מפתח API מוגדר, הפעולות
-            עדיין מתבצעות אך לא נשלח מייל.
+            כל פעולה מבצעית (חתימה, זיכוי, החתמה, מסירה, שיבוץ, שליחה לטנא) תישלח אוטומטית
+            לכתובת זו עם קבצי אקסל לגיבוי. שירות המייל מתפעל ע&quot;י Resend.
           </div>
         </div>
 
