@@ -30,6 +30,12 @@ type SquadRow = {
   soldierCount: number;
 };
 
+const ICON_OPTIONS = [
+  "✅", "⬅️", "➡️", "🔄", "🏥", "📚", "🏖️", "🤒", "📋", "🎖️",
+  "🔒", "❌", "🪖", "🛡️", "⚠️", "🚗", "🏠", "✈️", "💪", "🎯",
+  "⭐", "🔵", "🟢", "🔴", "🟡", "🟣", "⚫", "🟠",
+];
+
 const PRESET_STATUSES = [
   { name: "יום הגעה", color: "#10b981", icon: "⬅️", isPresent: true },
   { name: "נוכח", color: "#22c55e", icon: "✅", isPresent: true },
@@ -194,8 +200,21 @@ export default function AttendanceSettingsClient({
               </div>
               <div>
                 <label className="block text-[11px] text-slate-500 mb-1">אייקון</label>
-                <input value={statusIcon} onChange={(e) => setStatusIcon(e.target.value)} placeholder="✅"
-                  className="rounded border border-slate-300 px-2 py-1.5 text-sm w-16" />
+                <div className="flex items-center gap-1.5">
+                  <span className="w-9 h-9 flex items-center justify-center rounded border-2 border-slate-300 bg-white text-xl">
+                    {statusIcon || "·"}
+                  </span>
+                  <input value={statusIcon} onChange={(e) => setStatusIcon(e.target.value)} placeholder="✅"
+                    className="rounded border border-slate-300 px-2 py-1.5 text-sm w-12" />
+                </div>
+                <div className="flex flex-wrap gap-1 mt-1.5 max-w-[280px]">
+                  {ICON_OPTIONS.map((ico) => (
+                    <button key={ico} type="button" onClick={() => setStatusIcon(ico)}
+                      className={`w-7 h-7 rounded text-base hover:bg-slate-100 transition ${statusIcon === ico ? "ring-2 ring-blue-500 bg-blue-50" : ""}`}>
+                      {ico}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="block text-[11px] text-slate-500 mb-1">סדר</label>
