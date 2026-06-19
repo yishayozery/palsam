@@ -14,6 +14,7 @@ type Item = {
   categoryId: string | null;
   warehouseType: "EQUIPMENT" | "COMMS" | "AMMO" | "ARMORY" | "VEHICLES" | "MEDICAL" | "GENERAL" | null;
   categoryMismatch?: boolean;
+  trackExpiry?: boolean;
   total: number;
   available: number;
   signedOnSoldiers: number;
@@ -127,6 +128,13 @@ function ExpandedRow({ item, statuses }: { item: Item; statuses: Status[] }) {
               <textarea name="serials" rows={2} placeholder="M4-1001&#10;M4-1002"
                 className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-mono" />
             </div>
+            {item.trackExpiry && (
+              <div>
+                <label className="block text-xs text-amber-900 font-bold mb-1">⏳ תאריך תפוגה</label>
+                <input type="date" name="expiryDate" required
+                  className="rounded-lg border-2 border-amber-400 bg-amber-50 px-2 py-1.5 text-sm" />
+              </div>
+            )}
             <button className="bg-emerald-600 text-white rounded-lg px-4 py-1.5 text-sm hover:bg-emerald-700">הוסף</button>
           </div>
         </form>
@@ -164,6 +172,13 @@ function ExpandedRow({ item, statuses }: { item: Item; statuses: Status[] }) {
             <input name="quantity" type="number" min="1" defaultValue="1"
               className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
           </div>
+          {item.trackExpiry && (
+            <div>
+              <label className="block text-xs text-amber-900 font-bold mb-1">⏳ תאריך תפוגה</label>
+              <input type="date" name="expiryDate" required
+                className="rounded-lg border-2 border-amber-400 bg-amber-50 px-2 py-1.5 text-sm" />
+            </div>
+          )}
           <button className="bg-emerald-600 text-white rounded-lg px-4 py-1.5 text-sm hover:bg-emerald-700">הוסף אצווה</button>
         </form>
         <form action={importLots} className="flex items-end gap-2 flex-wrap">

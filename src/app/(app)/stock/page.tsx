@@ -404,7 +404,7 @@ export default async function StockPage({
 
           return {
             id: i.id, name: i.name, sku: i.sku, unit: i.unit,
-            trackingMethod: i.trackingMethod, association: ASSOC[i.association],
+            trackingMethod: i.trackingMethod, trackExpiry: i.trackExpiry, association: ASSOC[i.association],
             category: i.category?.name ?? null,
             categoryId: i.categoryId ?? null,
             warehouseType: itemWhType,

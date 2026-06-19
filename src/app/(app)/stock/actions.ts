@@ -223,14 +223,19 @@ export async function declareSerials(formData: FormData) {
     return { error: `מספרי הסריאל הבאים כבר קיימים במלאי לפריט זה: ${list}` };
   }
 
+  const itemType = await prisma.itemType.findUnique({ where: { id: itemTypeId }, select: { trackExpiry: true } });
+  const expRaw = String(formData.get("expiryDate") || "").trim();
+  const expiryDate = expRaw ? new Date(expRaw) : null;
+  if (itemType?.trackExpiry && !expiryDate) {
+    return { error: "⏳ חובה למלא תאריך תפוגה לפריט זה" };
+  }
+
   let created = 0;
   const failed: string[] = [];
   await prisma.$transaction(async (tx) => {
     const transfer = await tx.transfer.create({
       data: { battalionId: bId, type: "INTAKE", status: "COMPLETED", toHolderId: wh.id, reason: "הזנת סריאליים ידני", externalUnit, externalContact, recipientPersonalId, createdById: user.id, approvedById: user.id, approvedAt: new Date() },
     });
-    const expRaw = String(formData.get("expiryDate") || "").trim();
-    const expiryDate = expRaw ? new Date(expRaw) : null;
     for (const sn of serials) {
       try {
         const su = await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: sn, statusId, currentHolderId: wh.id, expiryDate } });
@@ -310,9 +315,12 @@ export async function declareLot(formData: FormData) {
   const wh = await pickWarehouse(bId, itemTypeId);
   if (!wh) return { error: "לא נמצא מחסן מתאים לפריט זה" };
 
-  // תאריך תפוגה (אופציונלי — חשוב לרפואה/אצוות)
+  const itemType = await prisma.itemType.findUnique({ where: { id: itemTypeId }, select: { trackExpiry: true } });
   const expiryRaw = String(formData.get("expiryDate") || "").trim();
   const expiryDate = expiryRaw ? new Date(expiryRaw) : null;
+  if (itemType?.trackExpiry && !expiryDate) {
+    return { error: "⏳ חובה למלא תאריך תפוגה לפריט זה" };
+  }
 
   let dupErr: string | null = null;
   try {
