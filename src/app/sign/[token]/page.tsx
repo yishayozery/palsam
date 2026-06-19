@@ -80,40 +80,22 @@ export default async function PublicSignPage({
             }))}
           />
 
-          {/* 🔫 נוהל שמירת נשק — מוצג כשהחתמה מארמון */}
-          {sig.transfer?.fromHolder?.warehouseType === "ARMORY" && !isCompanySign && (
-            <div className="mb-4 bg-rose-50 border-2 border-rose-300 rounded-xl p-3">
-              <div className="text-[11px] font-bold text-rose-900 mb-1.5 uppercase tracking-wide">
-                🔫 {WEAPONS_AGREEMENT_TITLE}
-              </div>
-              <div className="text-[13px] text-slate-800 leading-relaxed space-y-1.5">
-                {sig.transfer.fromHolder.weaponsAgreementText
-                  ? sig.transfer.fromHolder.weaponsAgreementText.split("\n").filter(Boolean).map((line, i) => <p key={i}>{line}</p>)
-                  : WEAPONS_AGREEMENT_CLAUSES.map((c, i) => <p key={i}>{i + 1}. {c}</p>)
-                }
-              </div>
-              <div className="text-[11px] text-rose-700 mt-2 pt-2 border-t border-rose-200">
-                {WEAPONS_AGREEMENT_FOOTER}
-              </div>
-            </div>
-          )}
-
-          {/* 📝 תניית חתימה - חייב לקרוא לפני שחותם */}
-          {sig.transfer?.fromHolder?.signatureClause && (
-            <div className="mb-4 bg-amber-50 border-2 border-amber-300 rounded-xl p-3">
-              <div className="text-[11px] font-bold text-amber-900 mb-1.5 uppercase tracking-wide">
-                📝 הצהרת חייל ({sig.transfer.fromHolder.name})
-              </div>
-              <pre className="text-sm text-slate-800 whitespace-pre-wrap font-sans leading-relaxed">
-                {sig.transfer.fromHolder.signatureClause}
-              </pre>
-              <div className="text-[11px] text-amber-700 mt-2 pt-2 border-t border-amber-200">
-                ⚠️ קרא בעיון. החתימה למטה מאשרת שקראת ואתה מסכים לתנאים.
-              </div>
-            </div>
-          )}
-
-          <SignaturePad token={token} soldierName={signerName} isCompanySign={isCompanySign} />
+          <SignaturePad
+            token={token}
+            soldierName={signerName}
+            isCompanySign={isCompanySign}
+            weaponsAgreement={sig.transfer?.fromHolder?.warehouseType === "ARMORY" && !isCompanySign ? {
+              title: WEAPONS_AGREEMENT_TITLE,
+              clauses: sig.transfer.fromHolder.weaponsAgreementText
+                ? sig.transfer.fromHolder.weaponsAgreementText.split("\n").filter(Boolean)
+                : WEAPONS_AGREEMENT_CLAUSES.map((c, i) => `${i + 1}. ${c}`),
+              footer: WEAPONS_AGREEMENT_FOOTER,
+            } : undefined}
+            signatureClause={sig.transfer?.fromHolder?.signatureClause ? {
+              holderName: sig.transfer.fromHolder.name,
+              text: sig.transfer.fromHolder.signatureClause,
+            } : undefined}
+          />
         </div>
       </div>
     </div>

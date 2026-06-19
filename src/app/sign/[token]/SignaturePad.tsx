@@ -5,14 +5,21 @@ import { useRouter } from "next/navigation";
 import { completeSignature, getPostSignatureShareData, cancelSignatureByToken } from "@/app/(app)/signatures/actions";
 import { completeCompanySignature } from "@/app/(app)/signatures/company-actions";
 
+type WeaponsAgreement = { title: string; clauses: string[]; footer: string };
+type SignatureClause = { holderName: string; text: string };
+
 export default function SignaturePad({
   token,
   soldierName,
   isCompanySign = false,
+  weaponsAgreement,
+  signatureClause,
 }: {
   token: string;
   soldierName: string;
   isCompanySign?: boolean;
+  weaponsAgreement?: WeaponsAgreement;
+  signatureClause?: SignatureClause;
 }) {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -24,6 +31,8 @@ export default function SignaturePad({
   const [countdown, setCountdown] = useState(10);
   const [whatsappText, setWhatsappText] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const needsAck = !!(weaponsAgreement || signatureClause);
+  const [acknowledged, setAcknowledged] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -87,6 +96,7 @@ export default function SignaturePad({
   };
 
   const submit = async () => {
+    if (needsAck && !acknowledged) { setError("יש לאשר קריאת ההוראות לפני החתימה"); return; }
     if (!hasDrawn.current) { setError("נא לחתום בתיבה"); return; }
     setError("");
     setSubmitting(true);
@@ -166,6 +176,51 @@ export default function SignaturePad({
 
   return (
     <div>
+      {/* 🔫 נוהל נשק + 📝 תניית חתימה — מתקפלים עם צ'קבוקס */}
+      {needsAck && (
+        <div className="mb-4 space-y-2">
+          {weaponsAgreement && (
+            <details className="bg-rose-50 border-2 border-rose-300 rounded-xl overflow-hidden">
+              <summary className="px-3 py-2 cursor-pointer text-[12px] font-bold text-rose-900 flex items-center gap-1.5">
+                🔫 {weaponsAgreement.title}
+                <span className="text-[10px] font-normal text-rose-600 mr-auto">(לחץ לקריאה)</span>
+              </summary>
+              <div className="px-3 pb-3">
+                <div className="text-[13px] text-slate-800 leading-relaxed space-y-1.5">
+                  {weaponsAgreement.clauses.map((c, i) => <p key={i}>{c}</p>)}
+                </div>
+                <div className="text-[11px] text-rose-700 mt-2 pt-2 border-t border-rose-200">
+                  {weaponsAgreement.footer}
+                </div>
+              </div>
+            </details>
+          )}
+
+          {signatureClause && (
+            <details className="bg-amber-50 border-2 border-amber-300 rounded-xl overflow-hidden">
+              <summary className="px-3 py-2 cursor-pointer text-[12px] font-bold text-amber-900 flex items-center gap-1.5">
+                📝 הצהרת חייל ({signatureClause.holderName})
+                <span className="text-[10px] font-normal text-amber-600 mr-auto">(לחץ לקריאה)</span>
+              </summary>
+              <div className="px-3 pb-3">
+                <pre className="text-sm text-slate-800 whitespace-pre-wrap font-sans leading-relaxed">
+                  {signatureClause.text}
+                </pre>
+              </div>
+            </details>
+          )}
+
+          <label className={`flex items-center gap-2 rounded-lg p-2.5 border-2 cursor-pointer transition ${acknowledged ? "bg-emerald-50 border-emerald-400" : "bg-rose-50 border-rose-300"}`}>
+            <input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)}
+              className="w-5 h-5 rounded accent-emerald-600" />
+            <span className={`text-sm font-bold ${acknowledged ? "text-emerald-800" : "text-rose-800"}`}>
+              קראתי את ההוראות ואני מאשר/ת
+            </span>
+          </label>
+        </div>
+      )}
+
+      <div className={needsAck && !acknowledged ? "opacity-40 pointer-events-none" : ""}>
       <p className="text-sm text-slate-600 mb-2">
         אני, <span className="font-bold">{soldierName}</span>, מאשר/ת קבלת הציוד וחותם/ת:
       </p>
@@ -190,6 +245,7 @@ export default function SignaturePad({
         className="w-full mt-2 rounded-lg border border-slate-200 py-2 text-xs text-slate-500 hover:bg-slate-50 hover:text-slate-700 disabled:opacity-50">
         {cancelling ? "מבטל..." : "← ביטול וחזרה לבחירת ציוד"}
       </button>
+      </div>
     </div>
   );
 }
