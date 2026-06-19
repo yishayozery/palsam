@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "./prisma";
+import { buildTransferAttachments } from "./email-attachments";
 
 /**
  * שליחת אימייל דרך Resend HTTP API.
@@ -11,6 +12,7 @@ export async function sendEmail(opts: {
   subject: string;
   text: string;
   html?: string;
+  attachments?: { filename: string; content: string }[];
 }): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM ?? "PALSAM <onboarding@resend.dev>";
@@ -27,6 +29,7 @@ export async function sendEmail(opts: {
         from, to: recipients, subject: opts.subject,
         text: opts.text,
         ...(opts.html ? { html: opts.html } : {}),
+        ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
       }),
     });
     if (!res.ok) {
@@ -143,10 +146,30 @@ export async function notifyTransactionEmail(params: {
 
     if (allRecipients.size === 0) return;
 
+    const transferId = resolveTransferId(params.entity, params.entityId);
+    if (transferId) {
+      const rich = await buildTransferAttachments(transferId).catch(() => null);
+      if (rich) {
+        void sendEmail({
+          to: [...allRecipients], subject,
+          text,
+          html: rich.html,
+          attachments: rich.attachments,
+        });
+        return;
+      }
+    }
+
     void sendEmail({ to: [...allRecipients], subject, text });
   } catch {
     // לא מפיל שום פעולה אם המייל נכשל
   }
+}
+
+function resolveTransferId(entity: string, entityId: string | null | undefined): string | null {
+  if (!entityId) return null;
+  if (entity === "Transfer") return entityId;
+  return null;
 }
 
 /** מצא holder IDs מתוך entity כדי לשלוח מייל למחסנים/פלוגות המעורבים */
