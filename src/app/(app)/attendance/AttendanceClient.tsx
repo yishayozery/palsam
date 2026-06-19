@@ -279,6 +279,7 @@ export default function AttendanceClient({
               <select name="companyId" defaultValue={selectedCompanyId}
                 onChange={(e) => (e.target.form as HTMLFormElement).submit()}
                 className="rounded-lg border-2 border-slate-300 px-3 py-1.5 text-sm">
+                <option value="__all__">כל הפלוגות</option>
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </form>

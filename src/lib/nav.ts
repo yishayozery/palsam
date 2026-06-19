@@ -15,7 +15,6 @@ export const GROUP_ROLES: Record<string, Role[]> = {
   "ראשי": ["SUPER_ADMIN", "BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER", "MAGAD", "SAMAGAD", "SHALISH"],
   "עזרה": ["SUPER_ADMIN", "BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER", "MAGAD", "SAMAGAD", "SHALISH"],
   "שלישות": ["SHALISH"],
-  "ניהול שוטף": ["BATTALION_ADMIN", "MAGAD", "SAMAGAD"],
   "ארמון": ["BATTALION_ADMIN", "MAGAD", "SAMAGAD"],
   "מחסנים": ["BATTALION_ADMIN", "MAGAD", "SAMAGAD"],
   "המחסנים שלי": ["WAREHOUSE_MANAGER"],
@@ -26,17 +25,14 @@ export const GROUP_ROLES: Record<string, Role[]> = {
 export const NAV: NavItem[] = [
   // ===== ראשי =====
   { href: "/admin/battalions", label: "ניהול גדודים", icon: "🏛️", group: "ראשי", roles: ["SUPER_ADMIN"] },
-  { href: "/dashboard", label: "דשבורד", icon: "📊", group: "ראשי", cap: "reports.view" },
   { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "ראשי", cap: "battalion.profile" },
+  { href: "/dashboard", label: "דשבורד", icon: "📊", group: "ראשי", cap: "reports.view" },
+  { href: "/attendance", label: "נוכחות חיילים", icon: "📋", group: "ראשי", cap: "attendance.view" },
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "ראשי", cap: "soldiers.roster" },
   { href: "/permanent-items", label: "ציוד קבוע לפלוגה", icon: "📌", group: "ראשי", cap: "battalion.profile" },
   { href: "/armory-allocations", label: "הקצאות לפלוגה", icon: "📦", group: "ראשי", cap: "weapons.approve" },
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "ראשי", cap: "dispatch.manage" },
   { href: "/maintenance", label: "סטטוס רכבים", icon: "🔧", group: "ראשי", cap: "maintenance.manage" },
-  // ===== ניהול שוטף (מפמ + מגד + סמגד) =====
-  { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "ניהול שוטף", cap: "dispatch.manage" },
-  { href: "/attendance", label: "נוכחות חיילים", icon: "📋", group: "ניהול שוטף", cap: "attendance.view" },
-  { href: "/maintenance", label: "סטטוס רכבים", icon: "🔧", group: "ניהול שוטף", cap: "maintenance.manage" },
 
   // ===== ארמון (מפמ + מגד + סמגד) =====
   { href: "/armory-approvals", label: "אישור חיילים לנשק", icon: "🔫", group: "ארמון", cap: "weapons.approve" },

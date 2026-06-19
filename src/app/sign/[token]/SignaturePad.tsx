@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { completeSignature, getPostSignatureShareData } from "@/app/(app)/signatures/actions";
+import { completeSignature, getPostSignatureShareData, cancelSignatureByToken } from "@/app/(app)/signatures/actions";
 import { completeCompanySignature } from "@/app/(app)/signatures/company-actions";
 
 export default function SignaturePad({
@@ -23,6 +23,7 @@ export default function SignaturePad({
   const [error, setError] = useState("");
   const [countdown, setCountdown] = useState(10);
   const [whatsappText, setWhatsappText] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -65,6 +66,18 @@ export default function SignaturePad({
       window.removeEventListener("pointerup", up);
     };
   }, []);
+
+  const handleCancel = async () => {
+    if (!confirm("לבטל את ההחתמה ולחזור? תוכל ליצור החתמה חדשה עם הפריטים הנכונים.")) return;
+    setCancelling(true);
+    const res = await cancelSignatureByToken(token);
+    setCancelling(false);
+    if (res.ok) {
+      router.push("/signatures");
+    } else {
+      setError(res.error || "שגיאה בביטול");
+    }
+  };
 
   const clear = () => {
     const canvas = canvasRef.current;
@@ -173,6 +186,10 @@ export default function SignaturePad({
           {submitting ? "שולח..." : "אישור וחתימה"}
         </button>
       </div>
+      <button onClick={handleCancel} disabled={cancelling}
+        className="w-full mt-2 rounded-lg border border-slate-200 py-2 text-xs text-slate-500 hover:bg-slate-50 hover:text-slate-700 disabled:opacity-50">
+        {cancelling ? "מבטל..." : "← שכחתי פריט? ביטול וחזרה לבחירת ציוד"}
+      </button>
     </div>
   );
 }

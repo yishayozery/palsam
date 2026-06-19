@@ -41,9 +41,11 @@ export default async function AttendancePage({
     availableCompanies = companies.filter((c) => c.id === user.holderId);
   }
 
-  const selectedCompanyId = sp.companyId && availableCompanies.some((c) => c.id === sp.companyId)
-    ? sp.companyId
-    : availableCompanies[0]?.id;
+  const selectedCompanyId = sp.companyId === "__all__"
+    ? "__all__"
+    : sp.companyId && availableCompanies.some((c) => c.id === sp.companyId)
+      ? sp.companyId
+      : availableCompanies[0]?.id;
 
   if (!selectedCompanyId) redirect("/dashboard");
 
@@ -54,9 +56,16 @@ export default async function AttendancePage({
 
   const mode = (sp.mode === "record" ? "record" : "plan") as "plan" | "record";
 
+  const isAll = selectedCompanyId === "__all__";
+
   // Fetch soldiers
   const soldiers = await prisma.soldier.findMany({
-    where: { battalionId: bId, companyId: selectedCompanyId, active: true, enlisted: true },
+    where: {
+      battalionId: bId,
+      ...(isAll ? {} : { companyId: selectedCompanyId }),
+      active: true,
+      enlisted: true,
+    },
     orderBy: [{ squad: { sortOrder: "asc" } }, { fullName: "asc" }],
     select: {
       id: true,
@@ -66,12 +75,15 @@ export default async function AttendancePage({
       squad: { select: { name: true } },
       enlistedAt: true,
       callupClosedAt: true,
+      company: { select: { name: true } },
     },
   });
 
-  // Fetch squads for this company
+  // Fetch squads for this company (or all companies)
   const squads = await prisma.squad.findMany({
-    where: { companyId: selectedCompanyId, active: true },
+    where: isAll
+      ? { company: { battalionId: bId }, active: true }
+      : { companyId: selectedCompanyId, active: true },
     orderBy: { sortOrder: "asc" },
     select: { id: true, name: true },
   });
@@ -134,7 +146,7 @@ export default async function AttendancePage({
         selectedCompanyId={selectedCompanyId}
         soldiers={soldiers.map((s) => ({
           id: s.id,
-          fullName: s.fullName,
+          fullName: isAll ? `${s.fullName} (${s.company?.name ?? ""})` : s.fullName,
           personalNumber: s.personalNumber,
           squadId: s.squadId,
           squadName: s.squad?.name ?? null,

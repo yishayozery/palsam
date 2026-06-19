@@ -439,6 +439,25 @@ export async function checkinQuantity(formData: FormData) {
   revalidatePath("/signatures");
 }
 
+/** ביטול ציבורי לפי token — מאפשר לחייל/נמען לבטל לפני שחתם */
+export async function cancelSignatureByToken(token: string): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const sig = await prisma.signature.findUnique({ where: { token }, select: { id: true, status: true, transferId: true } });
+    if (!sig) return { error: "לא נמצא" };
+    if (sig.status !== "PENDING") return { error: "לא ניתן לבטל" };
+    await prisma.$transaction(async (tx) => {
+      await tx.signature.update({ where: { id: sig.id }, data: { status: "CANCELED" } });
+      if (sig.transferId) {
+        await tx.transfer.update({ where: { id: sig.transferId }, data: { status: "REJECTED" } });
+      }
+    });
+    revalidatePath("/signatures");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
 /** עטיפה void לשימוש ב-<form action={...}> ב-Server Components */
 export async function cancelSignatureForm(formData: FormData): Promise<void> {
   await cancelSignature(formData);

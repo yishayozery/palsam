@@ -46,7 +46,7 @@ export async function sendEmail(opts: {
 const NOTIFY_ACTIONS = new Set([
   "CREATE", "UPDATE", "DELETE",
   "INTAKE", "ISSUE", "RETURN", "SIGNOUT", "CHECKIN", "CHECKIN_QTY",
-  "CREATE_SIGNOUT", "SIGN", "CANCEL_SIGNATURE",
+  "SIGN", "CANCEL_SIGNATURE",
   "COMPANY_SIGN_OUT", "COMPANY_SIGN", "COMPANY_RETURN",
   "MISSION_COMPLETE", "MISSION_REOPEN",
   "SET_BASELINE", "SET_BASELINES_BULK",
@@ -146,12 +146,12 @@ export async function notifyTransactionEmail(params: {
 
     if (allRecipients.size === 0) return;
 
-    const transferId = resolveTransferId(params.entity, params.entityId);
+    const transferId = await resolveTransferId(params.entity, params.entityId);
     if (transferId) {
       const rich = await buildTransferAttachments(transferId).catch(() => null);
       if (rich) {
         void sendEmail({
-          to: [...allRecipients], subject,
+          to: [...allRecipients], subject: rich.subject,
           text,
           html: rich.html,
           attachments: rich.attachments,
@@ -166,9 +166,13 @@ export async function notifyTransactionEmail(params: {
   }
 }
 
-function resolveTransferId(entity: string, entityId: string | null | undefined): string | null {
+async function resolveTransferId(entity: string, entityId: string | null | undefined): Promise<string | null> {
   if (!entityId) return null;
   if (entity === "Transfer") return entityId;
+  if (entity === "Signature") {
+    const sig = await prisma.signature.findUnique({ where: { id: entityId }, select: { transferId: true } });
+    return sig?.transferId ?? null;
+  }
   return null;
 }
 

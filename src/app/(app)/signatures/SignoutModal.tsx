@@ -46,6 +46,8 @@ export default function SignoutModal({
   const [pendingKitPicks, setPendingKitPicks] = useState<PendingKitPick[]>([]);
   const [kitPickerSearch, setKitPickerSearch] = useState("");
   // התראת חוסר ערכה — לפני שמרחיבים: מפרטת מה חסר, מאפשרת המשך עם מה שיש
+  const [mobileCartOpen, setMobileCartOpen] = useState(false);
+
   const [kitShortageDialog, setKitShortageDialog] = useState<{
     kitId: string;
     kitName: string;
@@ -294,8 +296,8 @@ export default function SignoutModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-2 md:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden relative">
+    <div className="fixed inset-0 bg-black/60 flex items-end md:items-center justify-center z-50 md:p-4">
+      <div className="bg-white md:rounded-2xl rounded-t-2xl shadow-2xl w-full max-w-5xl max-h-[85dvh] md:max-h-[95vh] flex flex-col overflow-hidden relative" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         {/* כותרת */}
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 flex items-center justify-between shrink-0">
           <div>
@@ -718,6 +720,52 @@ export default function SignoutModal({
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Mobile sticky cart summary — visible only on small screens when cart has items */}
+        {cart.length > 0 && (
+          <div className="md:hidden border-t-2 border-emerald-300 bg-emerald-50 shrink-0">
+            <button
+              onClick={() => setMobileCartOpen(!mobileCartOpen)}
+              className="w-full flex items-center justify-between px-3 py-2"
+            >
+              <div className="flex items-center gap-2 text-sm font-bold text-emerald-800">
+                <span>🛒</span>
+                <span>{cart.length} פריטים בעגלה</span>
+              </div>
+              <span className="text-emerald-600 text-xs">{mobileCartOpen ? "▲ סגור" : "▼ פרט"}</span>
+            </button>
+            {mobileCartOpen && (
+              <div className="max-h-48 overflow-y-auto px-2 pb-2 space-y-1">
+                {cart.map((c, i) => (
+                  <div key={i} className="bg-white border border-slate-200 rounded-lg px-2 py-1.5 flex items-center gap-2 text-xs">
+                    {c.type === "serial" ? (
+                      <>
+                        <span>{c.lotQty ? "💣" : "🔫"}</span>
+                        <div className="flex-1 min-w-0 truncate">
+                          <span className="font-medium">{c.itemName}</span>
+                          {c.lotQty && <span className="text-orange-700 mr-1">×{c.lotQty}</span>}
+                          <span className="text-slate-400 mr-1 font-mono">{c.serial}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span>{c.fromKit ? "🎒" : "📦"}</span>
+                        <div className="flex-1 min-w-0 truncate font-medium">{c.itemName}</div>
+                        <input type="number" min={1} value={c.quantity}
+                          onChange={(e) => updateCartQty(i, parseInt(e.target.value) || 1)}
+                          className="w-12 rounded border border-slate-300 px-1 py-0.5 text-center text-xs" />
+                      </>
+                    )}
+                    <button onClick={() => removeCart(i)} className="text-rose-400 hover:text-rose-700 px-0.5 shrink-0">✕</button>
+                  </div>
+                ))}
+                <button onClick={() => setCart([])} className="w-full text-center text-[10px] text-rose-500 hover:text-rose-700 py-1">
+                  נקה הכל
+                </button>
+              </div>
+            )}
           </div>
         )}
 
