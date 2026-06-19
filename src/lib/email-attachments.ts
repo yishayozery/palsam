@@ -89,7 +89,8 @@ function buildEmailHtml(t: TransferWithDetails): string {
     </div>
 
     <table style="width:100%;font-size:13px;margin-bottom:16px" cellpadding="4">
-      <tr><td style="color:#64748b;width:60px">תאריך:</td><td><b>${dateStr} ${timeStr}</b></td></tr>
+      <tr><td style="color:#64748b;width:80px">מס׳ תנועה:</td><td><b style="font-family:monospace;font-size:14px;letter-spacing:0.05em">${docNumber}</b></td></tr>
+      <tr><td style="color:#64748b">תאריך:</td><td><b>${dateStr} ${timeStr}</b></td></tr>
       <tr><td style="color:#64748b">מאת:</td><td><b>${fromName}</b></td></tr>
       <tr><td style="color:#64748b">אל:</td><td><b>${toName}</b>${t.toSoldier?.personalNumber ? ` (מ.א. ${t.toSoldier.personalNumber})` : ""}</td></tr>
       <tr><td style="color:#64748b">סטטוס:</td><td>${TRANSFER_STATUS[t.status]}</td></tr>
@@ -264,16 +265,28 @@ function buildPrintableHtml(t: TransferWithDetails): string {
 async function buildExcelBuffer(t: TransferWithDetails): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "PALSAM";
+  const docNumber = t.id.slice(-8).toUpperCase();
+  const dateStr = t.createdAt.toLocaleDateString("he-IL") + " " + t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+  const fromName = senderName(t);
+  const toName = recipientName(t);
+  const typeName = TRANSFER_TYPE[t.type] ?? t.type;
+
   const ws = wb.addWorksheet("תעודה", { views: [{ rightToLeft: true }] });
 
   ws.columns = [
     { header: "#", key: "idx", width: 5 },
+    { header: "מס׳ תנועה", key: "docNum", width: 14 },
     { header: "פריט", key: "item", width: 28 },
     { header: "מק״ט", key: "sku", width: 14 },
     { header: "סריאלי", key: "sn", width: 18 },
     { header: "כמות", key: "qty", width: 10 },
     { header: "יחידה", key: "unit", width: 10 },
-    { header: "סטטוס", key: "status", width: 12 },
+    { header: "סטטוס פריט", key: "status", width: 12 },
+    { header: "סוג תנועה", key: "type", width: 14 },
+    { header: "תאריך", key: "date", width: 18 },
+    { header: "מאת", key: "from", width: 18 },
+    { header: "אל", key: "to", width: 18 },
+    { header: "מבצע", key: "createdBy", width: 16 },
   ];
   ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F2937" } };
   ws.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -282,30 +295,37 @@ async function buildExcelBuffer(t: TransferWithDetails): Promise<Buffer> {
     const l = t.lines[i];
     ws.addRow({
       idx: i + 1,
+      docNum: docNumber,
       item: l.itemType.name,
       sku: l.itemType.sku ?? "",
       sn: l.serialUnit?.serialNumber ?? "—",
       qty: l.quantity,
       unit: l.itemType.unit,
       status: l.status?.name ?? "",
+      type: typeName,
+      date: dateStr,
+      from: fromName,
+      to: toName,
+      createdBy: t.createdBy.fullName,
     });
   }
 
   const totalQty = t.lines.reduce((s, l) => s + (l.quantity || (l.serialUnit?.lotQuantity ?? 1)), 0);
-  const sumRow = ws.addRow({ idx: "", item: "סה״כ", sku: "", sn: "", qty: totalQty, unit: "", status: `${t.lines.length} שורות` });
+  const sumRow = ws.addRow({ idx: "", docNum: "", item: "סה״כ", sku: "", sn: "", qty: totalQty, unit: "", status: `${t.lines.length} שורות`, type: "", date: "", from: "", to: "", createdBy: "" });
   sumRow.font = { bold: true };
 
   const infoWs = wb.addWorksheet("פרטי תעודה", { views: [{ rightToLeft: true }] });
   infoWs.columns = [{ header: "שדה", key: "field", width: 20 }, { header: "ערך", key: "value", width: 40 }];
   infoWs.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F2937" } };
   infoWs.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-  infoWs.addRow({ field: "מס׳ תעודה", value: t.id.slice(-8).toUpperCase() });
-  infoWs.addRow({ field: "סוג", value: TRANSFER_TYPE[t.type] });
-  infoWs.addRow({ field: "תאריך", value: t.createdAt.toLocaleDateString("he-IL") + " " + t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" }) });
+  infoWs.addRow({ field: "מס׳ תנועה", value: docNumber });
+  infoWs.addRow({ field: "מזהה מלא (ID)", value: t.id });
+  infoWs.addRow({ field: "סוג", value: typeName });
+  infoWs.addRow({ field: "תאריך", value: dateStr });
   infoWs.addRow({ field: "מאת", value: t.fromHolder?.name ?? "חטיבה" });
-  infoWs.addRow({ field: "אל", value: recipientName(t) });
+  infoWs.addRow({ field: "אל", value: toName });
   if (t.toSoldier?.personalNumber) infoWs.addRow({ field: "מ.א.", value: t.toSoldier.personalNumber });
-  infoWs.addRow({ field: "סטטוס", value: TRANSFER_STATUS[t.status] });
+  infoWs.addRow({ field: "סטטוס תעודה", value: TRANSFER_STATUS[t.status] });
   infoWs.addRow({ field: "בוצע ע״י", value: t.createdBy.fullName });
   if (t.approvedBy) infoWs.addRow({ field: "אושר ע״י", value: t.approvedBy.fullName });
   if (t.reason) infoWs.addRow({ field: "הערה", value: t.reason });
