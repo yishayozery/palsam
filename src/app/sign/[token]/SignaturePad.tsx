@@ -7,6 +7,7 @@ import { completeCompanySignature } from "@/app/(app)/signatures/company-actions
 
 type WeaponsAgreement = { title: string; clauses: string[]; footer: string };
 type SignatureClause = { holderName: string; text: string };
+type CommanderApproval = { name: string; date: string; signature: string | null };
 
 export default function SignaturePad({
   token,
@@ -14,12 +15,14 @@ export default function SignaturePad({
   isCompanySign = false,
   weaponsAgreement,
   signatureClause,
+  commanderApproval,
 }: {
   token: string;
   soldierName: string;
   isCompanySign?: boolean;
   weaponsAgreement?: WeaponsAgreement;
   signatureClause?: SignatureClause;
+  commanderApproval?: CommanderApproval;
 }) {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -217,6 +220,27 @@ export default function SignaturePad({
               קראתי את ההוראות ואני מאשר/ת
             </span>
           </label>
+        </div>
+      )}
+
+      {/* אישור מפקד — חתימת מגד/סמגד/מפמ */}
+      {commanderApproval && (
+        <div className="mb-4 bg-blue-50 border-2 border-blue-300 rounded-xl p-3">
+          <div className="text-[11px] font-bold text-blue-900 mb-1 uppercase tracking-wide">
+            🎖️ אישור מפקד לנשיאת נשק
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 text-sm text-slate-800">
+              <div>מאשר: <span className="font-bold">{commanderApproval.name}</span></div>
+              <div className="text-xs text-slate-500">תאריך: {commanderApproval.date}</div>
+            </div>
+            {commanderApproval.signature && (
+              <div className="shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={commanderApproval.signature} alt="חתימת מפקד" className="h-12 w-auto border border-blue-200 rounded bg-white p-0.5" />
+              </div>
+            )}
+          </div>
         </div>
       )}
 

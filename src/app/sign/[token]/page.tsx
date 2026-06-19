@@ -42,6 +42,21 @@ export default async function PublicSignPage({
   if (!sig) {
     return <CenteredWithRedirect title="קישור לא תקין" text="ההחתמה אינה קיימת." tone="error" />;
   }
+
+  // אישור מפקד לנשק — טוענים שם + חתימה של המאשר
+  const isArmoryTransfer = sig.transfer?.fromHolder?.warehouseType === "ARMORY" && !isCompanySign;
+  let commanderApproval: { name: string; date: string; signature: string | null } | undefined;
+  if (isArmoryTransfer && sig.soldier?.weaponsApprovedById) {
+    const approver = await prisma.appUser.findUnique({
+      where: { id: sig.soldier.weaponsApprovedById },
+      select: { fullName: true },
+    });
+    commanderApproval = {
+      name: approver?.fullName ?? "מפקד",
+      date: sig.soldier.weaponsApprovedAt?.toLocaleDateString("he-IL") ?? "",
+      signature: sig.soldier.weaponsApprovalSignature ?? null,
+    };
+  }
   if (sig.status === "SIGNED") {
     return <CenteredWithRedirect title="✅ נחתם בהצלחה" text={`תודה, ${signerName}. החתימה נקלטה במערכת.`} tone="ok" />;
   }
@@ -84,7 +99,8 @@ export default async function PublicSignPage({
             token={token}
             soldierName={signerName}
             isCompanySign={isCompanySign}
-            weaponsAgreement={sig.transfer?.fromHolder?.warehouseType === "ARMORY" && !isCompanySign ? {
+            commanderApproval={commanderApproval}
+            weaponsAgreement={isArmoryTransfer && sig.transfer?.fromHolder ? {
               title: WEAPONS_AGREEMENT_TITLE,
               clauses: sig.transfer.fromHolder.weaponsAgreementText
                 ? sig.transfer.fromHolder.weaponsAgreementText.split("\n").filter(Boolean)
