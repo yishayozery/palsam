@@ -349,14 +349,7 @@ export default function SignoutModal({
               )}
             </div>
           </div>
-          {selectedSoldier && (
-            <div className="mt-2 bg-white border border-blue-300 rounded-lg px-3 py-1.5 text-sm flex items-center gap-2">
-              <span className="text-lg">🪖</span>
-              <b>{selectedSoldier.name}</b>
-              <span className="font-mono text-xs text-slate-500">{selectedSoldier.pn}</span>
-              {selectedSoldier.companyName && <span className="text-xs text-slate-500">· {selectedSoldier.companyName}</span>}
-            </div>
-          )}
+          {/* שם החייל כבר מוצג ב-select — לא צריך שורה נוספת */}
         </div>
 
         {/* גוף: דסקטופ 2 עמודות; מובייל 1 עמודה - מלאי קודם (גלילה משלו), עגלה בהמשך */}
@@ -490,35 +483,33 @@ export default function SignoutModal({
 
           {/* === עמודה שמאלית — מלאי זמין === */}
           <div className="flex flex-col bg-white order-1 md:order-2 md:min-h-0">
-            <div className="p-3 border-b border-slate-200 bg-white sticky top-0 shrink-0 space-y-2">
-              {/* ⬆ בורר ערכה — קומפקטי, לא תופס מקום */}
-              {kits.length > 0 && (
-                <details className="bg-violet-50 border border-violet-200 rounded-lg">
-                  <summary className="px-2 py-1.5 cursor-pointer text-[11px] font-semibold text-violet-900 flex items-center justify-between">
-                    <span>📦 {selectedKit ? `ערכה: ${selectedKit.name}` : "בחר ערכה (מילוי אוטומטי)"}</span>
-                    {selectedKit && <span className="text-emerald-600 text-[10px]">✓ {selectedKit.lines.length} פריטים</span>}
-                  </summary>
-                  <div className="px-2 pb-2">
-                    <select value={kitId} onChange={(e) => onPickKit(e.target.value)}
-                      className="w-full rounded-lg border border-violet-300 px-2 py-1.5 text-sm bg-white">
-                      <option value="">— ללא ערכה / בחירה ידנית —</option>
-                      {kits.map((k) => <option key={k.id} value={k.id}>{k.name} ({k.lines.length} פריטים)</option>)}
-                    </select>
-                    {selectedKit && (
-                      <p className="text-[10px] text-violet-700 mt-1">
-                        {selectedKit.lines.map((l) => `${l.name}×${l.qty}`).join(" · ")}
-                      </p>
-                    )}
-                  </div>
-                </details>
-              )}
-              <div className="flex items-center gap-2">
-                <input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="🔍 חפש פריט..."
-                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
-                <span className="text-xs text-slate-400 shrink-0">({availableUnits.length + availableBalances.length})</span>
-              </div>
+            <div className="p-2 border-b border-slate-200 bg-white sticky top-0 shrink-0">
+              <details>
+                <summary className="cursor-pointer text-sm text-slate-600 flex items-center gap-1.5 px-1 py-1">
+                  🔍 חפש פריט...
+                  <span className="text-xs text-slate-400 mr-auto">({availableUnits.length + availableBalances.length})</span>
+                </summary>
+                <input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="הקלד שם פריט..."
+                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm mt-1" autoFocus />
+              </details>
             </div>
             <div className="flex-1 md:overflow-y-auto p-2 space-y-1.5 min-h-[200px]">
+              {/* בורר ערכה — נגלל עם שאר הפריטים */}
+              {kits.length > 0 && (
+                <div className="bg-violet-50 border border-violet-200 rounded-lg p-2 mb-1">
+                  <label className="block text-[11px] font-semibold text-violet-900 mb-1">📦 ערכה מוכנה</label>
+                  <select value={kitId} onChange={(e) => onPickKit(e.target.value)}
+                    className="w-full rounded-lg border border-violet-300 px-2 py-1.5 text-sm bg-white">
+                    <option value="">— ללא ערכה / בחירה ידנית —</option>
+                    {kits.map((k) => <option key={k.id} value={k.id}>{k.name} ({k.lines.length} פריטים)</option>)}
+                  </select>
+                  {selectedKit && (
+                    <p className="text-[10px] text-violet-700 mt-1">
+                      ✓ {selectedKit.lines.map((l) => `${l.name}×${l.qty}`).join(" · ")}
+                    </p>
+                  )}
+                </div>
+              )}
               {availableUnits.length === 0 && availableBalances.length === 0 && (
                 <div className="text-center text-slate-400 py-10 text-sm">
                   אין פריטים זמינים במחסן שלך.<br />הוסף מלאי קודם ב"מלאי המחסן".
