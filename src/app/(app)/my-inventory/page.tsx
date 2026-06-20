@@ -133,11 +133,12 @@ export default async function MyInventoryPage() {
   // qty חתום = totalsMap[item] - (כמותי במחסן + סריאלי אצל הפלוגה)
   for (const [itemTypeId, r] of standardMap.entries()) {
     const total = totalsMap.get(itemTypeId) ?? 0;
-    r.current = total;
-    r.diff = total - r.baseline;
     const heldHere = Array.from(r.statusBreakdown.values()).reduce((s, b) => s + b.qty, 0);
     const qtySignedToSoldiers = Math.max(0, total - heldHere);
-    r.signedOnSoldiers += qtySignedToSoldiers; // קודם רק סריאלי-חתום, עכשיו גם כמותי-חתום
+    r.signedOnSoldiers += qtySignedToSoldiers;
+    // "יש" = מלאי פיזי בפלוגה (סה"כ פחות חתום על חיילים)
+    r.current = total - r.signedOnSoldiers;
+    r.diff = r.current - r.baseline;
   }
   const standardRows = Array.from(standardMap.values()).sort((a, b) =>
     a.itemName.localeCompare(b.itemName)
