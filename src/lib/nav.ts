@@ -67,7 +67,7 @@ export const NAV: NavItem[] = [
 
   // ===== המחסנים שלי (קצין מחסן — תפעול שוטף) =====
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "המחסנים שלי", cap: "dispatch.manage" },
-  { href: "/reps", label: "נציגי פלוגות", icon: "🤝", group: "המחסנים שלי", cap: "reps.manage" },
+
   { href: "/items", label: "הגדרת פריטים", icon: "🏷️", group: "המחסנים שלי", cap: "catalog.manage" },
   { href: "/stock", label: "מלאי המחסן", icon: "📋", group: "המחסנים שלי", cap: "warehouse.operate" },
   { href: "/stock/brigade", label: "החתמות/זיכויי חטיבה", icon: "🤝", group: "המחסנים שלי", cap: "warehouse.operate" },

@@ -93,10 +93,25 @@ export default async function WarehouseDetailPage({
         include: { itemType: true, status: true, currentHolder: true },
       })
     : [];
-  // משתמשי המחסן: קציני המחסן + נציגי הפלוגות שהמחסן עובד מולן
-  const warehouseUsers = isUsersTab
-    ? await prisma.appUser.findMany({ where: { holderId: warehouse.id, role: "WAREHOUSE_MANAGER" } })
-    : [];
+  // משתמשי המחסן: קציני המחסן + מפקדי פלוגות (CompanyRole.isCommander)
+  const [warehouseUsers, companyCommanders] = isUsersTab
+    ? await Promise.all([
+        prisma.appUser.findMany({ where: { holderId: warehouse.id, role: "WAREHOUSE_MANAGER" } }),
+        prisma.soldier.findMany({
+          where: {
+            battalionId: bId,
+            active: true,
+            companyRole: { isCommander: true },
+            companyId: { in: companies.map((c) => c.id) },
+          },
+          include: {
+            company: { select: { name: true } },
+            companyRole: { select: { name: true } },
+          },
+          orderBy: [{ company: { name: "asc" } }, { companyRole: { sortOrder: "asc" } }, { fullName: "asc" }],
+        }),
+      ])
+    : [[], []];
 
   return (
     <div>
@@ -176,14 +191,14 @@ export default async function WarehouseDetailPage({
                   <Td>{warehouse.name}</Td>
                 </tr>
               ))}
-              {links.map((l) => (
-                <tr key={l.id}>
-                  <Td className="font-medium">{l.repUser?.fullName ?? <span className="text-slate-400">— ללא נציג —</span>}</Td>
-                  <Td><Badge className="bg-slate-200 text-slate-700">רס״פ פלוגתי</Badge></Td>
-                  <Td>{l.company.name}</Td>
+              {companyCommanders.map((s) => (
+                <tr key={s.id}>
+                  <Td className="font-medium">{s.fullName}</Td>
+                  <Td><Badge className="bg-emerald-100 text-emerald-700">⭐ {s.companyRole?.name ?? "מפקד"}</Badge></Td>
+                  <Td>{s.company?.name ?? "—"}</Td>
                 </tr>
               ))}
-              {warehouseUsers.length === 0 && links.length === 0 && (
+              {warehouseUsers.length === 0 && companyCommanders.length === 0 && (
                 <tr><Td><span className="text-slate-400 py-4 block">אין משתמשים משויכים</span></Td></tr>
               )}
             </tbody>

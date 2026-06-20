@@ -191,7 +191,7 @@ export default function CompanySignModal({
                 אין רס״פ או מ״פ פעיל בפלוגה <b>{selectedCompany.name}</b>. צריך מישהו שיחתום על קבלת הציוד.
               </p>
               <div className="flex gap-2 text-xs">
-                <a href="/reps" className="bg-rose-700 text-white rounded px-3 py-1.5 hover:bg-rose-800">+ הזמן רס״פ ל-{selectedCompany.name}</a>
+                <a href="/soldiers" className="bg-rose-700 text-white rounded px-3 py-1.5 hover:bg-rose-800">הגדר מפקדים ב-{selectedCompany.name}</a>
                 <a href="/org" className="border border-rose-300 rounded px-3 py-1.5 hover:bg-rose-100">/org</a>
               </div>
             </div>
