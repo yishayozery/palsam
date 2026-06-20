@@ -82,13 +82,23 @@ export default async function MyInventoryPage() {
     unit: string;
     categoryName: string | null;
     warehouseType: string | null;
+    sourceWarehouseName: string | null;
     baseline: number;
-    current: number;
-    diff: number; // חיובי = עודף לזיכוי, שלילי = חסר, אפס = מאוזן
+    companyTotal: number; // סה"כ חתום על הפלוגה (כולל חתום על חיילים)
+    current: number; // במלאי (פיזי, לא כולל חתום)
+    diff: number;
     statusBreakdown: Map<string, StatusBreakdown>;
-    signedOnSoldiers: number; // כמה יחידות חתומות על חיילים
-    serialNumbers: string[]; // SNs (אם יש)
+    signedOnSoldiers: number;
+    serialNumbers: string[];
   };
+  // מיפוי warehouseType → שם מחסן (לסינון לפי מחסן מחתים)
+  const whTypeToName = new Map<string, string>();
+  for (const w of warehouses) {
+    if (w.warehouseType && !whTypeToName.has(w.warehouseType)) {
+      whTypeToName.set(w.warehouseType, w.name);
+    }
+  }
+
   const standardMap = new Map<string, StandardRow>();
   const makeRow = (itemTypeId: string, sample: { name: string; sku: string | null; unit: string; category: { name: string; warehouseType: string | null } | null }): StandardRow => ({
     itemTypeId,
@@ -97,7 +107,9 @@ export default async function MyInventoryPage() {
     unit: sample.unit,
     categoryName: sample.category?.name ?? null,
     warehouseType: sample.category?.warehouseType ?? null,
+    sourceWarehouseName: sample.category?.warehouseType ? (whTypeToName.get(sample.category.warehouseType) ?? null) : null,
     baseline: 0,
+    companyTotal: 0,
     current: 0,
     diff: 0,
     statusBreakdown: new Map(),
@@ -133,10 +145,10 @@ export default async function MyInventoryPage() {
   // qty חתום = totalsMap[item] - (כמותי במחסן + סריאלי אצל הפלוגה)
   for (const [itemTypeId, r] of standardMap.entries()) {
     const total = totalsMap.get(itemTypeId) ?? 0;
+    r.companyTotal = total;
     const heldHere = Array.from(r.statusBreakdown.values()).reduce((s, b) => s + b.qty, 0);
     const qtySignedToSoldiers = Math.max(0, total - heldHere);
     r.signedOnSoldiers += qtySignedToSoldiers;
-    // "יש" = מלאי פיזי בפלוגה (סה"כ פחות חתום על חיילים)
     r.current = total - r.signedOnSoldiers;
     r.diff = r.current - r.baseline;
   }
@@ -147,7 +159,8 @@ export default async function MyInventoryPage() {
   const surplus = standardRows.filter((r) => r.diff > 0 && r.baseline > 0); // יש מה לזכות (עודף מעל תקן)
   const balanced = standardRows.filter((r) => r.diff === 0 && r.baseline > 0); // מאוזן בדיוק לתקן
 
-  // 📊 ספירות מאוחדות לדשבורד - מהשורות המסונכרנות (מתחשב גם בחתום-חיילים)
+  // 📊 ספירות מאוחדות לדשבורד
+  const totalCompanySigned = standardRows.reduce((s, r) => s + r.companyTotal, 0);
   totals = {
     totalItems: standardRows.reduce((s, r) => s + r.current, 0),
     defective: standardRows.reduce((s, r) =>
@@ -209,14 +222,18 @@ export default async function MyInventoryPage() {
         }
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
         <Card className="p-3">
-          <div className="text-xs text-slate-500">סה״כ פריטים</div>
-          <div className="text-2xl font-bold mt-1">{totals.totalItems}</div>
+          <div className="text-xs text-slate-500">📋 חתום על הפלוגה</div>
+          <div className="text-2xl font-bold mt-1 text-purple-600">{totalCompanySigned}</div>
         </Card>
         <Card className="p-3">
-          <div className="text-xs text-slate-500">חתום על חיילים</div>
+          <div className="text-xs text-slate-500">🪖 חתום על חיילים</div>
           <div className="text-2xl font-bold mt-1 text-blue-600">{totals.signedOnSoldiers}</div>
+        </Card>
+        <Card className="p-3">
+          <div className="text-xs text-slate-500">📦 במלאי</div>
+          <div className="text-2xl font-bold mt-1">{totals.totalItems}</div>
         </Card>
         <Card className="p-3">
           <div className="text-xs text-slate-500">בלאי / אבוד</div>
@@ -245,7 +262,9 @@ export default async function MyInventoryPage() {
           unit: r.unit,
           categoryName: r.categoryName,
           warehouseType: r.warehouseType,
+          sourceWarehouseName: r.sourceWarehouseName,
           baseline: r.baseline,
+          companyTotal: r.companyTotal,
           current: r.current,
           diff: r.diff,
           statusBreakdown: Array.from(r.statusBreakdown.values()),

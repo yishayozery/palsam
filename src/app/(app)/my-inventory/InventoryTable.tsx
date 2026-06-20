@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from "react";
 import { Card, Badge } from "@/components/ui";
-import { WAREHOUSE_TYPE_SHORT, WAREHOUSE_TYPE_ICON } from "@/lib/rbac";
 
 export type StatusBreakdown = { statusName: string; qty: number; isWear: boolean; isLoss: boolean };
 export type StandardRow = {
@@ -12,7 +11,9 @@ export type StandardRow = {
   unit: string;
   categoryName: string | null;
   warehouseType: string | null;
+  sourceWarehouseName: string | null;
   baseline: number;
+  companyTotal: number;
   current: number;
   diff: number;
   statusBreakdown: { statusName: string; qty: number; isWear: boolean; isLoss: boolean }[];
@@ -27,11 +28,14 @@ export default function InventoryTable({ rows }: { rows: StandardRow[] }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [whFilter, setWhFilter] = useState("");
 
-  // אפשרויות מחסן/קטגוריה
-  const warehouseTypes = useMemo(() => {
-    const s = new Set<string>();
-    rows.forEach((r) => r.warehouseType && s.add(r.warehouseType));
-    return Array.from(s).sort();
+  const sourceWarehouses = useMemo(() => {
+    const s = new Map<string, string>();
+    rows.forEach((r) => {
+      if (r.sourceWarehouseName && !s.has(r.sourceWarehouseName)) {
+        s.set(r.sourceWarehouseName, r.sourceWarehouseName);
+      }
+    });
+    return Array.from(s.keys()).sort();
   }, [rows]);
 
   const filtered = useMemo(() => {
@@ -40,7 +44,7 @@ export default function InventoryTable({ rows }: { rows: StandardRow[] }) {
         const s = q.toLowerCase();
         if (!`${r.itemName} ${r.sku ?? ""} ${r.categoryName ?? ""}`.toLowerCase().includes(s)) return false;
       }
-      if (whFilter && r.warehouseType !== whFilter) return false;
+      if (whFilter && r.sourceWarehouseName !== whFilter) return false;
       switch (statusFilter) {
         case "shortage": if (!(r.diff < 0 && r.baseline > 0)) return false; break;
         case "balanced": if (!(r.diff === 0 && r.baseline > 0)) return false; break;
@@ -84,11 +88,9 @@ export default function InventoryTable({ rows }: { rows: StandardRow[] }) {
             className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
           <select value={whFilter} onChange={(e) => setWhFilter(e.target.value)}
             className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
-            <option value="">📋 כל הקטגוריות</option>
-            {warehouseTypes.map((wh) => (
-              <option key={wh} value={wh}>
-                {WAREHOUSE_TYPE_ICON[wh as keyof typeof WAREHOUSE_TYPE_ICON]} {WAREHOUSE_TYPE_SHORT[wh as keyof typeof WAREHOUSE_TYPE_SHORT] ?? wh}
-              </option>
+            <option value="">🏭 כל המחסנים</option>
+            {sourceWarehouses.map((wh) => (
+              <option key={wh} value={wh}>{wh}</option>
             ))}
           </select>
           {(q || whFilter || statusFilter !== "all") && (
@@ -118,11 +120,12 @@ export default function InventoryTable({ rows }: { rows: StandardRow[] }) {
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="text-right p-2 font-medium text-xs text-slate-600">פריט</th>
-                <th className="text-right p-2 font-medium text-xs text-slate-600">קטגוריה</th>
+                <th className="text-right p-2 font-medium text-xs text-slate-600">מחסן</th>
                 <th className="text-right p-2 font-medium text-xs text-slate-600">📌 תקן</th>
-                <th className="text-right p-2 font-medium text-xs text-slate-600">📦 יש</th>
+                <th className="text-right p-2 font-medium text-xs text-slate-600">📋 חתום על הפלוגה</th>
+                <th className="text-right p-2 font-medium text-xs text-slate-600">🪖 חתום חיילים</th>
+                <th className="text-right p-2 font-medium text-xs text-slate-600">📦 במלאי</th>
                 <th className="text-right p-2 font-medium text-xs text-slate-600">פירוט סטטוסים</th>
-                <th className="text-right p-2 font-medium text-xs text-slate-600">🪖 חתום</th>
                 <th className="text-right p-2 font-medium text-xs text-slate-600">הפרש מתקן</th>
               </tr>
             </thead>
@@ -131,16 +134,12 @@ export default function InventoryTable({ rows }: { rows: StandardRow[] }) {
                 const rowClass = r.diff < 0 && r.baseline > 0
                   ? "bg-rose-50"
                   : r.diff > 0 && r.baseline > 0 ? "bg-emerald-50/50" : "";
-                const whIcon = r.warehouseType ? (WAREHOUSE_TYPE_ICON[r.warehouseType as keyof typeof WAREHOUSE_TYPE_ICON] ?? "📦") : "📦";
                 const breakdown = [...r.statusBreakdown].sort((a, b) => b.qty - a.qty);
                 const allOK = breakdown.length === 1 && !breakdown[0].isWear && !breakdown[0].isLoss;
                 return (
                   <tr key={r.itemTypeId} className={rowClass}>
                     <td className="p-2">
-                      <div className="font-medium flex items-center gap-1.5">
-                        <span>{whIcon}</span>
-                        <span>{r.itemName}</span>
-                      </div>
+                      <div className="font-medium">{r.itemName}</div>
                       {(r.sku || r.serialNumbers.length > 0) && (
                         <div className="text-[11px] text-slate-500 mt-0.5 flex gap-2 flex-wrap">
                           {r.sku && <span className="font-mono">{r.sku}</span>}
@@ -158,20 +157,24 @@ export default function InventoryTable({ rows }: { rows: StandardRow[] }) {
                       )}
                     </td>
                     <td className="p-2 text-xs text-slate-600">
-                      {r.categoryName ?? "—"}
-                      {r.warehouseType && (
-                        <div className="text-[10px] text-slate-400">
-                          {WAREHOUSE_TYPE_SHORT[r.warehouseType as keyof typeof WAREHOUSE_TYPE_SHORT] ?? r.warehouseType}
-                        </div>
-                      )}
+                      {r.sourceWarehouseName ?? r.categoryName ?? "—"}
                     </td>
                     <td className="p-2 font-mono">
                       <span className="bg-slate-100 rounded px-2 py-0.5">{r.baseline}</span>
                       <span className="text-[10px] text-slate-400 mr-1">{r.unit}</span>
                     </td>
                     <td className="p-2 font-mono">
+                      <span className="bg-purple-50 text-purple-700 rounded px-2 py-0.5 font-bold">{r.companyTotal}</span>
+                    </td>
+                    <td className="p-2 text-xs">
+                      {r.signedOnSoldiers > 0 ? (
+                        <span className="text-blue-700 font-medium font-mono">{r.signedOnSoldiers}</span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="p-2 font-mono">
                       <span className="bg-blue-50 text-blue-700 rounded px-2 py-0.5 font-bold">{r.current}</span>
-                      <span className="text-[10px] text-slate-400 mr-1">{r.unit}</span>
                     </td>
                     <td className="p-2">
                       {allOK ? (
@@ -190,13 +193,6 @@ export default function InventoryTable({ rows }: { rows: StandardRow[] }) {
                             </Badge>
                           ))}
                         </div>
-                      )}
-                    </td>
-                    <td className="p-2 text-xs">
-                      {r.signedOnSoldiers > 0 ? (
-                        <span className="text-blue-700 font-medium">{r.signedOnSoldiers}</span>
-                      ) : (
-                        <span className="text-slate-400">—</span>
                       )}
                     </td>
                     <td className="p-2">
@@ -222,8 +218,10 @@ export default function InventoryTable({ rows }: { rows: StandardRow[] }) {
       )}
 
       <div className="p-2.5 border-t border-slate-200 bg-slate-50 text-[11px] text-slate-600">
-        💡 <b>תקן</b> = הכמות שאמורה להישאר אצלכם גם אחרי תעסוקה (קובע מפ&quot;ם). <b>יש</b> = מלאי פיזי בפלוגה (לא כולל חתום על חיילים).
-        פירוט יחידני (SN, חייל, מיקום) — בעמוד <b>📍 מיקומי ציוד</b>.
+        💡 <b>חתום על הפלוגה</b> = סה&quot;כ שהפלוגה חתומה עליו מהמחסן.
+        <b> חתום חיילים</b> = כמה מתוכם חתום על חיילים.
+        <b> במלאי</b> = מלאי פיזי בפלוגה (חתום פלוגה פחות חתום חיילים).
+        <b> הפרש מתקן</b> = במלאי פחות תקן.
       </div>
     </Card>
   );
