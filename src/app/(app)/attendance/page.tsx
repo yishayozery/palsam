@@ -74,20 +74,29 @@ export default async function AttendancePage({
       personalNumber: true,
       squadId: true,
       squad: { select: { name: true } },
+      companyRoleId: true,
+      companyRole: { select: { name: true, isCommander: true } },
       enlistedAt: true,
       callupClosedAt: true,
       company: { select: { name: true } },
     },
   });
 
-  // Fetch squads for this company (or all companies)
-  const squads = await prisma.squad.findMany({
-    where: isAll
-      ? { company: { battalionId: bId }, active: true }
-      : { companyId: selectedCompanyId, active: true },
-    orderBy: { sortOrder: "asc" },
-    select: { id: true, name: true },
-  });
+  // Fetch squads & company roles
+  const [squads, companyRoles] = await Promise.all([
+    prisma.squad.findMany({
+      where: isAll
+        ? { company: { battalionId: bId }, active: true }
+        : { companyId: selectedCompanyId, active: true },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.companyRole.findMany({
+      where: { battalionId: bId, active: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, isCommander: true },
+    }),
+  ]);
 
   // Fetch statuses
   const rawStatuses = await prisma.attendanceStatus.findMany({
@@ -161,10 +170,14 @@ export default async function AttendancePage({
           personalNumber: s.personalNumber,
           squadId: s.squadId,
           squadName: s.squad?.name ?? null,
+          companyRoleId: s.companyRoleId,
+          companyRoleName: s.companyRole?.name ?? null,
+          isCommander: s.companyRole?.isCommander ?? false,
           enlistedAt: s.enlistedAt?.toISOString().slice(0, 10) ?? null,
           callupClosedAt: s.callupClosedAt?.toISOString().slice(0, 10) ?? null,
         }))}
         squads={squads}
+        companyRoles={companyRoles}
         statuses={statuses}
         days={days}
         plans={planData}

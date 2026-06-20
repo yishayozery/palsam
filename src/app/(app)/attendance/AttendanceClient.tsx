@@ -13,20 +13,25 @@ type SoldierRow = {
   personalNumber: string | null;
   squadId: string | null;
   squadName: string | null;
+  companyRoleId: string | null;
+  companyRoleName: string | null;
+  isCommander: boolean;
   enlistedAt: string | null;
   callupClosedAt: string | null;
 };
 type Squad = { id: string; name: string };
+type CompanyRole = { id: string; name: string; isCommander: boolean };
 type Status = { id: string; name: string; color: string; icon: string | null; isPresent: boolean };
 type AttEntry = { soldierId: string; date: string; statusId: string };
 
 export default function AttendanceClient({
-  companies, selectedCompanyId, soldiers, squads, statuses, days, plans, records, mode, canManage, startDate,
+  companies, selectedCompanyId, soldiers, squads, companyRoles, statuses, days, plans, records, mode, canManage, startDate,
 }: {
   companies: { id: string; name: string }[];
   selectedCompanyId: string;
   soldiers: SoldierRow[];
   squads: Squad[];
+  companyRoles: CompanyRole[];
   statuses: Status[];
   days: DayInfo[];
   plans: AttEntry[];
@@ -39,6 +44,7 @@ export default function AttendanceClient({
   const [saving, setSaving] = useState(false);
   const [pendingChanges, setPendingChanges] = useState<Map<string, string | null>>(new Map());
   const [selectedSquadId, setSelectedSquadId] = useState<string>("");
+  const [selectedRoleId, setSelectedRoleId] = useState<string>("");
 
   const data = mode === "plan" ? plans : records;
 
@@ -91,11 +97,15 @@ export default function AttendanceClient({
     router.refresh();
   }
 
-  // Filter soldiers by selected squad
+  // Filter soldiers by selected squad and role
   const filteredSoldiers = useMemo(() => {
-    if (!selectedSquadId) return soldiers;
-    return soldiers.filter((s) => s.squadId === selectedSquadId);
-  }, [soldiers, selectedSquadId]);
+    let list = soldiers;
+    if (selectedSquadId) list = list.filter((s) => s.squadId === selectedSquadId);
+    if (selectedRoleId === "__commander__") list = list.filter((s) => s.isCommander);
+    else if (selectedRoleId === "__none__") list = list.filter((s) => !s.companyRoleId);
+    else if (selectedRoleId) list = list.filter((s) => s.companyRoleId === selectedRoleId);
+    return list;
+  }, [soldiers, selectedSquadId, selectedRoleId]);
 
   // Group soldiers by squad
   const grouped = useMemo(() => {
@@ -168,7 +178,20 @@ export default function AttendanceClient({
       ...computeForSoldiers(g.soldiers),
     }));
 
-    return { all, bySquad };
+    // Role breakdown
+    const roleMap = new Map<string, { role: { id: string; name: string; isCommander: boolean } | null; soldiers: SoldierRow[] }>();
+    for (const s of filteredSoldiers) {
+      const key = s.companyRoleId ?? "__none__";
+      const entry = roleMap.get(key) ?? { role: s.companyRoleId ? { id: s.companyRoleId, name: s.companyRoleName!, isCommander: s.isCommander } : null, soldiers: [] };
+      entry.soldiers.push(s);
+      roleMap.set(key, entry);
+    }
+    const byRole = [...roleMap.values()].map((r) => ({
+      role: r.role,
+      ...computeForSoldiers(r.soldiers),
+    }));
+
+    return { all, bySquad, byRole };
   }, [filteredSoldiers, grouped, statuses, getStatus, today]);
 
   // Daily summary: count present soldiers per day
@@ -268,6 +291,25 @@ export default function AttendanceClient({
         </div>
       )}
 
+      {/* Per-role dashboard */}
+      {dashStats.byRole.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {dashStats.byRole.map((r) => (
+            <div key={r.role?.id ?? "none"}
+              className={`border rounded-lg px-3 py-2 text-xs flex items-center gap-3 min-w-[140px] ${r.role?.isCommander ? "bg-amber-50 border-amber-200" : "bg-white border-slate-200"}`}>
+              <div>
+                <div className="font-bold text-slate-700">{r.role ? `${r.role.isCommander ? "⭐ " : ""}${r.role.name}` : "ללא תפקיד"}</div>
+                <div className="text-slate-400">{r.total} חיילים</div>
+              </div>
+              <div className="mr-auto text-left">
+                <div className="font-bold text-emerald-600 text-sm">{r.present}/{r.total}</div>
+                <div className={`font-bold ${r.pct >= 80 ? "text-emerald-500" : r.pct >= 50 ? "text-amber-500" : "text-rose-500"}`}>{r.pct}%</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Controls */}
       <Card className="p-3 mb-4">
         <div className="flex items-center gap-3 flex-wrap">
@@ -293,6 +335,20 @@ export default function AttendanceClient({
                 className="rounded-lg border-2 border-slate-300 px-3 py-1.5 text-sm">
                 <option value="">כל המחלקות</option>
                 {squads.map((sq) => <option key={sq.id} value={sq.id}>{sq.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {companyRoles.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-slate-700">תפקיד:</label>
+              <select value={selectedRoleId}
+                onChange={(e) => setSelectedRoleId(e.target.value)}
+                className="rounded-lg border-2 border-slate-300 px-3 py-1.5 text-sm">
+                <option value="">כל התפקידים</option>
+                <option value="__commander__">⭐ פיקודיים בלבד</option>
+                {companyRoles.map((r) => <option key={r.id} value={r.id}>{r.isCommander ? `⭐ ${r.name}` : r.name}</option>)}
+                <option value="__none__">ללא תפקיד</option>
               </select>
             </div>
           )}
@@ -445,7 +501,14 @@ export default function AttendanceClient({
                   {g.soldiers.map((soldier) => (
                     <tr key={soldier.id} className="border-b border-slate-50 hover:bg-blue-50/20">
                       <td className="sticky right-0 bg-white z-10 px-2 py-1.5 border-l border-slate-100">
-                        <div className="font-medium text-slate-800 truncate max-w-[130px]">{soldier.fullName}</div>
+                        <div className="font-medium text-slate-800 truncate max-w-[160px]">
+                          {soldier.fullName}
+                          {soldier.companyRoleName && (
+                            <span className={`mr-1 text-[9px] font-normal ${soldier.isCommander ? "text-amber-600" : "text-slate-400"}`}>
+                              ({soldier.companyRoleName})
+                            </span>
+                          )}
+                        </div>
                         {soldier.personalNumber && (
                           <div className="text-[9px] font-mono text-slate-400">{soldier.personalNumber}</div>
                         )}
