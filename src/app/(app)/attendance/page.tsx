@@ -89,10 +89,20 @@ export default async function AttendancePage({
   });
 
   // Fetch statuses
-  const statuses = await prisma.attendanceStatus.findMany({
+  const rawStatuses = await prisma.attendanceStatus.findMany({
     where: { battalionId: bId, active: true },
     orderBy: { sortOrder: "asc" },
   });
+  const NAME_ICON_FALLBACK: Record<string, string> = {
+    "יום יציאה": "➡️", "יציאה": "➡️",
+    "יום חזרה": "⬅️", "חזרה": "⬅️", "יום הגעה": "⬅️",
+    "נוכח": "✅", "חופש סבב": "🔄", "מחלה": "🏥", "קורס": "📚",
+    "חופשה": "🏖️", "ג׳ובניק": "🔒",
+  };
+  const statuses = rawStatuses.map((s) => ({
+    ...s,
+    icon: s.icon || NAME_ICON_FALLBACK[s.name] || null,
+  }));
 
   if (statuses.length === 0) {
     return (

@@ -16,6 +16,7 @@ export async function saveUser(formData: FormData) {
   const fullName = String(formData.get("fullName") || "").trim();
   const phone = String(formData.get("phone") || "").trim() || null;
   const title = String(formData.get("title") || "").trim() || null;
+  const personalNumber = String(formData.get("personalNumber") || "").replace(/\D/g, "").trim() || null;
   const battalionId = admin.role === "SUPER_ADMIN" ? (String(formData.get("battalionId") || "") || null) : admin.battalionId;
   const battalion = battalionId ? await prisma.battalion.findUnique({ where: { id: battalionId } }) : null;
   const suffix = battalion?.brigade || battalion?.code || null;
@@ -48,10 +49,30 @@ export async function saveUser(formData: FormData) {
     }
   };
 
+  // קישור למ.א. — חיפוש חייל קיים לפי מספר אישי, או יצירת חייל חדש
+  let soldierId: string | null = null;
+  if (personalNumber && battalionId) {
+    const existing = await prisma.soldier.findFirst({
+      where: { battalionId, personalNumber },
+      select: { id: true },
+    });
+    if (existing) {
+      soldierId = existing.id;
+    } else {
+      const newSoldier = await prisma.soldier.create({
+        data: { battalionId, fullName, personalNumber, enlisted: true, enlistedAt: new Date() },
+      });
+      soldierId = newSoldier.id;
+    }
+  }
+
   try {
     if (id) {
       const username = await resolveUniqueUsername(enteredUsername, suffix, id);
-      await prisma.appUser.update({ where: { id }, data: { username, fullName, phone, title, role, customRoleId, holderId } });
+      await prisma.appUser.update({
+        where: { id },
+        data: { username, fullName, phone, title, role, customRoleId, holderId, ...(soldierId ? { soldierId } : {}) },
+      });
       await syncHolders(id);
       await audit(admin.id, "UPDATE", "AppUser", id);
     } else {
@@ -59,10 +80,10 @@ export async function saveUser(formData: FormData) {
       const inviteToken = nanoid(28);
       const randomHash = await hashPassword(nanoid(32));
       const created = await prisma.appUser.create({
-        data: { username, fullName, phone, title, role, customRoleId, holderId, battalionId, passwordHash: randomHash, passwordSet: false, inviteToken },
+        data: { username, fullName, phone, title, role, customRoleId, holderId, battalionId, passwordHash: randomHash, passwordSet: false, inviteToken, ...(soldierId ? { soldierId } : {}) },
       });
       await syncHolders(created.id);
-      await audit(admin.id, "CREATE", "AppUser", username, { invited: true });
+      await audit(admin.id, "CREATE", "AppUser", username, { invited: true, personalNumber });
     }
   } catch {
     // לא מקריסים את המערכת על שגיאת יצירה

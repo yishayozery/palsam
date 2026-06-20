@@ -13,11 +13,12 @@ export async function saveSoldier(formData: FormData) {
   const personalNumber = String(formData.get("personalNumber") || "").trim();
   const phone = String(formData.get("phone") || "").trim() || null;
   const platoon = String(formData.get("platoon") || "").trim() || null;
+  const squadId = String(formData.get("squadId") || "").trim() || null;
   let companyId = String(formData.get("companyId") || "") || null;
   if (user.holderId && !companyId) companyId = user.holderId;
   if (!fullName || !personalNumber) return;
 
-  const data = { fullName, personalNumber, phone, platoon, companyId };
+  const data = { fullName, personalNumber, phone, platoon, companyId, squadId };
   if (id) {
     await prisma.soldier.update({ where: { id }, data });
   } else {

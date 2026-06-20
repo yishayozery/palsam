@@ -14,16 +14,22 @@ export default async function SoldiersPage() {
   const bId = user.battalionId!;
 
   const where = { battalionId: bId, ...(user.holderId ? { companyId: user.holderId } : {}) };
-  const [soldiers, companies] = await Promise.all([
+  const [soldiers, companies, squads] = await Promise.all([
     prisma.soldier.findMany({
       where,
-      orderBy: [{ platoon: "asc" }, { fullName: "asc" }],
+      orderBy: [{ squad: { sortOrder: "asc" } }, { fullName: "asc" }],
       include: {
         company: true,
+        squad: true,
         _count: { select: { signedSerialUnits: true, signedKitInstances: true } },
       },
     }),
     prisma.holder.findMany({ where: { battalionId: bId, kind: "COMPANY", active: true }, orderBy: { name: "asc" } }),
+    prisma.squad.findMany({
+      where: { battalionId: bId, ...(user.holderId ? { companyId: user.holderId } : {}) },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: { company: { select: { name: true } } },
+    }),
   ]);
 
   const soldierIds = soldiers.map((s) => s.id);
@@ -121,7 +127,17 @@ export default async function SoldiersPage() {
     { name: "fullName", label: "שם מלא" },
     { name: "personalNumber", label: "מספר אישי" },
     { name: "phone", label: "טלפון" },
-    { name: "platoon", label: "מחלקה" },
+    ...(squads.length > 0
+      ? [{
+          name: "squadId",
+          label: "מחלקה",
+          type: "select" as const,
+          options: squads.map((sq) => ({
+            value: sq.id,
+            label: user.holderId ? sq.name : `${sq.name} (${sq.company.name})`,
+          })),
+        }]
+      : [{ name: "platoon", label: "מחלקה" }]),
     ...(user.holderId
       ? []
       : [{
@@ -155,6 +171,7 @@ export default async function SoldiersPage() {
               fullName: s.fullName,
               personalNumber: s.personalNumber ?? "",
               phone: s.phone ?? "",
+              squadId: s.squadId ?? "",
               platoon: s.platoon ?? "",
               companyId: s.companyId ?? "",
             },
@@ -162,7 +179,7 @@ export default async function SoldiersPage() {
               <span className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium">{s.fullName}</span>
                 <span className="font-mono text-xs text-slate-400">{s.personalNumber}</span>
-                {s.platoon && <Badge className="bg-indigo-100 text-indigo-700">מחלקה {s.platoon}</Badge>}
+                {(s.squad?.name || s.platoon) && <Badge className="bg-indigo-100 text-indigo-700">{s.squad?.name ?? s.platoon}</Badge>}
                 {s.company && <Badge>{s.company.name}</Badge>}
                 <SoldierEquipmentButton
                   soldierId={s.id} soldierName={s.fullName}
