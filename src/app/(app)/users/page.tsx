@@ -15,7 +15,7 @@ export default async function UsersPage() {
   const battalion = await prisma.battalion.findUnique({ where: { id: bId } });
 
   // מציג רק את "מטה הגדוד" — מפ"מ + צופים. קציני מחסן ורס"פ מנוהלים תחת /org accordion.
-  const [users, holders, customRoles] = await Promise.all([
+  const [users, holders, customRoles, squads] = await Promise.all([
     prisma.appUser.findMany({
       where: { battalionId: bId, role: { in: ["BATTALION_ADMIN", "VIEWER"] } },
       orderBy: { createdAt: "asc" },
@@ -23,6 +23,11 @@ export default async function UsersPage() {
     }),
     prisma.holder.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" } }),
     prisma.customRole.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" } }),
+    prisma.squad.findMany({
+      where: { battalionId: bId, active: true },
+      orderBy: [{ company: { name: "asc" } }, { sortOrder: "asc" }],
+      include: { company: { select: { name: true } } },
+    }),
   ]);
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
@@ -45,6 +50,7 @@ export default async function UsersPage() {
         brigade={battalion?.brigade ?? ""}
         battalionCode={battalion?.code ?? ""}
         holders={holders.map((h) => ({ id: h.id, name: h.name, kind: h.kind }))}
+        squads={squads.map((s) => ({ id: s.id, name: s.name, companyName: s.company.name }))}
         customRoles={customRoles.map((r) => ({ id: r.id, name: r.name, template: r.template }))}
         users={users.map((u) => ({
           id: u.id, fullName: u.fullName, username: u.username, phone: u.phone, title: u.title,

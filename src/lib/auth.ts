@@ -21,6 +21,7 @@ export type SessionUser = {
   title: string | null; // תואר/תפקיד מותאם של המשתמש (מ"פ, רס"פ, מפלג וכו') — מוצג בסיידבר
   holderId: string | null; // מחזיק ראשי
   holderIds: string[]; // כל המחזיקים המשויכים (תמיכה בכמה מחסנים)
+  squadIds: string[]; // מחלקות משויכות — ריק = רואה הכל בפלוגה
   battalionId: string | null;
 };
 
@@ -69,6 +70,7 @@ export async function getSession(): Promise<SessionUser | null> {
       title: (payload.title as string) ?? null,
       holderId: (payload.holderId as string) ?? null,
       holderIds: (payload.holderIds as string[]) ?? ((payload.holderId as string) ? [payload.holderId as string] : []),
+      squadIds: (payload.squadIds as string[]) ?? [],
       battalionId: (payload.battalionId as string) ?? null,
     };
   } catch {
@@ -80,6 +82,7 @@ function toSession(user: {
   id: string; username: string; fullName: string; title?: string | null; role: Role; holderId: string | null; battalionId: string | null;
   customRole?: { name: string } | null;
   assignedHolders?: { holderId: string }[];
+  assignedSquads?: { squadId: string }[];
 }): SessionUser {
   const ids = new Set<string>();
   for (const a of user.assignedHolders ?? []) ids.add(a.holderId);
@@ -93,6 +96,7 @@ function toSession(user: {
     title: user.title ?? null,
     holderId: user.holderId,
     holderIds: [...ids],
+    squadIds: (user.assignedSquads ?? []).map((s) => s.squadId),
     battalionId: user.battalionId,
   };
 }
@@ -111,7 +115,7 @@ export async function authenticate(
 ): Promise<AuthResult> {
   const user = await prisma.appUser.findFirst({
     where: { username: { equals: username, mode: "insensitive" } },
-    include: { customRole: true, assignedHolders: true, battalion: { select: { code: true, brigade: true, name: true } } },
+    include: { customRole: true, assignedHolders: true, assignedSquads: true, battalion: { select: { code: true, brigade: true, name: true } } },
   });
   if (!user || !user.active || !user.passwordSet) return { kind: "fail" };
   const ok = await verifyPassword(password, user.passwordHash);
@@ -139,7 +143,7 @@ export async function completeAuthWithTotp(userId: string, token: string): Promi
   const { verifyTotp } = await import("./totp");
   const user = await prisma.appUser.findUnique({
     where: { id: userId },
-    include: { customRole: true, assignedHolders: true, battalion: { select: { code: true, brigade: true, name: true } } },
+    include: { customRole: true, assignedHolders: true, assignedSquads: true, battalion: { select: { code: true, brigade: true, name: true } } },
   });
   if (!user || !user.totpSecret || !user.active) return null;
   if (!verifyTotp(token, user.totpSecret)) return null;
@@ -157,7 +161,7 @@ export async function setPasswordByInvite(
   const updated = await prisma.appUser.update({
     where: { id: user.id },
     data: { passwordHash: hash, passwordSet: true, inviteToken: null },
-    include: { customRole: true, assignedHolders: true },
+    include: { customRole: true, assignedHolders: true, assignedSquads: true },
   });
   return toSession(updated);
 }

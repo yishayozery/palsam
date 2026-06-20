@@ -202,6 +202,7 @@ model AppUser {
   resolvedGaps      Discrepancy[]      @relation("DiscrepancyResolvedBy")
   auditLogs         AuditLog[]
   repOfCompanies    WarehouseCompany[] @relation("RepUser")
+  assignedSquads    UserSquad[]
 }
 
 // ===================== תפקידים מותאמים (admin-driven) =====================
@@ -252,6 +253,17 @@ model UserHolder {
   holder   Holder  @relation(fields: [holderId], references: [id])
 
   @@unique([userId, holderId])
+}
+
+model UserSquad {
+  id      String  @id @default(cuid())
+  userId  String
+  user    AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  squadId String
+  squad   Squad   @relation(fields: [squadId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, squadId])
+  @@index([userId])
 }
 
 // ===================== מחזיקים: מחסנים ופלוגות =====================
@@ -1079,6 +1091,7 @@ model Squad {
   createdAt   DateTime @default(now())
 
   soldiers    Soldier[]
+  assignedUsers UserSquad[]
 
   @@unique([companyId, name])
   @@index([battalionId])

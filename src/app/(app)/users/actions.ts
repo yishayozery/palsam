@@ -40,12 +40,21 @@ export async function saveUser(formData: FormData) {
   if (role !== "WAREHOUSE_MANAGER") holderIds = holderIds.slice(0, 1); // יחיד לרס"פ/צופה
   const holderId = holderIds[0] || null;
 
+  const squadIds = formData.getAll("squadId").map(String).filter(Boolean);
+
   if (!enteredUsername || !fullName) return;
 
   const syncHolders = async (userId: string) => {
     await prisma.userHolder.deleteMany({ where: { userId } });
     for (const hId of holderIds) {
       await prisma.userHolder.create({ data: { userId, holderId: hId } });
+    }
+  };
+
+  const syncSquads = async (userId: string) => {
+    await prisma.userSquad.deleteMany({ where: { userId } });
+    for (const sId of squadIds) {
+      await prisma.userSquad.create({ data: { userId, squadId: sId } });
     }
   };
 
@@ -74,6 +83,7 @@ export async function saveUser(formData: FormData) {
         data: { username, fullName, phone, title, role, customRoleId, holderId, ...(soldierId ? { soldierId } : {}) },
       });
       await syncHolders(id);
+      await syncSquads(id);
       await audit(admin.id, "UPDATE", "AppUser", id);
     } else {
       const username = await resolveUniqueUsername(enteredUsername, suffix);
@@ -83,6 +93,7 @@ export async function saveUser(formData: FormData) {
         data: { username, fullName, phone, title, role, customRoleId, holderId, battalionId, passwordHash: randomHash, passwordSet: false, inviteToken, ...(soldierId ? { soldierId } : {}) },
       });
       await syncHolders(created.id);
+      await syncSquads(created.id);
       await audit(admin.id, "CREATE", "AppUser", username, { invited: true, personalNumber });
     }
   } catch {

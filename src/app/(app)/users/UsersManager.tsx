@@ -6,6 +6,7 @@ import { saveUser, regenerateInvite, toggleUser } from "./actions";
 import UsernameSuggest from "./UsernameSuggest";
 
 type Holder = { id: string; name: string; kind: string };
+type Squad = { id: string; name: string; companyName: string };
 type CustomRole = { id: string; name: string; template: string };
 type User = {
   id: string; fullName: string; username: string; phone: string | null; title?: string | null;
@@ -47,7 +48,7 @@ function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
   );
 }
 
-export default function UsersManager({ users, holders, customRoles, baseUrl, brigade, battalionCode }: { users: User[]; holders: Holder[]; customRoles: CustomRole[]; baseUrl: string; brigade: string; battalionCode: string }) {
+export default function UsersManager({ users, holders, squads, customRoles, baseUrl, brigade, battalionCode }: { users: User[]; holders: Holder[]; squads: Squad[]; customRoles: CustomRole[]; baseUrl: string; brigade: string; battalionCode: string }) {
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<string>("BATTALION_ADMIN");
 
@@ -156,6 +157,18 @@ export default function UsersManager({ users, holders, customRoles, baseUrl, bri
                   )}
                 </div>
               </div>
+              {squads.length > 0 && (effectiveTemplate === "COMPANY_REP" || effectiveTemplate === "VIEWER") && (
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">מחלקות (ריק = רואה הכל בפלוגה)</label>
+                  <div className="rounded-lg border border-slate-300 p-2 space-y-1 max-h-32 overflow-y-auto">
+                    {squads.map((sq) => (
+                      <label key={sq.id} className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" name="squadId" value={sq.id} className="w-4 h-4" /> {sq.name} <span className="text-xs text-slate-400">({sq.companyName})</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
               <p className="text-xs text-slate-400">ייווצר קישור הזמנה — שלח אותו למשתמש; הוא יגדיר סיסמה בכניסה הראשונה.</p>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>

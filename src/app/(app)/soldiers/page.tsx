@@ -13,7 +13,8 @@ export default async function SoldiersPage() {
   const user = await requireCapability("company.manage");
   const bId = user.battalionId!;
 
-  const where = { battalionId: bId, ...(user.holderId ? { companyId: user.holderId } : {}) };
+  const squadFilter = user.squadIds.length > 0 ? { squadId: { in: user.squadIds } } : {};
+  const where = { battalionId: bId, ...(user.holderId ? { companyId: user.holderId } : {}), ...squadFilter };
   const [soldiers, companies, squads, companyRoles] = await Promise.all([
     prisma.soldier.findMany({
       where,

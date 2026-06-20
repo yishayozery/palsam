@@ -59,11 +59,13 @@ export default async function AttendancePage({
   const isAll = selectedCompanyId === "__all__";
 
   // Fetch soldiers
+  const squadFilter = user.squadIds.length > 0 ? { squadId: { in: user.squadIds } } : {};
   const soldiers = await prisma.soldier.findMany({
     where: {
       battalionId: bId,
       ...(isAll ? {} : { companyId: selectedCompanyId }),
       active: true,
+      ...squadFilter,
     },
     orderBy: [{ squad: { sortOrder: "asc" } }, { fullName: "asc" }],
     select: {
