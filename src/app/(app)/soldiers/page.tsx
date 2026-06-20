@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge } from "@/components/ui";
 import CrudSection from "@/components/CrudSection";
 import ImportExcel from "@/components/ImportExcel";
-import { saveSoldier, toggleSoldier } from "./actions";
+import { saveSoldier, toggleSoldier, saveCompanyRole, toggleCompanyRole } from "./actions";
 import { importSoldiers } from "./import-actions";
 import SoldierEquipmentButton from "./SoldierEquipmentButton";
 
@@ -14,13 +14,14 @@ export default async function SoldiersPage() {
   const bId = user.battalionId!;
 
   const where = { battalionId: bId, ...(user.holderId ? { companyId: user.holderId } : {}) };
-  const [soldiers, companies, squads] = await Promise.all([
+  const [soldiers, companies, squads, companyRoles] = await Promise.all([
     prisma.soldier.findMany({
       where,
       orderBy: [{ squad: { sortOrder: "asc" } }, { fullName: "asc" }],
       include: {
         company: true,
         squad: true,
+        companyRole: true,
         _count: { select: { signedSerialUnits: true, signedKitInstances: true } },
       },
     }),
@@ -29,6 +30,10 @@ export default async function SoldiersPage() {
       where: { battalionId: bId, ...(user.holderId ? { companyId: user.holderId } : {}) },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       include: { company: { select: { name: true } } },
+    }),
+    prisma.companyRole.findMany({
+      where: { battalionId: bId, active: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
   ]);
 
@@ -138,6 +143,17 @@ export default async function SoldiersPage() {
           })),
         }]
       : [{ name: "platoon", label: "מחלקה" }]),
+    ...(companyRoles.length > 0
+      ? [{
+          name: "companyRoleId",
+          label: "תפקיד",
+          type: "select" as const,
+          options: companyRoles.map((r) => ({
+            value: r.id,
+            label: r.isCommander ? `${r.name} ⭐` : r.name,
+          })),
+        }]
+      : []),
     ...(user.holderId
       ? []
       : [{
@@ -173,6 +189,7 @@ export default async function SoldiersPage() {
               phone: s.phone ?? "",
               squadId: s.squadId ?? "",
               platoon: s.platoon ?? "",
+              companyRoleId: s.companyRoleId ?? "",
               companyId: s.companyId ?? "",
             },
             display: (
@@ -180,6 +197,7 @@ export default async function SoldiersPage() {
                 <span className="font-medium">{s.fullName}</span>
                 <span className="font-mono text-xs text-slate-400">{s.personalNumber}</span>
                 {(s.squad?.name || s.platoon) && <Badge className="bg-indigo-100 text-indigo-700">{s.squad?.name ?? s.platoon}</Badge>}
+                {s.companyRole && <Badge className={s.companyRole.isCommander ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}>{s.companyRole.name}{s.companyRole.isCommander ? " ⭐" : ""}</Badge>}
                 {s.company && <Badge>{s.company.name}</Badge>}
                 <SoldierEquipmentButton
                   soldierId={s.id} soldierName={s.fullName}
@@ -190,6 +208,28 @@ export default async function SoldiersPage() {
             ),
           };
         })}
+      />
+
+      <CrudSection
+        title="תפקידים בפלוגה"
+        addLabel="תפקיד"
+        fields={[
+          { name: "name", label: "שם התפקיד" },
+          { name: "isCommander", label: "פיקודי", type: "checkbox" as const },
+          { name: "sortOrder", label: "סדר", type: "number" as const },
+        ]}
+        saveAction={saveCompanyRole}
+        deleteAction={toggleCompanyRole}
+        rows={companyRoles.map((r) => ({
+          id: r.id,
+          values: { name: r.name, isCommander: r.isCommander, sortOrder: String(r.sortOrder) },
+          display: (
+            <span className="flex items-center gap-2">
+              <span className="font-medium">{r.name}</span>
+              {r.isCommander && <Badge className="bg-amber-100 text-amber-800">⭐ פיקודי</Badge>}
+            </span>
+          ),
+        }))}
       />
     </div>
   );

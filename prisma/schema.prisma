@@ -154,6 +154,7 @@ model Battalion {
   auditLogs     AuditLog[]
   equipmentLocations EquipmentLocation[]
   squads             Squad[]
+  companyRoles       CompanyRole[]
   attendanceStatuses AttendanceStatus[]
 }
 
@@ -401,6 +402,8 @@ model Soldier {
   platoon        String? // מחלקה בתוך הפלוגה (טקסט חופשי — לתאימות לאחור)
   squadId        String?
   squad          Squad?    @relation(fields: [squadId], references: [id])
+  companyRoleId  String?
+  companyRole    CompanyRole? @relation(fields: [companyRoleId], references: [id])
   companyId      String?
   company        Holder?   @relation(fields: [companyId], references: [id])
   // שיוך משני — מחסן שהחייל גם משתייך אליו (למשל חייל ארמון שגם בפלוגה א')
@@ -1080,6 +1083,24 @@ model Squad {
   @@unique([companyId, name])
   @@index([battalionId])
   @@index([companyId])
+}
+
+// ===================== תפקידי פלוגה (Company Roles) =====================
+
+model CompanyRole {
+  id          String   @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  name        String
+  isCommander Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  soldiers    Soldier[]
+
+  @@unique([battalionId, name])
+  @@index([battalionId])
 }
 
 // ===================== נוכחות (Attendance) =====================
