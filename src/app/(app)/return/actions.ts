@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 import { requiresPersonalId } from "@/lib/handover";
+import { adjustQuantity } from "@/lib/inventory";
 
 /** רס"פ פלוגה יוצר בקשת זיכוי (RETURN) למחסן ספציפי, עם מקבל ספציפי. אישור — דרך handshake. */
 export async function createReturn(formData: FormData) {
@@ -72,14 +73,17 @@ export async function createReturn(formData: FormData) {
       for (const sid of serialIds) {
         const su = await tx.serialUnit.findUnique({ where: { id: sid } });
         if (!su || su.currentHolderId !== companyId) continue;
-        // אצווה? אם הגיע lotQty חלקי — שומרים אותו ב-line.quantity, הפיצול בעת approveTransfer
         const partialLotQty = parseInt(String(formData.get(`lotQty:${sid}`) || "0"), 10);
         const lineQty = partialLotQty > 0 && partialLotQty < (su.lotQuantity ?? 1) ? partialLotQty : (su.lotQuantity ?? 1);
+        // גריעה מהפלוגה — "במעבר" עד לאישור
+        await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: null } });
         await tx.transferLine.create({
           data: { transferId: t.id, itemTypeId: su.itemTypeId, quantity: lineQty, serialUnitId: sid, statusId: su.statusId },
         });
       }
     } else if (quantity > 0 && statusId) {
+      // גריעת מלאי כמותי מהפלוגה
+      await adjustQuantity(tx, bId, itemTypeId, companyId!, statusId, -quantity);
       await tx.transferLine.create({ data: { transferId: t.id, itemTypeId, quantity, statusId } });
     }
   });

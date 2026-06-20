@@ -93,13 +93,15 @@ export async function createReturn(formData: FormData) {
     transferId = transfer.id;
     for (const e of qtyEntries) {
       await adjustQuantity(tx, bId, e.itemTypeId, fromHolderId, e.statusId, -e.qty);
-      await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: e.itemTypeId, quantity: e.qty, statusId: returnStatusId || e.statusId } });
+      // שומרים את הסטטוס המקורי — כך דחייה תחזיר לסטטוס הנכון.
+      // אם יש returnStatusId, שינוי הסטטוס מתבצע ב-approveTransfer
+      await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: e.itemTypeId, quantity: e.qty, statusId: e.statusId } });
     }
     for (const sid of serialIds) {
       const su = await tx.serialUnit.findUnique({ where: { id: sid } });
       if (!su || su.currentHolderId !== fromHolderId) continue;
       await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: null } });
-      await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: returnStatusId || su.statusId } });
+      await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: su.statusId } });
     }
   });
 
@@ -126,7 +128,6 @@ export async function approveTransfer(formData: FormData) {
         const isLot = (unit.lotQuantity ?? 1) > 1;
         const lineQty = line.quantity ?? 1;
         if (isLot && lineQty < (unit.lotQuantity ?? 1)) {
-          // פיצול אצווה: יוצרים יחידה ביעד עם הכמות החלקית; המקור נשאר אצל המקור עם היתרה
           let suffix = 1;
           while (await tx.serialUnit.findFirst({ where: { itemTypeId: unit.itemTypeId, serialNumber: `${unit.serialNumber}/${suffix}` } })) {
             suffix++;
@@ -137,7 +138,7 @@ export async function approveTransfer(formData: FormData) {
               serialNumber: `${unit.serialNumber}/${suffix}`, lotQuantity: lineQty,
               statusId: line.statusId ?? unit.statusId,
               currentHolderId: targetHolderId,
-              signedSoldierId: unit.signedSoldierId, // ביעד החדש כבר בלי חתימה אישית אם זה זיכוי
+              signedSoldierId: null,
             },
           });
           await tx.serialUnit.update({

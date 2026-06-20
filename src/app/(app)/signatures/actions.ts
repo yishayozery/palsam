@@ -228,19 +228,18 @@ export async function completeSignature(token: string, signatureData: string) {
   if (!sig.soldierId) return { ok: false, error: "סוג חתימה לא תואם" };
   const soldierId = sig.soldierId;
   const fromHolderId = sig.transfer!.fromHolderId;
+  const bId = sig.battalionId;
+  const { adjustQuantity, defaultStatusId } = await import("@/lib/inventory");
   await prisma.$transaction(async (tx) => {
     for (const line of sig.transfer!.lines) {
       if (line.serialUnitId) {
-        // יחידה סריאלית / אצווה — אם line.quantity קטן מ-lotQuantity, מפצלים
         const unit = await tx.serialUnit.findUnique({ where: { id: line.serialUnitId } });
         if (!unit) continue;
         const isLot = (unit.lotQuantity ?? 1) > 1;
         const lineQty = line.quantity ?? 1;
         if (isLot && lineQty < (unit.lotQuantity ?? 1)) {
-          // פיצול אצווה: יוצרים יחידה חדשה לחייל, מקטינים את המקור
           let childSerial = unit.serialNumber;
           let suffix = 1;
-          // מציאת serialNumber ייחודי
           while (await tx.serialUnit.findFirst({ where: { itemTypeId: unit.itemTypeId, serialNumber: `${childSerial}/${suffix}` } })) {
             suffix++;
           }
@@ -258,15 +257,12 @@ export async function completeSignature(token: string, signatureData: string) {
             data: { lotQuantity: (unit.lotQuantity ?? 1) - lineQty },
           });
         } else {
-          // יחידה רגילה / אצווה שלמה: מעבר signedTo
           await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { signedSoldierId: soldierId } });
         }
-      } else if (line.statusId && fromHolderId) {
-        // יחידה כמותית: גריעה מסך המלאי במחסן המקור
-        const existing = await tx.stockBalance.findFirst({ where: { itemTypeId: line.itemTypeId, holderId: fromHolderId, statusId: line.statusId } });
-        if (existing) {
-          await tx.stockBalance.update({ where: { id: existing.id }, data: { quantity: Math.max(0, existing.quantity - line.quantity) } });
-        }
+      } else if (fromHolderId) {
+        // כמותי: גריעה ע"י adjustQuantity (תומך גם בפריטי ערכה ללא statusId)
+        const statusId = line.statusId || await defaultStatusId(tx, bId);
+        await adjustQuantity(tx, bId, line.itemTypeId, fromHolderId, statusId, -line.quantity);
       }
     }
     await tx.signature.update({ where: { token }, data: { status: "SIGNED", signatureData, signedAt: new Date() } });
@@ -442,13 +438,30 @@ export async function checkinQuantity(formData: FormData) {
 /** ביטול ציבורי לפי token — מאפשר לחייל/נמען לבטל לפני שחתם */
 export async function cancelSignatureByToken(token: string): Promise<{ ok?: boolean; error?: string; soldierId?: string }> {
   try {
-    const sig = await prisma.signature.findUnique({ where: { token }, select: { id: true, status: true, transferId: true, soldierId: true } });
+    const sig = await prisma.signature.findUnique({
+      where: { token },
+      select: { id: true, status: true, transferId: true, soldierId: true, signerUserId: true, battalionId: true },
+    });
     if (!sig) return { error: "לא נמצא" };
     if (sig.status !== "PENDING") return { error: "לא ניתן לבטל" };
     await prisma.$transaction(async (tx) => {
       await tx.signature.update({ where: { id: sig.id }, data: { status: "CANCELED" } });
       if (sig.transferId) {
-        await tx.transfer.update({ where: { id: sig.transferId }, data: { status: "REJECTED" } });
+        const transfer = await tx.transfer.findUnique({ where: { id: sig.transferId }, include: { lines: true } });
+        if (transfer) {
+          await tx.transfer.update({ where: { id: sig.transferId }, data: { status: "REJECTED" } });
+          // החתמת פלוגה — מלאי הורד מראש ב-createCompanySign, צריך להחזיר
+          if (sig.signerUserId && transfer.fromHolderId) {
+            const { adjustQuantity } = await import("@/lib/inventory");
+            for (const line of transfer.lines) {
+              if (line.serialUnitId) {
+                await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { currentHolderId: transfer.fromHolderId } });
+              } else if (line.statusId) {
+                await adjustQuantity(tx, sig.battalionId, line.itemTypeId, transfer.fromHolderId, line.statusId, line.quantity);
+              }
+            }
+          }
+        }
       }
     });
     revalidatePath("/signatures");
@@ -514,14 +527,25 @@ export async function cancelSignature(formData: FormData): Promise<{ ok?: boolea
     const signatureId = String(formData.get("signatureId") || "");
     if (!signatureId) return { error: "חסר מזהה" };
 
-    const sig = await prisma.signature.findUnique({ where: { id: signatureId }, include: { transfer: true } });
+    const sig = await prisma.signature.findUnique({ where: { id: signatureId }, include: { transfer: { include: { lines: true } } } });
     if (!sig || sig.battalionId !== bId) return { error: "לא נמצא" };
     if (sig.status !== "PENDING") return { error: "לא ניתן לבטל — החתימה כבר הושלמה / בוטלה" };
 
     await prisma.$transaction(async (tx) => {
       await tx.signature.update({ where: { id: signatureId }, data: { status: "CANCELED" } });
-      if (sig.transferId) {
+      if (sig.transferId && sig.transfer) {
         await tx.transfer.update({ where: { id: sig.transferId }, data: { status: "REJECTED" } });
+        // החתמת פלוגה — מלאי הורד מראש, צריך להחזיר
+        if (sig.signerUserId && sig.transfer.fromHolderId) {
+          const { adjustQuantity } = await import("@/lib/inventory");
+          for (const line of sig.transfer.lines) {
+            if (line.serialUnitId) {
+              await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { currentHolderId: sig.transfer.fromHolderId } });
+            } else if (line.statusId) {
+              await adjustQuantity(tx, bId, line.itemTypeId, sig.transfer.fromHolderId, line.statusId, line.quantity);
+            }
+          }
+        }
       }
     });
     await audit(user.id, "CANCEL_SIGNATURE", "Signature", signatureId);

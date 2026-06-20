@@ -169,8 +169,21 @@ export async function completeCompanySignature(token: string, signatureData: str
   });
   if (!sig || sig.status !== "PENDING" || !sig.transfer) return { ok: false, error: "החתימה אינה זמינה או כבר בוצעה" };
   if (sig.tokenExpires && sig.tokenExpires < new Date()) {
-    await prisma.signature.update({ where: { token }, data: { status: "EXPIRED" } });
-    return { ok: false, error: "פג תוקף הקישור" };
+    // פג תוקף — מחזירים מלאי שהורד ב-createCompanySign
+    await prisma.$transaction(async (tx) => {
+      await tx.signature.update({ where: { token }, data: { status: "EXPIRED" } });
+      await tx.transfer.update({ where: { id: sig.transferId! }, data: { status: "REJECTED" } });
+      if (sig.transfer!.fromHolderId) {
+        for (const line of sig.transfer!.lines) {
+          if (line.serialUnitId) {
+            await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { currentHolderId: sig.transfer!.fromHolderId } });
+          } else if (line.statusId) {
+            await adjustQuantity(tx, sig.battalionId, line.itemTypeId, sig.transfer!.fromHolderId!, line.statusId, line.quantity);
+          }
+        }
+      }
+    });
+    return { ok: false, error: "פג תוקף הקישור — המלאי הוחזר למחסן" };
   }
 
   await prisma.$transaction(async (tx) => {
