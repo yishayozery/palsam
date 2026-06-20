@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge } from "@/components/ui";
 import CrudSection from "@/components/CrudSection";
 import ImportExcel from "@/components/ImportExcel";
-import { saveSoldier, toggleSoldier, saveCompanyRole, toggleCompanyRole } from "./actions";
+import { saveSoldier, toggleSoldier, saveCompanyRole, toggleCompanyRole, saveSquad, toggleSquad } from "./actions";
 import { importSoldiers } from "./import-actions";
 import SoldierEquipmentButton from "./SoldierEquipmentButton";
 
@@ -208,6 +208,39 @@ export default async function SoldiersPage() {
             ),
           };
         })}
+      />
+
+      <CrudSection
+        title="מחלקות"
+        addLabel="מחלקה"
+        fields={[
+          { name: "name", label: "שם מחלקה" },
+          { name: "sortOrder", label: "סדר", type: "number" as const },
+          ...(user.holderId
+            ? []
+            : [{
+                name: "companyId",
+                label: "פלוגה",
+                type: "select" as const,
+                options: companies.map((c) => ({ value: c.id, label: c.name })),
+              }]),
+        ]}
+        saveAction={saveSquad}
+        deleteAction={toggleSquad}
+        rows={squads.map((sq) => ({
+          id: sq.id,
+          values: {
+            name: sq.name,
+            sortOrder: String(sq.sortOrder),
+            companyId: sq.companyId,
+          },
+          display: (
+            <span className="flex items-center gap-2">
+              <span className="font-medium">{sq.name}</span>
+              {!user.holderId && <Badge>{sq.company.name}</Badge>}
+            </span>
+          ),
+        }))}
       />
 
       <CrudSection

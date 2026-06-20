@@ -33,6 +33,38 @@ export async function toggleCompanyRole(formData: FormData) {
   revalidatePath("/soldiers");
 }
 
+export async function saveSquad(formData: FormData) {
+  const user = await requireCapability("company.manage");
+  const bId = user.battalionId!;
+  const id = String(formData.get("id") || "");
+  const name = String(formData.get("name") || "").trim();
+  const sortOrder = parseInt(String(formData.get("sortOrder") || "0"), 10) || 0;
+  const companyId = user.holderId || String(formData.get("companyId") || "");
+  if (!name || !companyId) return;
+
+  if (id) {
+    await prisma.squad.update({ where: { id }, data: { name, sortOrder } });
+  } else {
+    await prisma.squad.create({ data: { battalionId: bId, companyId, name, sortOrder } });
+  }
+  await audit(user.id, id ? "UPDATE" : "CREATE", "Squad", id || name);
+  revalidatePath("/soldiers");
+  revalidatePath("/attendance");
+  revalidatePath("/attendance-settings");
+}
+
+export async function toggleSquad(formData: FormData) {
+  const user = await requireCapability("company.manage");
+  const id = String(formData.get("id") || "");
+  const sq = await prisma.squad.findUnique({ where: { id } });
+  if (!sq) return;
+  await prisma.squad.update({ where: { id }, data: { active: !sq.active } });
+  await audit(user.id, "UPDATE", "Squad", id, { active: !sq.active });
+  revalidatePath("/soldiers");
+  revalidatePath("/attendance");
+  revalidatePath("/attendance-settings");
+}
+
 export async function saveSoldier(formData: FormData) {
   const user = await requireCapability("company.manage");
   const bId = user.battalionId!;

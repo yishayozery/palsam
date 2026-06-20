@@ -64,7 +64,6 @@ export default async function AttendancePage({
       battalionId: bId,
       ...(isAll ? {} : { companyId: selectedCompanyId }),
       active: true,
-      enlisted: true,
     },
     orderBy: [{ squad: { sortOrder: "asc" } }, { fullName: "asc" }],
     select: {

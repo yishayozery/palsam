@@ -240,31 +240,6 @@ export default async function MaintenancePage({
         </Card>
       </div>
 
-      {/* ===== פירוט לפי סוג רכב ===== */}
-      <h2 className="font-bold text-slate-700 mb-2">📊 פירוט לפי סוג רכב</h2>
-      <Card className="mb-6">
-        {byType.size === 0 ? (
-          <EmptyState>אין רכבים צבאיים בגדוד</EmptyState>
-        ) : (
-          <Table>
-            <thead>
-              <tr><Th>סוג רכב</Th><Th>סה״כ</Th><Th>תקין (בשטח)</Th><Th>בטנא לתיקון</Th><Th>חתום על חייל</Th></tr>
-            </thead>
-            <tbody>
-              {[...byType.values()].sort((a, b) => b.total - a.total).map((s) => (
-                <tr key={s.typeName}>
-                  <Td className="font-medium">🚙 {s.typeName}</Td>
-                  <Td className="text-center font-bold">{s.total}</Td>
-                  <Td className="text-center text-emerald-700">{s.ok}</Td>
-                  <Td className="text-center text-orange-700">{s.defectiveAtTana}</Td>
-                  <Td className="text-center text-blue-700">{s.signedToSoldier}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
-      </Card>
-
       {/* ===== טבלת כל הרכבים ===== */}
       <h2 className="font-bold text-slate-700 mb-2">🚙 כל הרכבים ({filteredVehicles.length})</h2>
       {excludeOfficerOn && (
@@ -310,6 +285,31 @@ export default async function MaintenancePage({
                   </tr>
                 );
               })}
+            </tbody>
+          </Table>
+        )}
+      </Card>
+
+      {/* ===== פירוט לפי סוג רכב ===== */}
+      <h2 className="font-bold text-slate-700 mb-2">📊 פירוט לפי סוג רכב</h2>
+      <Card className="mb-6">
+        {byType.size === 0 ? (
+          <EmptyState>אין רכבים צבאיים בגדוד</EmptyState>
+        ) : (
+          <Table>
+            <thead>
+              <tr><Th>סוג רכב</Th><Th>סה״כ</Th><Th>תקין (בשטח)</Th><Th>בטנא לתיקון</Th><Th>חתום על חייל</Th></tr>
+            </thead>
+            <tbody>
+              {[...byType.values()].sort((a, b) => b.total - a.total).map((s) => (
+                <tr key={s.typeName}>
+                  <Td className="font-medium">🚙 {s.typeName}</Td>
+                  <Td className="text-center font-bold">{s.total}</Td>
+                  <Td className="text-center text-emerald-700">{s.ok}</Td>
+                  <Td className="text-center text-orange-700">{s.defectiveAtTana}</Td>
+                  <Td className="text-center text-blue-700">{s.signedToSoldier}</Td>
+                </tr>
+              ))}
             </tbody>
           </Table>
         )}
