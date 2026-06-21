@@ -7,7 +7,7 @@ import { approveSoldierForWeapons, revokeSoldierWeaponsApproval, bulkApproveForW
 
 type Soldier = {
   id: string; fullName: string; personalNumber: string | null; phone: string | null;
-  companyName: string | null; enlisted: boolean; enlistedAt: string | null;
+  companyName: string | null; status: string; enlistedAt: string | null;
   armoryTestDone: boolean;
   weaponsApprovedAt: string | null; weaponsApprovedByName: string | null;
 };
@@ -41,17 +41,17 @@ export default function ApprovalsClient({ soldiers, armoryTestUrl, approverName 
   const filtered = useMemo(() => {
     return soldiers.filter((s) => {
       if (q.trim() && !`${s.fullName} ${s.personalNumber ?? ""} ${s.companyName ?? ""}`.toLowerCase().includes(q.toLowerCase())) return false;
-      if (filter === "pending") return s.enlisted && !s.weaponsApprovedAt;
+      if (filter === "pending") return s.status === "ENLISTED" && !s.weaponsApprovedAt;
       if (filter === "approved") return !!s.weaponsApprovedAt;
-      if (filter === "blocked") return !s.enlisted;
+      if (filter === "blocked") return s.status !== "ENLISTED";
       return true;
     });
   }, [soldiers, q, filter]);
 
   const counts = {
-    pending: soldiers.filter((s) => s.enlisted && !s.weaponsApprovedAt).length,
+    pending: soldiers.filter((s) => s.status === "ENLISTED" && !s.weaponsApprovedAt).length,
     approved: soldiers.filter((s) => !!s.weaponsApprovedAt).length,
-    blocked: soldiers.filter((s) => !s.enlisted).length,
+    blocked: soldiers.filter((s) => s.status !== "ENLISTED").length,
   };
 
   async function submitApproval(signatureData: string) {
@@ -145,7 +145,7 @@ export default function ApprovalsClient({ soldiers, armoryTestUrl, approverName 
                     {s.companyName && <Badge className="bg-indigo-100 text-indigo-700">{s.companyName}</Badge>}
                   </div>
                   <div className="text-xs text-slate-600 mt-0.5 flex gap-2 flex-wrap">
-                    {s.enlisted ? (
+                    {s.status === "ENLISTED" ? (
                       <span className="text-emerald-700">✓ אושר שלישות {s.enlistedAt && `(${new Date(s.enlistedAt).toLocaleDateString("he-IL")})`}</span>
                     ) : (
                       <span className="text-rose-700">✗ לא אושר שלישות</span>
@@ -158,7 +158,7 @@ export default function ApprovalsClient({ soldiers, armoryTestUrl, approverName 
                     )}
                   </div>
                 </div>
-                {s.enlisted && !s.weaponsApprovedAt && (
+                {s.status === "ENLISTED" && !s.weaponsApprovedAt && (
                   <button onClick={() => setSignFor(s.id)} disabled={!!busy}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-1.5 text-sm font-medium disabled:opacity-50">
                     {busy === s.id ? "..." : "✓ אשר לנשק"}
@@ -176,7 +176,7 @@ export default function ApprovalsClient({ soldiers, armoryTestUrl, approverName 
                     ביטול
                   </button>
                 )}
-                {!s.enlisted && (
+                {s.status !== "ENLISTED" && (
                   <span className="text-xs text-rose-700 bg-rose-50 rounded px-3 py-1.5">חסום - אין שלישות</span>
                 )}
               </div>

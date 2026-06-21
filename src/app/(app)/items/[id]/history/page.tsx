@@ -55,7 +55,7 @@ export default async function ItemHistoryPage({
   // יתרות נוכחיות
   const [balances, serials] = await Promise.all([
     prisma.stockBalance.findMany({ where: { itemTypeId: id, quantity: { gt: 0 } }, include: { holder: true, status: true } }),
-    prisma.serialUnit.findMany({ where: { itemTypeId: id }, include: { currentHolder: true, status: true } }),
+    prisma.serialUnit.findMany({ where: { itemTypeId: id, dischargedAt: null }, include: { currentHolder: true, status: true } }),
   ]);
 
   const exportUrl = `/items/${id}/history/export?view=${view}${holder ? `&holder=${holder}` : ""}`;

@@ -44,7 +44,7 @@ export async function saveAssignment(
     if (vehicle.itemType.category?.warehouseType !== "VEHICLES") return { error: "הפריט אינו רכב" };
 
     const validSoldierCount = await prisma.soldier.count({
-      where: { id: { in: soldierIds }, battalionId: bId, active: true },
+      where: { id: { in: soldierIds }, battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
     });
     if (validSoldierCount !== soldierIds.length) return { error: "חלק מהחיילים לא נמצאו בגדוד" };
 

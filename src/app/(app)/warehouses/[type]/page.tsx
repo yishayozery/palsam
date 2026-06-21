@@ -89,7 +89,7 @@ export default async function WarehouseDetailPage({
   const isUsersTab = activeTab === "users";
   const wearUnits = isWearTab
     ? await prisma.serialUnit.findMany({
-        where: { battalionId: bId, itemType: { category: { warehouseType: wtype } }, status: { OR: [{ isWear: true }, { isLoss: true }] } },
+        where: { battalionId: bId, dischargedAt: null, itemType: { category: { warehouseType: wtype } }, status: { OR: [{ isWear: true }, { isLoss: true }] } },
         include: { itemType: true, status: true, currentHolder: true },
       })
     : [];
@@ -100,7 +100,7 @@ export default async function WarehouseDetailPage({
         prisma.soldier.findMany({
           where: {
             battalionId: bId,
-            active: true,
+            status: { notIn: ["DISCHARGED", "INACTIVE"] },
             companyRole: { isCommander: true },
             companyId: { in: companies.map((c) => c.id) },
           },

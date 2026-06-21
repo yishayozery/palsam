@@ -31,6 +31,7 @@ export default async function AllSerialsPage({
     prisma.serialUnit.findMany({
       where: {
         battalionId: bId,
+        dischargedAt: null,
         ...(scoped ? { itemType: { category: { warehouseType: { in: myWarehouseTypes as never[] } } } } : {}),
       },
       include: {

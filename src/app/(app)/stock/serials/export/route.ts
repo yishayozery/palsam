@@ -20,6 +20,7 @@ export async function GET() {
   const units = await prisma.serialUnit.findMany({
     where: {
       battalionId: bId,
+      dischargedAt: null,
       ...(scoped ? { itemType: { category: { warehouseType: { in: myWHTypes as never[] } } } } : {}),
     },
     include: {

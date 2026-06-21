@@ -25,7 +25,7 @@ export async function getSoldierWeaponsEligibility(soldierId: string): Promise<E
   const s = await prisma.soldier.findUnique({
     where: { id: soldierId },
     select: {
-      enlisted: true, enlistedAt: true, enlistedById: true,
+      status: true, enlistedAt: true, enlistedById: true,
       weaponsApprovedAt: true, weaponsApprovedById: true,
       armoryTestProofImage: true, armoryTestProofAt: true,
       weaponsAgreementSignedAt: true,
@@ -39,7 +39,7 @@ export async function getSoldierWeaponsEligibility(soldierId: string): Promise<E
     : [];
   const nameOf = (id: string | null) => id ? users.find((u) => u.id === id)?.fullName ?? null : null;
 
-  const enlisted = !!s.enlisted;
+  const enlisted = s.status === "ENLISTED";
   const weaponsApproved = !!s.weaponsApprovedAt;
   const armoryTestSubmitted = !!s.armoryTestProofAt;
   const weaponsAgreementSigned = !!s.weaponsAgreementSignedAt;

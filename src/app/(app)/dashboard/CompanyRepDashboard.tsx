@@ -20,7 +20,7 @@ export default async function CompanyRepDashboard({
       where: { battalionId: bId, holderId: companyId, quantity: { gt: 0 } },
       include: { itemType: { include: { category: true } }, status: true },
     }),
-    prisma.soldier.count({ where: { battalionId: bId, companyId, active: true } }),
+    prisma.soldier.count({ where: { battalionId: bId, companyId, status: { notIn: ["DISCHARGED", "INACTIVE"] } } }),
     prisma.serialUnit.count({
       where: { battalionId: bId, currentHolderId: companyId, signedSoldierId: { not: null } },
     }),

@@ -46,6 +46,7 @@ export default async function MaintenancePage({
   const allVehicles = await prisma.serialUnit.findMany({
     where: {
       battalionId: bId,
+      dischargedAt: null,
       itemType: { category: { warehouseType: "VEHICLES" }, association: "MILITARY" },
     },
     include: {

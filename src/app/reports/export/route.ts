@@ -43,7 +43,7 @@ export async function GET() {
     { header: "מיקום פיזי", key: "phys", width: 18 },
   ];
   const units = await prisma.serialUnit.findMany({
-    where: { battalionId: bId },
+    where: { battalionId: bId, dischargedAt: null },
     include: { itemType: { include: { category: true } }, status: true, currentHolder: true, signedSoldier: true },
     orderBy: [{ itemType: { name: "asc" } }, { serialNumber: "asc" }],
   });

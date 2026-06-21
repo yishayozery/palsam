@@ -17,10 +17,10 @@ export async function approveSoldierForWeapons(
     if (!signatureData.startsWith("data:image/")) return { error: "חתימה חסרה — נא לחתום בתיבה" };
 
     const s = await prisma.soldier.findUnique({
-      where: { id: soldierId }, select: { battalionId: true, enlisted: true, fullName: true },
+      where: { id: soldierId }, select: { battalionId: true, status: true, fullName: true },
     });
     if (!s || s.battalionId !== user.battalionId) return { error: "חייל לא נמצא" };
-    if (!s.enlisted) return { error: "החייל לא אושר ע\"י שלישות. אישור שלישות הוא תנאי מוקדם." };
+    if (s.status !== "ENLISTED") return { error: "החייל לא אושר ע\"י שלישות. אישור שלישות הוא תנאי מוקדם." };
 
     await prisma.soldier.update({
       where: { id: soldierId },
@@ -47,7 +47,7 @@ export async function bulkApproveForWeapons(
     if (!signatureData.startsWith("data:image/")) return { error: "חתימה חסרה — נא לחתום בתיבה" };
 
     const pending = await prisma.soldier.findMany({
-      where: { battalionId: bId, active: true, enlisted: true, weaponsApprovedAt: null },
+      where: { battalionId: bId, status: "ENLISTED", weaponsApprovedAt: null },
       select: { id: true, fullName: true },
     });
     if (pending.length === 0) return { ok: true, count: 0 };

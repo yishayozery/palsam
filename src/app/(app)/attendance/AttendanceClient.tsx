@@ -11,6 +11,8 @@ type SoldierRow = {
   id: string;
   fullName: string;
   personalNumber: string | null;
+  companyId: string | null;
+  companyName: string | null;
   squadId: string | null;
   squadName: string | null;
   companyRoleId: string | null;
@@ -107,27 +109,64 @@ export default function AttendanceClient({
     return list;
   }, [soldiers, selectedSquadId, selectedRoleId]);
 
-  // Group soldiers by squad
+  // Group soldiers by company → squad
+  const isAllCompanies = selectedCompanyId === "__all__";
   const grouped = useMemo(() => {
-    const groups: { squad: Squad | null; soldiers: SoldierRow[] }[] = [];
-    const noSquad: SoldierRow[] = [];
-    const squadMap = new Map<string, SoldierRow[]>();
-    for (const s of filteredSoldiers) {
-      if (s.squadId) {
-        const arr = squadMap.get(s.squadId) ?? [];
-        arr.push(s);
-        squadMap.set(s.squadId, arr);
-      } else {
-        noSquad.push(s);
+    const groups: { company: { id: string; name: string } | null; squad: Squad | null; soldiers: SoldierRow[] }[] = [];
+
+    if (isAllCompanies) {
+      // Group by company first, then by squad within each company
+      const companyMap = new Map<string, { name: string; soldiers: SoldierRow[] }>();
+      const noCompany: SoldierRow[] = [];
+      for (const s of filteredSoldiers) {
+        if (s.companyId) {
+          const entry = companyMap.get(s.companyId) ?? { name: s.companyName ?? "", soldiers: [] };
+          entry.soldiers.push(s);
+          companyMap.set(s.companyId, entry);
+        } else {
+          noCompany.push(s);
+        }
       }
+      for (const [cId, { name, soldiers: cSoldiers }] of companyMap) {
+        const squadMap = new Map<string, SoldierRow[]>();
+        const noSquad: SoldierRow[] = [];
+        for (const s of cSoldiers) {
+          if (s.squadId) {
+            const arr = squadMap.get(s.squadId) ?? [];
+            arr.push(s);
+            squadMap.set(s.squadId, arr);
+          } else {
+            noSquad.push(s);
+          }
+        }
+        for (const sq of squads) {
+          const arr = squadMap.get(sq.id);
+          if (arr && arr.length > 0) groups.push({ company: { id: cId, name }, squad: sq, soldiers: arr });
+        }
+        if (noSquad.length > 0) groups.push({ company: { id: cId, name }, squad: null, soldiers: noSquad });
+      }
+      if (noCompany.length > 0) groups.push({ company: null, squad: null, soldiers: noCompany });
+    } else {
+      // Single company: group by squad only
+      const squadMap = new Map<string, SoldierRow[]>();
+      const noSquad: SoldierRow[] = [];
+      for (const s of filteredSoldiers) {
+        if (s.squadId) {
+          const arr = squadMap.get(s.squadId) ?? [];
+          arr.push(s);
+          squadMap.set(s.squadId, arr);
+        } else {
+          noSquad.push(s);
+        }
+      }
+      for (const sq of squads) {
+        const arr = squadMap.get(sq.id);
+        if (arr && arr.length > 0) groups.push({ company: null, squad: sq, soldiers: arr });
+      }
+      if (noSquad.length > 0) groups.push({ company: null, squad: null, soldiers: noSquad });
     }
-    for (const sq of squads) {
-      const arr = squadMap.get(sq.id);
-      if (arr && arr.length > 0) groups.push({ squad: sq, soldiers: arr });
-    }
-    if (noSquad.length > 0) groups.push({ squad: null, soldiers: noSquad });
     return groups;
-  }, [filteredSoldiers, squads]);
+  }, [filteredSoldiers, squads, isAllCompanies, selectedCompanyId]);
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -215,7 +254,7 @@ export default function AttendanceClient({
   const squadDailySummary = useMemo(() => {
     const result = new Map<string, { present: number; total: number }[]>();
     for (const g of grouped) {
-      const key = g.squad?.id ?? "__none__";
+      const key = `${g.company?.id ?? "nc"}-${g.squad?.id ?? "ns"}`;
       const dayCounts = days.map((d) => {
         let present = 0;
         for (const s of g.soldiers) {
@@ -442,11 +481,11 @@ export default function AttendanceClient({
       </div>
 
       {/* Matrix */}
-      <Card className="overflow-x-auto">
+      <Card className="overflow-auto max-h-[70vh]">
         <table className="text-[11px] border-collapse w-full" onClick={() => setCtxMenu(null)}>
-          <thead>
+          <thead className="sticky top-0 z-30">
             <tr className="bg-slate-50">
-              <th className="sticky right-0 bg-slate-50 z-20 text-right px-2 py-1 min-w-[140px] border-b border-slate-200" rowSpan={3}>חייל</th>
+              <th className="sticky right-0 bg-slate-50 z-40 text-right px-2 py-1 min-w-[140px] border-b border-slate-200" rowSpan={3}>חייל</th>
               {days.map((d) => (
                 <th key={d.date + "-dow"} className={`text-center px-0.5 py-0.5 font-medium min-w-[32px] ${d.isShabbat ? "text-blue-600" : d.isHoliday ? "text-rose-600" : "text-slate-500"}`}>
                   {d.dayLabel}
@@ -469,11 +508,22 @@ export default function AttendanceClient({
             </tr>
           </thead>
           <tbody>
-            {grouped.map((g) => {
-              const squadKey = g.squad?.id ?? "__none__";
-              const squadDays = squadDailySummary.get(squadKey);
+            {grouped.map((g, gi) => {
+              const groupKey = `${g.company?.id ?? "nc"}-${g.squad?.id ?? "ns"}`;
+              const squadDays = squadDailySummary.get(groupKey);
+              const showCompanyHeader = isAllCompanies && g.company && (gi === 0 || grouped[gi - 1].company?.id !== g.company.id);
               return (
-                <React.Fragment key={squadKey}>
+                <React.Fragment key={groupKey}>
+                  {showCompanyHeader && (
+                    <tr>
+                      <td className="sticky right-0 bg-blue-100 z-10 px-2 py-2 font-bold text-xs text-blue-800 border-t-2 border-blue-300" colSpan={1}>
+                        🏢 {g.company!.name}
+                      </td>
+                      {days.map((d) => (
+                        <td key={d.date} className="bg-blue-100 border-t-2 border-blue-300" />
+                      ))}
+                    </tr>
+                  )}
                   {g.squad && (
                     <tr key={`sq-${g.squad.id}`}>
                       <td className="sticky right-0 bg-slate-100 z-10 px-2 py-1.5 font-bold text-[11px] text-slate-700 border-t-2 border-slate-300">

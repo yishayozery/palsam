@@ -204,7 +204,7 @@ export default async function SoldiersPage() {
                   soldierId={s.id} soldierName={s.fullName}
                   signedSerials={serials} signedQty={qty}
                 />
-                {!s.active && <Badge className="bg-rose-100 text-rose-700">לא פעיל</Badge>}
+                {(s.status === "DISCHARGED" || s.status === "INACTIVE") && <Badge className="bg-rose-100 text-rose-700">לא פעיל</Badge>}
               </span>
             ),
           };

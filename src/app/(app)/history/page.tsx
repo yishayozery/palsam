@@ -82,7 +82,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
       select: { name: true, sku: true },
     }),
     prisma.soldier.findMany({
-      where: { battalionId: bId, active: true }, orderBy: { fullName: "asc" },
+      where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } }, orderBy: { fullName: "asc" },
       select: { fullName: true, personalNumber: true },
     }),
   ]);

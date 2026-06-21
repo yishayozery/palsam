@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   const soldiers = await prisma.soldier.findMany({
     where: {
       battalionId: user.battalionId,
-      active: true,
+      status: { notIn: ["DISCHARGED", "INACTIVE"] },
       appUser: { is: null }, // לא מקושר עדיין
       ...(companyId ? { companyId } : {}),
     },

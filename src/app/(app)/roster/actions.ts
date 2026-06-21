@@ -21,7 +21,6 @@ export async function createSoldier(formData: FormData) {
   if (!firstName || !lastName) throw new Error("שם פרטי + שם משפחה חובה");
   if (!companyId) throw new Error("חובה לשייך לפלוגה");
 
-  // ייחודיות מספר אישי בגדוד (אם הוזן)
   if (personalNumber) {
     const existing = await prisma.soldier.findFirst({
       where: { battalionId: bId, personalNumber },
@@ -34,13 +33,13 @@ export async function createSoldier(formData: FormData) {
     data: {
       battalionId: bId, fullName, firstName, lastName,
       personalNumber: personalNumber || null,
-      phone, companyId, squadId, platoon, active: true,
-      enlisted: enlistNow,
+      phone, companyId, squadId, platoon,
+      status: enlistNow ? "ENLISTED" : "REGISTERED",
       enlistedAt: enlistNow ? new Date() : null,
       enlistedById: enlistNow ? user.id : null,
     },
   });
-  await audit(user.id, "CREATE_SOLDIER", "Soldier", personalNumber || fullName, { companyId, enlisted: enlistNow });
+  await audit(user.id, "CREATE_SOLDIER", "Soldier", personalNumber || fullName, { companyId, status: enlistNow ? "ENLISTED" : "REGISTERED" });
   revalidatePath("/roster");
   revalidatePath("/soldiers");
 }
@@ -75,7 +74,7 @@ export async function enlistSoldier(formData: FormData) {
   if (!s || s.battalionId !== user.battalionId) return;
   await prisma.soldier.update({
     where: { id },
-    data: { enlisted: true, enlistedAt: new Date(), enlistedById: user.id },
+    data: { status: "ENLISTED", enlistedAt: new Date(), enlistedById: user.id },
   });
   await audit(user.id, "ENLIST_SOLDIER", "Soldier", id);
   revalidatePath("/roster");
@@ -95,26 +94,57 @@ export async function unenlistSoldier(formData: FormData) {
 
   await prisma.soldier.update({
     where: { id },
-    data: { enlisted: false, enlistedAt: null, enlistedById: null },
+    data: { status: "REGISTERED", enlistedAt: null, enlistedById: null },
   });
   await audit(user.id, "UNENLIST_SOLDIER", "Soldier", id);
   revalidatePath("/roster");
 }
 
+/** שחרור חייל */
+export async function dischargeSoldier(formData: FormData) {
+  const user = await requireCapability("soldiers.roster");
+  const id = String(formData.get("id") || "");
+  const s = await prisma.soldier.findUnique({ where: { id } });
+  if (!s || s.battalionId !== user.battalionId) return;
+
+  const signedCount = await prisma.serialUnit.count({ where: { signedSoldierId: id } });
+  if (signedCount > 0) {
+    throw new Error(`לא ניתן לשחרר — החייל חתום על ${signedCount} פריטי ציוד. יש לזכות את הציוד תחילה.`);
+  }
+
+  await prisma.soldier.update({ where: { id }, data: { status: "DISCHARGED", dischargedAt: new Date() } });
+  await audit(user.id, "DISCHARGE_SOLDIER", "Soldier", id);
+  revalidatePath("/roster");
+}
+
+/** השבתה/הפעלה */
 export async function deactivateSoldier(formData: FormData) {
   const user = await requireCapability("soldiers.roster");
   const id = String(formData.get("id") || "");
   const s = await prisma.soldier.findUnique({ where: { id } });
   if (!s || s.battalionId !== user.battalionId) return;
 
-  if (s.active) {
+  if (s.status !== "INACTIVE") {
     const signedCount = await prisma.serialUnit.count({ where: { signedSoldierId: id } });
     if (signedCount > 0) {
       throw new Error(`לא ניתן להשבית — החייל חתום על ${signedCount} פריטי ציוד. יש לזכות את הציוד תחילה.`);
     }
   }
 
-  await prisma.soldier.update({ where: { id }, data: { active: !s.active } });
-  await audit(user.id, "TOGGLE_SOLDIER", "Soldier", id, { active: !s.active });
+  const newStatus = s.status === "INACTIVE" ? "REGISTERED" : "INACTIVE";
+  await prisma.soldier.update({ where: { id }, data: { status: newStatus } });
+  await audit(user.id, "TOGGLE_SOLDIER", "Soldier", id, { status: newStatus });
+  revalidatePath("/roster");
+}
+
+/** עדכון סטטוס מסופח */
+export async function toggleAttached(formData: FormData) {
+  const user = await requireCapability("soldiers.roster");
+  const id = String(formData.get("id") || "");
+  const s = await prisma.soldier.findUnique({ where: { id } });
+  if (!s || s.battalionId !== user.battalionId) return;
+
+  await prisma.soldier.update({ where: { id }, data: { attached: !s.attached } });
+  await audit(user.id, "TOGGLE_ATTACHED", "Soldier", id, { attached: !s.attached });
   revalidatePath("/roster");
 }

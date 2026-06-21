@@ -37,7 +37,7 @@ export async function GET() {
       orderBy: [{ itemType: { name: "asc" } }],
     }),
     prisma.soldier.findMany({
-      where: { battalionId: bId, companyId, active: true },
+      where: { battalionId: bId, companyId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
       select: { id: true, fullName: true, personalNumber: true },
     }),
     prisma.equipmentLocation.findMany({

@@ -10,7 +10,7 @@ export default async function ArmoryApprovalsPage() {
   const bId = user.battalionId!;
 
   const soldiers = await prisma.soldier.findMany({
-    where: { battalionId: bId, active: true },
+    where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
     include: { company: { select: { name: true } } },
     orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }],
   });
@@ -44,7 +44,7 @@ export default async function ArmoryApprovalsPage() {
             personalNumber: s.personalNumber,
             phone: s.phone,
             companyName: s.company?.name ?? null,
-            enlisted: s.enlisted,
+            status: s.status,
             enlistedAt: s.enlistedAt?.toISOString() ?? null,
             armoryTestDone: !!s.armoryTestProofAt,
             weaponsApprovedAt: s.weaponsApprovedAt?.toISOString() ?? null,

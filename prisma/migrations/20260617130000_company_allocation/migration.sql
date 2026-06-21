@@ -1,4 +1,4 @@
-﻿-- CreateTable
+-- CreateTable
 CREATE TABLE "CompanyAllocation" (
     "id" TEXT NOT NULL,
     "battalionId" TEXT NOT NULL,

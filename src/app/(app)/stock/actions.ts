@@ -145,11 +145,13 @@ export async function declareMulti(formData: FormData): Promise<{ ok?: boolean; 
           const uniq = new Set(serials);
           if (uniq.size !== serials.length) throw new Error(`שורה ${i + 1}: יש SN כפולים`);
           const existing = await tx.serialUnit.findMany({
-            where: { battalionId: bId, itemTypeId, serialNumber: { in: serials } },
+            where: { battalionId: bId, itemTypeId, serialNumber: { in: serials }, dischargedAt: null },
             select: { serialNumber: true },
           });
           if (existing.length > 0) throw new Error(`שורה ${i + 1}: SN קיים — ${existing.map(e => e.serialNumber).join(", ")}`);
           for (const sn of serials) {
+            const discharged = await tx.serialUnit.findFirst({ where: { battalionId: bId, itemTypeId, serialNumber: sn, dischargedAt: { not: null } } });
+            if (discharged) await tx.serialUnit.delete({ where: { id: discharged.id } });
             const su = await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: sn, statusId, currentHolderId: wh.id, expiryDate } });
             await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity: 1, serialUnitId: su.id, statusId } });
           }
@@ -215,7 +217,7 @@ export async function declareSerials(formData: FormData) {
   // בדיקה מקדימה: SN כפולים שכבר קיימים לאותו פריט (אותו SN לפריט אחר זה תקין —
   // למשל מסגרת רובה ורכב יכולים לחלוק את אותו מספר)
   const existingDuplicates = await prisma.serialUnit.findMany({
-    where: { battalionId: bId, itemTypeId, serialNumber: { in: serials } },
+    where: { battalionId: bId, itemTypeId, serialNumber: { in: serials }, dischargedAt: null },
     select: { serialNumber: true },
   });
   if (existingDuplicates.length > 0) {
@@ -238,6 +240,13 @@ export async function declareSerials(formData: FormData) {
     });
     for (const sn of serials) {
       try {
+        const existing = await tx.serialUnit.findFirst({ where: { battalionId: bId, itemTypeId, serialNumber: sn } });
+        if (existing && existing.dischargedAt) {
+          await tx.serialUnit.delete({ where: { id: existing.id } });
+        } else if (existing) {
+          failed.push(sn);
+          continue;
+        }
         const su = await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: sn, statusId, currentHolderId: wh.id, expiryDate } });
         await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity: 1, statusId, serialUnitId: su.id } });
         created++;
@@ -285,6 +294,12 @@ export async function importSerials(formData: FormData) {
     });
     for (const sn of serials) {
       try {
+        const existing = await tx.serialUnit.findFirst({ where: { battalionId: bId, itemTypeId, serialNumber: sn } });
+        if (existing && existing.dischargedAt) {
+          await tx.serialUnit.delete({ where: { id: existing.id } });
+        } else if (existing) {
+          continue;
+        }
         const su = await tx.serialUnit.create({ data: { battalionId: bId, itemTypeId, serialNumber: sn, statusId, currentHolderId: wh.id } });
         await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity: 1, statusId, serialUnitId: su.id } });
         created++;
@@ -417,7 +432,7 @@ export async function withdrawMulti(formData: FormData): Promise<{ ok?: boolean;
               });
             } else {
               // יחידה שלמה: מוחקים currentHolderId (יצאה מהגדוד)
-              await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: null, signedSoldierId: null } });
+              await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: null, signedSoldierId: null, dischargedAt: new Date() } });
               await tx.transferLine.create({
                 data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: su.statusId },
               });
@@ -510,7 +525,7 @@ export async function withdrawSerials(formData: FormData) {
       const su = await tx.serialUnit.findUnique({ where: { id: sid } });
       if (!su) continue;
       await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: su.statusId } });
-      await tx.serialUnit.delete({ where: { id: sid } });
+      await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: null, signedSoldierId: null, dischargedAt: new Date() } });
     }
   });
 
@@ -584,7 +599,7 @@ export async function editSerialNumber(formData: FormData) {
 
   // בדיקת כפילות מול אותו פריט
   const dup = await prisma.serialUnit.findFirst({
-    where: { battalionId: bId, itemTypeId: unit.itemTypeId, serialNumber: newSerial, id: { not: id } },
+    where: { battalionId: bId, itemTypeId: unit.itemTypeId, serialNumber: newSerial, id: { not: id }, dischargedAt: null },
   });
   if (dup) throw new Error(`מספר ${newSerial} כבר קיים בפריט זה`);
 

@@ -28,8 +28,8 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
   // חיילים: נציג פלוגה רואה את חיילי הפלוגה; אחרת כל חיילי הגדוד.
   // מציגים את כל החיילים הפעילים כדי שתמיד תהיה רשימה. enlisted=false יסומן כתג ויחסם בצד שרת.
   const isCompanyRep = user.role === "COMPANY_REP" && !!user.holderId;
-  const soldierWhere = {
-    battalionId: bId, active: true,
+  const soldierWhere: import("@/generated/prisma").Prisma.SoldierWhereInput = {
+    battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] },
     ...(isCompanyRep ? { companyId: user.holderId! } : {}),
   };
   // פלוגות לסינון בהחתמת חייל (לקצין מחסן — כדי לסנן ארוכה לפי פלוגה)
@@ -342,8 +342,8 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                 isArmory={!!(await prisma.holder.findFirst({ where: { id: user.holderId ?? "__", warehouseType: "ARMORY" } }))}
                 soldiers={soldiers.map((s) => {
                   const c = companiesForFilter.find((x) => x.id === s.companyId);
-                  const armoryEligible = !!s.enlisted && !!s.weaponsApprovedAt && !!s.armoryTestProofAt && !!s.weaponsAgreementSignedAt;
-                  return { id: s.id, name: s.fullName, pn: s.personalNumber, companyId: s.companyId, companyName: c?.name ?? null, enlisted: s.enlisted, armoryEligible };
+                  const armoryEligible = s.status === "ENLISTED" && !!s.weaponsApprovedAt && !!s.armoryTestProofAt && !!s.weaponsAgreementSignedAt;
+                  return { id: s.id, name: s.fullName, pn: s.personalNumber, companyId: s.companyId, companyName: c?.name ?? null, enlisted: s.status === "ENLISTED", armoryEligible };
                 })}
                 units={availableUnits.map((u) => ({
                   id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber,

@@ -10,7 +10,7 @@ export default async function IneligibilityReportPage() {
   const bId = user.battalionId!;
 
   const soldiers = await prisma.soldier.findMany({
-    where: { battalionId: bId, active: true },
+    where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
     include: {
       company: { select: { name: true } },
       signedSerialUnits: {
@@ -27,7 +27,7 @@ export default async function IneligibilityReportPage() {
 
   const rows = soldiers.map((s) => {
     const missing: string[] = [];
-    if (!s.enlisted) missing.push("שלישות");
+    if (s.status !== "ENLISTED") missing.push("שלישות");
     if (!s.weaponsApprovedAt) missing.push('מג"ד/סמג"ד');
     if (!s.armoryTestProofAt) missing.push("מבחן ארמון");
     if (!s.weaponsAgreementSignedAt) missing.push("נוהל שמירה");
@@ -37,7 +37,7 @@ export default async function IneligibilityReportPage() {
       pn: s.personalNumber,
       phone: s.phone,
       company: s.company?.name ?? "—",
-      enlisted: s.enlisted,
+      enlisted: s.status === "ENLISTED",
       approved: !!s.weaponsApprovedAt,
       test: !!s.armoryTestProofAt,
       agreement: !!s.weaponsAgreementSignedAt,

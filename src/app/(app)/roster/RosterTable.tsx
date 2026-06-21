@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { Card, Table, Th, Td, Badge } from "@/components/ui";
-import { createSoldier, updateSoldier, enlistSoldier, unenlistSoldier, deactivateSoldier } from "./actions";
+import { createSoldier, updateSoldier, enlistSoldier, unenlistSoldier, deactivateSoldier, toggleAttached } from "./actions";
 import { importSoldiersRoster, seedSampleSoldiers } from "./import-actions";
 
 type Company = { id: string; name: string };
@@ -12,7 +12,7 @@ type Soldier = {
   personalNumber: string | null; phone: string | null;
   companyId: string | null; companyName: string | null; platoon: string | null;
   squadId: string | null; squadName: string | null;
-  enlisted: boolean; active: boolean; signedCount: number; enlistedAt: string | null;
+  status: string; attached: boolean; signedCount: number; enlistedAt: string | null;
 };
 
 function AddForm({ companies, squads, onDone }: { companies: Company[]; squads: SquadOption[]; onDone: () => void }) {
@@ -188,9 +188,10 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
   const filtered = useMemo(() => {
     return soldiers.filter((s) => {
       if (company && s.companyId !== company) return false;
-      if (status === "enlisted" && !s.enlisted) return false;
-      if (status === "pending" && (s.enlisted || !s.active)) return false;
-      if (status === "inactive" && s.active) return false;
+      if (status === "enlisted" && s.status !== "ENLISTED") return false;
+      if (status === "pending" && s.status !== "REGISTERED") return false;
+      if (status === "inactive" && s.status !== "DISCHARGED" && s.status !== "INACTIVE") return false;
+      if (status === "attached" && !s.attached) return false;
       if (q.trim()) {
         const qq = q.trim().toLowerCase();
         return s.fullName.toLowerCase().includes(qq) || (s.personalNumber ?? "").includes(qq);
@@ -223,6 +224,7 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
               <option value="enlisted">מאושרים</option>
               <option value="pending">ממתינים</option>
               <option value="inactive">לא פעילים</option>
+              <option value="attached">מסופחים</option>
             </select>
           </div>
           <span className="text-xs text-slate-500 self-end pb-2">{filtered.length} חיילים</span>
@@ -272,7 +274,7 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
           </thead>
           <tbody>
             {filtered.map((s) => (
-              <tr key={s.id} className={!s.active ? "opacity-50" : ""}>
+              <tr key={s.id} className={s.status === "DISCHARGED" || s.status === "INACTIVE" ? "opacity-50" : ""}>
                 <Td>
                   <div className="font-medium">{s.fullName}</div>
                   {s.squadName && <div className="text-xs text-slate-400">🪖 {s.squadName}</div>}
@@ -281,22 +283,25 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
                 <Td>{s.companyName ?? <span className="text-slate-300">—</span>}</Td>
                 <Td className="text-xs text-slate-500">{s.phone ?? "—"}</Td>
                 <Td>
-                  {!s.active
-                    ? <Badge className="bg-slate-100 text-slate-500">לא פעיל</Badge>
-                    : s.enlisted
-                    ? <Badge className="bg-emerald-100 text-emerald-700">✓ מאושר</Badge>
-                    : <Badge className="bg-amber-100 text-amber-700">ממתין</Badge>}
+                  <span className="flex items-center gap-1 flex-wrap">
+                    {s.status === "DISCHARGED" || s.status === "INACTIVE"
+                      ? <Badge className="bg-slate-100 text-slate-500">לא פעיל</Badge>
+                      : s.status === "ENLISTED"
+                      ? <Badge className="bg-emerald-100 text-emerald-700">✓ מאושר</Badge>
+                      : <Badge className="bg-amber-100 text-amber-700">ממתין</Badge>}
+                    {s.attached && <Badge className="bg-blue-100 text-blue-700">מסופח</Badge>}
+                  </span>
                 </Td>
                 <Td className="text-center">{s.signedCount > 0 ? <span className="font-bold text-blue-600">{s.signedCount}</span> : <span className="text-slate-300">—</span>}</Td>
                 <Td>
                   <div className="flex items-center gap-2 justify-end">
-                    {!s.enlisted && s.active && (
+                    {s.status === "REGISTERED" && (
                       <form action={enlistSoldier}>
                         <input type="hidden" name="id" value={s.id} />
                         <button className="text-xs bg-emerald-600 text-white rounded-md px-2 py-1 hover:bg-emerald-700">✓ אשר גיוס</button>
                       </form>
                     )}
-                    {s.enlisted && (
+                    {s.status === "ENLISTED" && (
                       <form action={async (fd) => {
                         try { await unenlistSoldier(fd); setActionError(null); }
                         catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
@@ -305,13 +310,19 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
                         <button className="text-xs text-amber-600 hover:text-amber-800">בטל אישור</button>
                       </form>
                     )}
+                    <form action={toggleAttached}>
+                      <input type="hidden" name="id" value={s.id} />
+                      <button className={`text-xs ${s.attached ? "text-blue-600 hover:text-blue-800" : "text-slate-400 hover:text-blue-600"}`} title={s.attached ? "הסר מסופח" : "סמן מסופח"}>
+                        {s.attached ? "📌" : "📍"}
+                      </button>
+                    </form>
                     <button onClick={() => setEditId(s.id)} className="text-xs text-slate-500 hover:text-slate-800">✎</button>
                     <form action={async (fd) => {
                       try { await deactivateSoldier(fd); setActionError(null); }
                       catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
                     }}>
                       <input type="hidden" name="id" value={s.id} />
-                      <button className="text-xs text-rose-500 hover:text-rose-700" title={s.active ? "השבת" : "הפעל"}>{s.active ? "🚫" : "↻"}</button>
+                      <button className="text-xs text-rose-500 hover:text-rose-700" title={s.status !== "DISCHARGED" && s.status !== "INACTIVE" ? "השבת" : "הפעל"}>{s.status !== "DISCHARGED" && s.status !== "INACTIVE" ? "🚫" : "↻"}</button>
                     </form>
                   </div>
                 </Td>

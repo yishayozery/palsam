@@ -25,8 +25,8 @@ export default async function OrgPage({ searchParams }: { searchParams: Promise<
         },
         // חיילים שמוצבים במחזיק כשיוך משני (למשל ארמון)
         secondarySoldiers: {
-          where: { active: true },
-          select: { id: true, fullName: true, personalNumber: true, enlisted: true },
+          where: { status: { notIn: ["DISCHARGED", "INACTIVE"] } },
+          select: { id: true, fullName: true, personalNumber: true, status: true },
           orderBy: [{ lastName: "asc" }, { fullName: "asc" }],
         },
       },
@@ -40,9 +40,9 @@ export default async function OrgPage({ searchParams }: { searchParams: Promise<
           orderBy: { fullName: "asc" },
         },
         soldiers: {
-          where: { active: true },
-          select: { id: true, fullName: true, personalNumber: true, enlisted: true },
-          orderBy: [{ enlisted: "asc" }, { lastName: "asc" }, { fullName: "asc" }],
+          where: { status: { notIn: ["DISCHARGED", "INACTIVE"] } },
+          select: { id: true, fullName: true, personalNumber: true, status: true },
+          orderBy: [{ status: "asc" }, { lastName: "asc" }, { fullName: "asc" }],
         },
       },
     }),
@@ -54,14 +54,14 @@ export default async function OrgPage({ searchParams }: { searchParams: Promise<
     id: w.id, name: w.name, active: w.active, warehouseType: w.warehouseType, logoData: w.logoData, notificationEmails: w.notificationEmails,
     users: w.users.filter((u) => u.active || !u.passwordSet),
     soldiers: w.secondarySoldiers.map((s) => ({
-      id: s.id, fullName: s.fullName, personalNumber: s.personalNumber, enlisted: s.enlisted, isSecondary: true,
+      id: s.id, fullName: s.fullName, personalNumber: s.personalNumber, enlisted: s.status === "ENLISTED", isSecondary: true,
     })),
   }));
   const companyRows: HolderRowDetail[] = companies.map((c) => ({
     id: c.id, name: c.name, active: c.active, logoData: c.logoData, notificationEmails: c.notificationEmails,
     users: c.users.filter((u) => u.active || !u.passwordSet),
     soldiers: c.soldiers.map((s) => ({
-      id: s.id, fullName: s.fullName, personalNumber: s.personalNumber, enlisted: s.enlisted,
+      id: s.id, fullName: s.fullName, personalNumber: s.personalNumber, enlisted: s.status === "ENLISTED",
     })),
   }));
 

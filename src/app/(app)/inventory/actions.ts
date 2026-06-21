@@ -90,7 +90,7 @@ export async function writeOffStock(formData: FormData) {
       await adjustQuantity(tx, bId, itemTypeId, warehouseId, statusId, -qty);
       await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity: qty, statusId } });
     } else if (serialUnitId) {
-      await tx.serialUnit.delete({ where: { id: serialUnitId } });
+      await tx.serialUnit.update({ where: { id: serialUnitId }, data: { currentHolderId: null, signedSoldierId: null, dischargedAt: new Date() } });
       await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity: 1, statusId } });
     }
   });

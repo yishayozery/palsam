@@ -64,15 +64,15 @@ export default async function DashboardPage({
         ...(scopedHolderIds.length > 0 ? { holderId: { in: scopedHolderIds } } : {}),
       },
     }),
-    prisma.serialUnit.count({ where: { battalionId: bId, status: { isWear: true }, ...holderScope } }),
-    prisma.serialUnit.count({ where: { battalionId: bId, status: { isLoss: true }, ...holderScope } }),
-    prisma.serialUnit.count({ where: { battalionId: bId, ...holderScope } }),
-    prisma.serialUnit.count({ where: { battalionId: bId, signedSoldierId: { not: null }, ...holderScope } }),
+    prisma.serialUnit.count({ where: { battalionId: bId, dischargedAt: null, status: { isWear: true }, ...holderScope } }),
+    prisma.serialUnit.count({ where: { battalionId: bId, dischargedAt: null, status: { isLoss: true }, ...holderScope } }),
+    prisma.serialUnit.count({ where: { battalionId: bId, dischargedAt: null, ...holderScope } }),
+    prisma.serialUnit.count({ where: { battalionId: bId, dischargedAt: null, signedSoldierId: { not: null }, ...holderScope } }),
     prisma.holder.findMany({ where: { battalionId: bId, kind: "COMPANY", active: true } }),
     prisma.stockBalance.aggregate({ _sum: { quantity: true }, where: { battalionId: bId, ...stockHolderScope } }),
     // פריטים עם תפוגה — 30 הקרובים ביותר (מהכי קרוב לרחוק)
     prisma.serialUnit.findMany({
-      where: { battalionId: bId, expiryDate: { not: null }, ...holderScope },
+      where: { battalionId: bId, dischargedAt: null, expiryDate: { not: null }, ...holderScope },
       include: { itemType: { select: { name: true } }, currentHolder: { select: { name: true } }, status: { select: { name: true, isLoss: true } } },
       orderBy: { expiryDate: "asc" },
       take: 30,
@@ -131,6 +131,14 @@ export default async function DashboardPage({
       return { name: c.name, allocated, signed, free: allocated - signed };
     }),
   );
+
+  // === חיילים: סטטוס + מסופחים ===
+  const [soldierTotal, soldierEnlisted, soldierRegistered, soldierAttached] = await Promise.all([
+    prisma.soldier.count({ where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } } }),
+    prisma.soldier.count({ where: { battalionId: bId, status: "ENLISTED" } }),
+    prisma.soldier.count({ where: { battalionId: bId, status: "REGISTERED" } }),
+    prisma.soldier.count({ where: { battalionId: bId, attached: true, status: { notIn: ["DISCHARGED", "INACTIVE"] } } }),
+  ]);
 
   const accuracy = serialTotal === 0 ? 100 : Math.max(0, Math.round((1 - openGaps / serialTotal) * 100));
 
@@ -397,6 +405,29 @@ export default async function DashboardPage({
             </tbody>
           </table>
         )}
+      </Card>
+
+      {/* === חיילים === */}
+      <Card className="p-5 mb-6">
+        <h2 className="font-bold text-slate-800 mb-3">חיילים</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-slate-50 rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-slate-800">{soldierTotal}</div>
+            <div className="text-xs text-slate-500">פעילים</div>
+          </div>
+          <div className="bg-emerald-50 rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-emerald-700">{soldierEnlisted}</div>
+            <div className="text-xs text-emerald-600">מגויסים</div>
+          </div>
+          <div className="bg-amber-50 rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-amber-700">{soldierRegistered}</div>
+            <div className="text-xs text-amber-600">רשומים (ממתינים)</div>
+          </div>
+          <div className="bg-blue-50 rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-blue-700">{soldierAttached}</div>
+            <div className="text-xs text-blue-600">מסופחים לגדוד</div>
+          </div>
+        </div>
       </Card>
 
       <div className="grid md:grid-cols-2 gap-6">

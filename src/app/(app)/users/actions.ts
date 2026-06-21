@@ -69,7 +69,7 @@ export async function saveUser(formData: FormData) {
       soldierId = existing.id;
     } else {
       const newSoldier = await prisma.soldier.create({
-        data: { battalionId, fullName, personalNumber, enlisted: true, enlistedAt: new Date() },
+        data: { battalionId, fullName, personalNumber, status: "ENLISTED", enlistedAt: new Date() },
       });
       soldierId = newSoldier.id;
     }

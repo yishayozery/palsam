@@ -90,8 +90,8 @@ export async function importSoldiersRoster(formData: FormData): Promise<{ create
           battalionId: bId, fullName: `${s.firstName} ${s.lastName}`,
           firstName: s.firstName, lastName: s.lastName,
           personalNumber: s.personalNumber, phone: s.phone, platoon: s.platoon,
-          companyId: s.companyId, active: true,
-          enlisted: s.enlisted,
+          companyId: s.companyId,
+          status: s.enlisted ? "ENLISTED" : "REGISTERED",
           enlistedAt: s.enlisted ? new Date() : null,
           enlistedById: s.enlisted ? user.id : null,
         },
@@ -144,8 +144,8 @@ export async function seedSampleSoldiers(): Promise<{ created: number; errors?: 
         await prisma.soldier.create({
           data: {
             battalionId: bId, fullName: `${fn} ${ln}`, firstName: fn, lastName: ln,
-            personalNumber: pn, companyId: c.id, active: true,
-            enlisted: true, enlistedAt: new Date(), enlistedById: user.id,
+            personalNumber: pn, companyId: c.id,
+            status: "ENLISTED", enlistedAt: new Date(), enlistedById: user.id,
           },
         });
         created++;

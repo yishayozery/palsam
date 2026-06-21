@@ -77,7 +77,7 @@ export default async function CompanyLocationsPage({
 
   // 🆕 ציוד כמותי חתום על חיילים (חישוב מ-SIGNOUT-CHECKIN) + המיקום שלו (SoldierItemLocation)
   const companySoldiers = await prisma.soldier.findMany({
-    where: { battalionId: bId, companyId, active: true },
+    where: { battalionId: bId, companyId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
     select: { id: true, fullName: true, personalNumber: true },
   });
   const soldierIds = companySoldiers.map((s) => s.id);

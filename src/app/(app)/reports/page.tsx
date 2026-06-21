@@ -64,7 +64,7 @@ export default async function ReportsPage({
   const crossSection = selected
     ? await prisma.serialUnit.findMany({
         where: {
-          itemTypeId: selected.id, battalionId: bId,
+          itemTypeId: selected.id, battalionId: bId, dischargedAt: null,
           ...(scopedHolderIds.length > 0 ? { currentHolderId: { in: scopedHolderIds } } : {}),
         },
         include: {
@@ -80,7 +80,7 @@ export default async function ReportsPage({
     categories.map(async (c) => {
       const serial = await prisma.serialUnit.count({
         where: {
-          battalionId: bId, itemType: { categoryId: c.id },
+          battalionId: bId, dischargedAt: null, itemType: { categoryId: c.id },
           ...(scopedHolderIds.length > 0 ? { currentHolderId: { in: scopedHolderIds } } : {}),
         },
       });

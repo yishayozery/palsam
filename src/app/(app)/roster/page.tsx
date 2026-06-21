@@ -22,7 +22,7 @@ export default async function RosterPage({
     }),
     prisma.soldier.findMany({
       where: { battalionId: bId },
-      orderBy: [{ enlisted: "asc" }, { companyId: "asc" }, { lastName: "asc" }, { fullName: "asc" }],
+      orderBy: [{ status: "asc" }, { companyId: "asc" }, { lastName: "asc" }, { fullName: "asc" }],
       include: {
         company: { select: { name: true } },
         squad: { select: { id: true, name: true } },
@@ -36,11 +36,13 @@ export default async function RosterPage({
     }),
   ]);
 
+  const activeSoldiers = soldiers.filter((s) => s.status !== "DISCHARGED" && s.status !== "INACTIVE");
   const stats = {
     total: soldiers.length,
-    enlisted: soldiers.filter((s) => s.enlisted).length,
-    pending: soldiers.filter((s) => !s.enlisted && s.active).length,
-    inactive: soldiers.filter((s) => !s.active).length,
+    enlisted: soldiers.filter((s) => s.status === "ENLISTED").length,
+    pending: soldiers.filter((s) => s.status === "REGISTERED").length,
+    inactive: soldiers.filter((s) => s.status === "DISCHARGED" || s.status === "INACTIVE").length,
+    attached: activeSoldiers.filter((s) => s.attached).length,
   };
 
   return (
@@ -50,11 +52,12 @@ export default async function RosterPage({
         subtitle="ניהול רשימת חיילים. רק חיילים שאושרו (גויסו) יכולים לחתום על ציוד."
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
         <Card className="p-3"><div className="text-xs text-slate-500">סה״כ חיילים</div><div className="text-2xl font-bold mt-1">{stats.total}</div></Card>
         <Card className="p-3"><div className="text-xs text-slate-500">מאושרים</div><div className="text-2xl font-bold mt-1 text-emerald-600">{stats.enlisted}</div></Card>
         <Card className="p-3"><div className="text-xs text-slate-500">ממתינים</div><div className="text-2xl font-bold mt-1 text-amber-600">{stats.pending}</div></Card>
         <Card className="p-3"><div className="text-xs text-slate-500">לא פעילים</div><div className="text-2xl font-bold mt-1 text-slate-400">{stats.inactive}</div></Card>
+        <Card className="p-3"><div className="text-xs text-slate-500">מסופחים</div><div className="text-2xl font-bold mt-1 text-blue-600">{stats.attached}</div></Card>
       </div>
 
       <Card className="p-4 mb-4 bg-blue-50 border-blue-200 text-sm text-blue-900">
@@ -68,7 +71,7 @@ export default async function RosterPage({
           personalNumber: s.personalNumber, phone: s.phone,
           companyId: s.companyId, companyName: s.company?.name ?? null,
           platoon: s.platoon, squadId: s.squadId, squadName: s.squad?.name ?? null,
-          enlisted: s.enlisted, active: s.active,
+          status: s.status, attached: s.attached,
           signedCount: s._count.signedSerialUnits + s._count.signedKitInstances,
           enlistedAt: s.enlistedAt?.toISOString() ?? null,
         }))}

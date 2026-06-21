@@ -54,7 +54,7 @@ export default async function WarehousesPage() {
       const [serial, qty, soldiers] = await Promise.all([
         prisma.serialUnit.count({ where: { currentHolderId: c.id } }),
         prisma.stockBalance.aggregate({ _sum: { quantity: true }, where: { holderId: c.id } }),
-        prisma.soldier.count({ where: { companyId: c.id, active: true } }),
+        prisma.soldier.count({ where: { companyId: c.id, status: { notIn: ["DISCHARGED", "INACTIVE"] } } }),
       ]);
       return { c, serial, qty: qty._sum.quantity ?? 0, soldiers };
     }),

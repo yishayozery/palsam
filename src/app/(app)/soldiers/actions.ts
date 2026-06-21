@@ -94,7 +94,8 @@ export async function toggleSoldier(formData: FormData) {
   const id = String(formData.get("id") || "");
   const s = await prisma.soldier.findUnique({ where: { id } });
   if (!s) return;
-  await prisma.soldier.update({ where: { id }, data: { active: !s.active } });
-  await audit(user.id, "UPDATE", "Soldier", id, { active: !s.active });
+  const newStatus = (s.status === "DISCHARGED" || s.status === "INACTIVE") ? "REGISTERED" : "INACTIVE";
+  await prisma.soldier.update({ where: { id }, data: { status: newStatus } });
+  await audit(user.id, "UPDATE", "Soldier", id, { status: newStatus });
   revalidatePath("/soldiers");
 }

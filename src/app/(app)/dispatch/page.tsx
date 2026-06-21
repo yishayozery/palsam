@@ -15,6 +15,7 @@ export default async function DispatchPage() {
     prisma.serialUnit.findMany({
       where: {
         battalionId: bId,
+        dischargedAt: null,
         itemType: { category: { warehouseType: "VEHICLES" } },
       },
       include: {
@@ -26,7 +27,7 @@ export default async function DispatchPage() {
     }),
     // כל חיילי הגדוד הפעילים
     prisma.soldier.findMany({
-      where: { battalionId: bId, active: true },
+      where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
       select: { id: true, fullName: true, personalNumber: true, phone: true, companyId: true, company: { select: { name: true } } },
       orderBy: { fullName: "asc" },
     }),

@@ -49,7 +49,7 @@ export async function getSoldierEquipmentSummary(soldierId: string): Promise<Sol
   const qty = Array.from(qtyMap.values()).filter((q) => q.quantity > 0)
     .sort((a, b) => a.itemName.localeCompare(b.itemName));
 
-  const enlisted = !!soldier.enlisted;
+  const enlisted = soldier.status === "ENLISTED";
   const weaponsApproved = !!soldier.weaponsApprovedAt;
   const armoryTestSubmitted = !!soldier.armoryTestProofAt;
   const weaponsAgreementSigned = !!soldier.weaponsAgreementSignedAt;

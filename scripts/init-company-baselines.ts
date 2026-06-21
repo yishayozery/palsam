@@ -36,7 +36,7 @@ async function main() {
     for (const company of companies) {
       // לוקחים את כל חיילי הפלוגה
       const soldiers = await prisma.soldier.findMany({
-        where: { battalionId: battalion.id, companyId: company.id, active: true },
+        where: { battalionId: battalion.id, companyId: company.id, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
         select: { id: true },
       });
       const soldierIds = soldiers.map((s) => s.id);

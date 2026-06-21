@@ -158,7 +158,7 @@ export async function lookupSoldierEquipment(formData: FormData): Promise<Soldie
     if (!nameRaw) return { ok: false, error: "הזן שם מלא לאימות" };
 
     const soldier = await prisma.soldier.findFirst({
-      where: { personalNumber, active: true },
+      where: { personalNumber, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
       include: { battalion: { select: { name: true, logoData: true } }, company: { select: { name: true } } },
     });
     if (!soldier) return { ok: false, error: "לא נמצא חייל עם מספר אישי זה" };
@@ -236,7 +236,7 @@ export async function lookupSoldierEquipment(formData: FormData): Promise<Soldie
       ok: true,
       soldierId: soldier.id, // לאקציות נוספות
       weaponsEligibility: {
-        enlisted: !!soldier.enlisted,
+        enlisted: soldier.status === "ENLISTED",
         enlistedAt: soldier.enlistedAt?.toISOString() ?? null,
         enlistedByName,
         weaponsApproved: !!soldier.weaponsApprovedAt,

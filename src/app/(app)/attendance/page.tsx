@@ -64,10 +64,10 @@ export default async function AttendancePage({
     where: {
       battalionId: bId,
       ...(isAll ? {} : { companyId: selectedCompanyId }),
-      active: true,
+      status: { notIn: ["DISCHARGED", "INACTIVE"] },
       ...squadFilter,
     },
-    orderBy: [{ squad: { sortOrder: "asc" } }, { fullName: "asc" }],
+    orderBy: [{ company: { name: "asc" } }, { squad: { sortOrder: "asc" } }, { fullName: "asc" }],
     select: {
       id: true,
       fullName: true,
@@ -78,6 +78,7 @@ export default async function AttendancePage({
       companyRole: { select: { name: true, isCommander: true } },
       enlistedAt: true,
       callupClosedAt: true,
+      companyId: true,
       company: { select: { name: true } },
     },
   });
@@ -166,8 +167,10 @@ export default async function AttendancePage({
         selectedCompanyId={selectedCompanyId}
         soldiers={soldiers.map((s) => ({
           id: s.id,
-          fullName: isAll ? `${s.fullName} (${s.company?.name ?? ""})` : s.fullName,
+          fullName: s.fullName,
           personalNumber: s.personalNumber,
+          companyId: s.companyId,
+          companyName: s.company?.name ?? null,
           squadId: s.squadId,
           squadName: s.squad?.name ?? null,
           companyRoleId: s.companyRoleId,

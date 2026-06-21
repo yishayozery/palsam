@@ -13,7 +13,7 @@ export async function getCompanyItemTotals(
   companyId: string,
 ): Promise<Map<string, number>> {
   const soldiers = await prisma.soldier.findMany({
-    where: { battalionId, companyId, active: true },
+    where: { battalionId, companyId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
     select: { id: true },
   });
   const soldierIds = soldiers.map((s) => s.id);
