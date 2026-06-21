@@ -140,6 +140,37 @@ export default async function DashboardPage({
     prisma.soldier.count({ where: { battalionId: bId, attached: true, status: { notIn: ["DISCHARGED", "INACTIVE"] } } }),
   ]);
 
+  // === נוכחות: תמונת מצב להיום ===
+  const todayStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(new Date().getDate()).padStart(2, "0")}`;
+  const todayDate = new Date(todayStr + "T00:00:00Z");
+  const [attendanceStatuses, todayRecords] = await Promise.all([
+    prisma.attendanceStatus.findMany({ where: { battalionId: bId, active: true }, select: { id: true, name: true, icon: true, isPresent: true } }),
+    prisma.attendanceRecord.findMany({
+      where: { soldier: { battalionId: bId }, date: todayDate },
+      select: { soldierId: true, statusId: true },
+    }),
+  ]);
+  const recordMap = new Map(todayRecords.map((r) => [r.soldierId, r.statusId]));
+  const attPresent = todayRecords.filter((r) => attendanceStatuses.find((s) => s.id === r.statusId)?.isPresent).length;
+  const attReported = todayRecords.length;
+  const attUnreported = soldierTotal - attReported;
+  const attAbsent = attReported - attPresent;
+  const soldierCompanyList = soldierTotal > 0
+    ? await prisma.soldier.findMany({
+        where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
+        select: { id: true, companyId: true },
+      })
+    : [];
+  const companyAttendance = companies.map((c) => {
+    const ids = soldierCompanyList.filter((s) => s.companyId === c.id).map((s) => s.id);
+    const reported = ids.filter((id) => recordMap.has(id)).length;
+    const present = ids.filter((id) => {
+      const sid = recordMap.get(id);
+      return sid && attendanceStatuses.find((s) => s.id === sid)?.isPresent;
+    }).length;
+    return { name: c.name, total: ids.length, reported, present };
+  });
+
   const accuracy = serialTotal === 0 ? 100 : Math.max(0, Math.round((1 - openGaps / serialTotal) * 100));
 
   // ספירות באיחור — להתראה
@@ -429,6 +460,64 @@ export default async function DashboardPage({
           </div>
         </div>
       </Card>
+
+      {/* === נוכחות היום === */}
+      {attendanceStatuses.length > 0 && (
+        <Card className="p-5 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-bold text-slate-800">📋 נוכחות היום</h2>
+            <Link href="/attendance?mode=record" className="text-xs text-blue-600 hover:underline">לעמוד נוכחות ←</Link>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="bg-emerald-50 rounded-lg p-3 text-center">
+              <div className="text-2xl font-bold text-emerald-700">{attPresent}</div>
+              <div className="text-xs text-emerald-600">נוכחים</div>
+            </div>
+            <div className="bg-amber-50 rounded-lg p-3 text-center">
+              <div className="text-2xl font-bold text-amber-700">{attAbsent}</div>
+              <div className="text-xs text-amber-600">חסרים</div>
+            </div>
+            <div className="bg-slate-50 rounded-lg p-3 text-center">
+              <div className="text-2xl font-bold text-slate-400">{attUnreported}</div>
+              <div className="text-xs text-slate-500">לא דווח</div>
+            </div>
+            <div className="bg-slate-50 rounded-lg p-3 text-center">
+              <div className="text-2xl font-bold text-slate-800">{attReported}/{soldierTotal}</div>
+              <div className="text-xs text-slate-500">דווחו</div>
+            </div>
+          </div>
+          {companyAttendance.length > 0 && (
+            <table className="w-full text-sm text-right">
+              <thead>
+                <tr className="text-xs text-slate-500 border-b border-slate-200">
+                  <th className="text-right pb-2">פלוגה</th>
+                  <th className="pb-2 text-center">נוכחים</th>
+                  <th className="pb-2 text-center">חסרים</th>
+                  <th className="pb-2 text-center">לא דווח</th>
+                  <th className="pb-2 text-center">דווחו</th>
+                </tr>
+              </thead>
+              <tbody>
+                {companyAttendance.map((c) => (
+                  <tr key={c.name} className="border-t border-slate-100">
+                    <td className="py-2 font-medium">{c.name}</td>
+                    <td className="py-2 text-center">
+                      {c.present > 0 ? <span className="text-emerald-600 font-bold">{c.present}</span> : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-2 text-center">
+                      {c.reported - c.present > 0 ? <span className="text-amber-600 font-bold">{c.reported - c.present}</span> : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-2 text-center">
+                      {c.total - c.reported > 0 ? <span className="text-slate-400">{c.total - c.reported}</span> : <span className="text-emerald-500">✓</span>}
+                    </td>
+                    <td className="py-2 text-center text-xs text-slate-500">{c.reported}/{c.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      )}
 
       <div className="grid md:grid-cols-2 gap-6">
         <Card className="p-5">

@@ -290,65 +290,6 @@ export default function AttendanceClient({
         </div>
       </div>
 
-      {/* Dashboard */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <Card className="p-3 text-center">
-          <div className="text-[10px] text-slate-500 mb-1">סה״כ חיילים</div>
-          <div className="text-2xl font-bold text-slate-800">{dashStats.all.total}</div>
-        </Card>
-        <Card className="p-3 text-center">
-          <div className="text-[10px] text-slate-500 mb-1">נוכחים היום</div>
-          <div className="text-2xl font-bold text-emerald-600">{dashStats.all.present}</div>
-          <div className="text-xs text-emerald-500 font-bold">{dashStats.all.pct}%</div>
-        </Card>
-        <Card className="p-3 text-center">
-          <div className="text-[10px] text-slate-500 mb-1">חסרים</div>
-          <div className="text-2xl font-bold text-amber-600">{dashStats.all.absent}</div>
-        </Card>
-        <Card className="p-3 text-center">
-          <div className="text-[10px] text-slate-500 mb-1">לא סומנו</div>
-          <div className="text-2xl font-bold text-slate-400">{dashStats.all.unmarked}</div>
-        </Card>
-      </div>
-
-      {/* Per-squad dashboard */}
-      {dashStats.bySquad.length > 1 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          {dashStats.bySquad.map((sq) => (
-            <div key={sq.squad?.id ?? "none"}
-              className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs flex items-center gap-3 min-w-[140px]">
-              <div>
-                <div className="font-bold text-slate-700">{sq.squad?.name ?? "ללא מחלקה"}</div>
-                <div className="text-slate-400">{sq.total} חיילים</div>
-              </div>
-              <div className="mr-auto text-left">
-                <div className="font-bold text-emerald-600 text-sm">{sq.present}/{sq.total}</div>
-                <div className={`font-bold ${sq.pct >= 80 ? "text-emerald-500" : sq.pct >= 50 ? "text-amber-500" : "text-rose-500"}`}>{sq.pct}%</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Per-role dashboard */}
-      {dashStats.byRole.length > 1 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          {dashStats.byRole.map((r) => (
-            <div key={r.role?.id ?? "none"}
-              className={`border rounded-lg px-3 py-2 text-xs flex items-center gap-3 min-w-[140px] ${r.role?.isCommander ? "bg-amber-50 border-amber-200" : "bg-white border-slate-200"}`}>
-              <div>
-                <div className="font-bold text-slate-700">{r.role ? `${r.role.isCommander ? "⭐ " : ""}${r.role.name}` : "ללא תפקיד"}</div>
-                <div className="text-slate-400">{r.total} חיילים</div>
-              </div>
-              <div className="mr-auto text-left">
-                <div className="font-bold text-emerald-600 text-sm">{r.present}/{r.total}</div>
-                <div className={`font-bold ${r.pct >= 80 ? "text-emerald-500" : r.pct >= 50 ? "text-amber-500" : "text-rose-500"}`}>{r.pct}%</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Controls */}
       <Card className="p-3 mb-4">
         <div className="flex items-center gap-3 flex-wrap">
