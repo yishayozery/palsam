@@ -290,6 +290,46 @@ export default function AttendanceClient({
         </div>
       </div>
 
+      {/* Dashboard */}
+      <div className="flex items-center gap-3 flex-wrap mb-4">
+        <div className="bg-white border border-slate-200 rounded-lg px-4 py-2 text-center">
+          <div className="text-xl font-bold text-slate-800">{dashStats.all.total}</div>
+          <div className="text-[10px] text-slate-500">סה״כ</div>
+        </div>
+        {statuses.map((st) => {
+          const count = filteredSoldiers.filter((s) => getStatus(s.id, today) === st.id).length;
+          if (count === 0) return null;
+          return (
+            <div key={st.id} className={`border rounded-lg px-3 py-2 text-center ${st.isPresent ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
+              <div className={`text-lg font-bold ${st.isPresent ? "text-emerald-700" : "text-amber-700"}`}>{count}</div>
+              <div className="text-[10px] text-slate-600">{st.icon ? `${st.icon} ` : ""}{st.name}</div>
+            </div>
+          );
+        })}
+        {dashStats.all.unmarked > 0 && (
+          <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-center">
+            <div className="text-lg font-bold text-slate-400">{dashStats.all.unmarked}</div>
+            <div className="text-[10px] text-slate-500">לא סומנו</div>
+          </div>
+        )}
+      </div>
+
+      {/* Per-squad present/absent */}
+      {dashStats.bySquad.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {dashStats.bySquad.map((sq) => (
+            <div key={sq.squad?.id ?? "none"}
+              className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs flex items-center gap-3 min-w-[130px]">
+              <div className="font-bold text-slate-700">{sq.squad?.name ?? "ללא מחלקה"}</div>
+              <div className="mr-auto flex items-center gap-1.5">
+                <span className="text-emerald-600 font-bold">{sq.present}✓</span>
+                {sq.total - sq.present > 0 && <span className="text-amber-600 font-bold">{sq.total - sq.present}✗</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Controls */}
       <Card className="p-3 mb-4">
         <div className="flex items-center gap-3 flex-wrap">
