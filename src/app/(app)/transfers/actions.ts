@@ -58,9 +58,9 @@ export async function createIssue(formData: FormData) {
       await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: e.itemTypeId, quantity: e.qty, statusId: e.statusId } });
     }
     for (const sid of serialIds) {
-      const su = await tx.serialUnit.findUnique({ where: { id: sid } });
+      const su = await tx.serialUnit.findUnique({ where: { id: sid }, include: { transferLines: { where: { transfer: { status: "PENDING" } }, take: 1 } } });
       if (!su || su.currentHolderId !== fromHolderId) continue;
-      await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: null } });
+      if (su.transferLines.length > 0) continue;
       await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: su.statusId } });
     }
   });
@@ -98,9 +98,9 @@ export async function createReturn(formData: FormData) {
       await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: e.itemTypeId, quantity: e.qty, statusId: e.statusId } });
     }
     for (const sid of serialIds) {
-      const su = await tx.serialUnit.findUnique({ where: { id: sid } });
+      const su = await tx.serialUnit.findUnique({ where: { id: sid }, include: { transferLines: { where: { transfer: { status: "PENDING" } }, take: 1 } } });
       if (!su || su.currentHolderId !== fromHolderId) continue;
-      await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: null } });
+      if (su.transferLines.length > 0) continue;
       await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: su.statusId } });
     }
   });

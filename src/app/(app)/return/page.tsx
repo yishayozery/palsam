@@ -17,7 +17,10 @@ export default async function ReturnPage() {
 
   const [serialUnits, balances, statuses, recent] = await Promise.all([
     prisma.serialUnit.findMany({
-      where: { battalionId: bId, currentHolderId: companyId, signedSoldierId: null },
+      where: {
+        battalionId: bId, currentHolderId: companyId, signedSoldierId: null,
+        transferLines: { none: { transfer: { status: "PENDING" } } },
+      },
       include: { itemType: true, status: true },
       orderBy: { itemType: { name: "asc" } },
     }),

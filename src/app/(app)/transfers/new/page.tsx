@@ -36,7 +36,10 @@ export default async function NewTransferPage({
       include: { itemType: true, status: true },
     }),
     prisma.serialUnit.findMany({
-      where: { battalionId: bId, currentHolderId: sourceId },
+      where: {
+        battalionId: bId, currentHolderId: sourceId,
+        transferLines: { none: { transfer: { status: "PENDING" } } },
+      },
       include: { itemType: true, status: true },
       orderBy: { itemType: { name: "asc" } },
     }),

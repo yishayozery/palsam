@@ -117,6 +117,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
       currentHolderId: { in: companyHolderIds },
       signedSoldierId: null,
       itemType: { signable: true, ...companyScopeForWM },
+      transferLines: { none: { transfer: { status: "PENDING" } } },
     },
     include: { itemType: true, status: true },
     orderBy: { itemType: { name: "asc" } },
@@ -221,8 +222,10 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
     prisma.serialUnit.findMany({
       where: {
         battalionId: bId, signedSoldierId: null,
-        itemType: { signable: true }, // ⚠️ רק פריטים שמיועדים להחתמה
+        itemType: { signable: true },
         ...(isMafam ? {} : holderFilter),
+        // ⚠️ לא מציגים פריטים שכבר בהעברה PENDING (כדי למנוע כפל-החתמה)
+        transferLines: { none: { transfer: { status: "PENDING" } } },
       },
       include: { itemType: true, status: true, currentHolder: true },
       orderBy: { itemType: { name: "asc" } },

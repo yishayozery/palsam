@@ -124,15 +124,11 @@ export async function createCompanySign(
         });
       }
       for (const sid of serialIds) {
-        const su = await tx.serialUnit.findUnique({ where: { id: sid } });
+        const su = await tx.serialUnit.findUnique({ where: { id: sid }, include: { transferLines: { where: { transfer: { status: "PENDING" } }, take: 1 } } });
         if (!su) continue;
-        // אצווה? אפשר להחתים על כמות חלקית — נשמר ב-line.quantity, השרת יפצל בעת ההשלמה
+        if (su.transferLines.length > 0) continue;
         const partialLotQty = parseInt(String(formData.get(`lotQty:${sid}`) || "0"), 10);
         const lineQty = partialLotQty > 0 && partialLotQty < (su.lotQuantity ?? 1) ? partialLotQty : (su.lotQuantity ?? 1);
-        // הסרת המיקום הנוכחי (במעבר) — רק אם זו אצווה שלמה. בפיצול יש להשאיר את המקור
-        if (lineQty === (su.lotQuantity ?? 1)) {
-          await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: null } });
-        }
         await tx.transferLine.create({
           data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: lineQty, serialUnitId: sid, statusId: su.statusId },
         });

@@ -71,12 +71,11 @@ export async function createReturn(formData: FormData) {
     });
     if (serialIds.length > 0) {
       for (const sid of serialIds) {
-        const su = await tx.serialUnit.findUnique({ where: { id: sid } });
+        const su = await tx.serialUnit.findUnique({ where: { id: sid }, include: { transferLines: { where: { transfer: { status: "PENDING" } }, take: 1 } } });
         if (!su || su.currentHolderId !== companyId) continue;
+        if (su.transferLines.length > 0) continue;
         const partialLotQty = parseInt(String(formData.get(`lotQty:${sid}`) || "0"), 10);
         const lineQty = partialLotQty > 0 && partialLotQty < (su.lotQuantity ?? 1) ? partialLotQty : (su.lotQuantity ?? 1);
-        // גריעה מהפלוגה — "במעבר" עד לאישור
-        await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: null } });
         await tx.transferLine.create({
           data: { transferId: t.id, itemTypeId: su.itemTypeId, quantity: lineQty, serialUnitId: sid, statusId: su.statusId },
         });
