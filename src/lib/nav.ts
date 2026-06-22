@@ -79,6 +79,8 @@ export const NAV: NavItem[] = [
   { href: "/transfers", label: "קבלות ממתינות", icon: "📥", group: "המחסנים שלי", cap: "transfer.approve" },
   { href: "/kits", label: "ערכות החתמה", icon: "📦", group: "המחסנים שלי", cap: "kits.manage" },
   { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "המחסנים שלי", cap: "weapons.view" },
+  { href: "/soldiers", label: "חיילים (עריכה + ציוד)", icon: "🪖", group: "המחסנים שלי", cap: "company.manage" },
+  { href: "/attendance", label: "נוכחות חיילים", icon: "📋", group: "המחסנים שלי", cap: "attendance.manage" },
 
   // ===== דוחות ובקרה =====
   { href: "/reports", label: "דוחות", icon: "📈", group: "דוחות ובקרה", cap: "reports.view" },

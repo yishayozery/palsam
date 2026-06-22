@@ -63,6 +63,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "dictionaries.manage",
     "locations.manage",
     "reps.manage",
+    "company.manage", // חיילים — כשמשויך למחלקות רואה רק אותן
     "donations.manage",
     "transfer.approve",
     "signatures.manage",
@@ -71,7 +72,9 @@ const MATRIX: Record<Role, Capability[]> = {
     "gaps.resolve",
     "reports.view",
     "dispatch.manage",
-    "weapons.view", // קצין הארמון רואה את דוח הזכאות (לדעת מי לחתום)
+    "weapons.view",
+    "attendance.manage",
+    "attendance.view",
   ],
   COMPANY_REP: [
     "company.manage",
