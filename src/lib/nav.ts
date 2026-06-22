@@ -29,6 +29,7 @@ export const NAV: NavItem[] = [
   { href: "/dashboard", label: "דשבורד", icon: "📊", group: "ראשי", cap: "reports.view" },
   { href: "/attendance", label: "נוכחות חיילים", icon: "📋", group: "ראשי", cap: "attendance.view" },
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "ראשי", cap: "soldiers.roster" },
+  { href: "/soldiers", label: "חיילים (עריכה + ציוד)", icon: "🪖", group: "ראשי", cap: "company.manage" },
   { href: "/permanent-items", label: "ציוד קבוע לפלוגה", icon: "📌", group: "ראשי", cap: "battalion.profile" },
   { href: "/armory-allocations", label: "הקצאות לפלוגה", icon: "📦", group: "ראשי", cap: "weapons.approve" },
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "ראשי", cap: "dispatch.manage" },
@@ -46,7 +47,6 @@ export const NAV: NavItem[] = [
   { href: "/signatures", label: "החתמת פלוגה", icon: "✍️", group: "מחסנים", cap: "signatures.manage" },
   { href: "/counts", label: "ספירת מלאי", icon: "🔢", group: "מחסנים", cap: "counts.manage" },
   { href: "/gaps", label: "פערים מספירות מלאי", icon: "⚠️", group: "מחסנים", cap: "battalion.profile" },
-  { href: "/soldiers", label: "חיילים (עריכה + ציוד)", icon: "🪖", group: "מחסנים", cap: "company.manage" },
 
   // ===== שלישות (שליש גדודי — ניהול חיילים + גיוס) =====
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "שלישות", cap: "soldiers.roster" },
