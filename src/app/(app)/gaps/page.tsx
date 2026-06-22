@@ -20,6 +20,13 @@ export default async function GapsPage() {
       ? { holderId: { in: user.holderIds } }
       : {};
 
+  // מזהי ספירות שהמשתמש יצר — גם הוא יכול לאשר פערים מהן
+  const mySessions = await prisma.countSession.findMany({
+    where: { battalionId: bId, startedById: user.id },
+    select: { id: true },
+  });
+  const mySessionIds = new Set(mySessions.map((s) => s.id));
+
   const [open, resolved] = await Promise.all([
     prisma.discrepancy.findMany({
       where: { battalionId: bId, status: "OPEN", ...scope },
@@ -38,7 +45,7 @@ export default async function GapsPage() {
     <div>
       <PageHeader
         title="ניהול פערים"
-        subtitle="חוסרים וחריגות מספירות — מחייבים אישור מנהל המערכת לסגירה"
+        subtitle="חוסרים וחריגות מספירות — אישור ע״י מחולל הספירה או מנהל המערכת"
       />
 
       <div className="grid grid-cols-3 gap-4 mb-6">
@@ -84,7 +91,7 @@ export default async function GapsPage() {
                   <Td className={`text-center font-bold ${d.diff < 0 ? "text-rose-600" : "text-blue-600"}`}>
                     {d.diff > 0 ? `+${d.diff}` : d.diff}
                   </Td>
-                  <Td>{canResolve ? <ResolveGap id={d.id} /> : <span className="text-xs text-slate-400">ממתין ל-Admin</span>}</Td>
+                  <Td>{canResolve || (d.sessionId && mySessionIds.has(d.sessionId)) ? <ResolveGap id={d.id} /> : <span className="text-xs text-slate-400">ממתין לאישור</span>}</Td>
                 </tr>
               ))}
             </tbody>

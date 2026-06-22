@@ -152,11 +152,11 @@ export async function startCount(formData: FormData) {
 
 /** סיום ספירה — חישוב פערים. */
 export async function submitCount(formData: FormData) {
-  const user = await requireUser();
+  const user = await requireCapability("counts.execute");
   const bId = user.battalionId!;
   const sessionId = String(formData.get("sessionId") || "");
   const session = await prisma.countSession.findUnique({ where: { id: sessionId }, include: { lines: true } });
-  if (!session || session.status === "COMPLETED") return;
+  if (!session || session.battalionId !== bId || session.status === "COMPLETED") return;
 
   // איסוף עדכוני מיקום פיזי לכל יחידה סריאלית
   const locationUpdates = new Map<string, string>();

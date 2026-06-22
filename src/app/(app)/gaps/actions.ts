@@ -2,23 +2,32 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireCapability } from "@/lib/guard";
+import { requireUser } from "@/lib/guard";
+import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { adjustQuantity } from "@/lib/inventory";
 
-/** סגירת פער ע"י Admin — עם אפשרות יישור המלאי לכמות שנספרה */
+/** סגירת פער — מי שיש לו gaps.resolve, או מי שהתחיל את הספירה */
 export async function resolveDiscrepancy(formData: FormData) {
-  const user = await requireCapability("gaps.resolve");
+  const user = await requireUser();
   const id = String(formData.get("id") || "");
-  const resolution = String(formData.get("resolution") || "").trim() || "אושר ע\"י מנהל המערכת";
-  const adjust = formData.get("adjust") === "on";
 
-  const d = await prisma.discrepancy.findUnique({ where: { id } });
-  if (!d || d.status === "RESOLVED") return;
+  const d = await prisma.discrepancy.findUnique({
+    where: { id },
+    include: { session: { select: { startedById: true } } },
+  });
+  if (!d || d.status === "RESOLVED" || d.battalionId !== user.battalionId) return;
+
+  const hasGapsResolve = can(user.role, "gaps.resolve");
+  const isCountCreator = d.session?.startedById === user.id;
+  if (!hasGapsResolve && !isCountCreator) return;
+
+  const resolution = String(formData.get("resolution") || "").trim()
+    || (isCountCreator ? "אושר ע\"י מחולל הספירה" : "אושר ע\"י מנהל");
+  const adjust = formData.get("adjust") === "on";
 
   await prisma.$transaction(async (tx) => {
     if (adjust && d.holderId) {
-      // יישור יתרת המלאי הכמותי לכמות שנספרה בפועל
       const status = await tx.itemStatus.findFirst({ where: { battalionId: d.battalionId, isDefault: true } })
         ?? await tx.itemStatus.findFirst({ where: { battalionId: d.battalionId } });
       if (status) {
