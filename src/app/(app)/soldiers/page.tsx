@@ -6,16 +6,34 @@ import ImportExcel from "@/components/ImportExcel";
 import { saveSoldier, toggleSoldier, saveCompanyRole, toggleCompanyRole, saveSquad, toggleSquad } from "./actions";
 import { importSoldiers } from "./import-actions";
 import SoldierEquipmentButton from "./SoldierEquipmentButton";
+import CompanyFilter from "./CompanyFilter";
 
 export const dynamic = "force-dynamic";
 
-export default async function SoldiersPage() {
+export default async function SoldiersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ companyId?: string }>;
+}) {
   const user = await requireCapability("company.manage");
   const bId = user.battalionId!;
+  const sp = await searchParams;
+
+  const companies = await prisma.holder.findMany({
+    where: { battalionId: bId, kind: "COMPANY", active: true },
+    orderBy: { name: "asc" },
+  });
+
+  // מפ"ר רואה רק את הפלוגה שלו; מפ"מ בוחר פלוגה מ-dropdown
+  const effectiveCompanyId = user.holderId
+    ? user.holderId
+    : (sp.companyId && companies.some((c) => c.id === sp.companyId) ? sp.companyId : companies[0]?.id);
 
   const squadFilter = user.squadIds.length > 0 ? { squadId: { in: user.squadIds } } : {};
-  const where = { battalionId: bId, ...(user.holderId ? { companyId: user.holderId } : {}), ...squadFilter };
-  const [soldiers, companies, squads, companyRoles] = await Promise.all([
+  const companyFilter = effectiveCompanyId ? { companyId: effectiveCompanyId } : {};
+  const where = { battalionId: bId, ...companyFilter, ...squadFilter };
+
+  const [soldiers, squads, companyRoles] = await Promise.all([
     prisma.soldier.findMany({
       where,
       orderBy: [{ squad: { sortOrder: "asc" } }, { fullName: "asc" }],
@@ -26,9 +44,8 @@ export default async function SoldiersPage() {
         _count: { select: { signedSerialUnits: true, signedKitInstances: true } },
       },
     }),
-    prisma.holder.findMany({ where: { battalionId: bId, kind: "COMPANY", active: true }, orderBy: { name: "asc" } }),
     prisma.squad.findMany({
-      where: { battalionId: bId, ...(user.holderId ? { companyId: user.holderId } : {}) },
+      where: { battalionId: bId, ...(effectiveCompanyId ? { companyId: effectiveCompanyId } : {}) },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       include: { company: { select: { name: true } } },
     }),
@@ -172,6 +189,9 @@ export default async function SoldiersPage() {
         subtitle="לחץ '🪖 ציוד חתום' ליד כל חייל לפירוט הציוד, התאריכים ומי החתים"
         action={<ImportExcel action={importSoldiers} templateHref="/soldiers/template" label="ייבוא חיילים" />}
       />
+      {!user.holderId && companies.length > 0 && effectiveCompanyId && (
+        <CompanyFilter companies={companies} selectedId={effectiveCompanyId} />
+      )}
       <CrudSection
         title="רשימת חיילים"
         addLabel="חייל"
