@@ -156,6 +156,8 @@ model Battalion {
   squads             Squad[]
   companyRoles       CompanyRole[]
   attendanceStatuses AttendanceStatus[]
+  vacationBoards     VacationBoard[]
+  vacationStatuses   VacationStatus[]
 }
 
 // ===================== משתמשים =====================
@@ -203,6 +205,8 @@ model AppUser {
   auditLogs         AuditLog[]
   repOfCompanies    WarehouseCompany[] @relation("RepUser")
   assignedSquads    UserSquad[]
+  vacationAssignees VacationAssignee[]
+  vacationEntries   VacationEntry[]
 }
 
 // ===================== תפקידים מותאמים (admin-driven) =====================
@@ -1176,4 +1180,62 @@ model AttendanceRecord {
   @@unique([soldierId, date])
   @@index([soldierId])
   @@index([date])
+}
+
+// ===================== לוח זמינות (חופשות) =====================
+
+model VacationBoard {
+  id          String   @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation(fields: [battalionId], references: [id])
+  name        String
+  startDate   DateTime @db.Date
+  endDate     DateTime @db.Date
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  assignees VacationAssignee[]
+  entries   VacationEntry[]
+
+  @@index([battalionId])
+}
+
+model VacationAssignee {
+  id      String @id @default(cuid())
+  boardId String
+  board   VacationBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  userId  String
+  user    AppUser @relation(fields: [userId], references: [id])
+
+  @@unique([boardId, userId])
+}
+
+model VacationStatus {
+  id          String @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation(fields: [battalionId], references: [id])
+  name        String
+  color       String   @default("#3b82f6")
+  icon        String?
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+
+  entries VacationEntry[]
+
+  @@unique([battalionId, name])
+}
+
+model VacationEntry {
+  id       String   @id @default(cuid())
+  boardId  String
+  board    VacationBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  userId   String
+  user     AppUser @relation(fields: [userId], references: [id])
+  date     DateTime @db.Date
+  statusId String
+  status   VacationStatus @relation(fields: [statusId], references: [id])
+
+  @@unique([boardId, userId, date])
+  @@index([boardId])
+  @@index([userId])
 }
