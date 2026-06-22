@@ -24,10 +24,17 @@ export default async function SoldiersPage({
     orderBy: { name: "asc" },
   });
 
-  // מפ"ר רואה רק את הפלוגה שלו; מפ"מ בוחר פלוגה מ-dropdown
-  const effectiveCompanyId = user.holderId
+  // holderId = פלוגה (COMPANY_REP) או מחסן (WAREHOUSE_MANAGER)
+  // נבדוק אם ה-holderId הוא באמת פלוגה
+  const isCompanyHolder = user.holderId ? companies.some((c) => c.id === user.holderId) : false;
+
+  // מפ"ר רואה רק את הפלוגה שלו; מפ"מ/קצין מחסן בוחרים פלוגה מ-dropdown
+  // קצין מחסן עם squadIds — לא מסננים לפי פלוגה, רק לפי מחלקה
+  const effectiveCompanyId = isCompanyHolder
     ? user.holderId
-    : (sp.companyId && companies.some((c) => c.id === sp.companyId) ? sp.companyId : companies[0]?.id);
+    : (user.squadIds.length > 0
+      ? null
+      : (sp.companyId && companies.some((c) => c.id === sp.companyId) ? sp.companyId : companies[0]?.id));
 
   const squadFilter = user.squadIds.length > 0 ? { squadId: { in: user.squadIds } } : {};
   const companyFilter = effectiveCompanyId ? { companyId: effectiveCompanyId } : {};
@@ -45,7 +52,11 @@ export default async function SoldiersPage({
       },
     }),
     prisma.squad.findMany({
-      where: { battalionId: bId, ...(effectiveCompanyId ? { companyId: effectiveCompanyId } : {}) },
+      where: {
+        battalionId: bId,
+        ...(effectiveCompanyId ? { companyId: effectiveCompanyId } : {}),
+        ...(user.squadIds.length > 0 ? { id: { in: user.squadIds } } : {}),
+      },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       include: { company: { select: { name: true } } },
     }),
@@ -189,7 +200,7 @@ export default async function SoldiersPage({
         subtitle="לחץ '🪖 ציוד חתום' ליד כל חייל לפירוט הציוד, התאריכים ומי החתים"
         action={<ImportExcel action={importSoldiers} templateHref="/soldiers/template" label="ייבוא חיילים" />}
       />
-      {!user.holderId && companies.length > 0 && effectiveCompanyId && (
+      {!isCompanyHolder && user.squadIds.length === 0 && companies.length > 0 && effectiveCompanyId && (
         <CompanyFilter companies={companies} selectedId={effectiveCompanyId} />
       )}
       <CrudSection
