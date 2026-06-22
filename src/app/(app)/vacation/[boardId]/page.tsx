@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import Link from "next/link";
 import VacationCalendar from "./VacationCalendar";
+import StatusManager from "./StatusManager";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,6 @@ export default async function BoardPage({ params }: { params: Promise<{ boardId:
   const isAdmin = can(user.role, "battalion.profile");
   const isAssigned = board.assignees.some((a) => a.user.id === user.id);
 
-  // בניית ימים בטווח
   const days: string[] = [];
   const d = new Date(board.startDate);
   const end = new Date(board.endDate);
@@ -96,6 +96,12 @@ export default async function BoardPage({ params }: { params: Promise<{ boardId:
           isAdmin={isAdmin}
           isAssigned={isAssigned}
         />
+      )}
+
+      {isAdmin && (
+        <div className="mt-4">
+          <StatusManager statuses={statuses.map((s) => ({ id: s.id, name: s.name, color: s.color, icon: s.icon }))} />
+        </div>
       )}
     </div>
   );

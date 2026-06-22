@@ -113,6 +113,45 @@ export async function setVacationEntry(formData: FormData) {
   revalidatePath(`/vacation/${boardId}`);
 }
 
+/** שמירה מרוכזת של שינויים */
+export async function saveVacationBatch(
+  entries: { boardId: string; userId: string; date: string; statusId: string | null }[],
+) {
+  const user = await requireUser();
+  const bId = user.battalionId!;
+  if (entries.length === 0) return;
+  const boardId = entries[0].boardId;
+  const board = await prisma.vacationBoard.findUnique({ where: { id: boardId } });
+  if (!board || board.battalionId !== bId) return;
+
+  const isAdmin = can(user.role, "battalion.profile");
+  if (!isAdmin) {
+    const assignee = await prisma.vacationAssignee.findUnique({
+      where: { boardId_userId: { boardId, userId: user.id } },
+    });
+    if (!assignee) return;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const e of entries) {
+      const targetUserId = isAdmin ? e.userId : user.id;
+      if (!isAdmin && e.userId !== user.id) continue;
+      if (!e.statusId) {
+        await tx.vacationEntry.deleteMany({
+          where: { boardId, userId: targetUserId, date: new Date(e.date) },
+        });
+      } else {
+        await tx.vacationEntry.upsert({
+          where: { boardId_userId_date: { boardId, userId: targetUserId, date: new Date(e.date) } },
+          update: { statusId: e.statusId },
+          create: { boardId, userId: targetUserId, date: new Date(e.date), statusId: e.statusId },
+        });
+      }
+    }
+  });
+  revalidatePath(`/vacation/${boardId}`);
+}
+
 /** הוספת סטטוס חדש */
 export async function saveVacationStatus(formData: FormData) {
   const user = await requireCapability("battalion.profile");

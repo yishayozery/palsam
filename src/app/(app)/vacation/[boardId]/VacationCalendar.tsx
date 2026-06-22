@@ -1,7 +1,8 @@
 "use client";
 
-import { useTransition, useState, useRef, useCallback } from "react";
-import { setVacationEntry } from "../actions";
+import { useState, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { saveVacationBatch } from "../actions";
 
 type Status = { id: string; name: string; color: string; icon: string | null };
 type User = { id: string; fullName: string; title: string | null };
@@ -29,86 +30,99 @@ export default function VacationCalendar({
   isAdmin: boolean;
   isAssigned: boolean;
 }) {
-  const [entries, setEntries] = useState(initialEntries);
-  const [pending, startTransition] = useTransition();
-  const [statusPicker, setStatusPicker] = useState<{ userId: string; date: string; x: number; y: number } | null>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const [pendingChanges, setPendingChanges] = useState<Map<string, string | null>>(new Map());
+  const [saving, setSaving] = useState(false);
 
-  const canEdit = (userId: string) => isAdmin || (isAssigned && userId === currentUserId);
+  const canEdit = useCallback(
+    (userId: string) => isAdmin || (isAssigned && userId === currentUserId),
+    [isAdmin, isAssigned, currentUserId],
+  );
 
-  const handleCellClick = useCallback((userId: string, date: string, e: React.MouseEvent) => {
+  const getStatus = useCallback(
+    (userId: string, date: string): string | null => {
+      const key = `${userId}:${date}`;
+      if (pendingChanges.has(key)) return pendingChanges.get(key) ?? null;
+      return initialEntries[userId]?.[date] ?? null;
+    },
+    [initialEntries, pendingChanges],
+  );
+
+  function cycleStatus(userId: string, date: string) {
     if (!canEdit(userId)) return;
-    const rect = (e.target as HTMLElement).getBoundingClientRect();
-    setStatusPicker({ userId, date, x: rect.left, y: rect.bottom });
-  }, [isAdmin, isAssigned, currentUserId]);
-
-  const handleSetStatus = useCallback((statusId: string) => {
-    if (!statusPicker) return;
-    const { userId, date } = statusPicker;
-    // optimistic update
-    setEntries((prev) => {
-      const next = { ...prev };
-      if (!next[userId]) next[userId] = {};
-      if (statusId) {
-        next[userId] = { ...next[userId], [date]: statusId };
-      } else {
-        const { [date]: _, ...rest } = next[userId];
-        next[userId] = rest;
-      }
-      return next;
+    const current = getStatus(userId, date);
+    const idx = current ? statuses.findIndex((s) => s.id === current) : -1;
+    const next = idx + 1 < statuses.length ? statuses[idx + 1].id : null;
+    setPendingChanges((prev) => {
+      const m = new Map(prev);
+      m.set(`${userId}:${date}`, next);
+      return m;
     });
-    setStatusPicker(null);
-
-    const fd = new FormData();
-    fd.set("boardId", boardId);
-    fd.set("userId", userId);
-    fd.set("date", date);
-    fd.set("statusId", statusId);
-    startTransition(async () => {
-      await setVacationEntry(fd);
-    });
-  }, [statusPicker, boardId]);
-
-  // קיבוץ ימים לפי חודש
-  const months: { label: string; days: string[] }[] = [];
-  for (const day of days) {
-    const d = new Date(day + "T00:00:00");
-    const label = d.toLocaleDateString("he-IL", { month: "long", year: "numeric" });
-    let m = months.find((x) => x.label === label);
-    if (!m) { m = { label, days: [] }; months.push(m); }
-    m.days.push(day);
   }
 
-  // סיכום לכל סטטוס
-  const summaryByStatus = statuses.map((s) => {
-    let count = 0;
-    for (const userId of Object.keys(entries)) {
-      for (const dateStr of Object.keys(entries[userId] || {})) {
-        if (entries[userId][dateStr] === s.id) count++;
+  async function handleSave() {
+    if (pendingChanges.size === 0) return;
+    setSaving(true);
+    const entries = Array.from(pendingChanges.entries()).map(([key, statusId]) => {
+      const [userId, date] = key.split(":");
+      return { boardId, userId, date, statusId };
+    });
+    await saveVacationBatch(entries);
+    setPendingChanges(new Map());
+    setSaving(false);
+    router.refresh();
+  }
+
+  // סיכום פר יום — כמה זמינים (סטטוס ראשון = "זמין")
+  const dailySummary = useMemo(() => {
+    const summary: Record<string, Record<string, number>> = {};
+    for (const day of days) {
+      summary[day] = {};
+      for (const s of statuses) summary[day][s.id] = 0;
+      let total = 0;
+      for (const u of users) {
+        const sid = getStatus(u.id, day);
+        if (sid && summary[day][sid] !== undefined) {
+          summary[day][sid]++;
+          total++;
+        }
       }
+      summary[day]._total = total;
+      summary[day]._empty = users.length - total;
     }
-    return { ...s, count };
-  });
+    return summary;
+  }, [days, users, statuses, getStatus]);
+
+  // סיכום כולל
+  const totalByStatus = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const s of statuses) totals[s.id] = 0;
+    for (const day of days) {
+      for (const s of statuses) totals[s.id] += dailySummary[day]?.[s.id] ?? 0;
+    }
+    return totals;
+  }, [statuses, days, dailySummary]);
 
   return (
     <div>
       {/* מקרא */}
-      <div className="flex flex-wrap gap-3 mb-4">
+      <div className="flex flex-wrap gap-3 mb-4 items-center">
         {statuses.map((s) => (
           <div key={s.id} className="flex items-center gap-1.5 text-sm">
             <div className="w-4 h-4 rounded" style={{ backgroundColor: s.color }} />
             <span>{s.icon} {s.name}</span>
-            <span className="text-xs text-slate-400">({summaryByStatus.find((x) => x.id === s.id)?.count || 0})</span>
+            <span className="text-xs text-slate-400">({totalByStatus[s.id] || 0})</span>
           </div>
         ))}
         <div className="flex items-center gap-1.5 text-sm text-slate-400">
           <div className="w-4 h-4 rounded bg-slate-100 border border-slate-200" />
           <span>לא עודכן</span>
         </div>
+        <div className="text-xs text-slate-400 mr-4">לחיצה על תא = מעגל בין הסטטוסים</div>
       </div>
 
-      <div ref={tableRef} className="overflow-x-auto bg-white rounded-xl border border-slate-200">
-        <table className="min-w-full text-xs">
+      <div className="overflow-x-auto bg-white rounded-xl border border-slate-200">
+        <table className="min-w-full text-xs border-collapse">
           <thead>
             <tr className="bg-slate-50">
               <th className="sticky right-0 z-10 bg-slate-50 px-3 py-2 text-right font-medium text-slate-600 border-b min-w-[140px]">שם</th>
@@ -139,22 +153,25 @@ export default function VacationCalendar({
                   const d = new Date(day + "T00:00:00");
                   const dow = d.getDay();
                   const isWeekend = dow === SHABBAT || dow === FRIDAY;
-                  const statusId = entries[u.id]?.[day];
-                  const status = statusId ? statuses.find((s) => s.id === statusId) : null;
+                  const statusId = getStatus(u.id, day);
+                  const status = statusId ? statuses.find((ss) => ss.id === statusId) : null;
                   const editable = canEdit(u.id);
+                  const isPending = pendingChanges.has(`${u.id}:${day}`);
 
                   return (
                     <td
                       key={day}
-                      onClick={(e) => editable && handleCellClick(u.id, day, e)}
-                      className={`px-0.5 py-1 text-center border-b border-l transition ${
+                      onClick={() => editable && cycleStatus(u.id, day)}
+                      className={`px-0.5 py-1 text-center border-b border-l transition select-none ${
                         isWeekend ? "bg-slate-50" : ""
-                      } ${editable ? "cursor-pointer hover:ring-2 hover:ring-blue-300 hover:z-10" : ""}`}
+                      } ${editable ? "cursor-pointer hover:ring-2 hover:ring-blue-300 hover:z-10" : ""} ${
+                        isPending ? "ring-1 ring-blue-400" : ""
+                      }`}
                       style={status ? { backgroundColor: status.color + "30" } : undefined}
                       title={status ? `${status.name} — ${u.fullName}` : `${day} — ${u.fullName}`}
                     >
                       {status ? (
-                        <span className="text-[11px]" style={{ color: status.color }}>
+                        <span className="text-[11px] font-medium" style={{ color: status.color }}>
                           {status.icon || status.name.charAt(0)}
                         </span>
                       ) : null}
@@ -164,41 +181,57 @@ export default function VacationCalendar({
               </tr>
             ))}
           </tbody>
+          {/* שורת סיכום */}
+          <tfoot>
+            {statuses.map((st) => (
+              <tr key={st.id} className="bg-slate-50/50">
+                <td className="sticky right-0 z-10 bg-slate-50 px-3 py-1.5 border-t text-[10px] font-medium whitespace-nowrap" style={{ color: st.color }}>
+                  {st.icon} {st.name}
+                </td>
+                {days.map((day) => {
+                  const count = dailySummary[day]?.[st.id] ?? 0;
+                  return (
+                    <td key={day} className="text-center border-t border-l text-[10px] py-1" style={{ color: count > 0 ? st.color : "#cbd5e1" }}>
+                      {count > 0 ? count : "·"}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+            <tr className="bg-slate-100">
+              <td className="sticky right-0 z-10 bg-slate-100 px-3 py-1.5 border-t text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                לא עודכן
+              </td>
+              {days.map((day) => {
+                const empty = dailySummary[day]?._empty ?? 0;
+                return (
+                  <td key={day} className={`text-center border-t border-l text-[10px] font-bold py-1 ${empty > 0 ? "text-rose-500" : "text-slate-300"}`}>
+                    {empty > 0 ? empty : "✓"}
+                  </td>
+                );
+              })}
+            </tr>
+          </tfoot>
         </table>
       </div>
 
-      {/* סיכום שורת חושב */}
-      <div className="mt-3 text-xs text-slate-500">
-        {pending && <span className="text-blue-600">שומר...</span>}
-      </div>
-
-      {/* Status picker popover */}
-      {statusPicker && (
-        <div
-          className="fixed inset-0 z-50"
-          onClick={() => setStatusPicker(null)}
-        >
-          <div
-            className="absolute bg-white rounded-xl shadow-xl border p-2 space-y-1 min-w-[140px]"
-            style={{ left: statusPicker.x, top: statusPicker.y }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {statuses.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => handleSetStatus(s.id)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-50 text-sm text-right"
-              >
-                <span className="w-3 h-3 rounded" style={{ backgroundColor: s.color }} />
-                <span>{s.icon} {s.name}</span>
-              </button>
-            ))}
+      {/* כפתור שמירה */}
+      {pendingChanges.size > 0 && (
+        <div className="sticky bottom-4 mt-4 flex justify-center">
+          <div className="bg-white border border-blue-200 shadow-lg rounded-xl px-6 py-3 flex items-center gap-4">
+            <span className="text-sm text-slate-600">{pendingChanges.size} שינויים ממתינים</span>
             <button
-              onClick={() => handleSetStatus("")}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-red-50 text-sm text-slate-400"
+              onClick={handleSave}
+              disabled={saving}
+              className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
             >
-              <span className="w-3 h-3 rounded bg-slate-200" />
-              נקה
+              {saving ? "שומר..." : "💾 שמור"}
+            </button>
+            <button
+              onClick={() => setPendingChanges(new Map())}
+              className="px-3 py-2 text-slate-500 hover:text-slate-700 text-sm"
+            >
+              ביטול
             </button>
           </div>
         </div>
