@@ -87,6 +87,7 @@ export const NAV: NavItem[] = [
   { href: "/history", label: "היסטוריה", icon: "📜", group: "דוחות ובקרה", cap: "reports.view" },
   { href: "/backup", label: "בדיקת גיבוי", icon: "📂", group: "דוחות ובקרה", cap: "battalion.profile" },
   { href: "/audit", label: "יומן פעולות", icon: "🧾", group: "דוחות ובקרה", cap: "audit.view" },
+  { href: "/setup-checklist", label: "צ'קליסט הקמת גדוד", icon: "📋", group: "דוחות ובקרה", cap: "battalion.profile" },
 
   // ===== עזרה =====
   { href: "/security", label: "🔐 אבטחה (2FA)", icon: "🔐", group: "עזרה" },
