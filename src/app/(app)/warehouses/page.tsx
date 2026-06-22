@@ -10,12 +10,12 @@ export const dynamic = "force-dynamic";
 
 export default async function WarehousesPage() {
   const user = await requireUser();
-  if (user.role === "SUPER_ADMIN") redirect("/admin/battalions");
+  if (user.isSuperAdmin) redirect("/admin/battalions");
   const bId = user.battalionId!;
 
   const isWarehouseMgr = user.role === "WAREHOUSE_MANAGER";
   const isCompanyUser = user.role === "COMPANY_REP" || (user.role === "VIEWER" && user.holderIds.length > 0);
-  const isBattalionWide = user.role === "BATTALION_ADMIN" || (user.role === "VIEWER" && user.holderIds.length === 0);
+  const isBattalionWide = user.isAdmin || (user.role === "VIEWER" && user.holderIds.length === 0);
 
   // אילו מחזיקים המשתמש רואה: קצין מחסן→מחסניו; משתמש פלוגה→הפלוגה שלו; מפמ/צופה-גדודי→הכל
   const warehouses = (isWarehouseMgr || isBattalionWide)

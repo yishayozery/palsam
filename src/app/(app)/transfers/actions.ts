@@ -23,7 +23,7 @@ function qtyEntriesFromForm(formData: FormData) {
 /** ניפוק (ISSUE): מחסן ◄ פלוגה. הציוד יורד מהמחסן ומוגדר "מלאי במעבר" עד אישור הקבלה. */
 export async function createIssue(formData: FormData) {
   const user = await requireUser();
-  if (!can(user.role, "warehouse.operate")) redirect("/");
+  if (!can(user, "warehouse.operate")) redirect("/");
   const bId = user.battalionId!;
   // מקור: המחסן שנבחר (חייב להיות מבין מחסני המשתמש), אחרת הראשי
   const reqFrom = String(formData.get("fromHolderId") || "");
@@ -73,7 +73,7 @@ export async function createIssue(formData: FormData) {
 /** החזרה (RETURN): פלוגה ◄ מחסן, עם דיווח סטטוס. PENDING עד אישור מנהל המחסן. */
 export async function createReturn(formData: FormData) {
   const user = await requireUser();
-  if (!can(user.role, "company.manage")) redirect("/");
+  if (!can(user, "company.manage")) redirect("/");
   const bId = user.battalionId!;
   const fromHolderId = user.holderId || String(formData.get("fromHolderId") || "");
   const toHolderId = String(formData.get("toHolderId") || "");
@@ -113,7 +113,7 @@ export async function createReturn(formData: FormData) {
 /** אישור לחיצת יד — קבלת הציוד אצל היעד */
 export async function approveTransfer(formData: FormData) {
   const user = await requireUser();
-  if (!can(user.role, "transfer.approve")) redirect("/");
+  if (!can(user, "transfer.approve")) redirect("/");
   const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
   const transfer = await prisma.transfer.findUnique({ where: { id }, include: { lines: true } });
@@ -162,7 +162,7 @@ export async function approveTransfer(formData: FormData) {
 /** דחיית לחיצת יד — החזרת הציוד למקור */
 export async function rejectTransfer(formData: FormData) {
   const user = await requireUser();
-  if (!can(user.role, "transfer.approve")) redirect("/");
+  if (!can(user, "transfer.approve")) redirect("/");
   const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
   const transfer = await prisma.transfer.findUnique({ where: { id }, include: { lines: true } });

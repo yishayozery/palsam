@@ -10,8 +10,8 @@ export async function saveAttendance(
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
     const user = await requireUser();
-    const canManage = can(user.role, "attendance.manage");
-    const canView = can(user.role, "attendance.view");
+    const canManage = can(user, "attendance.manage");
+    const canView = can(user, "attendance.view");
     if (!canManage && !canView) return { error: "אין הרשאה" };
 
     for (const entry of entries) {
@@ -56,7 +56,7 @@ export async function assignSquad(
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
     const user = await requireUser();
-    if (!can(user.role, "attendance.manage") && !can(user.role, "battalion.profile"))
+    if (!can(user, "attendance.manage") && !can(user, "battalion.profile"))
       return { error: "אין הרשאה" };
     await prisma.soldier.update({
       where: { id: soldierId },

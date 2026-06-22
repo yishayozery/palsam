@@ -14,7 +14,7 @@ export default async function CompanyWarehousePage({
   params: Promise<{ id: string }>;
 }) {
   const user = await requireUser();
-  if (user.role === "SUPER_ADMIN") redirect("/admin/battalions");
+  if (user.isSuperAdmin) redirect("/admin/battalions");
   const bId = user.battalionId!;
   const { id } = await params;
 
@@ -22,11 +22,11 @@ export default async function CompanyWarehousePage({
   if (!company) notFound();
 
   // הרשאה: נציג/צופה של הפלוגה, או מפמ/צופה גדודי
-  const isBattalionWide = user.role === "BATTALION_ADMIN" || (user.role === "VIEWER" && user.holderIds.length === 0);
+  const isBattalionWide = user.isAdmin || (user.role === "VIEWER" && user.holderIds.length === 0);
   const isMine = user.holderIds.includes(company.id);
   if (!isBattalionWide && !isMine) redirect("/");
 
-  const canOperate = can(user.role, "company.manage") && isMine;
+  const canOperate = can(user, "company.manage") && isMine;
 
   const [serialCount, qtyAgg, signed, wear, soldierCount] = await Promise.all([
     prisma.serialUnit.count({ where: { currentHolderId: company.id } }),
@@ -52,9 +52,9 @@ export default async function CompanyWarehousePage({
 
   const actions = [
     { href: "/soldiers", label: "חיילים", icon: "🪖", show: canOperate },
-    { href: "/signatures", label: "החתמות", icon: "✍️", show: can(user.role, "signatures.manage") && isMine },
+    { href: "/signatures", label: "החתמות", icon: "✍️", show: can(user, "signatures.manage") && isMine },
     { href: "/transfers/new?type=RETURN", label: "החזרה למחסן", icon: "↩️", show: canOperate },
-    { href: "/donations", label: "מלאי תרומה", icon: "🎁", show: can(user.role, "donations.manage") && isMine },
+    { href: "/donations", label: "מלאי תרומה", icon: "🎁", show: can(user, "donations.manage") && isMine },
     { href: "/reports", label: "דוחות", icon: "📈", show: true },
   ].filter((a) => a.show);
 

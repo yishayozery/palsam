@@ -24,7 +24,7 @@ export async function updateWeaponsAgreementText(
     if (!wh || wh.battalionId !== user.battalionId) return { error: "מחסן לא נמצא" };
     if (wh.warehouseType !== "ARMORY") return { error: "ניתן רק למחסן ארמון" };
 
-    const isMafam = user.role === "BATTALION_ADMIN" && can(user.role, "battalion.profile");
+    const isMafam = user.isAdmin && can(user, "battalion.profile");
     const isWHManager = user.role === "WAREHOUSE_MANAGER" && user.holderIds.includes(warehouseId);
     if (!isMafam && !isWHManager) return { error: "אין הרשאה" };
 
@@ -56,7 +56,7 @@ export async function updateArmoryTestUrl(
     if (!wh || wh.battalionId !== user.battalionId) return { error: "מחסן לא נמצא" };
     if (wh.warehouseType !== "ARMORY") return { error: "ניתן רק למחסן ארמון" };
 
-    const isMafam = user.role === "BATTALION_ADMIN" && can(user.role, "battalion.profile");
+    const isMafam = user.isAdmin && can(user, "battalion.profile");
     const isWHManager = user.role === "WAREHOUSE_MANAGER" && user.holderIds.includes(warehouseId);
     if (!isMafam && !isWHManager) return { error: "אין הרשאה" };
 
@@ -86,7 +86,7 @@ export async function updateNotificationEmails(
     });
     if (!wh || wh.battalionId !== user.battalionId) return { error: "לא נמצא" };
 
-    const isMafam = user.role === "BATTALION_ADMIN" && can(user.role, "battalion.profile");
+    const isMafam = user.isAdmin && can(user, "battalion.profile");
     const isWHManager = user.role === "WAREHOUSE_MANAGER" && user.holderIds.includes(holderId);
     const isCompanyRep = user.role === "COMPANY_REP" && user.holderIds.includes(holderId);
     if (!isMafam && !isWHManager && !isCompanyRep) return { error: "אין הרשאה" };
@@ -119,7 +119,7 @@ export async function updateSignatureClause(
     if (wh.kind !== "WAREHOUSE") return { error: "ניתן רק במחסן" };
 
     // הרשאה: מפ"מ או קצין המחסן הזה
-    const isMafam = user.role === "BATTALION_ADMIN" && can(user.role, "battalion.profile");
+    const isMafam = user.isAdmin && can(user, "battalion.profile");
     const isWHManager = user.role === "WAREHOUSE_MANAGER" && user.holderIds.includes(warehouseId);
     if (!isMafam && !isWHManager) return { error: "אין הרשאה" };
 

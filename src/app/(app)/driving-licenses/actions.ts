@@ -38,22 +38,16 @@ export async function toggleLicenseType(formData: FormData) {
 export async function saveSoldierLicenses(formData: FormData) {
   const user = await requireUser();
   const bId = user.battalionId!;
-  const isAdmin = can(user.role, "battalion.profile");
+  const isAdmin = can(user, "battalion.profile");
   const isVehicleOfficer = user.role === "WAREHOUSE_MANAGER";
-  if (!isAdmin && !isVehicleOfficer && !can(user.role, "dispatch.manage")) return;
+  if (!isAdmin && !isVehicleOfficer && !can(user, "dispatch.manage")) return;
 
   const soldierId = String(formData.get("soldierId") || "");
   const soldier = await prisma.soldier.findUnique({ where: { id: soldierId } });
   if (!soldier || soldier.battalionId !== bId) return;
 
   const licenseTypeIds = formData.getAll("licenseTypeId").map(String);
-  const refresherDates: Record<string, string> = {};
-  for (const [key, val] of formData.entries()) {
-    if (key.startsWith("refresher_")) {
-      const ltId = key.replace("refresher_", "");
-      if (val) refresherDates[ltId] = String(val);
-    }
-  }
+  const refresherDate = String(formData.get("refresherDate") || "");
 
   await prisma.$transaction(async (tx) => {
     await tx.soldierDrivingLicense.deleteMany({ where: { soldierId } });
@@ -62,11 +56,42 @@ export async function saveSoldierLicenses(formData: FormData) {
         data: licenseTypeIds.map((licenseTypeId) => ({
           soldierId,
           licenseTypeId,
-          refresherDate: refresherDates[licenseTypeId] ? new Date(refresherDates[licenseTypeId]) : null,
+        })),
+      });
+    }
+    await tx.soldier.update({
+      where: { id: soldierId },
+      data: { drivingRefresherDate: refresherDate ? new Date(refresherDate) : null },
+    });
+  });
+  await audit(user.id, "UPDATE_LICENSES", "Soldier", soldierId, { count: licenseTypeIds.length });
+  revalidatePath("/driving-licenses");
+}
+
+export async function saveVehicleTypeLicenses(formData: FormData) {
+  const user = await requireUser();
+  const bId = user.battalionId!;
+  const isAdmin = can(user, "battalion.profile");
+  const isVehicleOfficer = user.role === "WAREHOUSE_MANAGER";
+  if (!isAdmin && !isVehicleOfficer && !can(user, "dispatch.manage")) return;
+
+  const itemTypeId = String(formData.get("itemTypeId") || "");
+  const itemType = await prisma.itemType.findUnique({ where: { id: itemTypeId } });
+  if (!itemType || itemType.battalionId !== bId) return;
+
+  const licenseTypeIds = formData.getAll("licenseTypeId").map(String);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.vehicleTypeLicense.deleteMany({ where: { itemTypeId } });
+    if (licenseTypeIds.length > 0) {
+      await tx.vehicleTypeLicense.createMany({
+        data: licenseTypeIds.map((licenseTypeId) => ({
+          itemTypeId,
+          licenseTypeId,
         })),
       });
     }
   });
-  await audit(user.id, "UPDATE_LICENSES", "Soldier", soldierId, { count: licenseTypeIds.length });
+  await audit(user.id, "UPDATE_VEHICLE_LICENSES", "ItemType", itemTypeId, { count: licenseTypeIds.length });
   revalidatePath("/driving-licenses");
 }

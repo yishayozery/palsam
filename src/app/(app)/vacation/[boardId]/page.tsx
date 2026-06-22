@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function BoardPage({ params }: { params: Promise<{ boardId: string }> }) {
   const user = await requireUser();
-  if (!can(user.role, "reports.view")) redirect("/dashboard");
+  if (!can(user, "reports.view")) redirect("/dashboard");
   const bId = user.battalionId!;
   const { boardId } = await params;
 
@@ -47,7 +47,7 @@ export default async function BoardPage({ params }: { params: Promise<{ boardId:
     select: { userId: true, date: true, statusId: true },
   });
 
-  const isAdmin = can(user.role, "battalion.profile");
+  const isAdmin = can(user, "battalion.profile");
   const isAssigned = board.assignees.some((a) => a.user.id === user.id);
   if (!isAdmin && !isAssigned) redirect("/dashboard");
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";

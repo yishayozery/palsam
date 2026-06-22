@@ -24,7 +24,7 @@ export default async function WarehouseDetailPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const user = await requireUser();
-  if (user.role === "SUPER_ADMIN") redirect("/admin/battalions");
+  if (user.isSuperAdmin) redirect("/admin/battalions");
   const bId = user.battalionId!;
   const { type } = await params;
   const { tab } = await searchParams;
@@ -41,7 +41,7 @@ export default async function WarehouseDetailPage({
   // משתמשי פלוגה לא רואים את מחסני הגדוד (רק את המחסן הפלוגתי שלהם)
   if (user.role === "COMPANY_REP" || (user.role === "VIEWER" && user.holderIds.length > 0)) redirect("/warehouses");
 
-  const isManager = can(user.role, "warehouse.operate") && user.holderIds.includes(warehouse.id);
+  const isManager = can(user, "warehouse.operate") && user.holderIds.includes(warehouse.id);
 
   // פלוגות שהמחסן עובד מולן
   const links = await prisma.warehouseCompany.findMany({
@@ -77,10 +77,10 @@ export default async function WarehouseDetailPage({
   ]);
 
   const actions = [
-    { href: "/inventory", label: "קליטת מלאי", icon: "📥", show: can(user.role, "warehouse.operate") },
-    { href: "/transfers", label: "ניפוק / העברה", icon: "🔄", show: can(user.role, "warehouse.operate") },
+    { href: "/inventory", label: "קליטת מלאי", icon: "📥", show: can(user, "warehouse.operate") },
+    { href: "/transfers", label: "ניפוק / העברה", icon: "🔄", show: can(user, "warehouse.operate") },
     { href: `/warehouses/${wtype}?tab=users`, label: "משתמשי המחסן", icon: "👤", show: true },
-    { href: "/signatures", label: "החתמות", icon: "✍️", show: can(user.role, "signatures.manage") },
+    { href: "/signatures", label: "החתמות", icon: "✍️", show: can(user, "signatures.manage") },
     { href: `/warehouses/${wtype}?tab=wear`, label: "ציוד בלאי", icon: "🛠️", show: true },
     { href: "/reports", label: "דוחות", icon: "📈", show: true },
   ].filter((a) => a.show);
@@ -134,7 +134,7 @@ export default async function WarehouseDetailPage({
         warehouseId={warehouse.id}
         warehouseName={warehouse.name}
         initial={warehouse.signatureClause}
-        readOnly={!isManager && user.role !== "BATTALION_ADMIN"}
+        readOnly={!isManager && !user.isAdmin}
       />
 
       {/* 📧 התראות מייל */}
@@ -142,7 +142,7 @@ export default async function WarehouseDetailPage({
         holderId={warehouse.id}
         holderName={warehouse.name}
         initial={warehouse.notificationEmails}
-        readOnly={!isManager && user.role !== "BATTALION_ADMIN"}
+        readOnly={!isManager && !user.isAdmin}
       />
 
       {/* 🔫 נוהל שמירת נשק + קישור למבחן - רק לארמון */}
@@ -151,12 +151,12 @@ export default async function WarehouseDetailPage({
           <ArmoryTestUrlEditor
             warehouseId={warehouse.id}
             initial={warehouse.armoryTestUrl}
-            readOnly={!isManager && user.role !== "BATTALION_ADMIN"}
+            readOnly={!isManager && !user.isAdmin}
           />
           <WeaponsAgreementEditor
             warehouseId={warehouse.id}
             initial={warehouse.weaponsAgreementText}
-            readOnly={!isManager && user.role !== "BATTALION_ADMIN"}
+            readOnly={!isManager && !user.isAdmin}
           />
         </>
       )}

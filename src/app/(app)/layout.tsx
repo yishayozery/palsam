@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
-import { NAV, GROUP_ROLES } from "@/lib/nav";
+import { NAV, GROUP_CONTEXT } from "@/lib/nav";
 import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/Sidebar";
 import MobileShell from "@/components/MobileShell";
@@ -16,12 +16,22 @@ export default async function AppLayout({
   const fresh = await prisma.appUser.findUnique({ where: { id: user.id }, select: { title: true } });
   const displayTitle = fresh?.title || user.title || user.roleLabel;
 
+  const holderKind = user.holderId
+    ? (await prisma.holder.findUnique({ where: { id: user.holderId }, select: { kind: true } }))?.kind
+    : null;
+  const isCompanyHolder = holderKind === "COMPANY";
+  const isWarehouseHolder = holderKind === "WAREHOUSE";
+
   const filtered = NAV.filter((n) => {
-    if (n.roles && !n.roles.includes(user.role)) return false;
-    if (user.role === "SUPER_ADMIN") return n.roles?.includes("SUPER_ADMIN") ?? false;
-    if (n.cap && !can(user.role, n.cap)) return false;
-    const groupRoles = GROUP_ROLES[n.group];
-    if (groupRoles && !groupRoles.includes(user.role)) return false;
+    if (n.superAdminOnly) return user.isSuperAdmin;
+    if (user.isSuperAdmin) return n.superAdminOnly;
+    if (n.adminOnly && !user.isAdmin) return false;
+    if (n.screen && !can(user, n.screen)) return false;
+    if (n.cap && !can(user, n.cap)) return false;
+    const ctx = GROUP_CONTEXT[n.group];
+    if (ctx === "company" && !isCompanyHolder) return false;
+    if (ctx === "warehouse" && !isWarehouseHolder) return false;
+    if (ctx === "admin" && !user.isAdmin) return false;
     return true;
   });
   const seen = new Set<string>();
@@ -57,7 +67,7 @@ export default async function AppLayout({
   const userHolder = user.holderId
     ? await prisma.holder.findUnique({ where: { id: user.holderId }, select: { name: true, logoData: true, kind: true } })
     : null;
-  const unitName = user.role === "SUPER_ADMIN" ? "ניהול-על" : battalion?.name || "גדוד";
+  const unitName = user.isSuperAdmin ? "ניהול-על" : battalion?.name || "גדוד";
 
   const sidebar = (
     <>

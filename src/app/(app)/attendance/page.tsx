@@ -14,8 +14,8 @@ export default async function AttendancePage({
   searchParams: Promise<{ companyId?: string; start?: string; mode?: string }>;
 }) {
   const user = await requireUser();
-  const canManage = can(user.role, "attendance.manage");
-  const canView = can(user.role, "attendance.view");
+  const canManage = can(user, "attendance.manage");
+  const canView = can(user, "attendance.view");
   if (!canManage && !canView) redirect("/dashboard");
   const bId = user.battalionId!;
   const sp = await searchParams;

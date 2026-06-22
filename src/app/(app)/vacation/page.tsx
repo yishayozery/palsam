@@ -11,9 +11,9 @@ export const dynamic = "force-dynamic";
 
 export default async function VacationPage() {
   const user = await requireUser();
-  if (!can(user.role, "reports.view")) redirect("/dashboard");
+  if (!can(user, "reports.view")) redirect("/dashboard");
   const bId = user.battalionId!;
-  const isAdmin = can(user.role, "battalion.profile");
+  const isAdmin = can(user, "battalion.profile");
 
   const boards = await prisma.vacationBoard.findMany({
     where: { battalionId: bId, active: true },

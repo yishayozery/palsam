@@ -3,8 +3,8 @@ import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
-import type { Role } from "@/generated/prisma";
-import { ROLE_LABELS } from "./rbac";
+import type { Role, PermissionLevel } from "@/generated/prisma";
+import { ROLE_LABELS, permissionsFromLegacyRole, type UserPermissions, type PermissionHolder } from "./rbac";
 
 const SECRET = new TextEncoder().encode(
   process.env.AUTH_SECRET || "dev-secret-change-me-please-32-characters",
@@ -16,14 +16,17 @@ export type SessionUser = {
   id: string;
   username: string;
   fullName: string;
-  role: Role; // פרופיל ההרשאות בפועל
-  roleLabel: string; // שם התצוגה (תפקיד מותאם או ברירת מחדל)
-  title: string | null; // תואר/תפקיד מותאם של המשתמש (מ"פ, רס"פ, מפלג וכו') — מוצג בסיידבר
-  holderId: string | null; // מחזיק ראשי
-  holderIds: string[]; // כל המחזיקים המשויכים (תמיכה בכמה מחסנים)
-  squadIds: string[]; // מחלקות משויכות — ריק = רואה הכל בפלוגה
+  role: Role; // legacy — נשמר לתאימות
+  roleLabel: string;
+  title: string | null;
+  holderId: string | null;
+  holderIds: string[];
+  squadIds: string[];
   battalionId: string | null;
-};
+  permissions: UserPermissions;
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
+} & PermissionHolder;
 
 export async function hashPassword(pw: string): Promise<string> {
   return bcrypt.hash(pw, 10);
@@ -61,17 +64,24 @@ export async function getSession(): Promise<SessionUser | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, SECRET);
+    const role = payload.role as Role;
+    const permissions = (payload.permissions as UserPermissions) ?? permissionsFromLegacyRole(role);
+    const isAdmin = (payload.isAdmin as boolean) ?? (role === "BATTALION_ADMIN");
+    const isSuperAdmin = (payload.isSuperAdmin as boolean) ?? (role === "SUPER_ADMIN");
     return {
       id: payload.id as string,
       username: payload.username as string,
       fullName: payload.fullName as string,
-      role: payload.role as Role,
-      roleLabel: (payload.roleLabel as string) ?? ROLE_LABELS[payload.role as Role],
+      role,
+      roleLabel: (payload.roleLabel as string) ?? ROLE_LABELS[role],
       title: (payload.title as string) ?? null,
       holderId: (payload.holderId as string) ?? null,
       holderIds: (payload.holderIds as string[]) ?? ((payload.holderId as string) ? [payload.holderId as string] : []),
       squadIds: (payload.squadIds as string[]) ?? [],
       battalionId: (payload.battalionId as string) ?? null,
+      permissions,
+      isAdmin,
+      isSuperAdmin,
     };
   } catch {
     return null;
@@ -81,23 +91,47 @@ export async function getSession(): Promise<SessionUser | null> {
 function toSession(user: {
   id: string; username: string; fullName: string; title?: string | null; role: Role; holderId: string | null; battalionId: string | null;
   customRole?: { name: string } | null;
+  systemRole?: { name: string; isAdmin: boolean; isPreset: boolean; permissions: { screen: string; level: PermissionLevel }[] } | null;
   assignedHolders?: { holderId: string }[];
   assignedSquads?: { squadId: string }[];
 }): SessionUser {
   const ids = new Set<string>();
   for (const a of user.assignedHolders ?? []) ids.add(a.holderId);
   if (user.holderId) ids.add(user.holderId);
+
+  const isSuperAdmin = user.role === "SUPER_ADMIN";
+
+  let permissions: UserPermissions;
+  let isAdmin: boolean;
+  let roleLabel: string;
+
+  if (user.systemRole) {
+    permissions = {};
+    for (const p of user.systemRole.permissions) {
+      permissions[p.screen as keyof UserPermissions] = p.level;
+    }
+    isAdmin = user.systemRole.isAdmin;
+    roleLabel = user.systemRole.name;
+  } else {
+    permissions = permissionsFromLegacyRole(user.role);
+    isAdmin = user.role === "BATTALION_ADMIN";
+    roleLabel = user.customRole?.name ?? ROLE_LABELS[user.role];
+  }
+
   return {
     id: user.id,
     username: user.username,
     fullName: user.fullName,
     role: user.role,
-    roleLabel: user.customRole?.name ?? ROLE_LABELS[user.role],
+    roleLabel,
     title: user.title ?? null,
     holderId: user.holderId,
     holderIds: [...ids],
     squadIds: (user.assignedSquads ?? []).map((s) => s.squadId),
     battalionId: user.battalionId,
+    permissions,
+    isAdmin,
+    isSuperAdmin,
   };
 }
 
@@ -115,7 +149,13 @@ export async function authenticate(
 ): Promise<AuthResult> {
   const user = await prisma.appUser.findFirst({
     where: { username: { equals: username, mode: "insensitive" } },
-    include: { customRole: true, assignedHolders: true, assignedSquads: true, battalion: { select: { code: true, brigade: true, name: true } } },
+    include: {
+      customRole: true,
+      systemRole: { include: { permissions: true } },
+      assignedHolders: true,
+      assignedSquads: true,
+      battalion: { select: { code: true, brigade: true, name: true } },
+    },
   });
   if (!user || !user.active || !user.passwordSet) return { kind: "fail" };
   const ok = await verifyPassword(password, user.passwordHash);
@@ -143,7 +183,13 @@ export async function completeAuthWithTotp(userId: string, token: string): Promi
   const { verifyTotp } = await import("./totp");
   const user = await prisma.appUser.findUnique({
     where: { id: userId },
-    include: { customRole: true, assignedHolders: true, assignedSquads: true, battalion: { select: { code: true, brigade: true, name: true } } },
+    include: {
+      customRole: true,
+      systemRole: { include: { permissions: true } },
+      assignedHolders: true,
+      assignedSquads: true,
+      battalion: { select: { code: true, brigade: true, name: true } },
+    },
   });
   if (!user || !user.totpSecret || !user.active) return null;
   if (!verifyTotp(token, user.totpSecret)) return null;
@@ -161,7 +207,7 @@ export async function setPasswordByInvite(
   const updated = await prisma.appUser.update({
     where: { id: user.id },
     data: { passwordHash: hash, passwordSet: true, inviteToken: null },
-    include: { customRole: true, assignedHolders: true, assignedSquads: true },
+    include: { customRole: true, systemRole: { include: { permissions: true } }, assignedHolders: true, assignedSquads: true },
   });
   return toSession(updated);
 }

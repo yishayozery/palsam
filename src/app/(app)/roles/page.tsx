@@ -1,61 +1,61 @@
-import { requireCapability } from "@/lib/guard";
+import { requireAdmin } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card } from "@/components/ui";
-import { ROLE_LABELS } from "@/lib/rbac";
-import CrudSection from "@/components/CrudSection";
-import { saveRole, deleteRole } from "./actions";
+import { SCREENS, SCREEN_KEYS } from "@/lib/rbac";
+import RolesClient from "./RolesClient";
+import { seedPresetRoles } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-const TEMPLATE_OPTIONS = [
-  { value: "VIEWER", label: "צפייה בלבד" },
-  { value: "COMPANY_REP", label: "תפעול פלוגתי (כמו רס\"פ)" },
-  { value: "WAREHOUSE_MANAGER", label: "תפעול מחסן (כמו קצין מחסן)" },
-];
-
 export default async function RolesPage() {
-  const user = await requireCapability("users.manage");
+  const user = await requireAdmin();
   const bId = user.battalionId!;
 
-  const roles = await prisma.customRole.findMany({
+  const roles = await prisma.systemRole.findMany({
     where: { battalionId: bId, active: true },
-    orderBy: { createdAt: "asc" },
-    include: { _count: { select: { users: true } } },
+    orderBy: { sortOrder: "asc" },
+    include: {
+      permissions: true,
+      _count: { select: { users: true } },
+    },
   });
+
+  const hasPresets = roles.some((r) => r.isPreset);
 
   return (
     <div>
       <PageHeader
-        title="תפקידים"
-        subtitle="הוספת תפקידים בשמות משלך, מבוססים על פרופיל הרשאות קיים"
+        title="ניהול תפקידים והרשאות"
+        subtitle="הגדרת תפקידים עם הרשאות מסכים — כל משתמש מקבל תפקיד אחד"
       />
-      <Card className="p-4 mb-4 bg-blue-50 border-blue-200">
-        <p className="text-sm text-blue-800">
-          המערכת מבוססת על שני פרופילי הרשאה: <b>צפייה בלבד</b> ו<b>תפעול</b> (פלוגתי/מחסן).
-          כאן ניתן ליצור תפקידים בשמות חופשיים (למשל מ"פ, מ"כ, קצין ביטחון) שמשתמשים באותם פרופילים.
-        </p>
-      </Card>
-      <CrudSection
-        title="תפקידים מותאמים"
-        addLabel="תפקיד"
-        fields={[
-          { name: "name", label: "שם התפקיד" },
-          { name: "template", label: "פרופיל הרשאות", type: "select", default: "VIEWER", options: TEMPLATE_OPTIONS },
-        ]}
-        saveAction={saveRole}
-        deleteAction={deleteRole}
-        rows={roles.map((r) => ({
+
+      {!hasPresets && (
+        <Card className="p-4 mb-4 bg-amber-50 border-amber-200">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-amber-800">
+              לא נמצאו תפקידים מוגדרים. לחץ כדי ליצור את תפקידי ברירת המחדל.
+            </p>
+            <form action={seedPresetRoles}>
+              <button className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700">
+                יצירת תפקידי ברירת מחדל
+              </button>
+            </form>
+          </div>
+        </Card>
+      )}
+
+      <RolesClient
+        roles={roles.map((r) => ({
           id: r.id,
-          values: { name: r.name, template: r.template },
-          locked: r._count.users > 0,
-          display: (
-            <span className="flex items-center gap-1.5">
-              {r.name}
-              <Badge className="bg-slate-100 text-slate-600">בסיס: {ROLE_LABELS[r.template]}</Badge>
-              {r._count.users > 0 && <Badge className="bg-blue-100 text-blue-700">{r._count.users} משתמשים</Badge>}
-            </span>
-          ),
+          name: r.name,
+          isPreset: r.isPreset,
+          isAdmin: r.isAdmin,
+          isCommander: r.isCommander,
+          userCount: r._count.users,
+          permissions: Object.fromEntries(r.permissions.map((p) => [p.screen, p.level])),
         }))}
+        screens={SCREENS}
+        screenKeys={SCREEN_KEYS}
       />
     </div>
   );

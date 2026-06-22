@@ -28,7 +28,7 @@ export default async function AuditPage() {
   const user = await requireCapability("audit.view");
 
   const logs = await prisma.auditLog.findMany({
-    where: user.role === "SUPER_ADMIN" ? {} : { battalionId: user.battalionId },
+    where: user.isSuperAdmin ? {} : { battalionId: user.battalionId },
     orderBy: { createdAt: "desc" },
     take: 200,
     include: { user: true },

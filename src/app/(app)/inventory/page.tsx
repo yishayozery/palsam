@@ -19,7 +19,7 @@ export default async function InventoryPage({
   const bId = user.battalionId!;
   const { holder: holderFilter, defective } = await searchParams;
   const onlyDefective = defective === "1";
-  const canManage = can(user.role, "warehouse.operate");
+  const canManage = can(user, "warehouse.operate");
 
   // בידוד: קצין מחסן/רס"פ/צופה-פלוגתי רואים רק את המחזיקים המשויכים. מפמ/אדמין/צופה-גדודי — הכל.
   const scopedToOwn =

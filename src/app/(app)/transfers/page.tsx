@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function TransfersPage() {
   const user = await requireUser();
   const bId = user.battalionId!;
-  const canApprove = can(user.role, "transfer.approve");
+  const canApprove = can(user, "transfer.approve");
 
   // סקופ: קצין מחסן רואה רק העברות עם המחסנים שלו; רס"פ רק העברות עם הפלוגה שלו
   const isWarehouseManager = user.role === "WAREHOUSE_MANAGER";

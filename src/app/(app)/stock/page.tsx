@@ -199,7 +199,7 @@ export default async function StockPage({
               if (!tana) return null;
               // ⚠️ "שלח לטנא" שייך רק לקצין רכב (warehouseType=VEHICLES) או למפ"מ —
               // מחסן בונקר/קשר/חימוש לא שולח לטנא (טנא מטפלת רק ברכבים).
-              const isMafam = user.role === "BATTALION_ADMIN";
+              const isMafam = user.isAdmin;
               const isVehicleOfficer = user.role === "WAREHOUSE_MANAGER" && myWarehouseTypes.includes("VEHICLES");
               if (!isMafam && !isVehicleOfficer) return null;
               // רק רכבים (warehouseType=VEHICLES) ולא בטנא

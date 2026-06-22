@@ -40,7 +40,7 @@ export default async function CountPlanDetailPage({ params }: { params: Promise<
   if (!plan || plan.battalionId !== user.battalionId) notFound();
 
   // הרשאה: רק createdBy, responsibleUser, או מפ"מ יכולים לראות
-  const isAuthorized = user.role === "BATTALION_ADMIN" || plan.createdById === user.id || plan.responsibleUserId === user.id;
+  const isAuthorized = user.isAdmin || plan.createdById === user.id || plan.responsibleUserId === user.id;
   if (!isAuthorized) notFound();
 
   const stats = {

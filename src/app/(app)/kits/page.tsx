@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function KitsPage() {
   const user = await requireUser();
-  if (!can(user.role, "signatures.manage")) redirect("/");
+  if (!can(user, "signatures.manage")) redirect("/");
 
   const bId = user.battalionId!;
   // אם אין holderId ראשי — ניקח את הראשון מ-holderIds (קצין מחסן יכול להיות מוקצה דרך UserHolder בלבד)

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function BackupPage() {
   const user = await requireUser();
-  if (!can(user.role, "battalion.profile")) redirect("/");
+  if (!can(user, "battalion.profile")) redirect("/");
 
   return (
     <div>

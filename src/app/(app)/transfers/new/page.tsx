@@ -18,8 +18,8 @@ export default async function NewTransferPage({
   const { type, from } = await searchParams;
   const isReturn = type === "RETURN";
 
-  if (isReturn && !can(user.role, "company.manage")) redirect("/transfers");
-  if (!isReturn && !can(user.role, "warehouse.operate")) redirect("/transfers");
+  if (isReturn && !can(user, "company.manage")) redirect("/transfers");
+  if (!isReturn && !can(user, "warehouse.operate")) redirect("/transfers");
 
   // מקור: מבין מחסני המשתמש (לקצין עם כמה מחסנים — בורר)
   const myWarehouses = isReturn

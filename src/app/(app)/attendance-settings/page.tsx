@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AttendanceSettingsPage() {
   const user = await requireUser();
-  if (!can(user.role, "attendance.manage") && !can(user.role, "battalion.profile")) redirect("/");
+  if (!can(user, "attendance.manage") && !can(user, "battalion.profile")) redirect("/");
   const bId = user.battalionId!;
 
   const statuses = await prisma.attendanceStatus.findMany({

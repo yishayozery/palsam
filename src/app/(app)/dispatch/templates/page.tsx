@@ -10,7 +10,7 @@ export default async function DispatchTemplatesPage() {
   const user = await requireCapability("dispatch.manage");
   const bId = user.battalionId!;
 
-  const [vehicles, soldiers, templates, licenseTypes] = await Promise.all([
+  const [vehicles, soldiers, templates, vehicleTypeLicenses, companies] = await Promise.all([
     prisma.serialUnit.findMany({
       where: {
         battalionId: bId,
@@ -18,7 +18,7 @@ export default async function DispatchTemplatesPage() {
         itemType: { category: { warehouseType: "VEHICLES" } },
       },
       include: {
-        itemType: { select: { name: true } },
+        itemType: { select: { id: true, name: true } },
         currentHolder: { select: { name: true } },
       },
       orderBy: [{ itemType: { name: "asc" } }, { serialNumber: "asc" }],
@@ -31,30 +31,47 @@ export default async function DispatchTemplatesPage() {
         personalNumber: true,
         companyId: true,
         company: { select: { name: true } },
-        drivingLicenses: { include: { licenseType: { select: { name: true } } } },
-        signedSerialUnits: { select: { itemType: { select: { name: true } }, serialNumber: true }, take: 10 },
+        companyRole: { select: { name: true } },
+        drivingLicenses: { include: { licenseType: { select: { id: true, name: true } } } },
       },
       orderBy: { fullName: "asc" },
     }),
     prisma.dispatchTemplate.findMany({
       where: { battalionId: bId, active: true },
       include: {
-        vehicleSerialUnit: { include: { itemType: { select: { name: true } } } },
+        vehicleSerialUnit: { include: { itemType: { select: { id: true, name: true } } } },
         soldiers: {
           include: {
             soldier: {
-              select: { id: true, fullName: true, personalNumber: true, company: { select: { name: true } } },
+              select: {
+                id: true,
+                fullName: true,
+                personalNumber: true,
+                company: { select: { name: true } },
+                companyRole: { select: { name: true } },
+              },
             },
           },
         },
       },
       orderBy: { name: "asc" },
     }),
-    prisma.drivingLicenseType.findMany({
-      where: { battalionId: bId, active: true },
+    prisma.vehicleTypeLicense.findMany({
+      where: { itemType: { battalionId: bId } },
+      select: { itemTypeId: true, licenseTypeId: true },
+    }),
+    prisma.holder.findMany({
+      where: { battalionId: bId, kind: "COMPANY", active: true },
       select: { id: true, name: true },
+      orderBy: { name: "asc" },
     }),
   ]);
+
+  const vtlMap: Record<string, string[]> = {};
+  for (const vtl of vehicleTypeLicenses) {
+    if (!vtlMap[vtl.itemTypeId]) vtlMap[vtl.itemTypeId] = [];
+    vtlMap[vtl.itemTypeId].push(vtl.licenseTypeId);
+  }
 
   return (
     <div>
@@ -66,22 +83,28 @@ export default async function DispatchTemplatesPage() {
       <TemplatesClient
         vehicles={vehicles.map((v) => ({
           id: v.id,
+          itemTypeId: v.itemType.id,
           itemName: v.itemType.name,
           serialNumber: v.serialNumber,
           holderName: v.currentHolder?.name ?? null,
+          requiredLicenseIds: vtlMap[v.itemType.id] || [],
         }))}
         soldiers={soldiers.map((s) => ({
           id: s.id,
           fullName: s.fullName,
           personalNumber: s.personalNumber,
+          companyId: s.companyId,
           companyName: s.company?.name ?? null,
-          licenses: s.drivingLicenses.map((dl) => dl.licenseType.name),
-          signedEquipment: s.signedSerialUnits.map((u) => `${u.itemType.name} (${u.serialNumber})`),
+          roleName: s.companyRole?.name ?? null,
+          licenseIds: s.drivingLicenses.map((dl) => dl.licenseType.id),
+          licenseNames: s.drivingLicenses.map((dl) => dl.licenseType.name),
         }))}
+        companies={companies.map((c) => ({ id: c.id, name: c.name }))}
         templates={templates.map((t) => ({
           id: t.id,
           name: t.name,
           vehicleSerialUnitId: t.vehicleSerialUnitId,
+          vehicleItemTypeId: t.vehicleSerialUnit.itemType.id,
           vehicleName: t.vehicleSerialUnit.itemType.name,
           vehicleSerial: t.vehicleSerialUnit.serialNumber,
           soldiers: t.soldiers.map((ts) => ({
@@ -89,6 +112,9 @@ export default async function DispatchTemplatesPage() {
             fullName: ts.soldier.fullName,
             personalNumber: ts.soldier.personalNumber,
             companyName: ts.soldier.company?.name ?? null,
+            roleName: ts.soldier.companyRole?.name ?? null,
+            role: ts.role,
+            seatIndex: ts.seatIndex,
           })),
         }))}
       />

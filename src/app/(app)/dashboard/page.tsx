@@ -15,7 +15,7 @@ export default async function DashboardPage({
   searchParams: Promise<{ warehouse?: string }>;
 }) {
   const user = await requireUser();
-  if (user.role === "SUPER_ADMIN") redirect("/admin/battalions");
+  if (user.isSuperAdmin) redirect("/admin/battalions");
   const bId = user.battalionId!;
   const { warehouse: selectedWh = "" } = await searchParams;
 

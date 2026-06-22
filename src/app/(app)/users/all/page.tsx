@@ -18,7 +18,7 @@ export default async function AllUsersPage({
 
   const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { name: true, brigade: true, code: true } });
 
-  const [users, holders, squads, customRoles] = await Promise.all([
+  const [users, holders, squads, customRoles, systemRoles] = await Promise.all([
     prisma.appUser.findMany({
       where: { battalionId: bId },
       orderBy: [{ active: "desc" }, { createdAt: "desc" }],
@@ -27,6 +27,7 @@ export default async function AllUsersPage({
         assignedHolders: { include: { holder: { select: { id: true, name: true } } } },
         assignedSquads: { select: { squadId: true } },
         customRole: { select: { id: true, name: true } },
+        systemRole: { select: { id: true, name: true } },
         soldier: { select: { id: true, fullName: true, personalNumber: true } },
       },
     }),
@@ -37,6 +38,7 @@ export default async function AllUsersPage({
       include: { company: { select: { id: true, name: true } } },
     }),
     prisma.customRole.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" } }),
+    prisma.systemRole.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" } }),
   ]);
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
@@ -62,6 +64,7 @@ export default async function AllUsersPage({
         holders={holders.map((h) => ({ id: h.id, name: h.name, kind: h.kind }))}
         squads={squads.map((s) => ({ id: s.id, name: s.name, companyId: s.company.id, companyName: s.company.name }))}
         customRoles={customRoles.map((r) => ({ id: r.id, name: r.name, template: r.template }))}
+        systemRoles={systemRoles.map((r) => ({ id: r.id, name: r.name }))}
         brigade={battalion?.brigade ?? ""}
         battalionCode={battalion?.code ?? ""}
         users={users.map((u) => ({
@@ -72,7 +75,8 @@ export default async function AllUsersPage({
           title: u.title,
           role: u.role,
           customRoleId: u.customRole?.id ?? null,
-          roleLabel: u.customRole?.name ?? ROLE_LABELS[u.role],
+          systemRoleId: u.systemRole?.id ?? null,
+          roleLabel: u.systemRole?.name ?? u.customRole?.name ?? ROLE_LABELS[u.role],
           holderId: u.holderId,
           holderName: u.holder?.name ?? null,
           holderKind: u.holder?.kind ?? null,

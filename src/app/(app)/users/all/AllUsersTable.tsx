@@ -13,6 +13,7 @@ type User = {
   title: string | null;
   role: Role;
   customRoleId: string | null;
+  systemRoleId: string | null;
   roleLabel: string;
   holderId: string | null;
   holderName: string | null;
@@ -30,6 +31,7 @@ type User = {
 type Holder = { id: string; name: string; kind: string };
 type Squad = { id: string; name: string; companyId: string; companyName: string };
 type CustomRole = { id: string; name: string; template: string };
+type SystemRoleOpt = { id: string; name: string };
 
 const ROLE_FILTER_OPTS: { v: Role; l: string }[] = [
   { v: "BATTALION_ADMIN", l: 'מפ״מ' },
@@ -250,9 +252,9 @@ function EditDialog({ user, holders, squads, customRoles, onClose }: {
   );
 }
 
-export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, initialStatus, holders, squads, customRoles, brigade, battalionCode }: {
+export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, initialStatus, holders, squads, customRoles, systemRoles, brigade, battalionCode }: {
   users: User[]; baseUrl: string; initialQ: string; initialRole: string; initialStatus: string;
-  holders: Holder[]; squads: Squad[]; customRoles: CustomRole[]; brigade: string; battalionCode: string;
+  holders: Holder[]; squads: Squad[]; customRoles: CustomRole[]; systemRoles?: SystemRoleOpt[]; brigade: string; battalionCode: string;
 }) {
   const [q, setQ] = useState(initialQ);
   const [role, setRole] = useState(initialRole);

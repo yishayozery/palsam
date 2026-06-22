@@ -37,7 +37,7 @@ export async function getPostSignatureShareData(
 /** יצירת החתמה (SIGNOUT): מחזיק ◄ חייל. */
 export async function createSignout(formData: FormData) {
   const user = await requireUser();
-  if (!can(user.role, "signatures.manage")) redirect("/signatures");
+  if (!can(user, "signatures.manage")) redirect("/signatures");
   const bId = user.battalionId!;
   const soldierId = String(formData.get("soldierId") || "");
   const method = String(formData.get("method") || "QR") as SignatureMethod;
@@ -294,7 +294,7 @@ export async function completeSignature(token: string, signatureData: string) {
 /** זיכוי מהיר (Fast Check-in) */
 export async function checkinSerial(formData: FormData) {
   const user = await requireUser();
-  if (!can(user.role, "signatures.manage")) redirect("/signatures");
+  if (!can(user, "signatures.manage")) redirect("/signatures");
   const bId = user.battalionId!;
   const serialUnitId = String(formData.get("serialUnitId") || "");
   const statusId = String(formData.get("statusId") || "");
@@ -395,7 +395,7 @@ export async function checkinSerial(formData: FormData) {
 /** זיכוי כמותי של חייל: יוצר CHECKIN, מחזיר StockBalance למחסן. */
 export async function checkinQuantity(formData: FormData) {
   const user = await requireUser();
-  if (!can(user.role, "signatures.manage")) redirect("/signatures");
+  if (!can(user, "signatures.manage")) redirect("/signatures");
   const bId = user.battalionId!;
   const soldierId = String(formData.get("soldierId") || "");
   const itemTypeId = String(formData.get("itemTypeId") || "");
@@ -522,7 +522,7 @@ export async function cancelSignatureForm(formData: FormData): Promise<void> {
 export async function cancelSignature(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
     const user = await requireUser();
-    if (!can(user.role, "signatures.manage")) return { error: "אין הרשאה" };
+    if (!can(user, "signatures.manage")) return { error: "אין הרשאה" };
     const bId = user.battalionId!;
     const signatureId = String(formData.get("signatureId") || "");
     if (!signatureId) return { error: "חסר מזהה" };
@@ -559,7 +559,7 @@ export async function cancelSignature(formData: FormData): Promise<{ ok?: boolea
 /** עדכון מיקום פיזי (אחריות מול מיקום) */
 export async function updatePhysicalLocation(formData: FormData) {
   const user = await requireUser();
-  if (!can(user.role, "signatures.manage")) redirect("/signatures");
+  if (!can(user, "signatures.manage")) redirect("/signatures");
   const serialUnitId = String(formData.get("serialUnitId") || "");
   const physicalLocation = String(formData.get("physicalLocation") || "").trim() || null;
   await prisma.serialUnit.update({ where: { id: serialUnitId }, data: { physicalLocation } });

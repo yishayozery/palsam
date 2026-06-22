@@ -24,7 +24,7 @@ export default async function MaintenancePage({
   const isTanaRep = user.role === "COMPANY_REP" && user.holderId
     ? (await prisma.holder.findUnique({ where: { id: user.holderId }, select: { name: true } }))?.name?.includes("טנא")
     : false;
-  const isAdmin = user.role === "BATTALION_ADMIN" || user.role === "WAREHOUSE_MANAGER";
+  const isAdmin = user.isAdmin || user.role === "WAREHOUSE_MANAGER";
   if (!isAdmin && !isTanaRep) redirect("/");
 
   const tana = await findTanaHolder(bId);

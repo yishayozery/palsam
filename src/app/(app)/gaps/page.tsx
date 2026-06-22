@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function GapsPage() {
   const user = await requireUser();
   const bId = user.battalionId!;
-  const canResolve = can(user.role, "gaps.resolve");
+  const canResolve = can(user, "gaps.resolve");
 
   // ⚠️ סקופ — רס"פ פלוגה רואה רק פערים של הפלוגה שלו (פערים שהוא יצר בעצמו בספירה).
   // קצין מחסן — רק של המחסנים שלו. מפ"מ/אדמין-על — הכל.

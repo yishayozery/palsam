@@ -22,9 +22,9 @@ export const dynamic = "force-dynamic";
 export default async function CountsPage() {
   const user = await requireUser();
   const bId = user.battalionId!;
-  const canManage = can(user.role, "counts.manage");
-  const canExecute = can(user.role, "counts.execute");
-  const isMafam = user.role === "BATTALION_ADMIN";
+  const canManage = can(user, "counts.manage");
+  const canExecute = can(user, "counts.execute");
+  const isMafam = user.isAdmin;
 
   // best-effort: יצירת משימות שטרם נוצרו (בכל כניסה למסך)
   try { await generatePendingTasks(); } catch { /* ignore */ }

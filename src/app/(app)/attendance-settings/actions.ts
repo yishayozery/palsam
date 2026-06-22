@@ -11,7 +11,7 @@ export async function upsertAttendanceStatus(
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
     const user = await requireUser();
-    if (!can(user.role, "attendance.manage") && !can(user.role, "battalion.profile"))
+    if (!can(user, "attendance.manage") && !can(user, "battalion.profile"))
       return { error: "אין הרשאה" };
     const bId = user.battalionId!;
     const id = String(formData.get("id") || "");
@@ -50,7 +50,7 @@ export async function deleteAttendanceStatus(
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
     const user = await requireUser();
-    if (!can(user.role, "attendance.manage") && !can(user.role, "battalion.profile"))
+    if (!can(user, "attendance.manage") && !can(user, "battalion.profile"))
       return { error: "אין הרשאה" };
     const used = await prisma.attendancePlan.count({ where: { statusId: id } })
       + await prisma.attendanceRecord.count({ where: { statusId: id } });
@@ -70,7 +70,7 @@ export async function toggleAttendanceStatus(
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
     const user = await requireUser();
-    if (!can(user.role, "attendance.manage") && !can(user.role, "battalion.profile"))
+    if (!can(user, "attendance.manage") && !can(user, "battalion.profile"))
       return { error: "אין הרשאה" };
     await prisma.attendanceStatus.update({ where: { id }, data: { active } });
     revalidatePath("/attendance-settings");
@@ -95,7 +95,7 @@ export async function upsertSquad(
 
     if (!companyId || !name) return { error: "פלוגה ושם חובה" };
 
-    const isBattalionAdmin = can(user.role, "battalion.profile");
+    const isBattalionAdmin = can(user, "battalion.profile");
     const isCompanyRep = user.role === "COMPANY_REP" && user.holderIds.includes(companyId);
     if (!isBattalionAdmin && !isCompanyRep) return { error: "אין הרשאה" };
 
@@ -131,7 +131,7 @@ export async function deleteSquad(
     const squad = await prisma.squad.findUnique({ where: { id }, select: { companyId: true } });
     if (!squad) return { error: "לא נמצא" };
 
-    const isBattalionAdmin = can(user.role, "battalion.profile");
+    const isBattalionAdmin = can(user, "battalion.profile");
     const isCompanyRep = user.role === "COMPANY_REP" && user.holderIds.includes(squad.companyId);
     if (!isBattalionAdmin && !isCompanyRep) return { error: "אין הרשאה" };
 

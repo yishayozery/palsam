@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { saveSoldierLicenses } from "./actions";
 
 type LicenseType = { id: string; name: string };
-type SoldierLicense = { licenseTypeId: string; refresherDate: string | null };
+type SoldierLicense = { licenseTypeId: string };
 type Soldier = {
   id: string;
   fullName: string;
   companyName: string | null;
   squadName: string | null;
+  drivingRefresherDate: string | null;
   licenses: SoldierLicense[];
 };
 
@@ -25,7 +26,7 @@ export default function LicenseEditor({
 }) {
   const [editingSoldier, setEditingSoldier] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [refreshers, setRefreshers] = useState<Record<string, string>>({});
+  const [refresherDate, setRefresherDate] = useState("");
   const [pending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
   const router = useRouter();
@@ -41,20 +42,14 @@ export default function LicenseEditor({
   function startEdit(s: Soldier) {
     setEditingSoldier(s.id);
     setSelected(new Set(s.licenses.map((l) => l.licenseTypeId)));
-    const r: Record<string, string> = {};
-    for (const l of s.licenses) {
-      if (l.refresherDate) r[l.licenseTypeId] = l.refresherDate;
-    }
-    setRefreshers(r);
+    setRefresherDate(s.drivingRefresherDate || "");
   }
 
   function handleSave(soldierId: string) {
     const fd = new FormData();
     fd.set("soldierId", soldierId);
     selected.forEach((ltId) => fd.append("licenseTypeId", ltId));
-    for (const [ltId, date] of Object.entries(refreshers)) {
-      if (selected.has(ltId) && date) fd.set(`refresher_${ltId}`, date);
-    }
+    if (refresherDate) fd.set("refresherDate", refresherDate);
     startTransition(async () => {
       await saveSoldierLicenses(fd);
       setEditingSoldier(null);
@@ -63,7 +58,7 @@ export default function LicenseEditor({
   }
 
   if (licenseTypes.length === 0) {
-    return <div className="text-sm text-slate-500 p-4">לא הוגדרו סוגי הרשאות נהיגה. הוסף סוגים למעלה.</div>;
+    return <div className="text-sm text-slate-500 p-4">לא הוגדרו סוגי הרשאות נהיגה. עבור לטאב &quot;סוגי הרשאות&quot; והוסף סוגים.</div>;
   }
 
   return (
@@ -84,15 +79,14 @@ export default function LicenseEditor({
               {licenseTypes.map((lt) => (
                 <th key={lt.id} className="px-2 py-2 text-center font-medium text-slate-600 border-b min-w-[80px]">{lt.name}</th>
               ))}
-              <th className="px-2 py-2 text-center font-medium text-slate-600 border-b min-w-[100px]">ריענון</th>
+              <th className="px-2 py-2 text-center font-medium text-slate-600 border-b min-w-[120px]">ריענון נהיגה</th>
               {canEdit && <th className="px-2 py-2 border-b" />}
             </tr>
           </thead>
           <tbody>
             {filtered.map((s) => {
               const isEditing = editingSoldier === s.id;
-              const licenseMap = new Map(s.licenses.map((l) => [l.licenseTypeId, l]));
-              const hasAnyRefresher = s.licenses.some((l) => l.refresherDate);
+              const licenseSet = new Set(s.licenses.map((l) => l.licenseTypeId));
 
               return (
                 <tr key={s.id} className={isEditing ? "bg-blue-50/50" : "hover:bg-slate-50"}>
@@ -122,7 +116,7 @@ export default function LicenseEditor({
                         </td>
                       );
                     }
-                    const has = licenseMap.has(lt.id);
+                    const has = licenseSet.has(lt.id);
                     return (
                       <td key={lt.id} className="px-2 py-2 border-b text-center">
                         {has ? <span className="text-green-600 font-bold">✓</span> : <span className="text-slate-200">-</span>}
@@ -131,34 +125,18 @@ export default function LicenseEditor({
                   })}
                   <td className="px-2 py-2 border-b text-center">
                     {isEditing ? (
-                      <div className="space-y-1">
-                        {licenseTypes.filter((lt) => selected.has(lt.id)).map((lt) => (
-                          <div key={lt.id} className="flex items-center gap-1 text-[10px]">
-                            <span className="text-slate-500">{lt.name}:</span>
-                            <input
-                              type="date"
-                              value={refreshers[lt.id] || ""}
-                              onChange={(e) => setRefreshers((prev) => ({ ...prev, [lt.id]: e.target.value }))}
-                              className="border rounded px-1 py-0.5 text-[10px] w-28"
-                            />
-                          </div>
-                        ))}
-                      </div>
+                      <input
+                        type="date"
+                        value={refresherDate}
+                        onChange={(e) => setRefresherDate(e.target.value)}
+                        className="border rounded px-2 py-1 text-xs w-32"
+                      />
+                    ) : s.drivingRefresherDate ? (
+                      <span className="text-xs text-slate-600">
+                        {new Date(s.drivingRefresherDate).toLocaleDateString("he-IL")}
+                      </span>
                     ) : (
-                      hasAnyRefresher ? (
-                        <div className="space-y-0.5">
-                          {s.licenses.filter((l) => l.refresherDate).map((l) => {
-                            const lt = licenseTypes.find((t) => t.id === l.licenseTypeId);
-                            return (
-                              <div key={l.licenseTypeId} className="text-[10px] text-slate-500">
-                                {lt?.name}: {new Date(l.refresherDate!).toLocaleDateString("he-IL")}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <span className="text-slate-200 text-xs">-</span>
-                      )
+                      <span className="text-slate-200 text-xs">-</span>
                     )}
                   </td>
                   {canEdit && (

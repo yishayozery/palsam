@@ -18,7 +18,7 @@ export async function resolveDiscrepancy(formData: FormData) {
   });
   if (!d || d.status === "RESOLVED" || d.battalionId !== user.battalionId) return;
 
-  const hasGapsResolve = can(user.role, "gaps.resolve");
+  const hasGapsResolve = can(user, "gaps.resolve");
   const isCountCreator = d.session?.startedById === user.id;
   if (!hasGapsResolve && !isCountCreator) return;
 

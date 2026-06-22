@@ -160,6 +160,7 @@ model Battalion {
   vacationStatuses   VacationStatus[]
   dispatchTemplates  DispatchTemplate[] @relation("BattalionDispatchTemplates")
   drivingLicenseTypes DrivingLicenseType[] @relation("BattalionDrivingLicenseTypes")
+  systemRoles        SystemRole[]      @relation("BattalionSystemRoles")
 }
 
 // ===================== משתמשים =====================
@@ -171,8 +172,9 @@ model AppUser {
   fullName     String
   phone        String? // לשליחת הזמנה בוואטסאפ
   title        String? // תואר/תפקיד טקסט חופשי (מפ, רס"פ, מפקד מחסן, אחראי, מפלג, וכו')
-  role         Role // פרופיל ההרשאות בפועל (תבנית)
-  // תפקיד מותאם (שם תצוגה) שמשתמש בפרופיל ההרשאות של role
+  role         Role       // legacy — נשמר לתאימות לאחור
+  systemRoleId String?
+  systemRole   SystemRole? @relation(fields: [systemRoleId], references: [id])
   customRoleId String?
   customRole   CustomRole? @relation(fields: [customRoleId], references: [id])
   passwordSet  Boolean    @default(true) // false עד הגדרת סיסמה דרך קישור ההזמנה
@@ -212,14 +214,49 @@ model AppUser {
   vacationEntries   VacationEntry[]
 }
 
-// ===================== תפקידים מותאמים (admin-driven) =====================
-// תפקיד עם שם חופשי שמשתמש בפרופיל הרשאות קיים (template). מוגדר ע"י המפמ לכל גדוד.
+// ===================== תפקידים =====================
+// תפקיד גמיש ברמת גדוד — מחליף את ה-Role enum הקשיח
+model SystemRole {
+  id          String    @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation("BattalionSystemRoles", fields: [battalionId], references: [id])
+  name        String    // מפ, קשר"ג, מג"ד, ...
+  isPreset    Boolean   @default(false) // תפקיד מובנה (לא ניתן למחיקה)
+  isAdmin     Boolean   @default(false) // גישה מלאה למערכת
+  isCommander Boolean   @default(false) // תפקיד פיקודי (מפ, מג"ד, סמג"ד)
+  active      Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  permissions ScreenPermission[]
+  users       AppUser[]
+
+  @@unique([battalionId, name])
+  @@index([battalionId])
+}
+
+enum PermissionLevel {
+  VIEW
+  EDIT
+}
+
+model ScreenPermission {
+  id     String          @id @default(cuid())
+  roleId String
+  role   SystemRole      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  screen String          // מפתח מסך: soldiers, stock, dispatch, ...
+  level  PermissionLevel // צפייה / עריכה
+
+  @@unique([roleId, screen])
+}
+
+// Legacy — נשמר לתאימות לאחור עד מיגרציה מלאה
 model CustomRole {
   id          String    @id @default(cuid())
   battalionId String
   battalion   Battalion @relation(fields: [battalionId], references: [id])
   name        String
-  template    Role // פרופיל ההרשאות שעליו התפקיד מבוסס
+  template    Role
   active      Boolean   @default(true)
   createdAt   DateTime  @default(now())
 
@@ -452,6 +489,7 @@ model Soldier {
   weaponsAgreementSignedAt   DateTime?
   weaponsAgreementSignature  String? // data URL של החתימה
   // גיוס
+  drivingRefresherDate DateTime? @db.Date // ריענון נהיגה כללי
   callupClosedAt DateTime? // תאריך סגירת גיוס
   createdAt      DateTime  @default(now())
 
@@ -664,6 +702,7 @@ model ItemType {
   // מיקומים פר-holder (מאפשר אותו פריט במיקומים שונים בכל מחסן/פלוגה)
   holderLocations ItemHolderLocation[]
   inSignableKits SignableKitLine[] @relation("KitLineItem")
+  requiredLicenses VehicleTypeLicense[] @relation("ItemTypeRequiredLicense")
 
   @@unique([battalionId, sku])
   @@index([categoryId])
@@ -1273,6 +1312,8 @@ model DispatchTemplateSoldier {
   template   DispatchTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   soldierId  String
   soldier    Soldier @relation("SoldierDispatchTemplate", fields: [soldierId], references: [id], onDelete: Cascade)
+  role       String  @default("לוחם") // נהג, מפקד, חובש, לוחם, ...
+  seatIndex  Int     @default(0) // מיקום מושב ויזואלי
 
   @@unique([templateId, soldierId])
   @@index([soldierId])
@@ -1289,10 +1330,22 @@ model DrivingLicenseType {
   sortOrder   Int     @default(0)
   createdAt   DateTime @default(now())
 
-  soldierLicenses SoldierDrivingLicense[]
+  soldierLicenses    SoldierDrivingLicense[]
+  vehicleTypeLicenses VehicleTypeLicense[] @relation("LicenseTypeVehicleTypes")
 
   @@unique([battalionId, name])
   @@index([battalionId])
+}
+
+// שיוך סוג רכב (ItemType) להרשאת נהיגה נדרשת
+model VehicleTypeLicense {
+  id            String @id @default(cuid())
+  itemTypeId    String
+  itemType      ItemType @relation("ItemTypeRequiredLicense", fields: [itemTypeId], references: [id], onDelete: Cascade)
+  licenseTypeId String
+  licenseType   DrivingLicenseType @relation("LicenseTypeVehicleTypes", fields: [licenseTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([itemTypeId, licenseTypeId])
 }
 
 model SoldierDrivingLicense {
@@ -1301,7 +1354,6 @@ model SoldierDrivingLicense {
   soldier       Soldier @relation("SoldierDrivingLicenses", fields: [soldierId], references: [id], onDelete: Cascade)
   licenseTypeId String
   licenseType   DrivingLicenseType @relation(fields: [licenseTypeId], references: [id], onDelete: Cascade)
-  refresherDate DateTime? @db.Date
 
   @@unique([soldierId, licenseTypeId])
   @@index([soldierId])

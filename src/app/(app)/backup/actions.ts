@@ -40,7 +40,7 @@ export async function verifyBackupExcel(
   formData: FormData,
 ): Promise<{ results: VerifyResult[]; error?: string }> {
   const user = await requireUser();
-  if (!can(user.role, "battalion.profile")) return { results: [], error: "אין הרשאה" };
+  if (!can(user, "battalion.profile")) return { results: [], error: "אין הרשאה" };
   const bId = user.battalionId!;
 
   const file = formData.get("file") as File | null;

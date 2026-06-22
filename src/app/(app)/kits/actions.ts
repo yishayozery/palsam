@@ -8,7 +8,7 @@ import { audit } from "@/lib/audit";
 
 export async function saveKit(formData: FormData) {
   const user = await requireUser();
-  if (!can(user.role, "signatures.manage") || !user.holderId) return;
+  if (!can(user, "signatures.manage") || !user.holderId) return;
   const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
@@ -35,7 +35,7 @@ export async function saveKit(formData: FormData) {
 
 export async function deleteKit(formData: FormData) {
   const user = await requireUser();
-  if (!can(user.role, "signatures.manage")) return;
+  if (!can(user, "signatures.manage")) return;
   const id = String(formData.get("id") || "");
   await prisma.signableKit.delete({ where: { id } });
   await audit(user.id, "DELETE", "SignableKit", id);

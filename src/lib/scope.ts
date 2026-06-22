@@ -5,7 +5,7 @@ import type { SessionUser } from "./auth";
  * אדמין-על (ללא גדוד) רואה הכל.
  */
 export function battalionFilter(user: SessionUser): { battalionId?: string } {
-  if (user.role === "SUPER_ADMIN") return {};
+  if (user.isSuperAdmin) return {};
   return { battalionId: user.battalionId ?? "__none__" };
 }
 

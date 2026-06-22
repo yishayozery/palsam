@@ -1,144 +1,297 @@
-import type { Role, WarehouseType } from "@/generated/prisma";
+import type { Role, PermissionLevel, WarehouseType } from "@/generated/prisma";
 
-/** יכולות המערכת — בקרת גישה מבוססת-תפקיד (RBAC) */
+// ===================== מסכים =====================
+
+export const SCREENS = {
+  dashboard: "דשבורד",
+  soldiers: "חיילים",
+  attendance: "נוכחות",
+  dispatch: "שבצ\"ק",
+  driving_licenses: "הרשאות נהיגה",
+  stock: "מלאי",
+  signatures: "החתמות/זיכוי",
+  counts: "ספירות",
+  gaps: "פערים",
+  armory: "ארמון",
+  maintenance: "תחזוקה/רכבים",
+  transfers: "מסירות",
+  kits: "ערכות",
+  donations: "תרומות",
+  reports: "דוחות",
+  history: "היסטוריה",
+  audit: "יומן פעולות",
+  vacation: "לוח זמינות",
+  catalog: "הגדרות פריטים",
+  warehouses: "מחסנים",
+  allocations: "הקצאות/ציוד קבוע",
+  settings: "הגדרות גדוד",
+} as const;
+
+export type Screen = keyof typeof SCREENS;
+export const SCREEN_KEYS = Object.keys(SCREENS) as Screen[];
+
+// ===================== Capability → Screen מיפוי תאימות =====================
+
 export type Capability =
-  | "battalions.manage" // אדמין-על: הקמת גדודים + מפמ
-  | "users.manage" // ניהול משתמשים (מפמ: מנהלי מחסן/צופים; אדמין-על: מפמ)
-  | "org.manage" // מפמ: הקמת מחסנים ופלוגות
-  | "battalion.profile" // פרופיל הגדוד
-  | "warehouse.operate" // ניפוק/קליטה/גריעה/החזרה במחסן
-  | "catalog.manage" // אפיון פריטים + מיקום סופי
-  | "kits.manage" // הקמת קיטים
-  | "dictionaries.manage" // קטגוריות/סטטוסים/תדירויות
-  | "locations.manage" // מידוף (מחסן/עמודה/שורה)
-  | "reps.manage" // הגדרת נציגי פלוגה מול המחסן
-  | "company.manage" // נציג פלוגה: חיילים + מחסן פלוגתי
-  | "soldiers.roster" // שליש: ניהול חיילים גדודי + אישור גיוס
-  | "donations.manage" // מלאי תרומה / ציוד לא-צבאי
-  | "transfer.approve" // אישור קבלה (לחיצת יד)
-  | "signatures.manage" // החתמות וזיכוי
-  | "counts.manage" // הגדרות ספירה
-  | "counts.execute" // ביצוע ספירה
-  | "gaps.resolve" // אישור/סגירת פערים
-  | "maintenance.manage" // טנא: ניהול ציוד תקול ותיקונים
-  | "reports.view" // דשבורד ודוחות
-  | "audit.view" // יומן פעולות
-  | "dispatch.manage" // שבצ"ק - יצירה/עריכה של שיבוצי רכב
-  | "weapons.approve" // 🔫 אישור חייל לחימוש (מג"ד/סמג"ד)
-  | "weapons.view" // צפייה בדוח זכאות נשק
-  | "attendance.manage" // עריכת נוכחות חיילים
-  | "attendance.view"; // צפייה בנוכחות
+  | "battalions.manage"
+  | "users.manage"
+  | "org.manage"
+  | "battalion.profile"
+  | "warehouse.operate"
+  | "catalog.manage"
+  | "kits.manage"
+  | "dictionaries.manage"
+  | "locations.manage"
+  | "reps.manage"
+  | "company.manage"
+  | "soldiers.roster"
+  | "donations.manage"
+  | "transfer.approve"
+  | "signatures.manage"
+  | "counts.manage"
+  | "counts.execute"
+  | "gaps.resolve"
+  | "maintenance.manage"
+  | "reports.view"
+  | "audit.view"
+  | "dispatch.manage"
+  | "weapons.approve"
+  | "weapons.view"
+  | "attendance.manage"
+  | "attendance.view";
 
-const MATRIX: Record<Role, Capability[]> = {
+const CAP_TO_SCREEN: Record<Capability, { screen: Screen; needsEdit: boolean }> = {
+  "battalions.manage": { screen: "settings", needsEdit: true },
+  "users.manage": { screen: "settings", needsEdit: true },
+  "org.manage": { screen: "settings", needsEdit: true },
+  "battalion.profile": { screen: "settings", needsEdit: false },
+  "warehouse.operate": { screen: "stock", needsEdit: true },
+  "catalog.manage": { screen: "catalog", needsEdit: true },
+  "kits.manage": { screen: "kits", needsEdit: true },
+  "dictionaries.manage": { screen: "catalog", needsEdit: true },
+  "locations.manage": { screen: "stock", needsEdit: true },
+  "reps.manage": { screen: "stock", needsEdit: true },
+  "company.manage": { screen: "soldiers", needsEdit: true },
+  "soldiers.roster": { screen: "soldiers", needsEdit: true },
+  "donations.manage": { screen: "donations", needsEdit: true },
+  "transfer.approve": { screen: "transfers", needsEdit: true },
+  "signatures.manage": { screen: "signatures", needsEdit: true },
+  "counts.manage": { screen: "counts", needsEdit: true },
+  "counts.execute": { screen: "counts", needsEdit: true },
+  "gaps.resolve": { screen: "gaps", needsEdit: true },
+  "maintenance.manage": { screen: "maintenance", needsEdit: true },
+  "reports.view": { screen: "reports", needsEdit: false },
+  "audit.view": { screen: "audit", needsEdit: false },
+  "dispatch.manage": { screen: "dispatch", needsEdit: false },
+  "weapons.approve": { screen: "armory", needsEdit: true },
+  "weapons.view": { screen: "armory", needsEdit: false },
+  "attendance.manage": { screen: "attendance", needsEdit: true },
+  "attendance.view": { screen: "attendance", needsEdit: false },
+};
+
+// ===================== SessionUser permissions =====================
+
+export type UserPermissions = Partial<Record<Screen, PermissionLevel>>;
+
+export interface PermissionHolder {
+  permissions: UserPermissions;
+  isAdmin: boolean;
+  isSuperAdmin?: boolean;
+}
+
+/**
+ * בודק האם למשתמש יש גישה ליכולת/מסך מסוים.
+ * תומך בשני פורמטים:
+ * - can(user, "dispatch.manage") — תאימות לאחור
+ * - can(user, "dispatch") — מסך ישיר
+ */
+export function can(
+  userOrRole: PermissionHolder | Role,
+  capOrScreen: Capability | Screen,
+): boolean {
+  // Legacy: can(role, cap) — ממיר דרך המטריצה הישנה
+  if (typeof userOrRole === "string") {
+    return LEGACY_MATRIX[userOrRole]?.includes(capOrScreen as Capability) ?? false;
+  }
+
+  const user = userOrRole;
+  if (user.isSuperAdmin) return true;
+  if (user.isAdmin) return true;
+
+  // בדיקה ישירה כמסך
+  if (capOrScreen in SCREENS) {
+    return !!user.permissions[capOrScreen as Screen];
+  }
+
+  // מיפוי capability → screen
+  const mapping = CAP_TO_SCREEN[capOrScreen as Capability];
+  if (!mapping) return false;
+
+  const level = user.permissions[mapping.screen];
+  if (!level) return false;
+  if (mapping.needsEdit && level === "VIEW") return false;
+  return true;
+}
+
+/** בדיקה שלמשתמש יש הרשאת עריכה על מסך */
+export function canEdit(user: PermissionHolder, screen: Screen): boolean {
+  if (user.isSuperAdmin || user.isAdmin) return true;
+  return user.permissions[screen] === "EDIT";
+}
+
+// ===================== Legacy =====================
+
+const LEGACY_MATRIX: Record<Role, Capability[]> = {
   SUPER_ADMIN: ["battalions.manage", "users.manage", "reports.view", "audit.view"],
   BATTALION_ADMIN: [
-    "users.manage",
-    "org.manage",
-    "battalion.profile",
-    "dictionaries.manage",
-    "catalog.manage",
-    "kits.manage",
-    "locations.manage",
-    "warehouse.operate", // הצהרת מלאי גדודי מול החטיבה
-    "counts.manage", // תכניות ספירה
-    "counts.execute", // ביצוע ספירה (גם למפ"מ)
-    "soldiers.roster", // שלישות: ניהול חיילים גדודי
-    "company.manage", // חיילי פלוגה: עריכה + ציוד חתום
-    "signatures.manage", // החתמות (פלוגה / חייל) — צפייה ויצירה
-    "transfer.approve", // אישור לחיצת יד גם למפ"מ
-    "gaps.resolve",
-    "maintenance.manage",
-    "reports.view",
-    "audit.view",
-    "dispatch.manage",
-    "weapons.approve",
-    "weapons.view",
-    "attendance.manage",
-    "attendance.view",
+    "users.manage", "org.manage", "battalion.profile", "dictionaries.manage",
+    "catalog.manage", "kits.manage", "locations.manage", "warehouse.operate",
+    "counts.manage", "counts.execute", "soldiers.roster", "company.manage",
+    "signatures.manage", "transfer.approve", "gaps.resolve", "maintenance.manage",
+    "reports.view", "audit.view", "dispatch.manage", "weapons.approve",
+    "weapons.view", "attendance.manage", "attendance.view",
   ],
   WAREHOUSE_MANAGER: [
-    "warehouse.operate",
-    "catalog.manage",
-    "kits.manage",
-    "dictionaries.manage",
-    "locations.manage",
-    "reps.manage",
-    "company.manage", // חיילים — כשמשויך למחלקות רואה רק אותן
-    "donations.manage",
-    "transfer.approve",
-    "signatures.manage",
-    "counts.manage",
-    "counts.execute",
-    "gaps.resolve",
-    "reports.view",
-    "dispatch.manage",
-    "weapons.view",
-    "attendance.manage",
-    "attendance.view",
+    "warehouse.operate", "catalog.manage", "kits.manage", "dictionaries.manage",
+    "locations.manage", "reps.manage", "company.manage", "donations.manage",
+    "transfer.approve", "signatures.manage", "counts.manage", "counts.execute",
+    "gaps.resolve", "reports.view", "dispatch.manage", "weapons.view",
+    "attendance.manage", "attendance.view",
   ],
   COMPANY_REP: [
-    "company.manage",
-    "locations.manage",
-    "donations.manage",
-    "transfer.approve",
-    "signatures.manage",
-    "counts.manage",
-    "counts.execute",
-    "reports.view",
-    "dispatch.manage",
-    "attendance.manage",
-    "attendance.view",
+    "company.manage", "locations.manage", "donations.manage", "transfer.approve",
+    "signatures.manage", "counts.manage", "counts.execute", "reports.view",
+    "dispatch.manage", "attendance.manage", "attendance.view",
   ],
   VIEWER: ["reports.view", "dispatch.manage"],
-  SHALISH: [
-    "soldiers.roster",
-    "reports.view",
-    "dispatch.manage",
-    "weapons.view",
-  ],
-  // 🆕 מג"ד: צפייה מלאה (כמו מפ"מ) - ללא יכולת לערוך/להקים, פלוס אישור חימוש
+  SHALISH: ["soldiers.roster", "reports.view", "dispatch.manage", "weapons.view"],
   MAGAD: [
-    "reports.view",
-    "audit.view",
-    "battalion.profile",
-    "soldiers.roster",
-    "company.manage",
-    "signatures.manage",
-    "counts.manage",
-    "counts.execute",
-    "gaps.resolve",
-    "maintenance.manage",
-    "dispatch.manage",
-    "weapons.approve",
-    "weapons.view",
-    "attendance.view",
+    "reports.view", "audit.view", "battalion.profile", "soldiers.roster",
+    "company.manage", "signatures.manage", "counts.manage", "counts.execute",
+    "gaps.resolve", "maintenance.manage", "dispatch.manage", "weapons.approve",
+    "weapons.view", "attendance.view",
   ],
-  // 🆕 סמג"ד: אותן הרשאות כמו מג"ד
   SAMAGAD: [
-    "reports.view",
-    "audit.view",
-    "battalion.profile",
-    "soldiers.roster",
-    "company.manage",
-    "signatures.manage",
-    "counts.manage",
-    "counts.execute",
-    "gaps.resolve",
-    "maintenance.manage",
-    "dispatch.manage",
-    "weapons.approve",
-    "weapons.view",
-    "attendance.view",
+    "reports.view", "audit.view", "battalion.profile", "soldiers.roster",
+    "company.manage", "signatures.manage", "counts.manage", "counts.execute",
+    "gaps.resolve", "maintenance.manage", "dispatch.manage", "weapons.approve",
+    "weapons.view", "attendance.view",
   ],
 };
 
-export function can(role: Role, cap: Capability): boolean {
-  return MATRIX[role]?.includes(cap) ?? false;
+/** בונה permissions map מתפקיד ישן (legacy) */
+export function permissionsFromLegacyRole(role: Role): UserPermissions {
+  const caps = LEGACY_MATRIX[role] ?? [];
+  const perms: UserPermissions = {};
+  for (const cap of caps) {
+    const mapping = CAP_TO_SCREEN[cap];
+    if (!mapping) continue;
+    const level: PermissionLevel = mapping.needsEdit ? "EDIT" : "VIEW";
+    const existing = perms[mapping.screen];
+    if (!existing || (level === "EDIT" && existing === "VIEW")) {
+      perms[mapping.screen] = level;
+    }
+  }
+  return perms;
 }
 
-export function capabilitiesOf(role: Role): Capability[] {
-  return MATRIX[role] ?? [];
-}
+// ===================== Preset role definitions =====================
+
+export const PRESET_ROLES: {
+  name: string; isAdmin: boolean; isCommander: boolean; sortOrder: number;
+  permissions: { screen: Screen; level: PermissionLevel }[];
+}[] = [
+  {
+    name: "מנהל מערכת", isAdmin: true, isCommander: false, sortOrder: 0,
+    permissions: SCREEN_KEYS.map((s) => ({ screen: s, level: "EDIT" as const })),
+  },
+  {
+    name: 'מג"ד', isAdmin: false, isCommander: true, sortOrder: 1,
+    permissions: [
+      ...SCREEN_KEYS.filter((s) => !["settings"].includes(s)).map((s) => ({ screen: s, level: "VIEW" as const })),
+      { screen: "armory", level: "EDIT" as const },
+    ],
+  },
+  {
+    name: 'סמג"ד', isAdmin: false, isCommander: true, sortOrder: 2,
+    permissions: [
+      ...SCREEN_KEYS.filter((s) => !["settings"].includes(s)).map((s) => ({ screen: s, level: "VIEW" as const })),
+      { screen: "armory", level: "EDIT" as const },
+    ],
+  },
+  {
+    name: 'מפ"מ', isAdmin: false, isCommander: false, sortOrder: 3,
+    permissions: SCREEN_KEYS.map((s) => ({ screen: s, level: "EDIT" as const })),
+  },
+  {
+    name: "מפ", isAdmin: false, isCommander: true, sortOrder: 4,
+    permissions: [
+      { screen: "soldiers", level: "EDIT" }, { screen: "attendance", level: "EDIT" },
+      { screen: "dispatch", level: "EDIT" }, { screen: "signatures", level: "EDIT" },
+      { screen: "stock", level: "VIEW" }, { screen: "transfers", level: "EDIT" },
+      { screen: "counts", level: "EDIT" }, { screen: "gaps", level: "VIEW" },
+      { screen: "reports", level: "VIEW" }, { screen: "dashboard", level: "VIEW" },
+      { screen: "donations", level: "EDIT" }, { screen: "vacation", level: "VIEW" },
+    ],
+  },
+  {
+    name: "מפלג", isAdmin: false, isCommander: false, sortOrder: 5,
+    permissions: [
+      { screen: "soldiers", level: "VIEW" }, { screen: "attendance", level: "VIEW" },
+      { screen: "dashboard", level: "VIEW" }, { screen: "dispatch", level: "VIEW" },
+    ],
+  },
+  {
+    name: 'קשר"ג', isAdmin: false, isCommander: false, sortOrder: 6,
+    permissions: [
+      { screen: "stock", level: "EDIT" }, { screen: "catalog", level: "EDIT" },
+      { screen: "signatures", level: "EDIT" }, { screen: "counts", level: "EDIT" },
+      { screen: "gaps", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
+      { screen: "kits", level: "EDIT" }, { screen: "soldiers", level: "EDIT" },
+      { screen: "attendance", level: "EDIT" }, { screen: "dispatch", level: "EDIT" },
+      { screen: "reports", level: "VIEW" }, { screen: "dashboard", level: "VIEW" },
+      { screen: "donations", level: "EDIT" }, { screen: "armory", level: "VIEW" },
+    ],
+  },
+  {
+    name: "שליש", isAdmin: false, isCommander: false, sortOrder: 7,
+    permissions: [
+      { screen: "soldiers", level: "EDIT" }, { screen: "reports", level: "VIEW" },
+      { screen: "dispatch", level: "EDIT" }, { screen: "armory", level: "VIEW" },
+      { screen: "dashboard", level: "VIEW" },
+    ],
+  },
+  {
+    name: "רב", isAdmin: false, isCommander: false, sortOrder: 8,
+    permissions: [
+      { screen: "soldiers", level: "VIEW" }, { screen: "reports", level: "VIEW" },
+      { screen: "dashboard", level: "VIEW" },
+    ],
+  },
+  {
+    name: "ק.רכב", isAdmin: false, isCommander: false, sortOrder: 9,
+    permissions: [
+      { screen: "dispatch", level: "EDIT" }, { screen: "driving_licenses", level: "EDIT" },
+      { screen: "maintenance", level: "EDIT" }, { screen: "stock", level: "EDIT" },
+      { screen: "catalog", level: "EDIT" }, { screen: "signatures", level: "EDIT" },
+      { screen: "counts", level: "EDIT" }, { screen: "gaps", level: "EDIT" },
+      { screen: "transfers", level: "EDIT" }, { screen: "reports", level: "VIEW" },
+      { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
+      { screen: "attendance", level: "EDIT" },
+    ],
+  },
+  {
+    name: 'ק.אג"ם', isAdmin: false, isCommander: false, sortOrder: 10,
+    permissions: [
+      { screen: "stock", level: "EDIT" }, { screen: "catalog", level: "EDIT" },
+      { screen: "signatures", level: "EDIT" }, { screen: "counts", level: "EDIT" },
+      { screen: "gaps", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
+      { screen: "reports", level: "VIEW" }, { screen: "dashboard", level: "VIEW" },
+    ],
+  },
+];
+
+// ===================== תוויות (legacy, נשמר לשימוש מעברי) =====================
 
 export const ROLE_LABELS: Record<Role, string> = {
   SUPER_ADMIN: "אדמין-על",
@@ -150,6 +303,10 @@ export const ROLE_LABELS: Record<Role, string> = {
   MAGAD: 'מג"ד',
   SAMAGAD: 'סמג"ד',
 };
+
+export function capabilitiesOf(role: Role): Capability[] {
+  return LEGACY_MATRIX[role] ?? [];
+}
 
 export const WAREHOUSE_TYPE_LABELS: Record<WarehouseType, string> = {
   EQUIPMENT: 'ציוד (קל"ג)',
@@ -181,7 +338,6 @@ export const WAREHOUSE_TYPE_ICON: Record<WarehouseType, string> = {
   GENERAL: "📦",
 };
 
-/** תפקיד מנהל המחסן לפי טיפוס (לתיוג בלבד) */
 export const WAREHOUSE_MANAGER_TITLE: Record<WarehouseType, string> = {
   EQUIPMENT: 'קל"ג',
   COMMS: 'קשר"ג',

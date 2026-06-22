@@ -6,20 +6,26 @@ import { PageHeader } from "@/components/ui";
 import CrudSection from "@/components/CrudSection";
 import { saveLicenseType, toggleLicenseType } from "./actions";
 import LicenseEditor from "./LicenseEditor";
+import VehicleTypeLicenseEditor from "./VehicleTypeLicenseEditor";
 
 export const dynamic = "force-dynamic";
 
-export default async function DrivingLicensesPage() {
+export default async function DrivingLicensesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const user = await requireUser();
-  if (!can(user.role, "dispatch.manage")) redirect("/dashboard");
+  if (!can(user, "dispatch.manage")) redirect("/dashboard");
   const bId = user.battalionId!;
+  const { tab = "soldiers" } = await searchParams;
 
-  const isAdmin = can(user.role, "battalion.profile");
+  const isAdmin = can(user, "battalion.profile");
   const isVehicleOfficer = user.role === "WAREHOUSE_MANAGER";
   const canManageTypes = isAdmin || isVehicleOfficer;
   const canEditLicenses = isAdmin || isVehicleOfficer;
 
-  const [licenseTypes, soldiers] = await Promise.all([
+  const [licenseTypes, soldiers, vehicleItemTypes, vehicleTypeLicenses] = await Promise.all([
     prisma.drivingLicenseType.findMany({
       where: { battalionId: bId, active: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -30,19 +36,54 @@ export default async function DrivingLicensesPage() {
       include: {
         company: { select: { name: true } },
         squad: { select: { name: true } },
-        drivingLicenses: { select: { licenseTypeId: true, refresherDate: true } },
+        drivingLicenses: { select: { licenseTypeId: true } },
       },
     }),
+    prisma.itemType.findMany({
+      where: {
+        battalionId: bId,
+        active: true,
+        category: { warehouseType: "VEHICLES" },
+      },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.vehicleTypeLicense.findMany({
+      where: { itemType: { battalionId: bId } },
+      select: { id: true, itemTypeId: true, licenseTypeId: true },
+    }),
   ]);
+
+  const TABS = [
+    { key: "soldiers", label: "הרשאות פר חייל" },
+    { key: "types", label: "סוגי הרשאות" },
+    { key: "vehicles", label: "שיוך רכבים" },
+  ] as const;
 
   return (
     <div>
       <PageHeader
         title="הרשאות נהיגה"
-        subtitle={`${soldiers.length} חיילים · ${licenseTypes.length} סוגי הרשאות`}
+        subtitle={`${soldiers.length} חיילים · ${licenseTypes.length} סוגי הרשאות · ${vehicleItemTypes.length} סוגי רכב`}
       />
 
-      {canManageTypes && (
+      <div className="flex gap-1 mb-4 border-b border-slate-200">
+        {TABS.map((t) => (
+          <a
+            key={t.key}
+            href={`?tab=${t.key}`}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+              tab === t.key
+                ? "border-blue-600 text-blue-700"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            {t.label}
+          </a>
+        ))}
+      </div>
+
+      {tab === "types" && canManageTypes && (
         <CrudSection
           title="סוגי הרשאות"
           addLabel="סוג הרשאה"
@@ -57,23 +98,33 @@ export default async function DrivingLicensesPage() {
         />
       )}
 
-      <div className="mt-6">
-        <h3 className="text-lg font-bold mb-3">הרשאות פר חייל</h3>
+      {tab === "vehicles" && (
+        <VehicleTypeLicenseEditor
+          vehicleTypes={vehicleItemTypes}
+          licenseTypes={licenseTypes.map((lt) => ({ id: lt.id, name: lt.name }))}
+          existing={vehicleTypeLicenses}
+          canEdit={canEditLicenses}
+        />
+      )}
+
+      {tab === "soldiers" && (
         <LicenseEditor
           soldiers={soldiers.map((s) => ({
             id: s.id,
             fullName: s.fullName,
             companyName: s.company?.name ?? null,
             squadName: s.squad?.name ?? null,
+            drivingRefresherDate: s.drivingRefresherDate
+              ? s.drivingRefresherDate.toISOString().slice(0, 10)
+              : null,
             licenses: s.drivingLicenses.map((dl) => ({
               licenseTypeId: dl.licenseTypeId,
-              refresherDate: dl.refresherDate ? dl.refresherDate.toISOString().slice(0, 10) : null,
             })),
           }))}
           licenseTypes={licenseTypes.map((lt) => ({ id: lt.id, name: lt.name }))}
           canEdit={canEditLicenses}
         />
-      </div>
+      )}
     </div>
   );
 }

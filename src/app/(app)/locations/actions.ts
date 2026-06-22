@@ -37,7 +37,7 @@ export async function setItemLocation(formData: FormData): Promise<{ ok?: boolea
     const locationId = String(formData.get("locationId") || "");
     // ⚠️ מפ"מ יכול לבחור holderId ספציפי מהממשק; אחרים — רק שלהם
     const overrideHolderId = String(formData.get("holderId") || "");
-    const isMafam = user.role === "BATTALION_ADMIN";
+    const isMafam = user.isAdmin;
     const holderId = overrideHolderId && isMafam ? overrideHolderId : user.holderId;
     if (!holderId) return { error: "אינך משויך למחסן/פלוגה" };
 

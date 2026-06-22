@@ -22,7 +22,7 @@ export async function createCompanySign(
 ): Promise<{ token?: string; error?: string }> {
   try {
     const user = await requireUser();
-    if (!can(user.role, "signatures.manage")) {
+    if (!can(user, "signatures.manage")) {
       return { error: "אין לך הרשאה להחתים פלוגה" };
     }
     const bId = user.battalionId!;
@@ -237,7 +237,7 @@ export async function completeCompanySignature(token: string, signatureData: str
 export async function companyReturn(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
     const user = await requireUser();
-    if (!can(user.role, "signatures.manage")) return { error: "אין הרשאה" };
+    if (!can(user, "signatures.manage")) return { error: "אין הרשאה" };
     const bId = user.battalionId!;
     const companyId = String(formData.get("companyId") || "");
     const newStatusId = String(formData.get("newStatusId") || "") || null;

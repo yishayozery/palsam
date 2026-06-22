@@ -18,7 +18,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
   const { reopenFor } = await searchParams;
   const user = await requireUser();
   const bId = user.battalionId!;
-  const canSign = can(user.role, "signatures.manage");
+  const canSign = can(user, "signatures.manage");
 
   // היקף: קצין מחסן/נציג רואים את המחזיקים שלהם; מפמ/צופה רואים הכל
   const scopedToOwn =
@@ -39,7 +39,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
     select: { id: true, name: true },
   });
 
-  const isMafam = user.role === "BATTALION_ADMIN";
+  const isMafam = user.isAdmin;
 
   const kits = user.holderId
     ? await prisma.signableKit.findMany({

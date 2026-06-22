@@ -83,7 +83,7 @@ export async function setVacationEntry(formData: FormData) {
   if (!board || board.battalionId !== bId) return;
 
   // מפ"מ יכול לעדכן לכל אחד, אחרים רק לעצמם
-  const isAdmin = can(user.role, "battalion.profile");
+  const isAdmin = can(user, "battalion.profile");
   let targetUserId = user.id;
   const formUserId = String(formData.get("userId") || "");
   if (formUserId && isAdmin) {
@@ -124,7 +124,7 @@ export async function saveVacationBatch(
   const board = await prisma.vacationBoard.findUnique({ where: { id: boardId } });
   if (!board || board.battalionId !== bId) return;
 
-  const isAdmin = can(user.role, "battalion.profile");
+  const isAdmin = can(user, "battalion.profile");
   if (!isAdmin) {
     const assignee = await prisma.vacationAssignee.findUnique({
       where: { boardId_userId: { boardId, userId: user.id } },
