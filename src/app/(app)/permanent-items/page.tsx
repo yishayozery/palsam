@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { getCompanyItemTotals } from "@/lib/company-stock-snapshot";
 import PermanentItemsClient from "./PermanentItemsClient";
+import CompanySelect from "./CompanySelect";
 
 export const dynamic = "force-dynamic";
 
@@ -81,13 +82,7 @@ export default async function PermanentItemsPage({
       <Card className="p-3 mb-4">
         <div className="flex items-center gap-3 flex-wrap">
           <label className="text-sm font-medium text-slate-700">פלוגה:</label>
-          <form method="GET" className="flex items-center gap-2">
-            <select name="companyId" defaultValue={selectedCompanyId}
-              onChange={(e) => { (e.target.form as HTMLFormElement).submit(); }}
-              className="rounded-lg border-2 border-slate-300 px-3 py-1.5 text-sm">
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </form>
+          <CompanySelect companies={companies} selectedId={selectedCompanyId} />
           <div className="text-xs text-slate-500 mr-auto flex gap-4">
             <span>📦 {itemsWithStock} פריטים עם מלאי</span>
             <span>📌 {itemsWithBaseline} פריטים עם בסיס &gt; 0</span>
