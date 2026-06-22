@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PREFIXES = ["/login", "/sign", "/invite", "/_next", "/favicon", "/api/sign", "/my-equipment"];
+const PUBLIC_PREFIXES = ["/login", "/about", "/sign", "/invite", "/_next", "/favicon", "/api/sign", "/my-equipment"];
 const ALLOWED_COUNTRIES = new Set(["IL"]);
 
 export function proxy(req: NextRequest) {
