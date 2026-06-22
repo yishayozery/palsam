@@ -6,6 +6,7 @@ import { PageHeader, Card, EmptyState } from "@/components/ui";
 import Link from "next/link";
 import VacationCalendar from "./VacationCalendar";
 import StatusManager from "./StatusManager";
+import ShareWhatsApp from "./ShareWhatsApp";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function BoardPage({ params }: { params: Promise<{ boardId:
     where: { id: boardId },
     include: {
       assignees: {
-        include: { user: { select: { id: true, fullName: true, title: true, role: true } } },
+        include: { user: { select: { id: true, fullName: true, title: true, role: true, phone: true, passwordSet: true, inviteToken: true } } },
       },
     },
   });
@@ -48,6 +49,8 @@ export default async function BoardPage({ params }: { params: Promise<{ boardId:
 
   const isAdmin = can(user.role, "battalion.profile");
   const isAssigned = board.assignees.some((a) => a.user.id === user.id);
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  const boardUrl = `${baseUrl}/vacation/${boardId}`;
 
   const days: string[] = [];
   const d = new Date(board.startDate);
@@ -99,7 +102,19 @@ export default async function BoardPage({ params }: { params: Promise<{ boardId:
       )}
 
       {isAdmin && (
-        <div className="mt-4">
+        <div className="mt-4 space-y-4">
+          <ShareWhatsApp
+            boardName={board.name}
+            boardUrl={boardUrl}
+            baseUrl={baseUrl}
+            assignees={board.assignees.map((a) => ({
+              id: a.user.id,
+              fullName: a.user.fullName,
+              phone: a.user.phone,
+              passwordSet: a.user.passwordSet,
+              inviteToken: a.user.inviteToken,
+            }))}
+          />
           <StatusManager statuses={statuses.map((s) => ({ id: s.id, name: s.name, color: s.color, icon: s.icon }))} />
         </div>
       )}
