@@ -158,6 +158,8 @@ model Battalion {
   attendanceStatuses AttendanceStatus[]
   vacationBoards     VacationBoard[]
   vacationStatuses   VacationStatus[]
+  dispatchTemplates  DispatchTemplate[] @relation("BattalionDispatchTemplates")
+  drivingLicenseTypes DrivingLicenseType[] @relation("BattalionDrivingLicenseTypes")
 }
 
 // ===================== משתמשים =====================
@@ -197,6 +199,7 @@ model AppUser {
   recipientTransfers Transfer[]        @relation("TransferToUser")
   signedAsUser      Signature[]        @relation("SignerUser")
   createdDispatches VehicleAssignment[] @relation("DispatchCreatedBy")
+  createdDispatchTemplates DispatchTemplate[] @relation("DispatchTemplateCreatedBy")
   startedCounts     CountSession[]     @relation("CountStartedBy")
   createdCountPlans CountPlan[]        @relation("CountPlanCreatedBy")
   responsibleCountPlans CountPlan[]    @relation("CountPlanResponsible")
@@ -458,6 +461,8 @@ model Soldier {
   signatures         Signature[]
   itemLocations      SoldierItemLocation[] @relation("SoldierItemLocations")
   dispatchAssignments VehicleAssignmentSoldier[] @relation("SoldierDispatch")
+  dispatchTemplates   DispatchTemplateSoldier[] @relation("SoldierDispatchTemplate")
+  drivingLicenses     SoldierDrivingLicense[]   @relation("SoldierDrivingLicenses")
   attendancePlans    AttendancePlan[]
   attendanceRecords  AttendanceRecord[]
   // מקושר למשתמש מערכת (קצין/רס"פ)
@@ -758,6 +763,7 @@ model SerialUnit {
   // אם זו יחידת רכב — מיקומי ציוד שמצביעים אליה
   asEquipmentLocations EquipmentLocation[] @relation("EquipmentLocationVehicle")
   dispatchAssignments  VehicleAssignment[] @relation("VehicleAssignmentVehicle")
+  dispatchTemplates    DispatchTemplate[]  @relation("DispatchTemplateVehicle")
   locationId       String?
   location         StorageLocation? @relation(fields: [locationId], references: [id])
 
@@ -1238,4 +1244,65 @@ model VacationEntry {
   @@unique([boardId, userId, date])
   @@index([boardId])
   @@index([userId])
+}
+
+// ===================== שבצ"ק קבוע (תבנית) =====================
+
+model DispatchTemplate {
+  id                  String @id @default(cuid())
+  battalionId         String
+  battalion           Battalion @relation("BattalionDispatchTemplates", fields: [battalionId], references: [id], onDelete: Cascade)
+  name                String
+  vehicleSerialUnitId String
+  vehicleSerialUnit   SerialUnit @relation("DispatchTemplateVehicle", fields: [vehicleSerialUnitId], references: [id], onDelete: Cascade)
+  active              Boolean @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  createdById         String
+  createdBy           AppUser @relation("DispatchTemplateCreatedBy", fields: [createdById], references: [id])
+
+  soldiers            DispatchTemplateSoldier[]
+
+  @@unique([battalionId, name])
+  @@index([battalionId])
+}
+
+model DispatchTemplateSoldier {
+  id         String @id @default(cuid())
+  templateId String
+  template   DispatchTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  soldierId  String
+  soldier    Soldier @relation("SoldierDispatchTemplate", fields: [soldierId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, soldierId])
+  @@index([soldierId])
+}
+
+// ===================== הרשאות נהיגה =====================
+
+model DrivingLicenseType {
+  id          String @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation("BattalionDrivingLicenseTypes", fields: [battalionId], references: [id], onDelete: Cascade)
+  name        String
+  active      Boolean @default(true)
+  sortOrder   Int     @default(0)
+  createdAt   DateTime @default(now())
+
+  soldierLicenses SoldierDrivingLicense[]
+
+  @@unique([battalionId, name])
+  @@index([battalionId])
+}
+
+model SoldierDrivingLicense {
+  id            String @id @default(cuid())
+  soldierId     String
+  soldier       Soldier @relation("SoldierDrivingLicenses", fields: [soldierId], references: [id], onDelete: Cascade)
+  licenseTypeId String
+  licenseType   DrivingLicenseType @relation(fields: [licenseTypeId], references: [id], onDelete: Cascade)
+  refresherDate DateTime? @db.Date
+
+  @@unique([soldierId, licenseTypeId])
+  @@index([soldierId])
 }

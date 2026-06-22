@@ -20,21 +20,30 @@ type Assignment = {
   vehicleSerialUnitId: string;
   vehicleName: string;
   vehicleSerial: string;
-  vehicleCompanyName: string | null; // הפלוגה שמחזיקה את הרכב
+  vehicleCompanyName: string | null;
   companyName: string | null;
-  missionDate: string; // YYYY-MM-DD
-  departureTime: string; // HH:mm
+  missionDate: string;
+  departureTime: string;
   createdByName: string;
   createdAt: string;
   completedAt: string | null;
   soldiers: { id: string; fullName: string; personalNumber: string | null; companyName: string | null }[];
 };
+type DispatchTpl = {
+  id: string;
+  name: string;
+  vehicleSerialUnitId: string;
+  vehicleName: string;
+  vehicleSerial: string;
+  soldierIds: string[];
+};
 
 export default function DispatchClient({
-  battalionName, myCompanyId, vehicles, soldiers, assignments,
+  battalionName, myCompanyId, templates = [], vehicles, soldiers, assignments,
 }: {
   battalionName: string;
   myCompanyId: string | null;
+  templates?: DispatchTpl[];
   vehicles: Vehicle[];
   soldiers: Soldier[];
   assignments: Assignment[];
@@ -74,6 +83,21 @@ export default function DispatchClient({
     setChosenSoldiers([]);
     setError(null);
   }
+  function loadFromTemplate(tplId: string) {
+    const tpl = templates.find((t) => t.id === tplId);
+    if (!tpl) return;
+    setEditingId("new");
+    setVehicleId(tpl.vehicleSerialUnitId);
+    setMissionDate("");
+    setDepartureTime("");
+    setChosenSoldiers(
+      tpl.soldierIds
+        .map((sid) => soldiers.find((s) => s.id === sid))
+        .filter((s): s is Soldier => !!s)
+    );
+    setError(null);
+  }
+
   function openEdit(a: Assignment) {
     setEditingId(a.id);
     setVehicleId(a.vehicleSerialUnitId);
@@ -242,6 +266,19 @@ export default function DispatchClient({
           className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-4 py-2 text-sm font-medium">
           + שיבוץ חדש
         </button>
+        {templates.length > 0 && (
+          <select
+            value=""
+            onChange={(e) => { if (e.target.value) loadFromTemplate(e.target.value); }}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
+          >
+            <option value="">📋 טען משבצ&quot;ק קבוע...</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>{t.name} ({t.vehicleName} - {t.vehicleSerial})</option>
+            ))}
+          </select>
+        )}
+        <a href="/dispatch/templates" className="text-xs text-blue-600 hover:underline self-center">ניהול תבניות →</a>
         <div className="flex bg-slate-100 rounded-lg p-1 gap-1">
           <button onClick={() => setTab("active")}
             className={`text-sm rounded-md px-3 py-1 transition ${

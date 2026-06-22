@@ -48,6 +48,7 @@ export default async function SoldiersPage({
         company: true,
         squad: true,
         companyRole: true,
+        drivingLicenses: { include: { licenseType: { select: { name: true } } } },
         _count: { select: { signedSerialUnits: true, signedKitInstances: true } },
       },
     }),
@@ -231,6 +232,9 @@ export default async function SoldiersPage({
                 {(s.squad?.name || s.platoon) && <Badge className="bg-indigo-100 text-indigo-700">{s.squad?.name ?? s.platoon}</Badge>}
                 {s.companyRole && <Badge className={s.companyRole.isCommander ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}>{s.companyRole.name}{s.companyRole.isCommander ? " ⭐" : ""}</Badge>}
                 {s.company && <Badge>{s.company.name}</Badge>}
+                {s.drivingLicenses.length > 0 && (
+                  <Badge className="bg-green-100 text-green-700">🪪 {s.drivingLicenses.map((dl) => dl.licenseType.name).join(", ")}</Badge>
+                )}
                 <SoldierEquipmentButton
                   soldierId={s.id} soldierName={s.fullName}
                   signedSerials={serials} signedQty={qty}

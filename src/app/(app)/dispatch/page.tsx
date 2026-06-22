@@ -27,7 +27,7 @@ export default async function DispatchPage() {
     effectiveCompanyId = sq?.companyId ?? null;
   }
 
-  const [battalion, vehicles, soldiers, assignments] = await Promise.all([
+  const [battalion, vehicles, soldiers, assignments, templates] = await Promise.all([
     prisma.battalion.findUnique({ where: { id: bId }, select: { name: true } }),
     // כל רכבי הגדוד התקינים
     prisma.serialUnit.findMany({
@@ -65,6 +65,14 @@ export default async function DispatchPage() {
       },
       orderBy: [{ missionDate: "desc" }, { departureTime: "desc" }],
     }),
+    prisma.dispatchTemplate.findMany({
+      where: { battalionId: bId, active: true },
+      include: {
+        vehicleSerialUnit: { include: { itemType: { select: { name: true } } } },
+        soldiers: { include: { soldier: { select: { id: true, fullName: true } } } },
+      },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   return (
@@ -87,6 +95,14 @@ export default async function DispatchPage() {
         <DispatchClient
           battalionName={battalion?.name ?? ""}
           myCompanyId={effectiveCompanyId}
+          templates={templates.map((t) => ({
+            id: t.id,
+            name: t.name,
+            vehicleSerialUnitId: t.vehicleSerialUnitId,
+            vehicleName: t.vehicleSerialUnit.itemType.name,
+            vehicleSerial: t.vehicleSerialUnit.serialNumber,
+            soldierIds: t.soldiers.map((ts) => ts.soldier.id),
+          }))}
           vehicles={vehicles.map((v) => ({
             id: v.id,
             itemName: v.itemType.name,

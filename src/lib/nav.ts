@@ -33,6 +33,7 @@ export const NAV: NavItem[] = [
   { href: "/permanent-items", label: "ציוד קבוע לפלוגה", icon: "📌", group: "ראשי", cap: "battalion.profile" },
   { href: "/armory-allocations", label: "הקצאות לפלוגה", icon: "📦", group: "ראשי", cap: "weapons.approve" },
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "ראשי", cap: "dispatch.manage" },
+  { href: "/driving-licenses", label: "הרשאות נהיגה", icon: "🪪", group: "ראשי", cap: "dispatch.manage" },
   { href: "/maintenance", label: "סטטוס רכבים", icon: "🔧", group: "ראשי", cap: "maintenance.manage" },
 
   // ===== ארמון (מפמ + מגד + סמגד) =====
@@ -68,6 +69,7 @@ export const NAV: NavItem[] = [
 
   // ===== המחסנים שלי (קצין מחסן — תפעול שוטף) =====
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "המחסנים שלי", cap: "dispatch.manage" },
+  { href: "/driving-licenses", label: "הרשאות נהיגה", icon: "🪪", group: "המחסנים שלי", cap: "dispatch.manage" },
 
   { href: "/items", label: "הגדרת פריטים", icon: "🏷️", group: "המחסנים שלי", cap: "catalog.manage" },
   { href: "/stock", label: "מלאי המחסן", icon: "📋", group: "המחסנים שלי", cap: "warehouse.operate" },
