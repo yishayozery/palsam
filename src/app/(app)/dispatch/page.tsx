@@ -9,6 +9,24 @@ export default async function DispatchPage() {
   const user = await requireCapability("dispatch.manage");
   const bId = user.battalionId!;
 
+  // holderId = מחסן (WAREHOUSE_MANAGER) או פלוגה (COMPANY_REP)
+  // לקשר"ג עם מחלקות — מוצאים את הפלוגה דרך המחלקות
+  const companies = await prisma.holder.findMany({
+    where: { battalionId: bId, kind: "COMPANY", active: true },
+    select: { id: true },
+  });
+  const isCompanyHolder = user.holderId ? companies.some((c) => c.id === user.holderId) : false;
+  let effectiveCompanyId: string | null = null;
+  if (isCompanyHolder) {
+    effectiveCompanyId = user.holderId;
+  } else if (user.squadIds.length > 0) {
+    const sq = await prisma.squad.findFirst({
+      where: { id: { in: user.squadIds } },
+      select: { companyId: true },
+    });
+    effectiveCompanyId = sq?.companyId ?? null;
+  }
+
   const [battalion, vehicles, soldiers, assignments] = await Promise.all([
     prisma.battalion.findUnique({ where: { id: bId }, select: { name: true } }),
     // כל רכבי הגדוד התקינים
@@ -68,7 +86,7 @@ export default async function DispatchPage() {
       ) : (
         <DispatchClient
           battalionName={battalion?.name ?? ""}
-          myCompanyId={user.holderId ?? null}
+          myCompanyId={effectiveCompanyId}
           vehicles={vehicles.map((v) => ({
             id: v.id,
             itemName: v.itemType.name,
