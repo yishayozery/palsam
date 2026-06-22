@@ -49,6 +49,7 @@ export default async function BoardPage({ params }: { params: Promise<{ boardId:
 
   const isAdmin = can(user.role, "battalion.profile");
   const isAssigned = board.assignees.some((a) => a.user.id === user.id);
+  if (!isAdmin && !isAssigned) redirect("/dashboard");
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
   const boardUrl = `${baseUrl}/vacation/${boardId}`;
 

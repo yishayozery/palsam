@@ -133,7 +133,7 @@ export default function VacationCalendar({
                 return (
                   <th
                     key={day}
-                    className={`px-1 py-1 text-center border-b min-w-[36px] ${isWeekend ? "bg-slate-100" : ""}`}
+                    className={`px-1 py-1.5 text-center border-b min-w-[40px] ${isWeekend ? "bg-slate-100" : ""}`}
                   >
                     <div className="text-[10px] text-slate-400">{DAY_NAMES[dow]}</div>
                     <div className={`font-bold ${isWeekend ? "text-slate-400" : ""}`}>{d.getDate()}</div>
@@ -162,12 +162,15 @@ export default function VacationCalendar({
                     <td
                       key={day}
                       onClick={() => editable && cycleStatus(u.id, day)}
-                      className={`px-0.5 py-1 text-center border-b border-l transition select-none ${
+                      className={`px-1 py-2 text-center border-b border-l transition select-none min-w-[40px] min-h-[40px] ${
                         isWeekend ? "bg-slate-50" : ""
                       } ${editable ? "cursor-pointer hover:ring-2 hover:ring-blue-300 hover:z-10" : ""} ${
                         isPending ? "ring-1 ring-blue-400" : ""
                       }`}
-                      style={status ? { backgroundColor: status.color + "30" } : undefined}
+                      style={{
+                        ...(status ? { backgroundColor: status.color + "30" } : {}),
+                        touchAction: "manipulation",
+                      }}
                       title={status ? `${status.name} — ${u.fullName}` : `${day} — ${u.fullName}`}
                     >
                       {status ? (

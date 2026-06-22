@@ -33,12 +33,11 @@ export default async function VacationPage() {
       })
     : [];
 
-  // ללא אדמין — אם משתמש משויך ללוח אחד בלבד, מעביר ישירות אליו
+  // ללא אדמין — מראים רק לוחות שהמשתמש משויך אליהם
   if (!isAdmin) {
     const myBoards = boards.filter((b) => b.assignees.some((a) => a.userId === user.id));
-    if (myBoards.length === 1) {
-      redirect(`/vacation/${myBoards[0].id}`);
-    }
+    if (myBoards.length === 0) redirect("/dashboard");
+    if (myBoards.length === 1) redirect(`/vacation/${myBoards[0].id}`);
   }
 
   const fmt = (d: Date) => d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -62,7 +61,7 @@ export default async function VacationPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {boards.map((b) => {
+          {(isAdmin ? boards : boards.filter((b) => b.assignees.some((a) => a.userId === user.id))).map((b) => {
             const isAssigned = b.assignees.some((a) => a.userId === user.id);
             return (
               <Card key={b.id} className="p-4">
