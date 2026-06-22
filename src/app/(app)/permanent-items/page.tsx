@@ -37,7 +37,7 @@ export default async function PermanentItemsPage({
   // קטלוג הגדוד
   const items = await prisma.itemType.findMany({
     where: { battalionId: bId, active: true },
-    orderBy: [{ category: { name: "asc" } }, { name: "asc" }],
+    orderBy: [{ name: "asc" }],
     include: { category: { select: { name: true, warehouseType: true } } },
   });
 
