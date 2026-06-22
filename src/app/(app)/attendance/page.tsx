@@ -35,10 +35,17 @@ export default async function AttendancePage({
     );
   }
 
-  // COMPANY_REP sees only their company
+  // COMPANY_REP sees only their company; squad-scoped users see only relevant companies
   let availableCompanies = companies;
   if (user.role === "COMPANY_REP" && user.holderId) {
     availableCompanies = companies.filter((c) => c.id === user.holderId);
+  } else if (user.squadIds.length > 0) {
+    const squadCompanyIds = await prisma.squad.findMany({
+      where: { id: { in: user.squadIds } },
+      select: { companyId: true },
+    });
+    const companyIdSet = new Set(squadCompanyIds.map((s) => s.companyId));
+    availableCompanies = companies.filter((c) => companyIdSet.has(c.id));
   }
 
   const selectedCompanyId = sp.companyId === "__all__"
@@ -86,9 +93,12 @@ export default async function AttendancePage({
   // Fetch squads & company roles
   const [squads, companyRoles] = await Promise.all([
     prisma.squad.findMany({
-      where: isAll
-        ? { company: { battalionId: bId }, active: true }
-        : { companyId: selectedCompanyId, active: true },
+      where: {
+        ...(isAll
+          ? { company: { battalionId: bId }, active: true }
+          : { companyId: selectedCompanyId, active: true }),
+        ...(user.squadIds.length > 0 ? { id: { in: user.squadIds } } : {}),
+      },
       orderBy: { sortOrder: "asc" },
       select: { id: true, name: true },
     }),
