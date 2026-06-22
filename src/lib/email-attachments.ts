@@ -2,6 +2,7 @@ import "server-only";
 import ExcelJS from "exceljs";
 import { prisma } from "./prisma";
 import { TRANSFER_TYPE, TRANSFER_STATUS } from "./labels";
+import { buildTransferPdfBuffer } from "./email-pdf";
 
 type TransferWithDetails = NonNullable<Awaited<ReturnType<typeof loadTransfer>>>;
 
@@ -350,15 +351,16 @@ export async function buildTransferAttachments(transferId: string): Promise<{
     const subject = buildSubject(t);
     const baseName = sanitizeFilename(subject);
     const html = buildEmailHtml(t);
-    const [excelBuf, printableHtml] = await Promise.all([
+    const [excelBuf, pdfBuf] = await Promise.all([
       buildExcelBuffer(t),
-      Promise.resolve(buildPrintableHtml(t)),
+      buildTransferPdfBuffer(t).catch(() => null),
     ]);
 
-    const attachments: { filename: string; content: string }[] = [
-      { filename: `${baseName}.html`, content: Buffer.from(printableHtml, "utf-8").toString("base64") },
-      { filename: `${baseName}.xlsx`, content: excelBuf.toString("base64") },
-    ];
+    const attachments: { filename: string; content: string }[] = [];
+    if (pdfBuf) {
+      attachments.push({ filename: `${baseName}.pdf`, content: pdfBuf.toString("base64") });
+    }
+    attachments.push({ filename: `${baseName}.xlsx`, content: excelBuf.toString("base64") });
 
     return { subject, html, attachments };
   } catch {
