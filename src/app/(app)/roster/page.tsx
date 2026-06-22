@@ -74,6 +74,7 @@ export default async function RosterPage({
           status: s.status, attached: s.attached,
           signedCount: s._count.signedSerialUnits + s._count.signedKitInstances,
           enlistedAt: s.enlistedAt?.toISOString() ?? null,
+          dischargedAt: s.dischargedAt?.toISOString() ?? null,
         }))}
         companies={companies}
         squads={squads}

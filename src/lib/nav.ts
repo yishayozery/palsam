@@ -46,6 +46,7 @@ export const NAV: NavItem[] = [
   { href: "/signatures", label: "החתמת פלוגה", icon: "✍️", group: "מחסנים", cap: "signatures.manage" },
   { href: "/counts", label: "ספירת מלאי", icon: "🔢", group: "מחסנים", cap: "counts.manage" },
   { href: "/gaps", label: "פערים מספירות מלאי", icon: "⚠️", group: "מחסנים", cap: "battalion.profile" },
+  { href: "/soldiers", label: "חיילים (עריכה + ציוד)", icon: "🪖", group: "מחסנים", cap: "company.manage" },
 
   // ===== שלישות (שליש גדודי — ניהול חיילים + גיוס) =====
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "שלישות", cap: "soldiers.roster" },

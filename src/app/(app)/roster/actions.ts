@@ -17,6 +17,7 @@ export async function createSoldier(formData: FormData) {
   const squadId = String(formData.get("squadId") || "") || null;
   const platoon = String(formData.get("platoon") || "").trim() || null;
   const enlistNow = formData.get("enlistNow") === "on";
+  const attached = formData.get("attached") === "on";
 
   if (!firstName || !lastName) throw new Error("שם פרטי + שם משפחה חובה");
   if (!companyId) throw new Error("חובה לשייך לפלוגה");
@@ -37,6 +38,7 @@ export async function createSoldier(formData: FormData) {
       status: enlistNow ? "ENLISTED" : "REGISTERED",
       enlistedAt: enlistNow ? new Date() : null,
       enlistedById: enlistNow ? user.id : null,
+      attached,
     },
   });
   await audit(user.id, "CREATE_SOLDIER", "Soldier", personalNumber || fullName, { companyId, status: enlistNow ? "ENLISTED" : "REGISTERED" });
@@ -53,6 +55,7 @@ export async function updateSoldier(formData: FormData) {
   const companyId = String(formData.get("companyId") || "") || null;
   const squadId = String(formData.get("squadId") || "") || null;
   const platoon = String(formData.get("platoon") || "").trim() || null;
+  const attached = formData.get("attached") === "on";
   if (!firstName || !lastName) throw new Error("שם פרטי + שם משפחה חובה");
 
   const s = await prisma.soldier.findUnique({ where: { id } });
@@ -60,7 +63,7 @@ export async function updateSoldier(formData: FormData) {
 
   await prisma.soldier.update({
     where: { id },
-    data: { firstName, lastName, fullName: `${firstName} ${lastName}`, phone, companyId, squadId, platoon },
+    data: { firstName, lastName, fullName: `${firstName} ${lastName}`, phone, companyId, squadId, platoon, attached },
   });
   await audit(user.id, "UPDATE_SOLDIER", "Soldier", id);
   revalidatePath("/roster");

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { Card, Table, Th, Td, Badge } from "@/components/ui";
-import { createSoldier, updateSoldier, enlistSoldier, unenlistSoldier, deactivateSoldier, toggleAttached } from "./actions";
+import { createSoldier, updateSoldier, enlistSoldier, dischargeSoldier, deactivateSoldier } from "./actions";
 import { importSoldiersRoster, seedSampleSoldiers } from "./import-actions";
 
 type Company = { id: string; name: string };
@@ -12,8 +12,14 @@ type Soldier = {
   personalNumber: string | null; phone: string | null;
   companyId: string | null; companyName: string | null; platoon: string | null;
   squadId: string | null; squadName: string | null;
-  status: string; attached: boolean; signedCount: number; enlistedAt: string | null;
+  status: string; attached: boolean; signedCount: number;
+  enlistedAt: string | null; dischargedAt: string | null;
 };
+
+function fmtDate(iso: string | null) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
 
 function AddForm({ companies, squads, onDone }: { companies: Company[]; squads: SquadOption[]; onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +76,13 @@ function AddForm({ companies, squads, onDone }: { companies: Company[]; squads: 
           <input name="phone" placeholder="05X-XXXXXXX" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
       </div>
+      <label className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer">
+        <input type="checkbox" name="attached" className="mt-0.5" />
+        <div>
+          <span className="font-medium text-sm text-blue-800">📌 מסופח</span>
+          <span className="text-xs text-blue-700 mr-2">מידע בלבד — לא משפיע על הרשאות</span>
+        </div>
+      </label>
       <label className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg cursor-pointer">
         <input type="checkbox" name="enlistNow" defaultChecked className="mt-0.5" />
         <div>
@@ -94,11 +107,27 @@ function EditForm({ soldier, companies, squads, onDone }: { soldier: Soldier; co
     try { await updateSoldier(fd); onDone(); }
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
+
+  const statusLabel = soldier.status === "ENLISTED" ? "מגויס ✓" : soldier.status === "REGISTERED" ? "ממתין לגיוס" : soldier.status === "DISCHARGED" ? "משוחרר" : "לא פעיל";
+  const statusColor = soldier.status === "ENLISTED" ? "text-emerald-700" : soldier.status === "REGISTERED" ? "text-amber-700" : "text-slate-500";
+
   return (
     <form action={submit} className="p-5 space-y-3">
       <input type="hidden" name="id" value={soldier.id} />
       {error && <div className="bg-rose-50 border border-rose-300 rounded-lg p-2.5 text-sm text-rose-800">⚠️ {error}</div>}
-      <div className="text-xs text-slate-500 font-mono">מ.א.: {soldier.personalNumber}</div>
+
+      <div className="flex items-center justify-between bg-slate-50 rounded-lg p-3 text-sm">
+        <div>
+          <span className="text-slate-500">סטטוס: </span>
+          <span className={`font-bold ${statusColor}`}>{statusLabel}</span>
+        </div>
+        <div className="text-xs text-slate-400 flex gap-3">
+          {soldier.enlistedAt && <span>גיוס: {fmtDate(soldier.enlistedAt)}</span>}
+          {soldier.dischargedAt && <span className="text-rose-500">סיום: {fmtDate(soldier.dischargedAt)}</span>}
+        </div>
+      </div>
+
+      <div className="text-xs text-slate-500 font-mono">מ.א.: {soldier.personalNumber || "—"}</div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs text-slate-600 mb-1">שם פרטי</label>
@@ -131,6 +160,13 @@ function EditForm({ soldier, companies, squads, onDone }: { soldier: Soldier; co
           {companySquads.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       </div>
+      <label className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer">
+        <input type="checkbox" name="attached" defaultChecked={soldier.attached} />
+        <div>
+          <span className="font-medium text-sm text-blue-800">📌 מסופח</span>
+          <span className="text-xs text-blue-700 mr-2">מידע בלבד — לא משפיע על הרשאות</span>
+        </div>
+      </label>
       <div className="flex justify-end gap-2 pt-2">
         <button type="button" onClick={onDone} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
         <button className="bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-5 py-2 text-sm font-medium">שמור</button>
@@ -183,6 +219,25 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
     } finally {
       setSeedBusy(false);
     }
+  }
+
+  async function handleEnlist(id: string) {
+    setActionError(null);
+    try {
+      const fd = new FormData();
+      fd.append("id", id);
+      await enlistSoldier(fd);
+    } catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
+  }
+
+  async function handleDischarge(id: string) {
+    if (!confirm("לשחרר את החייל? (אם יש ציוד חתום — יש לזכות קודם)")) return;
+    setActionError(null);
+    try {
+      const fd = new FormData();
+      fd.append("id", id);
+      await dischargeSoldier(fd);
+    } catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
   }
 
   const filtered = useMemo(() => {
@@ -269,7 +324,7 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
         <Table>
           <thead>
             <tr>
-              <Th>חייל</Th><Th>מ.א.</Th><Th>פלוגה</Th><Th>נייד</Th><Th>סטטוס</Th><Th>חתום על</Th><Th></Th>
+              <Th>חייל</Th><Th>מ.א.</Th><Th>פלוגה</Th><Th>סטטוס</Th><Th>תאריך גיוס</Th><Th>חתום על</Th><Th></Th>
             </tr>
           </thead>
           <tbody>
@@ -277,53 +332,47 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
               <tr key={s.id} className={s.status === "DISCHARGED" || s.status === "INACTIVE" ? "opacity-50" : ""}>
                 <Td>
                   <div className="font-medium">{s.fullName}</div>
-                  {s.squadName && <div className="text-xs text-slate-400">🪖 {s.squadName}</div>}
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {s.squadName && <span className="text-xs text-slate-400">🪖 {s.squadName}</span>}
+                    {s.attached && <Badge className="bg-blue-100 text-blue-700 text-[10px]">📌 מסופח</Badge>}
+                  </div>
                 </Td>
                 <Td className="font-mono text-xs">{s.personalNumber ?? <span className="text-slate-300">—</span>}</Td>
                 <Td>{s.companyName ?? <span className="text-slate-300">—</span>}</Td>
-                <Td className="text-xs text-slate-500">{s.phone ?? "—"}</Td>
                 <Td>
-                  <span className="flex items-center gap-1 flex-wrap">
-                    {s.status === "DISCHARGED" || s.status === "INACTIVE"
-                      ? <Badge className="bg-slate-100 text-slate-500">לא פעיל</Badge>
-                      : s.status === "ENLISTED"
-                      ? <Badge className="bg-emerald-100 text-emerald-700">✓ מאושר</Badge>
-                      : <Badge className="bg-amber-100 text-amber-700">ממתין</Badge>}
-                    {s.attached && <Badge className="bg-blue-100 text-blue-700">מסופח</Badge>}
-                  </span>
+                  {s.status === "DISCHARGED" || s.status === "INACTIVE"
+                    ? <Badge className="bg-slate-100 text-slate-500">{s.status === "DISCHARGED" ? "משוחרר" : "לא פעיל"}</Badge>
+                    : s.status === "ENLISTED"
+                    ? <Badge className="bg-emerald-100 text-emerald-700">✓ מגויס</Badge>
+                    : <Badge className="bg-amber-100 text-amber-700">ממתין</Badge>}
+                </Td>
+                <Td className="text-xs text-slate-500">
+                  {s.status === "DISCHARGED" && s.dischargedAt ? (
+                    <div>
+                      {s.enlistedAt && <div>{fmtDate(s.enlistedAt)}</div>}
+                      <div className="text-rose-500">סיום: {fmtDate(s.dischargedAt)}</div>
+                    </div>
+                  ) : s.enlistedAt ? fmtDate(s.enlistedAt) : "—"}
                 </Td>
                 <Td className="text-center">{s.signedCount > 0 ? <span className="font-bold text-blue-600">{s.signedCount}</span> : <span className="text-slate-300">—</span>}</Td>
                 <Td>
-                  <div className="flex items-center gap-2 justify-end">
+                  <div className="flex items-center gap-1.5 justify-end">
                     {s.status === "REGISTERED" && (
-                      <form action={enlistSoldier}>
-                        <input type="hidden" name="id" value={s.id} />
-                        <button className="text-xs bg-emerald-600 text-white rounded-md px-2 py-1 hover:bg-emerald-700">✓ אשר גיוס</button>
-                      </form>
+                      <button onClick={() => handleEnlist(s.id)}
+                        className="text-xs bg-emerald-600 text-white rounded-md px-2.5 py-1 hover:bg-emerald-700">
+                        ✓ אישור גיוס
+                      </button>
                     )}
                     {s.status === "ENLISTED" && (
-                      <form action={async (fd) => {
-                        try { await unenlistSoldier(fd); setActionError(null); }
-                        catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
-                      }}>
-                        <input type="hidden" name="id" value={s.id} />
-                        <button className="text-xs text-amber-600 hover:text-amber-800">בטל אישור</button>
-                      </form>
-                    )}
-                    <form action={toggleAttached}>
-                      <input type="hidden" name="id" value={s.id} />
-                      <button className={`text-xs ${s.attached ? "text-blue-600 hover:text-blue-800" : "text-slate-400 hover:text-blue-600"}`} title={s.attached ? "הסר מסופח" : "סמן מסופח"}>
-                        {s.attached ? "📌" : "📍"}
+                      <button onClick={() => handleDischarge(s.id)}
+                        className="text-xs bg-rose-100 text-rose-700 rounded-md px-2.5 py-1 hover:bg-rose-200">
+                        סיום גיוס
                       </button>
-                    </form>
-                    <button onClick={() => setEditId(s.id)} className="text-xs text-slate-500 hover:text-slate-800">✎</button>
-                    <form action={async (fd) => {
-                      try { await deactivateSoldier(fd); setActionError(null); }
-                      catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
-                    }}>
-                      <input type="hidden" name="id" value={s.id} />
-                      <button className="text-xs text-rose-500 hover:text-rose-700" title={s.status !== "DISCHARGED" && s.status !== "INACTIVE" ? "השבת" : "הפעל"}>{s.status !== "DISCHARGED" && s.status !== "INACTIVE" ? "🚫" : "↻"}</button>
-                    </form>
+                    )}
+                    <button onClick={() => setEditId(s.id)}
+                      className="text-xs text-slate-500 hover:text-slate-800 border border-slate-300 rounded-md px-2.5 py-1 hover:bg-slate-50">
+                      ✏️ עריכה
+                    </button>
                   </div>
                 </Td>
               </tr>
@@ -348,7 +397,7 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-slate-200">
-              <h3 className="font-bold text-slate-800">עריכת חייל</h3>
+              <h3 className="font-bold text-slate-800">עריכת חייל — {editSoldier.fullName}</h3>
               <button onClick={() => setEditId(null)} className="text-slate-400 hover:text-slate-700 text-xl">✕</button>
             </div>
             <EditForm soldier={editSoldier} companies={companies} squads={squads} onDone={() => setEditId(null)} />

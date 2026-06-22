@@ -43,6 +43,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "counts.manage", // תכניות ספירה
     "counts.execute", // ביצוע ספירה (גם למפ"מ)
     "soldiers.roster", // שלישות: ניהול חיילים גדודי
+    "company.manage", // חיילי פלוגה: עריכה + ציוד חתום
     "signatures.manage", // החתמות (פלוגה / חייל) — צפייה ויצירה
     "transfer.approve", // אישור לחיצת יד גם למפ"מ
     "gaps.resolve",
@@ -98,6 +99,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "audit.view",
     "battalion.profile",
     "soldiers.roster",
+    "company.manage",
     "signatures.manage",
     "counts.manage",
     "counts.execute",
@@ -114,6 +116,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "audit.view",
     "battalion.profile",
     "soldiers.roster",
+    "company.manage",
     "signatures.manage",
     "counts.manage",
     "counts.execute",
