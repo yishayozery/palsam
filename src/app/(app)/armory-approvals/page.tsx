@@ -10,7 +10,11 @@ export default async function ArmoryApprovalsPage() {
   const bId = user.battalionId!;
 
   const soldiers = await prisma.soldier.findMany({
-    where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
+    where: {
+      battalionId: bId,
+      status: { notIn: ["DISCHARGED", "INACTIVE"] },
+      callupPeriods: { some: { endDate: null } },
+    },
     include: { company: { select: { name: true } } },
     orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }],
   });
@@ -33,7 +37,7 @@ export default async function ArmoryApprovalsPage() {
       />
 
       {soldiers.length === 0 ? (
-        <Card className="p-6"><EmptyState>אין חיילים פעילים בגדוד</EmptyState></Card>
+        <Card className="p-6"><EmptyState>אין חיילים עם שמ״פ פתוח. חיילים יופיעו כאן אחרי שהשלישות תאשר את הגעתם.</EmptyState></Card>
       ) : (
         <ApprovalsClient
           armoryTestUrl={armoryHolder?.armoryTestUrl ?? null}
