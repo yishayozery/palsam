@@ -25,9 +25,14 @@ type Squad = { id: string; name: string };
 type CompanyRole = { id: string; name: string; isCommander: boolean };
 type Status = { id: string; name: string; color: string; icon: string | null; isPresent: boolean };
 type AttEntry = { soldierId: string; date: string; statusId: string };
+type EmploymentOption = { id: string; name: string; startDate: string; endDate: string; totalDays: number; mode: string };
+type SelectedEmployment = EmploymentOption & {
+  allocations: { companyId: string; date: string; allocated: number }[];
+};
 
 export default function AttendanceClient({
   companies, selectedCompanyId, soldiers, squads, companyRoles, statuses, days, plans, records, mode, canManage, startDate,
+  employments, selectedEmployment,
 }: {
   companies: { id: string; name: string }[];
   selectedCompanyId: string;
@@ -41,6 +46,8 @@ export default function AttendanceClient({
   mode: "plan" | "record";
   canManage: boolean;
   startDate: string;
+  employments: EmploymentOption[];
+  selectedEmployment: SelectedEmployment | null;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -184,11 +191,18 @@ export default function AttendanceClient({
   }
 
   // Navigate date range
+  function buildUrl(params: Record<string, string>) {
+    const base: Record<string, string> = { companyId: selectedCompanyId, start: startDate, mode };
+    if (selectedEmployment) base.employmentId = selectedEmployment.id;
+    const merged = { ...base, ...params };
+    return "?" + new URLSearchParams(merged).toString();
+  }
+
   function shiftDays(offset: number) {
     const d = new Date(startDate);
     d.setDate(d.getDate() + offset);
     const newStart = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    router.push(`?companyId=${selectedCompanyId}&start=${newStart}&mode=${mode}`);
+    router.push(buildUrl({ start: newStart }));
   }
 
   const companyName = companies.find((c) => c.id === selectedCompanyId)?.name ?? "";
@@ -234,6 +248,71 @@ export default function AttendanceClient({
     return { all, bySquad, byRole };
   }, [filteredSoldiers, grouped, statuses, getStatus, today]);
 
+  const employmentDash = useMemo(() => {
+    if (!selectedEmployment) return null;
+    const presentStatusIds = new Set(statuses.filter((s) => s.isPresent).map((s) => s.id));
+    const allocs = selectedEmployment.allocations;
+
+    const todayAllocs = allocs.filter((a) => a.date === today);
+    const todayAllocatedTotal = todayAllocs.reduce((s, a) => s + a.allocated, 0);
+
+    let todayActualTotal = 0;
+    for (const s of filteredSoldiers) {
+      const st = getStatus(s.id, today);
+      if (st && presentStatusIds.has(st)) todayActualTotal++;
+    }
+    const todayPct = todayAllocatedTotal > 0 ? Math.round((todayActualTotal / todayAllocatedTotal) * 100) : 0;
+
+    const pastAllocs = allocs.filter((a) => a.date <= today);
+    const cumulativeAllocated = pastAllocs.reduce((s, a) => s + a.allocated, 0);
+
+    const pastDates = [...new Set(pastAllocs.map((a) => a.date))];
+    let cumulativeActual = 0;
+    for (const d of pastDates) {
+      for (const s of soldiers) {
+        const st = getStatus(s.id, d);
+        if (st && presentStatusIds.has(st)) cumulativeActual++;
+      }
+    }
+    const cumulativePct = cumulativeAllocated > 0 ? Math.round((cumulativeActual / cumulativeAllocated) * 100) : 0;
+
+    const isAll = selectedCompanyId === "__all__";
+    let perCompany: { name: string; todayAlloc: number; todayAct: number; todayPct: number; cumAlloc: number; cumAct: number; cumPct: number }[] = [];
+    if (isAll) {
+      const companyIds = [...new Set(allocs.map((a) => a.companyId))];
+      perCompany = companyIds.map((cid) => {
+        const cName = companies.find((c) => c.id === cid)?.name ?? cid;
+        const tAlloc = todayAllocs.filter((a) => a.companyId === cid).reduce((s, a) => s + a.allocated, 0);
+        const companySoldiers = soldiers.filter((s) => s.companyId === cid);
+        let tAct = 0;
+        for (const s of companySoldiers) {
+          const st = getStatus(s.id, today);
+          if (st && presentStatusIds.has(st)) tAct++;
+        }
+        const cAlloc = pastAllocs.filter((a) => a.companyId === cid).reduce((s, a) => s + a.allocated, 0);
+        const cDates = [...new Set(pastAllocs.filter((a) => a.companyId === cid).map((a) => a.date))];
+        let cAct = 0;
+        for (const d of cDates) {
+          for (const s of companySoldiers) {
+            const st = getStatus(s.id, d);
+            if (st && presentStatusIds.has(st)) cAct++;
+          }
+        }
+        return {
+          name: cName,
+          todayAlloc: tAlloc,
+          todayAct: tAct,
+          todayPct: tAlloc > 0 ? Math.round((tAct / tAlloc) * 100) : 0,
+          cumAlloc: cAlloc,
+          cumAct: cAct,
+          cumPct: cAlloc > 0 ? Math.round((cAct / cAlloc) * 100) : 0,
+        };
+      });
+    }
+
+    return { todayAllocatedTotal, todayActualTotal, todayPct, cumulativeAllocated, cumulativeActual, cumulativePct, perCompany };
+  }, [selectedEmployment, filteredSoldiers, soldiers, statuses, getStatus, today, selectedCompanyId, companies]);
+
   // Daily summary: count present soldiers per day
   const dailySummary = useMemo(() => {
     return days.map((d) => {
@@ -274,14 +353,49 @@ export default function AttendanceClient({
 
   return (
     <>
+      {/* Employment selector */}
+      {employments.length > 0 && (
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-700">תעסוקה:</label>
+            <select
+              value={selectedEmployment?.id ?? ""}
+              onChange={(e) => {
+                const empId = e.target.value;
+                if (!empId) {
+                  const params = new URLSearchParams({ companyId: selectedCompanyId, start: startDate, mode });
+                  router.push("?" + params.toString());
+                } else {
+                  const emp = employments.find((x) => x.id === empId);
+                  const params: Record<string, string> = { companyId: selectedCompanyId, mode, employmentId: empId };
+                  if (emp) params.start = emp.startDate;
+                  router.push("?" + new URLSearchParams(params).toString());
+                }
+              }}
+              className="rounded-lg border-2 border-slate-300 px-3 py-1.5 text-sm min-w-[200px]"
+            >
+              <option value="">ללא תעסוקה</option>
+              {employments.map((emp) => (
+                <option key={emp.id} value={emp.id}>{emp.name}</option>
+              ))}
+            </select>
+          </div>
+          {canManage && (
+            <a href="/employment" className="text-xs text-blue-600 hover:text-blue-800 underline">
+              ניהול תעסוקות
+            </a>
+          )}
+        </div>
+      )}
+
       {/* Mode toggle */}
       <div className="flex items-center gap-3 mb-4">
         <div className="flex rounded-xl overflow-hidden border-2 border-slate-200 text-sm font-bold">
-          <a href={`?companyId=${selectedCompanyId}&start=${startDate}&mode=plan`}
+          <a href={buildUrl({ mode: "plan" })}
             className={`px-5 py-2.5 flex items-center gap-2 transition-colors ${mode === "plan" ? "bg-blue-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
             📝 תוכנית עבודה
           </a>
-          <a href={`?companyId=${selectedCompanyId}&start=${startDate}&mode=record`}
+          <a href={buildUrl({ mode: "record" })}
             className={`px-5 py-2.5 flex items-center gap-2 transition-colors ${mode === "record" ? "bg-emerald-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
             ✅ ביצוע בפועל
           </a>
@@ -334,6 +448,65 @@ export default function AttendanceClient({
         </div>
       )}
 
+      {/* Employment execution dashboard */}
+      {selectedEmployment && employmentDash && (
+        <Card className="p-4 mb-4 border-2 border-indigo-200 bg-indigo-50/30">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-indigo-800">
+              📊 תעסוקה: {selectedEmployment.name}
+            </h3>
+            <span className="text-xs text-slate-500">
+              {selectedEmployment.startDate} — {selectedEmployment.endDate}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+            <div className={`rounded-lg p-3 text-center border ${employmentDash.todayPct >= 90 ? "bg-emerald-50 border-emerald-200" : employmentDash.todayPct >= 70 ? "bg-amber-50 border-amber-200" : "bg-rose-50 border-rose-200"}`}>
+              <div className={`text-2xl font-bold ${employmentDash.todayPct >= 90 ? "text-emerald-700" : employmentDash.todayPct >= 70 ? "text-amber-700" : "text-rose-700"}`}>
+                {employmentDash.todayPct}%
+              </div>
+              <div className="text-[10px] text-slate-500">נוכחות היום</div>
+              <div className="text-xs text-slate-600">{employmentDash.todayActualTotal} / {employmentDash.todayAllocatedTotal}</div>
+            </div>
+            <div className={`rounded-lg p-3 text-center border ${employmentDash.cumulativePct >= 90 ? "bg-emerald-50 border-emerald-200" : employmentDash.cumulativePct >= 70 ? "bg-amber-50 border-amber-200" : "bg-rose-50 border-rose-200"}`}>
+              <div className={`text-2xl font-bold ${employmentDash.cumulativePct >= 90 ? "text-emerald-700" : employmentDash.cumulativePct >= 70 ? "text-amber-700" : "text-rose-700"}`}>
+                {employmentDash.cumulativePct}%
+              </div>
+              <div className="text-[10px] text-slate-500">מצטבר</div>
+              <div className="text-xs text-slate-600">{employmentDash.cumulativeActual} / {employmentDash.cumulativeAllocated} ימי מילואים</div>
+            </div>
+            <div className="rounded-lg p-3 text-center border bg-slate-50 border-slate-200">
+              <div className="text-2xl font-bold text-slate-700">{selectedEmployment.totalDays}</div>
+              <div className="text-[10px] text-slate-500">ימי מילואים מתוכננים</div>
+            </div>
+            <div className="rounded-lg p-3 text-center border bg-blue-50 border-blue-200">
+              <div className="text-2xl font-bold text-blue-700">{employmentDash.cumulativeActual}</div>
+              <div className="text-[10px] text-slate-500">ימי מילואים שנוצלו</div>
+              <div className="text-xs text-slate-600">{selectedEmployment.totalDays > 0 ? Math.round((employmentDash.cumulativeActual / selectedEmployment.totalDays) * 100) : 0}% מהמכסה</div>
+            </div>
+          </div>
+          {employmentDash.perCompany.length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold text-slate-600 mb-2">פירוט לפי פלוגה</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {employmentDash.perCompany.map((co) => (
+                  <div key={co.name} className={`rounded-lg p-3 border border-slate-200 ${co.cumPct >= 90 ? "bg-emerald-50" : co.cumPct >= 70 ? "bg-amber-50" : "bg-rose-50"}`}>
+                    <div className="font-medium text-sm text-slate-800">{co.name}</div>
+                    <div className="flex gap-4 mt-1 text-xs">
+                      <span className={co.todayPct >= 90 ? "text-emerald-600" : co.todayPct >= 70 ? "text-amber-600" : "text-rose-600"}>
+                        היום: {co.todayAct}/{co.todayAlloc} ({co.todayPct}%)
+                      </span>
+                      <span className={co.cumPct >= 90 ? "text-emerald-600" : co.cumPct >= 70 ? "text-amber-600" : "text-rose-600"}>
+                        מצטבר: {co.cumAct}/{co.cumAlloc} ({co.cumPct}%)
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Controls */}
       <Card className="p-3 mb-4">
         <div className="flex items-center gap-3 flex-wrap">
@@ -341,6 +514,7 @@ export default function AttendanceClient({
             <form method="GET" className="flex items-center gap-2">
               <input type="hidden" name="mode" value={mode} />
               <input type="hidden" name="start" value={startDate} />
+              {selectedEmployment && <input type="hidden" name="employmentId" value={selectedEmployment.id} />}
               <label className="text-sm font-medium text-slate-700">פלוגה:</label>
               <select name="companyId" defaultValue={selectedCompanyId}
                 onChange={(e) => (e.target.form as HTMLFormElement).submit()}
@@ -383,7 +557,7 @@ export default function AttendanceClient({
             <button onClick={() => {
               const t = new Date();
               const s = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
-              router.push(`?companyId=${selectedCompanyId}&start=${s}&mode=${mode}`);
+              router.push(buildUrl({ start: s }));
             }} className="rounded bg-blue-600 text-white px-3 py-1 text-xs font-bold hover:bg-blue-700">📅 היום</button>
             <button onClick={() => shiftDays(1)} className="rounded bg-white border border-slate-200 px-2 py-1 text-xs hover:bg-slate-100">יום ▶</button>
             <button onClick={() => shiftDays(7)} className="rounded bg-white border border-slate-200 px-2 py-1 text-xs hover:bg-slate-100 font-medium">שבוע ▶</button>

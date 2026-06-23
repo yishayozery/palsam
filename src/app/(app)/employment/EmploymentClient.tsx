@@ -113,7 +113,7 @@ export default function EmploymentClient({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">סה״כ ימי אדם</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">סה״כ ימי מילואים</label>
                 <input
                   name="totalDays"
                   type="number"
@@ -148,7 +148,7 @@ export default function EmploymentClient({
                 <Th>שם</Th>
                 <Th>תאריכים</Th>
                 <Th>ימים</Th>
-                <Th>סה״כ ימי אדם</Th>
+                <Th>סה״כ ימי מילואים</Th>
                 <Th>מצב</Th>
                 <Th>הקצאות</Th>
                 {canManage && <Th>פעולות</Th>}

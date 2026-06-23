@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function AttendancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ companyId?: string; start?: string; mode?: string }>;
+  searchParams: Promise<{ companyId?: string; start?: string; mode?: string; employmentId?: string }>;
 }) {
   const user = await requireUser();
   const canManage = can(user, "attendance.manage");
@@ -166,6 +166,48 @@ export default async function AttendancePage({
     statusId: r.statusId,
   }));
 
+  const allEmployments = await prisma.employment.findMany({
+    where: { battalionId: bId, active: true },
+    orderBy: { startDate: "desc" },
+    select: { id: true, name: true, startDate: true, endDate: true, totalDays: true, mode: true },
+  });
+  const employmentsForClient = allEmployments.map((e) => ({
+    id: e.id,
+    name: e.name,
+    startDate: e.startDate.toISOString().slice(0, 10),
+    endDate: e.endDate.toISOString().slice(0, 10),
+    totalDays: e.totalDays,
+    mode: e.mode,
+  }));
+
+  let selectedEmployment: {
+    id: string; name: string; startDate: string; endDate: string; totalDays: number; mode: string;
+    allocations: { companyId: string; date: string; allocated: number }[];
+  } | null = null;
+
+  if (sp.employmentId) {
+    const emp = allEmployments.find((e) => e.id === sp.employmentId);
+    if (emp) {
+      const allocs = await prisma.employmentAllocation.findMany({
+        where: { employmentId: emp.id },
+        select: { companyId: true, date: true, allocated: true },
+      });
+      selectedEmployment = {
+        id: emp.id,
+        name: emp.name,
+        startDate: emp.startDate.toISOString().slice(0, 10),
+        endDate: emp.endDate.toISOString().slice(0, 10),
+        totalDays: emp.totalDays,
+        mode: emp.mode,
+        allocations: allocs.map((a) => ({
+          companyId: a.companyId,
+          date: a.date.toISOString().slice(0, 10),
+          allocated: a.allocated,
+        })),
+      };
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -198,6 +240,8 @@ export default async function AttendancePage({
         mode={mode}
         canManage={canManage}
         startDate={startStr}
+        employments={employmentsForClient}
+        selectedEmployment={selectedEmployment}
       />
     </div>
   );

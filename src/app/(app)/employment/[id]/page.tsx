@@ -59,7 +59,7 @@ export default async function EmploymentDetailPage({
     <div>
       <PageHeader
         title={`📅 ${employment.name}`}
-        subtitle={`${new Date(startDate).toLocaleDateString("he-IL")} - ${new Date(endDate).toLocaleDateString("he-IL")} | ${dayCount} ימים | ${employment.totalDays} ימי אדם`}
+        subtitle={`${new Date(startDate).toLocaleDateString("he-IL")} - ${new Date(endDate).toLocaleDateString("he-IL")} | ${dayCount} ימים | ${employment.totalDays} ימי מילואים`}
         action={<LinkButton href="/employment" variant="secondary">חזרה לרשימה</LinkButton>}
       />
 

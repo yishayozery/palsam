@@ -94,16 +94,16 @@ export default function EmploymentDashboard({ data }: { data: DashboardEntry[] }
               <StatCard
                 label="מצטבר"
                 value={`${cumulativePct}%`}
-                hint={`${cumulativeActual} / ${cumulativeAllocated} ימי אדם`}
+                hint={`${cumulativeActual} / ${cumulativeAllocated} ימי מילואים`}
                 tone={toneForPercent(cumulativePct)}
               />
               <StatCard
-                label="סה״כ ימי אדם מתוכננים"
+                label="סה״כ ימי מילואים מתוכננים"
                 value={entry.totalDays}
                 tone="slate"
               />
               <StatCard
-                label="ימי אדם שנוצלו"
+                label="ימי מילואים שנוצלו"
                 value={cumulativeActual}
                 hint={`${Math.round((cumulativeActual / entry.totalDays) * 100)}% מהמכסה`}
                 tone="blue"

@@ -19,7 +19,6 @@ export const NAV: NavItem[] = [
   { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "ראשי", screen: "settings" },
   { href: "/dashboard", label: "דשבורד", icon: "📊", group: "ראשי", screen: "dashboard" },
   { href: "/attendance", label: "נוכחות חיילים", icon: "📋", group: "ראשי", screen: "attendance" },
-  { href: "/employment", label: "תעסוקה", icon: "📅", group: "ראשי", screen: "attendance" },
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "ראשי", screen: "soldiers" },
   { href: "/soldiers", label: "חיילים (עריכה + ציוד)", icon: "🪖", group: "ראשי", screen: "soldiers" },
   { href: "/permanent-items", label: "ציוד קבוע לפלוגה", icon: "📌", group: "ראשי", screen: "allocations" },
@@ -44,7 +43,6 @@ export const NAV: NavItem[] = [
   // ===== שלישות =====
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "שלישות", screen: "soldiers" },
   { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "שלישות", screen: "armory" },
-  { href: "/employment", label: "תעסוקה", icon: "📅", group: "שלישות", screen: "attendance" },
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "שלישות", screen: "dispatch" },
 
   // ===== הפלוגה שלי (רס"פ פלוגה — תפעול ברמת פלוגה) =====
