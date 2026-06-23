@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Heebo } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const heebo = Heebo({
@@ -10,6 +11,12 @@ const heebo = Heebo({
 export const metadata: Metadata = {
   title: "PALSAM — מערכת ניהול מלאי גדודי",
   description: "ניהול שרשרת אספקה, מלאי והחתמות ציוד — דרג גדודי",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "PALSAM",
+  },
 };
 
 export const viewport: Viewport = {
@@ -27,8 +34,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="he" dir="rtl" className={`${heebo.variable} h-full antialiased`}>
+      <head>
+        <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+      </head>
       <body className="min-h-full flex flex-col bg-slate-100 text-slate-900">
         {children}
+        <Script id="sw-register" strategy="lazyOnload">
+          {`if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}`}
+        </Script>
       </body>
     </html>
   );

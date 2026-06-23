@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PREFIXES = ["/login", "/about", "/sign", "/invite", "/_next", "/favicon", "/api/sign", "/my-equipment"];
+const PUBLIC_PREFIXES = ["/login", "/about", "/sign", "/invite", "/_next", "/favicon", "/api/sign", "/my-equipment", "/offline"];
 const ALLOWED_COUNTRIES = new Set(["IL"]);
 
 export function proxy(req: NextRequest) {
@@ -31,5 +31,5 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|svg|ico)).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.json|icons/|.*\\.(?:png|jpg|svg|ico)).*)"],
 };

@@ -34,6 +34,13 @@ export async function saveUser(formData: FormData) {
     role = roleRaw as Role;
   }
 
+  const systemRoleIdRaw = String(formData.get("systemRoleId") || "").trim();
+  let systemRoleId: string | null = null;
+  if (systemRoleIdRaw) {
+    const sr = await prisma.systemRole.findUnique({ where: { id: systemRoleIdRaw } });
+    if (sr && sr.battalionId === battalionId) systemRoleId = sr.id;
+  }
+
   // קצין מחסן יכול להיות משויך לכמה מחסנים (getAll). שאר התפקידים — מחזיק יחיד.
   let holderIds = formData.getAll("holderId").map(String).filter(Boolean);
   if (role !== "WAREHOUSE_MANAGER" && role !== "COMPANY_REP" && role !== "VIEWER") holderIds = [];
@@ -80,7 +87,7 @@ export async function saveUser(formData: FormData) {
       const username = await resolveUniqueUsername(enteredUsername, suffix, id);
       await prisma.appUser.update({
         where: { id },
-        data: { username, fullName, phone, title, role, customRoleId, holderId, ...(soldierId ? { soldierId } : {}) },
+        data: { username, fullName, phone, title, role, customRoleId, systemRoleId, holderId, ...(soldierId ? { soldierId } : {}) },
       });
       await syncHolders(id);
       await syncSquads(id);
@@ -90,7 +97,7 @@ export async function saveUser(formData: FormData) {
       const inviteToken = nanoid(28);
       const randomHash = await hashPassword(nanoid(32));
       const created = await prisma.appUser.create({
-        data: { username, fullName, phone, title, role, customRoleId, holderId, battalionId, passwordHash: randomHash, passwordSet: false, inviteToken, ...(soldierId ? { soldierId } : {}) },
+        data: { username, fullName, phone, title, role, customRoleId, systemRoleId, holderId, battalionId, passwordHash: randomHash, passwordSet: false, inviteToken, ...(soldierId ? { soldierId } : {}) },
       });
       await syncHolders(created.id);
       await syncSquads(created.id);
@@ -99,7 +106,7 @@ export async function saveUser(formData: FormData) {
   } catch {
     // לא מקריסים את המערכת על שגיאת יצירה
   }
-  revalidatePath("/users");
+  revalidatePath("/users/all");
 }
 
 /** יצירת קישור הזמנה מחדש (איפוס סיסמה דרך הזמנה) */
@@ -109,7 +116,7 @@ export async function regenerateInvite(formData: FormData) {
   const inviteToken = nanoid(28);
   await prisma.appUser.update({ where: { id }, data: { inviteToken, passwordSet: false } });
   await audit(admin.id, "REGEN_INVITE", "AppUser", id);
-  revalidatePath("/users");
+  revalidatePath("/users/all");
 }
 
 export async function toggleUser(formData: FormData) {
@@ -120,5 +127,5 @@ export async function toggleUser(formData: FormData) {
   if (!u) return;
   await prisma.appUser.update({ where: { id }, data: { active: !u.active } });
   await audit(admin.id, "UPDATE", "AppUser", id, { active: !u.active });
-  revalidatePath("/users");
+  revalidatePath("/users/all");
 }

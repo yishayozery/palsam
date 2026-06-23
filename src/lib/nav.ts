@@ -83,8 +83,8 @@ export const NAV: NavItem[] = [
   { href: "/setup-checklist", label: "צ'קליסט הקמת גדוד", icon: "📋", group: "דוחות ובקרה", adminOnly: true },
 
   // ===== ניהול =====
+  { href: "/users/all", label: "ניהול משתמשים", icon: "👥", group: "ניהול", adminOnly: true },
   { href: "/roles", label: "תפקידים והרשאות", icon: "🔑", group: "ניהול", adminOnly: true },
-  { href: "/users", label: "הגדרות גדוד", icon: "⚙️", group: "ניהול", adminOnly: true },
   { href: "/org", label: "מבנה ארגוני", icon: "🏢", group: "ניהול", adminOnly: true },
 
   // ===== עזרה =====

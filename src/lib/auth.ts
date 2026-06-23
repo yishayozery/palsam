@@ -64,6 +64,7 @@ export async function getSession(): Promise<SessionUser | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, SECRET);
+    if (!payload.id || !payload.username || !payload.role) return null;
     const role = payload.role as Role;
     const permissions = (payload.permissions as UserPermissions) ?? permissionsFromLegacyRole(role);
     const isAdmin = (payload.isAdmin as boolean) ?? (role === "BATTALION_ADMIN");

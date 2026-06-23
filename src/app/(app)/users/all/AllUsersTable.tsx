@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
 import { saveUser, regenerateInvite, toggleUser } from "../actions";
 
@@ -87,14 +87,27 @@ function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
   );
 }
 
-function EditDialog({ user, holders, squads, customRoles, onClose }: {
-  user: User; holders: Holder[]; squads: Squad[]; customRoles: CustomRole[]; onClose: () => void;
+function UserFormDialog({ user, holders, squads, customRoles, systemRoles, brigade, battalionCode, onClose }: {
+  user: User | null;
+  holders: Holder[];
+  squads: Squad[];
+  customRoles: CustomRole[];
+  systemRoles: SystemRoleOpt[];
+  brigade: string;
+  battalionCode: string;
+  onClose: () => void;
 }) {
-  const [role, setRole] = useState<string>(user.customRoleId ? `custom:${user.customRoleId}` : user.role);
+  const isNew = !user;
+  const [role, setRole] = useState<string>(user?.customRoleId ? `custom:${user.customRoleId}` : user?.role ?? "VIEWER");
+  const [selectedSystemRoleId, setSelectedSystemRoleId] = useState<string>(user?.systemRoleId ?? "");
   const [selectedHolderIds, setSelectedHolderIds] = useState<Set<string>>(
-    new Set(user.holderIds.length > 0 ? user.holderIds : (user.holderId ? [user.holderId] : []))
+    new Set(user ? (user.holderIds.length > 0 ? user.holderIds : (user.holderId ? [user.holderId] : [])) : [])
   );
-  const [selectedSquadIds, setSelectedSquadIds] = useState<Set<string>>(new Set(user.squadIds));
+  const [selectedSquadIds, setSelectedSquadIds] = useState<Set<string>>(new Set(user?.squadIds ?? []));
+  const [username, setUsername] = useState(user?.username ?? "");
+  const [fullName, setFullName] = useState(user?.fullName ?? "");
+  const [check, setCheck] = useState<{ available?: boolean; taken?: boolean; recommended?: string | null }>({});
+  const [checking, setChecking] = useState(false);
 
   const effectiveTemplate = role.startsWith("custom:")
     ? customRoles.find((c) => c.id === role.slice(7))?.template ?? "VIEWER"
@@ -108,8 +121,6 @@ function EditDialog({ user, holders, squads, customRoles, onClose }: {
   const holderOpts = isMultiHolder ? warehouses : companies;
   const holderLabel = isMultiHolder ? "מחסנים" : effectiveTemplate === "COMPANY_REP" ? "פלוגה" : "פלוגה (אופציונלי)";
 
-  // Squad filter: for COMPANY_REP, show only squads of the selected company.
-  // For others (WAREHOUSE_MANAGER, VIEWER, MAGAD, etc.), show all squads grouped by company.
   const selectedCompanyId = !isMultiHolder && selectedHolderIds.size === 1 ? [...selectedHolderIds][0] : null;
   const relevantSquads = effectiveTemplate === "COMPANY_REP" && selectedCompanyId
     ? squads.filter((s) => s.companyId === selectedCompanyId)
@@ -125,6 +136,34 @@ function EditDialog({ user, holders, squads, customRoles, onClose }: {
     return [...map.values()];
   }, [relevantSquads]);
 
+  // Auto-generate username from fullName for new users
+  useEffect(() => {
+    if (!isNew || username) return;
+    if (!fullName.trim()) return;
+    const first = fullName.trim().split(/\s+/)[0] ?? "";
+    const slug = first.replace(/[^A-Za-z֐-׿0-9_.-]+/g, "").slice(0, 24);
+    if (slug) {
+      const suffix = brigade || battalionCode;
+      setUsername(suffix ? `${slug}.${suffix}` : slug);
+    }
+  }, [fullName, isNew, username, brigade, battalionCode]);
+
+  // Username availability check for new users
+  useEffect(() => {
+    if (!isNew) return;
+    const u = username.trim().toLowerCase();
+    if (!u) { setCheck({}); return; }
+    setChecking(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/users/check-username?u=${encodeURIComponent(u)}`);
+        setCheck(await res.json());
+      } catch { setCheck({}); }
+      finally { setChecking(false); }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [username, isNew]);
+
   const toggleHolder = (id: string) => {
     const next = new Set(selectedHolderIds);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -137,25 +176,40 @@ function EditDialog({ user, holders, squads, customRoles, onClose }: {
     setSelectedSquadIds(next);
   };
 
+  const statusBadge = !isNew ? null
+    : !username ? null
+    : checking ? <span className="text-xs text-slate-400">בודק...</span>
+    : check.available ? <span className="text-xs text-emerald-600">✓ זמין</span>
+    : check.taken ? (
+        <span className="text-xs text-rose-600">
+          תפוס
+          {check.recommended && (
+            <button type="button" onClick={() => setUsername(check.recommended!)}
+              className="mr-1 underline">השתמש ב-{check.recommended}</button>
+          )}
+        </span>
+      ) : null;
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-slate-200">
-          <h3 className="font-bold text-slate-800">עריכת משתמש — {user.fullName}</h3>
+          <h3 className="font-bold text-slate-800">{isNew ? "הוספת משתמש חדש" : `עריכת משתמש — ${user.fullName}`}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700">✕</button>
         </div>
         <form action={async (fd) => { await saveUser(fd); onClose(); }} className="p-5 space-y-4">
-          <input type="hidden" name="id" value={user.id} />
-          <input type="hidden" name="username" value={user.username} />
+          {user && <input type="hidden" name="id" value={user.id} />}
+          {!isNew && <input type="hidden" name="username" value={user.username} />}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-slate-500 mb-1">שם מלא</label>
-              <input name="fullName" defaultValue={user.fullName} required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <input name="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} required
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             </div>
             <div>
               <label className="block text-xs text-slate-500 mb-1">תואר / תפקיד</label>
-              <input name="title" defaultValue={user.title ?? ""} placeholder="מפ״מ, קשר״ג, רס״פ..."
+              <input name="title" defaultValue={user?.title ?? ""} placeholder="מפ״מ, קשר״ג, רס״פ..."
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             </div>
           </div>
@@ -163,30 +217,60 @@ function EditDialog({ user, holders, squads, customRoles, onClose }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-slate-500 mb-1">טלפון</label>
-              <input name="phone" defaultValue={user.phone ?? ""} placeholder="05X-XXXXXXX"
+              <input name="phone" defaultValue={user?.phone ?? ""} placeholder="05X-XXXXXXX"
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">שם משתמש</label>
-              <div className="w-full rounded-lg bg-slate-100 border border-slate-200 px-3 py-2 text-sm text-slate-500 font-mono">@{user.username}</div>
+              <label className="block text-xs text-slate-500 mb-1">שם משתמש {statusBadge}</label>
+              {isNew ? (
+                <input name="username" value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^\w.-]/g, ""))}
+                  required placeholder="username"
+                  className={`w-full rounded-lg border px-3 py-2 text-sm font-mono ${check.taken ? "border-rose-300 bg-rose-50" : check.available ? "border-emerald-300 bg-emerald-50" : "border-slate-300"}`} />
+              ) : (
+                <div className="w-full rounded-lg bg-slate-100 border border-slate-200 px-3 py-2 text-sm text-slate-500 font-mono">@{user.username}</div>
+              )}
             </div>
           </div>
 
+          {isNew && (
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">מ.א. (קישור לחייל — אופציונלי)</label>
+              <input name="personalNumber" placeholder="מספר אישי" inputMode="numeric"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
+            </div>
+          )}
+
           {/* Role */}
           <div>
-            <label className="block text-xs text-slate-500 mb-1">הרשאות</label>
+            <label className="block text-xs text-slate-500 mb-1">תפקיד במערכת</label>
             <select name="role" value={role} onChange={(e) => { setRole(e.target.value); setSelectedHolderIds(new Set()); setSelectedSquadIds(new Set()); }}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-              <optgroup label="הרשאות בסיס">
+              <optgroup label="תפקידים בסיסיים">
                 {ROLE_OPTS.map((r) => <option key={r} value={r}>{BUILTIN_LABELS[r]}</option>)}
               </optgroup>
               {customRoles.length > 0 && (
-                <optgroup label="הרשאות מותאמות">
+                <optgroup label="תפקידים מותאמים">
                   {customRoles.map((c) => <option key={c.id} value={`custom:${c.id}`}>{c.name}</option>)}
                 </optgroup>
               )}
             </select>
           </div>
+
+          {/* SystemRole — screen-level permissions */}
+          {systemRoles.length > 0 && (
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">פרופיל הרשאות (הרשאות מסכים)</label>
+              <select name="systemRoleId" value={selectedSystemRoleId} onChange={(e) => setSelectedSystemRoleId(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <option value="">ברירת מחדל (לפי תפקיד)</option>
+                {systemRoles.map((sr) => <option key={sr.id} value={sr.id}>{sr.name}</option>)}
+              </select>
+              <p className="text-[11px] text-slate-400 mt-1">
+                פרופיל הרשאות קובע לאילו מסכים למשתמש יש גישה. ניהול פרופילים ב<a href="/roles" className="text-blue-600 hover:underline">ניהול הרשאות</a>.
+              </p>
+            </div>
+          )}
 
           {/* Holder assignment */}
           {showHolderPicker && (
@@ -204,7 +288,7 @@ function EditDialog({ user, holders, squads, customRoles, onClose }: {
                   ))}
                 </div>
               ) : (
-                <select name="holderId" defaultValue={user.holderId ?? ""}
+                <select name="holderId" defaultValue={user?.holderId ?? ""}
                   onChange={(e) => setSelectedHolderIds(e.target.value ? new Set([e.target.value]) : new Set())}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                   {effectiveTemplate === "VIEWER" && <option value="">כל הגדוד</option>}
@@ -214,7 +298,7 @@ function EditDialog({ user, holders, squads, customRoles, onClose }: {
             </div>
           )}
 
-          {/* Squad assignment — available for all roles */}
+          {/* Squad assignment */}
           {squads.length > 0 && (
             <div>
               <label className="block text-xs text-slate-500 mb-1">
@@ -244,7 +328,10 @@ function EditDialog({ user, holders, squads, customRoles, onClose }: {
 
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
-            <button className="bg-slate-800 text-white rounded-lg px-4 py-2 text-sm hover:bg-slate-900">שמירה</button>
+            <button disabled={isNew && check.taken && !check.recommended}
+              className="bg-slate-800 text-white rounded-lg px-4 py-2 text-sm hover:bg-slate-900 disabled:opacity-50">
+              {isNew ? "צור והזמן" : "שמירה"}
+            </button>
           </div>
         </form>
       </div>
@@ -254,12 +341,13 @@ function EditDialog({ user, holders, squads, customRoles, onClose }: {
 
 export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, initialStatus, holders, squads, customRoles, systemRoles, brigade, battalionCode }: {
   users: User[]; baseUrl: string; initialQ: string; initialRole: string; initialStatus: string;
-  holders: Holder[]; squads: Squad[]; customRoles: CustomRole[]; systemRoles?: SystemRoleOpt[]; brigade: string; battalionCode: string;
+  holders: Holder[]; squads: Squad[]; customRoles: CustomRole[]; systemRoles: SystemRoleOpt[]; brigade: string; battalionCode: string;
 }) {
   const [q, setQ] = useState(initialQ);
   const [role, setRole] = useState(initialRole);
   const [status, setStatus] = useState(initialStatus);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const stats = useMemo(() => ({
     total: users.length,
@@ -279,7 +367,8 @@ export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, i
         return u.fullName.toLowerCase().includes(qq)
           || u.username.toLowerCase().includes(qq)
           || (u.phone ?? "").includes(qq)
-          || (u.title ?? "").toLowerCase().includes(qq);
+          || (u.title ?? "").toLowerCase().includes(qq)
+          || (u.holderName ?? "").toLowerCase().includes(qq);
       }
       return true;
     });
@@ -297,12 +386,12 @@ export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, i
       <Card className="p-3 mb-3">
         <div className="flex gap-2 flex-wrap items-end">
           <div className="flex-1 min-w-40">
-            <label className="block text-xs text-slate-500 mb-1">חיפוש (שם / משתמש / טלפון / תואר)</label>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="הקלד..."
+            <label className="block text-xs text-slate-500 mb-1">חיפוש</label>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="שם, משתמש, טלפון, שיוך..."
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-1">הרשאות</label>
+            <label className="block text-xs text-slate-500 mb-1">תפקיד</label>
             <select value={role} onChange={(e) => setRole(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
               <option value="">הכל</option>
               {ROLE_FILTER_OPTS.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
@@ -317,6 +406,10 @@ export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, i
               <option value="inactive">מושבתים</option>
             </select>
           </div>
+          <button onClick={() => setShowCreate(true)}
+            className="bg-slate-800 text-white rounded-lg px-4 py-2 text-sm hover:bg-slate-900 whitespace-nowrap">
+            + הוסף משתמש
+          </button>
           <span className="text-xs text-slate-500 self-end pb-2">{filtered.length} משתמשים</span>
         </div>
       </Card>
@@ -366,12 +459,28 @@ export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, i
       </Card>
 
       {editingUser && (
-        <EditDialog
+        <UserFormDialog
           user={editingUser}
           holders={holders}
           squads={squads}
           customRoles={customRoles}
+          systemRoles={systemRoles}
+          brigade={brigade}
+          battalionCode={battalionCode}
           onClose={() => setEditingUser(null)}
+        />
+      )}
+
+      {showCreate && (
+        <UserFormDialog
+          user={null}
+          holders={holders}
+          squads={squads}
+          customRoles={customRoles}
+          systemRoles={systemRoles}
+          brigade={brigade}
+          battalionCode={battalionCode}
+          onClose={() => setShowCreate(false)}
         />
       )}
     </>

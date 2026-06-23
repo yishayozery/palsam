@@ -1,7 +1,8 @@
 import { requireAdmin } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
-import { PageHeader, Badge, Card } from "@/components/ui";
+import { PageHeader, Card } from "@/components/ui";
 import { SCREENS, SCREEN_KEYS } from "@/lib/rbac";
+import SettingsTabs from "@/components/SettingsTabs";
 import RolesClient from "./RolesClient";
 import { seedPresetRoles } from "./actions";
 
@@ -25,9 +26,10 @@ export default async function RolesPage() {
   return (
     <div>
       <PageHeader
-        title="ניהול תפקידים והרשאות"
+        title="הגדרות גדוד"
         subtitle="הגדרת תפקידים עם הרשאות מסכים — כל משתמש מקבל תפקיד אחד"
       />
+      <SettingsTabs active="roles" />
 
       {!hasPresets && (
         <Card className="p-4 mb-4 bg-amber-50 border-amber-200">
