@@ -306,7 +306,7 @@ export default function TemplatesClient({
           </div>
 
           <div className="flex gap-2 pt-2">
-            <button onClick={handleSave} disabled={pending || !name || !vehicleId || assignments.length === 0} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50">
+            <button onClick={handleSave} disabled={pending || !name || !vehicleId} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50">
               {pending ? "שומר..." : "שמור"}
             </button>
             <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-slate-200 rounded-lg text-sm">ביטול</button>
@@ -316,10 +316,49 @@ export default function TemplatesClient({
     );
   }
 
+  // Gaps dashboard
+  const gaps = useMemo(() => {
+    let missingDriver = 0, missingCommander = 0, missingMedic = 0, totalSoldiers = 0;
+    for (const t of templates) {
+      if (!t.soldiers.some((s) => s.role === "נהג")) missingDriver++;
+      if (!t.soldiers.some((s) => s.role === "מפקד")) missingCommander++;
+      if (!t.soldiers.some((s) => s.role === "חובש")) missingMedic++;
+      totalSoldiers += t.soldiers.length;
+    }
+    return { missingDriver, missingCommander, missingMedic, totalSoldiers, total: templates.length };
+  }, [templates]);
+
+  const hasGaps = gaps.missingDriver > 0 || gaps.missingCommander > 0 || gaps.missingMedic > 0;
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <button onClick={openCreate} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+      {/* Gaps dashboard */}
+      {templates.length > 0 && (
+        <div className={`rounded-xl border p-4 ${hasGaps ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"}`}>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">{hasGaps ? "⚠️" : "✅"}</span>
+            <span className="font-bold text-sm">{hasGaps ? "יש פערים בשבצ\"קים" : "כל השבצ\"קים מאוישים"}</span>
+            <span className="text-xs text-slate-500 mr-auto">{gaps.total} רכבים · {gaps.totalSoldiers} חיילים משובצים</span>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className={`rounded-lg p-2.5 text-center ${gaps.missingDriver > 0 ? "bg-rose-100 border border-rose-300" : "bg-white border border-slate-200"}`}>
+              <div className="text-2xl font-bold">{gaps.missingDriver > 0 ? gaps.missingDriver : "✓"}</div>
+              <div className="text-[11px] text-slate-600">🚗 חסרי נהג</div>
+            </div>
+            <div className={`rounded-lg p-2.5 text-center ${gaps.missingCommander > 0 ? "bg-amber-100 border border-amber-300" : "bg-white border border-slate-200"}`}>
+              <div className="text-2xl font-bold">{gaps.missingCommander > 0 ? gaps.missingCommander : "✓"}</div>
+              <div className="text-[11px] text-slate-600">⭐ חסרי מפקד</div>
+            </div>
+            <div className={`rounded-lg p-2.5 text-center ${gaps.missingMedic > 0 ? "bg-yellow-100 border border-yellow-300" : "bg-white border border-slate-200"}`}>
+              <div className="text-2xl font-bold">{gaps.missingMedic > 0 ? gaps.missingMedic : "✓"}</div>
+              <div className="text-[11px] text-slate-600">🏥 חסרי חובש</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <button onClick={openCreate} className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-5 py-2.5 text-sm font-bold shadow-md hover:shadow-lg transition">
           + שבצ&quot;ק קבוע חדש
         </button>
         {templates.length > 3 && (
@@ -490,7 +529,12 @@ function SeatCard({
 function TemplateCard({ template, onEdit, onDelete }: { template: Template; onEdit: () => void; onDelete: () => void }) {
   const driver = template.soldiers.find((s) => s.role === "נהג");
   const commander = template.soldiers.find((s) => s.role === "מפקד");
+  const medic = template.soldiers.find((s) => s.role === "חובש");
   const back = template.soldiers.filter((s) => s.role !== "נהג" && s.role !== "מפקד");
+  const missingRoles: string[] = [];
+  if (!driver) missingRoles.push("נהג");
+  if (!commander) missingRoles.push("מפקד");
+  if (!medic) missingRoles.push("חובש");
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
@@ -506,56 +550,92 @@ function TemplateCard({ template, onEdit, onDelete }: { template: Template; onEd
         </div>
       </div>
 
-      {/* Vehicle visual */}
-      <div className="p-3">
-        <div className="relative border-2 border-slate-300 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100 overflow-hidden">
-          {/* Vehicle shape indicator */}
-          <div className="bg-slate-200 text-center py-1 text-[10px] text-slate-500 font-medium">▲ קדמת הרכב</div>
+      {/* Vehicle top-down view */}
+      <div className="p-4 flex justify-center">
+        <div className="relative w-48">
+          {/* Vehicle body */}
+          <div className="relative bg-gradient-to-b from-slate-700 via-slate-600 to-slate-700 rounded-t-[2rem] rounded-b-2xl border-2 border-slate-500 overflow-hidden shadow-lg">
+            {/* Windshield */}
+            <div className="bg-sky-200/60 border-b-2 border-slate-400 pt-3 pb-1 px-2">
+              <div className="bg-sky-300/40 rounded-t-xl h-3 mx-4 border border-sky-400/50" />
+            </div>
 
-          {/* Front row: driver + commander */}
-          <div className="grid grid-cols-2 gap-1.5 p-2">
-            <VehicleSeat name={driver?.fullName} role="נהג" icon="🚗" accent="blue" />
-            <VehicleSeat name={commander?.fullName} role="מפקד" icon="⭐" accent="amber" />
+            {/* Hood accent */}
+            <div className="h-1 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 mx-6" />
+
+            {/* Front seats: driver + commander */}
+            <div className="grid grid-cols-2 gap-2 p-3 pb-2">
+              <SeatBubble name={driver?.fullName} role="נהג" icon="🚗" filled={!!driver} color="blue" />
+              <SeatBubble name={commander?.fullName} role="מפקד" icon="⭐" filled={!!commander} color="amber" />
+            </div>
+
+            {/* Divider */}
+            <div className="flex items-center gap-1 px-3">
+              <div className="flex-1 border-t border-dashed border-slate-400" />
+              <span className="text-[8px] text-slate-400">מושבים אחוריים</span>
+              <div className="flex-1 border-t border-dashed border-slate-400" />
+            </div>
+
+            {/* Back seats */}
+            <div className="grid grid-cols-2 gap-2 p-3 pt-2">
+              {back.length > 0 ? back.map((s) => (
+                <SeatBubble key={s.id} name={s.fullName} role={s.role} icon={ROLE_ICONS[s.role] || "🎖️"} filled color={s.role === "חובש" ? "green" : "slate"} />
+              )) : (
+                <>
+                  <SeatBubble role="חובש" icon="🏥" filled={false} color="green" />
+                  <SeatBubble role="לוחם" icon="🎖️" filled={false} color="slate" />
+                </>
+              )}
+            </div>
+
+            {/* Tailgate */}
+            <div className="h-2 bg-gradient-to-r from-rose-500 via-rose-400 to-rose-500 mx-4 mb-2 rounded-full opacity-70" />
           </div>
 
-          {/* Back rows */}
-          {back.length > 0 && (
-            <>
-              <div className="border-t-2 border-dashed border-slate-300 mx-2" />
-              <div className="grid grid-cols-2 gap-1.5 p-2">
-                {back.map((s) => (
-                  <VehicleSeat key={s.id} name={s.fullName} role={s.role} icon={ROLE_ICONS[s.role] || "🎖️"} accent="slate" />
-                ))}
-              </div>
-            </>
-          )}
+          {/* Wheels */}
+          <div className="absolute top-12 -right-2.5 w-5 h-8 bg-slate-900 rounded-full border-2 border-slate-600" />
+          <div className="absolute top-12 -left-2.5 w-5 h-8 bg-slate-900 rounded-full border-2 border-slate-600" />
+          <div className="absolute bottom-8 -right-2.5 w-5 h-8 bg-slate-900 rounded-full border-2 border-slate-600" />
+          <div className="absolute bottom-8 -left-2.5 w-5 h-8 bg-slate-900 rounded-full border-2 border-slate-600" />
 
-          <div className="bg-slate-200 text-center py-1 text-[10px] text-slate-500 font-medium">▼ אחורי הרכב</div>
+          {/* Side mirrors */}
+          <div className="absolute top-10 -right-4 w-2 h-3 bg-slate-500 rounded-sm" />
+          <div className="absolute top-10 -left-4 w-2 h-3 bg-slate-500 rounded-sm" />
         </div>
+      </div>
 
-        <div className="mt-2 text-center text-[11px] text-slate-400">
-          {template.soldiers.length} משובצים
-          {!driver && <span className="text-rose-500 font-medium mr-2">· ⚠️ חסר נהג</span>}
-        </div>
+      {/* Status bar */}
+      <div className={`px-3 py-2 text-center text-[11px] border-t ${missingRoles.length > 0 ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-emerald-50 border-emerald-200 text-emerald-700"}`}>
+        {missingRoles.length > 0 ? (
+          <span>⚠️ חסרים: {missingRoles.map((r) => `${ROLE_ICONS[r]} ${r}`).join(" · ")}</span>
+        ) : (
+          <span>✅ מאויש מלא · {template.soldiers.length} משובצים</span>
+        )}
       </div>
     </div>
   );
 }
 
-function VehicleSeat({ name, role, icon, accent }: { name?: string; role: string; icon: string; accent: string }) {
-  const colors: Record<string, string> = {
-    blue: name ? "bg-blue-100 border-blue-300 text-blue-900" : "bg-blue-50/50 border-dashed border-blue-200 text-blue-300",
-    amber: name ? "bg-amber-100 border-amber-300 text-amber-900" : "bg-amber-50/50 border-dashed border-amber-200 text-amber-300",
-    green: name ? "bg-green-100 border-green-300 text-green-900" : "bg-green-50/50 border-dashed border-green-200 text-green-300",
-    slate: name ? "bg-slate-100 border-slate-300 text-slate-800" : "bg-slate-50/50 border-dashed border-slate-200 text-slate-300",
+function SeatBubble({ name, role, icon, filled, color }: { name?: string; role: string; icon: string; filled: boolean; color: string }) {
+  const filledColors: Record<string, string> = {
+    blue: "bg-blue-500 text-white border-blue-300 shadow-blue-500/30",
+    amber: "bg-amber-500 text-white border-amber-300 shadow-amber-500/30",
+    green: "bg-emerald-500 text-white border-emerald-300 shadow-emerald-500/30",
+    slate: "bg-slate-500 text-white border-slate-300 shadow-slate-500/30",
+  };
+  const emptyColors: Record<string, string> = {
+    blue: "border-dashed border-blue-400/60 text-blue-300",
+    amber: "border-dashed border-amber-400/60 text-amber-300",
+    green: "border-dashed border-emerald-400/60 text-emerald-300",
+    slate: "border-dashed border-slate-400/60 text-slate-400",
   };
   return (
-    <div className={`border rounded-lg p-1.5 text-[11px] ${colors[accent] || colors.slate}`}>
-      <div className="flex items-center gap-1">
-        <span className="text-sm">{icon}</span>
-        <span className="font-medium truncate">{name || "—"}</span>
-      </div>
-      <div className="text-[10px] opacity-60 mr-5">{role}</div>
+    <div className={`rounded-lg border p-1.5 text-center transition ${
+      filled ? `${filledColors[color]} shadow-md` : `bg-slate-700/50 ${emptyColors[color]}`
+    }`}>
+      <div className="text-sm leading-none">{icon}</div>
+      <div className="text-[9px] font-bold truncate mt-0.5 leading-tight">{name || role}</div>
+      {filled && name && <div className="text-[8px] opacity-70 leading-tight">{role}</div>}
     </div>
   );
 }
