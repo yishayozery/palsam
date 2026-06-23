@@ -1,5 +1,4 @@
 import { requireUser } from "@/lib/guard";
-import { can } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
@@ -11,9 +10,8 @@ export const dynamic = "force-dynamic";
 
 export default async function VacationPage() {
   const user = await requireUser();
-  if (!can(user, "reports.view")) redirect("/dashboard");
   const bId = user.battalionId!;
-  const isAdmin = can(user, "battalion.profile");
+  const isAdmin = user.isAdmin;
 
   const boards = await prisma.vacationBoard.findMany({
     where: { battalionId: bId, active: true },
@@ -34,11 +32,8 @@ export default async function VacationPage() {
     : [];
 
   // ללא אדמין — מראים רק לוחות שהמשתמש משויך אליהם
-  if (!isAdmin) {
-    const myBoards = boards.filter((b) => b.assignees.some((a) => a.userId === user.id));
-    if (myBoards.length === 0) redirect("/dashboard");
-    if (myBoards.length === 1) redirect(`/vacation/${myBoards[0].id}`);
-  }
+  const myBoards = isAdmin ? boards : boards.filter((b) => b.assignees.some((a) => a.userId === user.id));
+  if (!isAdmin && myBoards.length === 1) redirect(`/vacation/${myBoards[0].id}`);
 
   const fmt = (d: Date) => d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
 
@@ -51,17 +46,17 @@ export default async function VacationPage() {
 
       {isAdmin && <CreateBoardForm />}
 
-      {boards.length === 0 ? (
+      {myBoards.length === 0 ? (
         <Card className="p-6">
           <EmptyState>
             {isAdmin
               ? "אין לוחות זמינות — לחץ על \"לוח חדש\" כדי להתחיל"
-              : "אין לוחות זמינות פעילים"}
+              : "אין לוחות זמינות שאתה משויך אליהם. פנה למנהל המערכת."}
           </EmptyState>
         </Card>
       ) : (
         <div className="space-y-3">
-          {(isAdmin ? boards : boards.filter((b) => b.assignees.some((a) => a.userId === user.id))).map((b) => {
+          {myBoards.map((b) => {
             const isAssigned = b.assignees.some((a) => a.userId === user.id);
             return (
               <Card key={b.id} className="p-4">

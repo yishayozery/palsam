@@ -18,7 +18,7 @@ export default async function AllUsersPage({
 
   const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { name: true, brigade: true, code: true } });
 
-  const [users, holders, squads, customRoles, systemRoles] = await Promise.all([
+  const [users, holders, squads, customRoles, systemRoles, soldiers] = await Promise.all([
     prisma.appUser.findMany({
       where: { battalionId: bId },
       orderBy: [{ active: "desc" }, { createdAt: "desc" }],
@@ -39,6 +39,11 @@ export default async function AllUsersPage({
     }),
     prisma.customRole.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" } }),
     prisma.systemRole.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, isAdmin: true, isCommander: true, permissions: { select: { screen: true, level: true } } } }),
+    prisma.soldier.findMany({
+      where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
+      orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }],
+      select: { id: true, fullName: true, personalNumber: true, phone: true, company: { select: { name: true } } },
+    }),
   ]);
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
@@ -65,6 +70,7 @@ export default async function AllUsersPage({
         squads={squads.map((s) => ({ id: s.id, name: s.name, companyId: s.company.id, companyName: s.company.name }))}
         customRoles={customRoles.map((r) => ({ id: r.id, name: r.name, template: r.template }))}
         systemRoles={systemRoles.map((r) => ({ id: r.id, name: r.name, isAdmin: r.isAdmin, isCommander: r.isCommander, screens: r.permissions.map((p) => p.screen) }))}
+        soldiers={soldiers.map((s) => ({ id: s.id, fullName: s.fullName, personalNumber: s.personalNumber, phone: s.phone, companyName: s.company?.name ?? null }))}
         brigade={battalion?.brigade ?? ""}
         battalionCode={battalion?.code ?? ""}
         users={users.map((u) => ({

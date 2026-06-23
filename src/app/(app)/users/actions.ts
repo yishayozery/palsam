@@ -16,7 +16,7 @@ export async function saveUser(formData: FormData) {
   const fullName = String(formData.get("fullName") || "").trim();
   const phone = String(formData.get("phone") || "").trim() || null;
   const title = String(formData.get("title") || "").trim() || null;
-  const personalNumber = String(formData.get("personalNumber") || "").replace(/\D/g, "").trim() || null;
+  const soldierId = String(formData.get("soldierId") || "").trim() || null;
   const battalionId = admin.role === "SUPER_ADMIN" ? (String(formData.get("battalionId") || "") || null) : admin.battalionId;
   const battalion = battalionId ? await prisma.battalion.findUnique({ where: { id: battalionId } }) : null;
   const suffix = battalion?.brigade || battalion?.code || null;
@@ -86,21 +86,10 @@ export async function saveUser(formData: FormData) {
     }
   };
 
-  // קישור למ.א. — חיפוש חייל קיים לפי מספר אישי, או יצירת חייל חדש
-  let soldierId: string | null = null;
-  if (personalNumber && battalionId) {
-    const existing = await prisma.soldier.findFirst({
-      where: { battalionId, personalNumber },
-      select: { id: true },
-    });
-    if (existing) {
-      soldierId = existing.id;
-    } else {
-      const newSoldier = await prisma.soldier.create({
-        data: { battalionId, fullName, personalNumber, status: "ENLISTED", enlistedAt: new Date() },
-      });
-      soldierId = newSoldier.id;
-    }
+  // ולידציה: אם נבחר חייל, לוודא שהוא שייך לגדוד
+  if (soldierId && battalionId) {
+    const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true } });
+    if (!soldier || soldier.battalionId !== battalionId) return;
   }
 
   try {
@@ -122,7 +111,7 @@ export async function saveUser(formData: FormData) {
       });
       await syncHolders(created.id);
       await syncSquads(created.id);
-      await audit(admin.id, "CREATE", "AppUser", username, { invited: true, personalNumber });
+      await audit(admin.id, "CREATE", "AppUser", username, { invited: true, soldierId });
     }
   } catch {
     // לא מקריסים את המערכת על שגיאת יצירה

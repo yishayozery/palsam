@@ -82,7 +82,7 @@ export const NAV: NavItem[] = [
   { href: "/history", label: "היסטוריה", icon: "📜", group: "דוחות ובקרה", screen: "history" },
   { href: "/backup", label: "בדיקת גיבוי", icon: "📂", group: "דוחות ובקרה", adminOnly: true },
   { href: "/audit", label: "יומן פעולות", icon: "🧾", group: "דוחות ובקרה", screen: "audit" },
-  { href: "/vacation", label: "לוח זמינות", icon: "🏖️", group: "דוחות ובקרה", screen: "vacation" },
+  { href: "/vacation", label: "לוח זמינות", icon: "🏖️", group: "דוחות ובקרה" },
   { href: "/setup-checklist", label: "צ'קליסט הקמת גדוד", icon: "📋", group: "דוחות ובקרה", adminOnly: true },
 
   // ===== ניהול =====

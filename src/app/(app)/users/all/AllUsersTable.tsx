@@ -32,6 +32,7 @@ type Holder = { id: string; name: string; kind: string };
 type Squad = { id: string; name: string; companyId: string; companyName: string };
 type CustomRole = { id: string; name: string; template: string };
 type SystemRoleOpt = { id: string; name: string; isAdmin: boolean; isCommander: boolean; screens: string[] };
+type SoldierOpt = { id: string; fullName: string; personalNumber: string | null; phone: string | null; companyName: string | null };
 
 const ROLE_FILTER_OPTS: { v: Role; l: string }[] = [
   { v: "BATTALION_ADMIN", l: 'מפ״מ' },
@@ -69,8 +70,8 @@ function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
   }
   const link = `${baseUrl}/invite/${user.inviteToken}`;
   const wa = user.phone
-    ? `https://wa.me/${user.phone.replace(/\D/g, "").replace(/^0/, "972")}?text=${encodeURIComponent(`הוזמנת למערכת PALSAM. הקישור להגדרת סיסמה: ${link}`)}`
-    : `https://wa.me/?text=${encodeURIComponent(`הוזמנת למערכת PALSAM. הקישור להגדרת סיסמה: ${link}`)}`;
+    ? `https://wa.me/${user.phone.replace(/\D/g, "").replace(/^0/, "972")}?text=${encodeURIComponent(`הוזמנת למערכת. הקישור להגדרת סיסמה: ${link}`)}`
+    : `https://wa.me/?text=${encodeURIComponent(`הוזמנת למערכת. הקישור להגדרת סיסמה: ${link}`)}`;
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       <Badge className="bg-amber-100 text-amber-800 text-[10px]">⏳ ממתין</Badge>
@@ -90,12 +91,69 @@ function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
 const WAREHOUSE_SCREENS = new Set(["stock", "catalog", "signatures", "counts", "gaps", "transfers", "kits", "donations"]);
 const COMPANY_SCREENS = new Set(["soldiers", "attendance", "dispatch", "armory"]);
 
-function UserFormDialog({ user, holders, squads, customRoles, systemRoles, brigade, battalionCode, onClose }: {
+function SoldierPicker({ soldiers, value, onChange }: { soldiers: SoldierOpt[]; value: string; onChange: (id: string) => void }) {
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const selected = soldiers.find((s) => s.id === value);
+  const filtered = search.trim()
+    ? soldiers.filter((s) => {
+        const q = search.trim().toLowerCase();
+        return s.fullName.toLowerCase().includes(q)
+          || (s.personalNumber ?? "").includes(q)
+          || (s.phone ?? "").includes(q);
+      }).slice(0, 20)
+    : soldiers.slice(0, 20);
+
+  return (
+    <div className="relative">
+      {selected ? (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm">
+          <span className="flex-1">🔗 {selected.fullName}{selected.personalNumber ? ` (${selected.personalNumber})` : ""}{selected.companyName ? ` — ${selected.companyName}` : ""}</span>
+          <button type="button" onClick={() => { onChange(""); setSearch(""); }} className="text-slate-400 hover:text-rose-600">✕</button>
+        </div>
+      ) : (
+        <input
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder="חיפוש חייל — שם, מ.א., טלפון..."
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      )}
+      {open && !selected && (
+        <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <div className="p-3 text-sm text-slate-500 text-center">
+              לא נמצא חייל.{" "}
+              <a href="/soldiers" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">הוסף חייל חדש ↗</a>
+            </div>
+          ) : (
+            filtered.map((s) => (
+              <button key={s.id} type="button"
+                onClick={() => { onChange(s.id); setOpen(false); setSearch(""); }}
+                className="w-full text-right px-3 py-2 text-sm hover:bg-blue-50 border-b border-slate-100 last:border-0">
+                <span className="font-medium">{s.fullName}</span>
+                {s.personalNumber && <span className="text-slate-400 mr-2 font-mono text-xs">{s.personalNumber}</span>}
+                {s.companyName && <span className="text-slate-400 mr-2 text-xs">({s.companyName})</span>}
+              </button>
+            ))
+          )}
+          <button type="button" onClick={() => setOpen(false)}
+            className="w-full text-center px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-50 border-t">סגור</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UserFormDialog({ user, holders, squads, customRoles, systemRoles, soldiers, brigade, battalionCode, onClose }: {
   user: User | null;
   holders: Holder[];
   squads: Squad[];
   customRoles: CustomRole[];
   systemRoles: SystemRoleOpt[];
+  soldiers: SoldierOpt[];
   brigade: string;
   battalionCode: string;
   onClose: () => void;
@@ -113,6 +171,7 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
   const [selectedSquadIds, setSelectedSquadIds] = useState<Set<string>>(new Set(user?.squadIds ?? []));
   const [username, setUsername] = useState(user?.username ?? "");
   const [fullName, setFullName] = useState(user?.fullName ?? "");
+  const [selectedSoldierId, setSelectedSoldierId] = useState("");
   const [check, setCheck] = useState<{ available?: boolean; taken?: boolean; recommended?: string | null }>({});
   const [checking, setChecking] = useState(false);
 
@@ -256,9 +315,14 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
 
           {isNew && (
             <div>
-              <label className="block text-xs text-slate-500 mb-1">מ.א. (קישור לחייל — אופציונלי)</label>
-              <input name="personalNumber" placeholder="מספר אישי" inputMode="numeric"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
+              <label className="block text-xs text-slate-500 mb-1">🔗 קישור לחייל (אופציונלי)</label>
+              <SoldierPicker soldiers={soldiers} value={selectedSoldierId} onChange={setSelectedSoldierId} />
+              <input type="hidden" name="soldierId" value={selectedSoldierId} />
+              <p className="text-[11px] text-slate-400 mt-1">
+                בחר חייל קיים. לא מצאת?{" "}
+                <a href="/soldiers" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">הקם חייל חדש ↗</a>
+                {" "}וחזור לבחור אותו.
+              </p>
             </div>
           )}
 
@@ -380,9 +444,9 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
   );
 }
 
-export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, initialStatus, holders, squads, customRoles, systemRoles, brigade, battalionCode }: {
+export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, initialStatus, holders, squads, customRoles, systemRoles, soldiers, brigade, battalionCode }: {
   users: User[]; baseUrl: string; initialQ: string; initialRole: string; initialStatus: string;
-  holders: Holder[]; squads: Squad[]; customRoles: CustomRole[]; systemRoles: SystemRoleOpt[]; brigade: string; battalionCode: string;
+  holders: Holder[]; squads: Squad[]; customRoles: CustomRole[]; systemRoles: SystemRoleOpt[]; soldiers: SoldierOpt[]; brigade: string; battalionCode: string;
 }) {
   const [q, setQ] = useState(initialQ);
   const [role, setRole] = useState(initialRole);
@@ -506,6 +570,7 @@ export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, i
           squads={squads}
           customRoles={customRoles}
           systemRoles={systemRoles}
+          soldiers={soldiers}
           brigade={brigade}
           battalionCode={battalionCode}
           onClose={() => setEditingUser(null)}
@@ -519,6 +584,7 @@ export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, i
           squads={squads}
           customRoles={customRoles}
           systemRoles={systemRoles}
+          soldiers={soldiers}
           brigade={brigade}
           battalionCode={battalionCode}
           onClose={() => setShowCreate(false)}

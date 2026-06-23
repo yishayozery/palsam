@@ -36,8 +36,8 @@ function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
   }
   const link = `${baseUrl}/invite/${user.inviteToken}`;
   const wa = user.phone
-    ? `https://wa.me/${user.phone.replace(/\D/g, "").replace(/^0/, "972")}?text=${encodeURIComponent(`הוזמנת למערכת PALSAM. קישור להגדרת סיסמה: ${link}`)}`
-    : `https://wa.me/?text=${encodeURIComponent(`הוזמנת למערכת PALSAM. קישור להגדרת סיסמה: ${link}`)}`;
+    ? `https://wa.me/${user.phone.replace(/\D/g, "").replace(/^0/, "972")}?text=${encodeURIComponent(`הוזמנת למערכת. קישור להגדרת סיסמה: ${link}`)}`
+    : `https://wa.me/?text=${encodeURIComponent(`הוזמנת למערכת. קישור להגדרת סיסמה: ${link}`)}`;
   return (
     <div className="flex items-center gap-2">
       <Badge className="bg-amber-100 text-amber-700">ממתין להפעלה</Badge>
