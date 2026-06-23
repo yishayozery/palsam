@@ -27,17 +27,16 @@ export default async function StockPage({
   const bId = user.battalionId!;
   const { q = "", category = "", warehouse = "" } = await searchParams;
 
-  // סקופ לקצין מחסן — רק טיפוסי המחסנים שהוא מורשה אליהם
-  const isWarehouseManager = user.role === "WAREHOUSE_MANAGER";
+  // סקופ — משתמש לא-אדמין עם מחסנים רואה רק את טיפוסי המחסנים שלו
   const myWarehouseTypes: string[] = [];
-  if (isWarehouseManager && user.holderIds?.length) {
+  if (!user.isAdmin && user.holderIds?.length) {
     const myHolders = await prisma.holder.findMany({
       where: { id: { in: user.holderIds }, kind: "WAREHOUSE" },
       select: { warehouseType: true },
     });
     for (const h of myHolders) if (h.warehouseType) myWarehouseTypes.push(h.warehouseType);
   }
-  const isScoped = isWarehouseManager && myWarehouseTypes.length > 0;
+  const isScoped = !user.isAdmin && myWarehouseTypes.length > 0;
 
   // קווי העברה במצב PENDING (מלאי במעבר)
   const transitLines = await prisma.transferLine.findMany({
@@ -200,7 +199,7 @@ export default async function StockPage({
               // ⚠️ "שלח לטנא" שייך רק לקצין רכב (warehouseType=VEHICLES) או למפ"מ —
               // מחסן בונקר/קשר/חימוש לא שולח לטנא (טנא מטפלת רק ברכבים).
               const isMafam = user.isAdmin;
-              const isVehicleOfficer = user.role === "WAREHOUSE_MANAGER" && myWarehouseTypes.includes("VEHICLES");
+              const isVehicleOfficer = myWarehouseTypes.includes("VEHICLES");
               if (!isMafam && !isVehicleOfficer) return null;
               // רק רכבים (warehouseType=VEHICLES) ולא בטנא
               const myUnits = items.flatMap((i) =>

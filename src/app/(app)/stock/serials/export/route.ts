@@ -6,16 +6,15 @@ export async function GET() {
   const user = await requireCapability("warehouse.operate");
   const bId = user.battalionId!;
 
-  const isWM = user.role === "WAREHOUSE_MANAGER";
   const myWHTypes: string[] = [];
-  if (isWM && user.holderIds?.length) {
+  if (!user.isAdmin && user.holderIds?.length) {
     const h = await prisma.holder.findMany({
       where: { id: { in: user.holderIds }, kind: "WAREHOUSE" },
       select: { warehouseType: true },
     });
     for (const x of h) if (x.warehouseType) myWHTypes.push(x.warehouseType);
   }
-  const scoped = isWM && myWHTypes.length > 0;
+  const scoped = !user.isAdmin && myWHTypes.length > 0;
 
   const units = await prisma.serialUnit.findMany({
     where: {
