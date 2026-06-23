@@ -1,10 +1,12 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
-import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
+import { hashPassword, verifyPassword } from "./password";
 import type { Role, PermissionLevel } from "@/generated/prisma";
 import { ROLE_LABELS, permissionsFromLegacyRole, type UserPermissions, type PermissionHolder } from "./rbac";
+
+export { hashPassword, verifyPassword };
 
 const RAW_SECRET = process.env.AUTH_SECRET || "dev-secret-change-me-please-32-characters";
 if (process.env.NODE_ENV === "production" && !process.env.AUTH_SECRET) {
@@ -30,13 +32,6 @@ export type SessionUser = {
   isSuperAdmin: boolean;
 } & PermissionHolder;
 
-export async function hashPassword(pw: string): Promise<string> {
-  return bcrypt.hash(pw, 10);
-}
-
-export async function verifyPassword(pw: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(pw, hash);
-}
 
 export async function createSession(user: SessionUser): Promise<void> {
   const token = await new SignJWT({ ...user })

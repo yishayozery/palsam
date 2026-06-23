@@ -1,7 +1,7 @@
 {
-  "name": "PALSAM — מערכת ניהול מלאי גדודי",
-  "short_name": "PALSAM",
-  "description": "ניהול שרשרת אספקה, מלאי והחתמות ציוד — דרג גדודי",
+  "name": "Inventory",
+  "short_name": "Inventory",
+  "description": "",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",

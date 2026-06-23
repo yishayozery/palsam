@@ -9,13 +9,14 @@ const heebo = Heebo({
 });
 
 export const metadata: Metadata = {
-  title: "PALSAM — מערכת ניהול מלאי גדודי",
-  description: "ניהול שרשרת אספקה, מלאי והחתמות ציוד — דרג גדודי",
+  title: "Inventory",
+  description: "",
+  robots: { index: false, follow: false },
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "PALSAM",
+    title: "Inventory",
   },
 };
 

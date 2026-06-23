@@ -36,6 +36,8 @@ const securityHeaders = [
   { key: "X-XSS-Protection", value: "1; mode=block" },
   // 🛡️ DNS prefetch control
   { key: "X-DNS-Prefetch-Control", value: "on" },
+  // 🛡️ מניעת אינדוקס במנועי חיפוש
+  { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
 ];
 
 const nextConfig: NextConfig = {
@@ -44,6 +46,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BUILD_VERSION: BUILD_VERSION,
     NEXT_PUBLIC_BUILD_DATE: BUILD_DATE,
   },
+  productionBrowserSourceMaps: false,
   experimental: {
     serverActions: { bodySizeLimit: "10mb" },
   },

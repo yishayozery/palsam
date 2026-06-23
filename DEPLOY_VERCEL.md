@@ -31,7 +31,7 @@ git push
    ```
    DATABASE_URL=postgresql://...?sslmode=require
    JWT_SECRET=<משהו ארוך 32+ תווים אקראיים>
-   NEXT_PUBLIC_APP_URL=https://palsam.vercel.app
+   NEXT_PUBLIC_APP_URL=https://palmy.co.il
    CRON_SECRET=<משהו ארוך אחר 32+ תווים>
    ```
 5. "Deploy"

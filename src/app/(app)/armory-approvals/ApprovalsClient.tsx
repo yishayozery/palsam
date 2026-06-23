@@ -12,7 +12,7 @@ type Soldier = {
   weaponsApprovedAt: string | null; weaponsApprovedByName: string | null;
 };
 
-const MY_EQUIPMENT_URL = "https://palsam.vercel.app/my-equipment";
+const MY_EQUIPMENT_URL = `${process.env.NEXT_PUBLIC_APP_URL || ""}/my-equipment`;
 
 function buildWhatsAppUrl(soldier: Soldier, armoryTestUrl: string | null) {
   const lines = [

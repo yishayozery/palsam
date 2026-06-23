@@ -65,13 +65,13 @@ export default async function IneligibilityReportPage() {
             <div className="font-bold text-blue-900 text-sm mb-1">📲 שלח לחיילים</div>
             <p className="text-xs text-blue-800">שתף את הלינק הזה כדי שחיילים יוכלו לעשות את המבחן ולהעלות צילום מסך:</p>
             <div className="mt-2 bg-white border border-blue-300 rounded-lg px-3 py-2 font-mono text-xs text-blue-900 select-all break-all">
-              https://palsam.vercel.app/my-equipment
+              {`${process.env.NEXT_PUBLIC_APP_URL || ""}/my-equipment`}
             </div>
             <p className="text-[10px] text-blue-600 mt-1">💡 החייל מזדהה עם שם מלא + מ.א. — לא צריך לוגין.</p>
           </div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent("https://palsam.vercel.app/my-equipment")}`}
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL || ""}/my-equipment`)}`}
             alt="QR code" width={120} height={120} className="rounded-lg border border-blue-300 bg-white p-1"
           />
         </div>

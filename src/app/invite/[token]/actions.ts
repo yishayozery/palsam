@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { setPasswordByInvite, createSession } from "@/lib/auth";
+import { isPasswordPwned } from "@/lib/password";
 import { audit } from "@/lib/audit";
 
 export type InviteState = { error?: string };
@@ -14,9 +15,13 @@ export async function activateAccount(
   const password = String(formData.get("password") || "");
   const confirm = String(formData.get("confirm") || "");
 
-  if (password.length < 10) return { error: "סיסמה חייבת להיות לפחות 10 תווים" };
-  if (!/[a-z]/i.test(password) || !/\d/.test(password)) return { error: "סיסמה חייבת לכלול לפחות אות ומספר" };
+  if (password.length < 12) return { error: "סיסמה חייבת להיות לפחות 12 תווים" };
+  if (password.length > 128) return { error: "סיסמה ארוכה מדי (מקסימום 128 תווים)" };
   if (password !== confirm) return { error: "הסיסמאות אינן תואמות" };
+
+  if (await isPasswordPwned(password)) {
+    return { error: "סיסמה זו הופיעה בדליפות מידע ידועות. בחר/י סיסמה אחרת." };
+  }
 
   const user = await setPasswordByInvite(token, password);
   if (!user) return { error: "ההזמנה אינה תקפה או שכבר נוצלה" };

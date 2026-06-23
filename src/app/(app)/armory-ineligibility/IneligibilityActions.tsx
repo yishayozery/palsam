@@ -1,6 +1,6 @@
 "use client";
 
-const MY_EQUIPMENT_URL = "https://palsam.vercel.app/my-equipment";
+const MY_EQUIPMENT_URL = `${process.env.NEXT_PUBLIC_APP_URL || ""}/my-equipment`;
 
 export default function IneligibilityActions({ soldierName, phone, armoryTestUrl }: {
   soldierName: string; phone: string; armoryTestUrl: string | null;
