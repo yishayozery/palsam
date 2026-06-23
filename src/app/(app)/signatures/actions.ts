@@ -440,10 +440,11 @@ export async function cancelSignatureByToken(token: string): Promise<{ ok?: bool
   try {
     const sig = await prisma.signature.findUnique({
       where: { token },
-      select: { id: true, status: true, transferId: true, soldierId: true, signerUserId: true, battalionId: true },
+      select: { id: true, status: true, transferId: true, soldierId: true, signerUserId: true, battalionId: true, tokenExpires: true },
     });
     if (!sig) return { error: "לא נמצא" };
     if (sig.status !== "PENDING") return { error: "לא ניתן לבטל" };
+    if (sig.tokenExpires && sig.tokenExpires < new Date()) return { error: "פג תוקף הקישור" };
     await prisma.$transaction(async (tx) => {
       await tx.signature.update({ where: { id: sig.id }, data: { status: "CANCELED" } });
       if (sig.transferId) {
@@ -476,9 +477,10 @@ export async function removeTransferLineByToken(token: string, lineId: string): 
   try {
     const sig = await prisma.signature.findUnique({
       where: { token },
-      select: { status: true, transferId: true },
+      select: { status: true, transferId: true, tokenExpires: true },
     });
     if (!sig || sig.status !== "PENDING" || !sig.transferId) return { error: "לא ניתן לערוך" };
+    if (sig.tokenExpires && sig.tokenExpires < new Date()) return { error: "פג תוקף הקישור" };
     const line = await prisma.transferLine.findUnique({ where: { id: lineId } });
     if (!line || line.transferId !== sig.transferId) return { error: "שורה לא נמצאה" };
     const remaining = await prisma.transferLine.count({ where: { transferId: sig.transferId } });
@@ -497,9 +499,10 @@ export async function updateTransferLineQtyByToken(token: string, lineId: string
     if (newQty < 1) return { error: "כמות חייבת להיות לפחות 1" };
     const sig = await prisma.signature.findUnique({
       where: { token },
-      select: { status: true, transferId: true },
+      select: { status: true, transferId: true, tokenExpires: true },
     });
     if (!sig || sig.status !== "PENDING" || !sig.transferId) return { error: "לא ניתן לערוך" };
+    if (sig.tokenExpires && sig.tokenExpires < new Date()) return { error: "פג תוקף הקישור" };
     const line = await prisma.transferLine.findUnique({ where: { id: lineId } });
     if (!line || line.transferId !== sig.transferId) return { error: "שורה לא נמצאה" };
     await prisma.transferLine.update({ where: { id: lineId }, data: { quantity: newQty } });

@@ -36,9 +36,11 @@ export async function createIssue(formData: FormData) {
   const qtyEntries = qtyEntriesFromForm(formData);
   if (serialIds.length === 0 && qtyEntries.length === 0) return;
 
+  const toHolder = await prisma.holder.findUnique({ where: { id: toHolderId }, select: { battalionId: true } });
+  if (!toHolder || toHolder.battalionId !== bId) return;
+
   let transferId = "";
   await prisma.$transaction(async (tx) => {
-    // 🛡️ ולידציה: לא ניתן להקצות יותר ממה שיש במלאי
     for (const e of qtyEntries) {
       const balance = await tx.stockBalance.findFirst({
         where: { itemTypeId: e.itemTypeId, holderId: fromHolderId, statusId: e.statusId, battalionId: bId },
@@ -85,6 +87,9 @@ export async function createReturn(formData: FormData) {
   const qtyEntries = qtyEntriesFromForm(formData);
   if (serialIds.length === 0 && qtyEntries.length === 0) return;
 
+  const toHolder = await prisma.holder.findUnique({ where: { id: toHolderId }, select: { battalionId: true } });
+  if (!toHolder || toHolder.battalionId !== bId) return;
+
   let transferId = "";
   await prisma.$transaction(async (tx) => {
     const transfer = await tx.transfer.create({
@@ -117,7 +122,7 @@ export async function approveTransfer(formData: FormData) {
   const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
   const transfer = await prisma.transfer.findUnique({ where: { id }, include: { lines: true } });
-  if (!transfer || transfer.status !== "PENDING") return;
+  if (!transfer || transfer.status !== "PENDING" || transfer.battalionId !== bId) return;
 
   await prisma.$transaction(async (tx) => {
     const targetHolderId = transfer.toHolderId!;
@@ -166,7 +171,7 @@ export async function rejectTransfer(formData: FormData) {
   const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
   const transfer = await prisma.transfer.findUnique({ where: { id }, include: { lines: true } });
-  if (!transfer || transfer.status !== "PENDING") return;
+  if (!transfer || transfer.status !== "PENDING" || transfer.battalionId !== bId) return;
 
   await prisma.$transaction(async (tx) => {
     const sourceHolderId = transfer.fromHolderId!;

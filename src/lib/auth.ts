@@ -6,9 +6,11 @@ import { prisma } from "./prisma";
 import type { Role, PermissionLevel } from "@/generated/prisma";
 import { ROLE_LABELS, permissionsFromLegacyRole, type UserPermissions, type PermissionHolder } from "./rbac";
 
-const SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET || "dev-secret-change-me-please-32-characters",
-);
+const RAW_SECRET = process.env.AUTH_SECRET || "dev-secret-change-me-please-32-characters";
+if (process.env.NODE_ENV === "production" && !process.env.AUTH_SECRET) {
+  console.error("⚠️ AUTH_SECRET is not set — using insecure default. Set AUTH_SECRET in production!");
+}
+const SECRET = new TextEncoder().encode(RAW_SECRET);
 const COOKIE = "gadsam_session";
 const MAX_AGE = 60 * 60 * 12; // 12 שעות
 
