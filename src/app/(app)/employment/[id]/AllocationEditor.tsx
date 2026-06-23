@@ -29,6 +29,7 @@ export default function AllocationEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [distMode, setDistMode] = useState<"pct" | "days">("pct");
   const [companyPcts, setCompanyPcts] = useState<Record<string, number>>(() => {
     const even = Math.floor(100 / companies.length);
     const pcts: Record<string, number> = {};
@@ -36,6 +37,14 @@ export default function AllocationEditor({
       pcts[c.id] = i === companies.length - 1 ? 100 - even * (companies.length - 1) : even;
     });
     return pcts;
+  });
+  const [companyDays, setCompanyDays] = useState<Record<string, number>>(() => {
+    const perCo = Math.floor(totalDays / companies.length);
+    const days: Record<string, number> = {};
+    companies.forEach((c, i) => {
+      days[c.id] = i === companies.length - 1 ? totalDays - perCo * (companies.length - 1) : perCo;
+    });
+    return days;
   });
 
   const getValue = useCallback(
@@ -135,6 +144,24 @@ export default function AllocationEditor({
     setSuccess(false);
   }
 
+  function distributeByDays() {
+    const next: Record<string, number> = {};
+    for (const co of companies) {
+      const coTotal = companyDays[co.id] || 0;
+      const perDay = dates.length > 0 ? Math.ceil(coTotal / dates.length) : 0;
+      for (const dt of dates) {
+        next[`${co.id}_${dt}`] = perDay;
+      }
+    }
+    setAllocations(next);
+    setSuccess(false);
+  }
+
+  function distribute() {
+    if (distMode === "pct") distributeByPercentage();
+    else distributeByDays();
+  }
+
   function setCompanyTotal(companyId: string, newTotal: number) {
     const perDay = dates.length > 0 ? Math.ceil(newTotal / dates.length) : 0;
     setAllocations((prev) => {
@@ -160,36 +187,81 @@ export default function AllocationEditor({
                 מלא ממוצע ({dailyAverage} ליום)
               </Button>
             )}
-            <Button type="button" variant="secondary" onClick={distributeByPercentage}>
-              חלק לפי אחוזים
+            <Button type="button" variant="secondary" onClick={distribute}>
+              חלק {distMode === "pct" ? "לפי אחוזים" : "לפי ימים"}
             </Button>
             {error && <span className="text-sm text-rose-600">{error}</span>}
             {success && <span className="text-sm text-emerald-600">נשמר בהצלחה</span>}
           </div>
 
-          {/* Percentage distribution controls */}
+          {/* Distribution controls — toggle between % and days */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <div className="text-xs font-semibold text-blue-800 mb-2">חלוקה באחוזים ({totalDays} ימי מילואים)</div>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-xs font-semibold text-blue-800">חלוקה ({totalDays} ימי מילואים)</span>
+              <div className="flex rounded-md overflow-hidden border border-blue-300 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setDistMode("pct")}
+                  className={`px-3 py-1 transition ${distMode === "pct" ? "bg-blue-600 text-white" : "bg-white text-blue-700 hover:bg-blue-100"}`}
+                >
+                  אחוזים %
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDistMode("days")}
+                  className={`px-3 py-1 transition ${distMode === "days" ? "bg-blue-600 text-white" : "bg-white text-blue-700 hover:bg-blue-100"}`}
+                >
+                  מספר ימים
+                </button>
+              </div>
+            </div>
             <div className="flex flex-wrap gap-3 items-end">
-              {companies.map((co) => (
-                <div key={co.id} className="flex flex-col items-center">
-                  <label className="text-[10px] text-slate-600 mb-0.5">{co.name}</label>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number" min={0} max={100}
-                      value={companyPcts[co.id] || 0}
-                      onChange={(e) => setCompanyPcts((prev) => ({ ...prev, [co.id]: parseInt(e.target.value, 10) || 0 }))}
-                      className="w-14 text-center rounded border border-blue-300 px-1 py-1 text-sm"
-                    />
-                    <span className="text-[10px] text-slate-500">%</span>
+              {companies.map((co) => {
+                const pctSum = Object.values(companyPcts).reduce((s, v) => s + v, 0);
+                const daysSum = Object.values(companyDays).reduce((s, v) => s + v, 0);
+                return (
+                  <div key={co.id} className="flex flex-col items-center">
+                    <label className="text-[10px] text-slate-600 mb-0.5">{co.name}</label>
+                    {distMode === "pct" ? (
+                      <>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number" min={0} max={100}
+                            value={companyPcts[co.id] || 0}
+                            onChange={(e) => setCompanyPcts((prev) => ({ ...prev, [co.id]: parseInt(e.target.value, 10) || 0 }))}
+                            className="w-14 text-center rounded border border-blue-300 px-1 py-1 text-sm"
+                          />
+                          <span className="text-[10px] text-slate-500">%</span>
+                        </div>
+                        <span className="text-[10px] text-blue-600 mt-0.5">
+                          {Math.round((totalDays * (companyPcts[co.id] || 0)) / Math.max(1, pctSum))} ימים
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          type="number" min={0}
+                          value={companyDays[co.id] || 0}
+                          onChange={(e) => setCompanyDays((prev) => ({ ...prev, [co.id]: parseInt(e.target.value, 10) || 0 }))}
+                          className="w-16 text-center rounded border border-blue-300 px-1 py-1 text-sm"
+                        />
+                        <span className="text-[10px] text-blue-600 mt-0.5">
+                          {pctSum > 0 ? Math.round(((companyDays[co.id] || 0) / Math.max(1, daysSum)) * 100) : 0}%
+                        </span>
+                      </>
+                    )}
                   </div>
-                  <span className="text-[10px] text-blue-600 mt-0.5">
-                    {Math.round((totalDays * (companyPcts[co.id] || 0)) / Math.max(1, Object.values(companyPcts).reduce((s, v) => s + v, 0)))} ימים
+                );
+              })}
+              <div className="flex flex-col items-center text-xs text-slate-500">
+                <span>סה״כ:</span>
+                {distMode === "pct" ? (
+                  <span>{Object.values(companyPcts).reduce((s, v) => s + v, 0)}%</span>
+                ) : (
+                  <span className={Object.values(companyDays).reduce((s, v) => s + v, 0) !== totalDays ? "text-rose-600 font-semibold" : ""}>
+                    {Object.values(companyDays).reduce((s, v) => s + v, 0)} / {totalDays}
                   </span>
-                </div>
-              ))}
-              <div className="text-xs text-slate-500">
-                סה״כ: {Object.values(companyPcts).reduce((s, v) => s + v, 0)}%
+                )}
               </div>
             </div>
           </div>
