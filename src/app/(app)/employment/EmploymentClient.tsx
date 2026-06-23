@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, Button, Badge, EmptyState, Table, Th, Td } from "@/components/ui";
+import { Card, Button, Badge, EmptyState, Table, Th, Td, LinkButton } from "@/components/ui";
 import { saveEmployment, deleteEmployment } from "./actions";
 
 type Employment = {
@@ -24,10 +24,29 @@ export default function EmploymentClient({
 }) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
+  const [editingEmp, setEditingEmp] = useState<Employment | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
+  function openCreate() {
+    setEditingEmp(null);
+    setShowForm(true);
+    setError("");
+  }
+
+  function openEdit(emp: Employment) {
+    setEditingEmp(emp);
+    setShowForm(true);
+    setError("");
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditingEmp(null);
+    setError("");
+  }
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaving(true);
     setError("");
@@ -37,7 +56,7 @@ export default function EmploymentClient({
     if (res.error) {
       setError(res.error);
     } else {
-      setShowForm(false);
+      closeForm();
       router.refresh();
     }
   }
@@ -63,23 +82,30 @@ export default function EmploymentClient({
 
   return (
     <div className="space-y-4">
-      {canManage && (
-        <div className="flex justify-end">
-          <Button type="button" onClick={() => setShowForm(!showForm)}>
+      {/* Action bar */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <LinkButton href="/attendance" variant="secondary">
+          ← חזרה לנוכחות בתעסוקה
+        </LinkButton>
+        {canManage && (
+          <Button type="button" onClick={showForm ? closeForm : openCreate}>
             {showForm ? "ביטול" : "➕ תעסוקה חדשה"}
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       {showForm && (
         <Card className="p-4 md:p-6">
-          <form onSubmit={handleCreate} className="space-y-4">
+          <h3 className="font-bold text-lg mb-3">{editingEmp ? "עריכת תעסוקה" : "תעסוקה חדשה"}</h3>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {editingEmp && <input type="hidden" name="id" value={editingEmp.id} />}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">שם התעסוקה</label>
                 <input
                   name="name"
                   required
+                  defaultValue={editingEmp?.name ?? ""}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                   placeholder='לדוג׳: "אימון מילואים מאי 2026"'
                 />
@@ -88,6 +114,7 @@ export default function EmploymentClient({
                 <label className="block text-sm font-medium text-slate-700 mb-1">מצב חישוב</label>
                 <select
                   name="mode"
+                  defaultValue={editingEmp?.mode ?? "daily"}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 >
                   <option value="daily">יומי (הקצאה לפי יום)</option>
@@ -100,6 +127,7 @@ export default function EmploymentClient({
                   name="startDate"
                   type="date"
                   required
+                  defaultValue={editingEmp?.startDate ?? ""}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 />
               </div>
@@ -109,6 +137,7 @@ export default function EmploymentClient({
                   name="endDate"
                   type="date"
                   required
+                  defaultValue={editingEmp?.endDate ?? ""}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 />
               </div>
@@ -119,17 +148,18 @@ export default function EmploymentClient({
                   type="number"
                   min={1}
                   required
+                  defaultValue={editingEmp?.totalDays ?? ""}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 />
               </div>
             </div>
             {error && <p className="text-sm text-rose-600">{error}</p>}
             <div className="flex gap-2 justify-end">
-              <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>
+              <Button type="button" variant="secondary" onClick={closeForm}>
                 ביטול
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? "שומר..." : "צור תעסוקה"}
+                {saving ? "שומר..." : editingEmp ? "שמור שינויים" : "צור תעסוקה"}
               </Button>
             </div>
           </form>
@@ -189,15 +219,26 @@ export default function EmploymentClient({
                     <Td>{emp._count.allocations}</Td>
                     {canManage && (
                       <Td>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(emp.id);
-                          }}
-                          className="text-rose-500 hover:text-rose-700 text-xs"
-                        >
-                          מחק
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEdit(emp);
+                            }}
+                            className="text-blue-500 hover:text-blue-700 text-xs"
+                          >
+                            ערוך
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(emp.id);
+                            }}
+                            className="text-rose-500 hover:text-rose-700 text-xs"
+                          >
+                            מחק
+                          </button>
+                        </div>
                       </Td>
                     )}
                   </tr>

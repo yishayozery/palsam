@@ -24,43 +24,24 @@ export default async function EmploymentPage() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const activeEmployments = employments.filter(
-    (e) => new Date(e.startDate) <= today && new Date(e.endDate) >= today,
-  );
-
   let dashboardData: {
     employment: (typeof employments)[0];
     allocations: { companyId: string; companyName: string; date: string; allocated: number }[];
     attendanceCounts: { companyId: string; date: string; count: number }[];
   }[] = [];
 
-  if (activeEmployments.length > 0) {
-    for (const emp of activeEmployments) {
-      const allocations = await prisma.employmentAllocation.findMany({
-        where: { employmentId: emp.id },
-        include: { company: { select: { name: true } } },
-      });
+  for (const emp of employments) {
+    const allocations = await prisma.employmentAllocation.findMany({
+      where: { employmentId: emp.id },
+      include: { company: { select: { name: true } } },
+    });
 
-      const startDate = new Date(emp.startDate);
-      const endDateCapped = today < new Date(emp.endDate) ? today : new Date(emp.endDate);
+    if (allocations.length === 0) continue;
 
-      const companyIds = [...new Set(allocations.map((a) => a.companyId))];
+    const startDate = new Date(emp.startDate);
+    const endDateCapped = today < new Date(emp.endDate) ? today : new Date(emp.endDate);
 
-      const attendanceRecords = await prisma.attendanceRecord.findMany({
-        where: {
-          soldier: { companyId: { in: companyIds } },
-          date: { gte: startDate, lte: endDateCapped },
-          status: { isPresent: true },
-        },
-        select: { soldier: { select: { companyId: true } }, date: true },
-      });
-
-      const countMap = new Map<string, number>();
-      for (const rec of attendanceRecords) {
-        const key = `${rec.soldier.companyId}_${rec.date.toISOString().slice(0, 10)}`;
-        countMap.set(key, (countMap.get(key) || 0) + 1);
-      }
-
+    if (endDateCapped < startDate) {
       dashboardData.push({
         employment: emp,
         allocations: allocations.map((a) => ({
@@ -69,12 +50,41 @@ export default async function EmploymentPage() {
           date: a.date.toISOString().slice(0, 10),
           allocated: a.allocated,
         })),
-        attendanceCounts: Array.from(countMap.entries()).map(([key, count]) => {
-          const [companyId, date] = key.split("_");
-          return { companyId, date, count };
-        }),
+        attendanceCounts: [],
       });
+      continue;
     }
+
+    const companyIds = [...new Set(allocations.map((a) => a.companyId))];
+
+    const attendanceRecords = await prisma.attendanceRecord.findMany({
+      where: {
+        soldier: { companyId: { in: companyIds } },
+        date: { gte: startDate, lte: endDateCapped },
+        status: { isPresent: true },
+      },
+      select: { soldier: { select: { companyId: true } }, date: true },
+    });
+
+    const countMap = new Map<string, number>();
+    for (const rec of attendanceRecords) {
+      const key = `${rec.soldier.companyId}_${rec.date.toISOString().slice(0, 10)}`;
+      countMap.set(key, (countMap.get(key) || 0) + 1);
+    }
+
+    dashboardData.push({
+      employment: emp,
+      allocations: allocations.map((a) => ({
+        companyId: a.companyId,
+        companyName: a.company.name,
+        date: a.date.toISOString().slice(0, 10),
+        allocated: a.allocated,
+      })),
+      attendanceCounts: Array.from(countMap.entries()).map(([key, count]) => {
+        const [companyId, date] = key.split("_");
+        return { companyId, date, count };
+      }),
+    });
   }
 
   const serialized = employments.map((e) => ({

@@ -56,10 +56,34 @@ export default async function AttendancePage({
 
   if (!selectedCompanyId) redirect("/dashboard");
 
-  // Date range: start from today, 35 days forward
   const today = new Date();
-  const startStr = sp.start || `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  const days = getDaysForRange(startStr, 35);
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  // Resolve employment early so we can align dates
+  const allEmployments = await prisma.employment.findMany({
+    where: { battalionId: bId, active: true },
+    orderBy: { startDate: "desc" },
+    select: { id: true, name: true, startDate: true, endDate: true, totalDays: true, mode: true },
+  });
+
+  const resolvedEmpId = sp.employmentId
+    ?? allEmployments.find((e) => e.startDate.toISOString().slice(0, 10) <= todayStr && e.endDate.toISOString().slice(0, 10) >= todayStr)?.id;
+
+  const resolvedEmp = resolvedEmpId ? allEmployments.find((e) => e.id === resolvedEmpId) : null;
+
+  // Date range: if employment selected, align to its period; otherwise 35 days from today
+  let startStr: string;
+  let dayCount: number;
+  if (resolvedEmp && !sp.start) {
+    startStr = resolvedEmp.startDate.toISOString().slice(0, 10);
+    const empStart = new Date(resolvedEmp.startDate);
+    const empEnd = new Date(resolvedEmp.endDate);
+    dayCount = Math.round((empEnd.getTime() - empStart.getTime()) / 86400000) + 1;
+  } else {
+    startStr = sp.start || todayStr;
+    dayCount = 35;
+  }
+  const days = getDaysForRange(startStr, dayCount);
 
   const mode = (sp.mode === "record" ? "record" : "plan") as "plan" | "record";
 
@@ -144,7 +168,7 @@ export default async function AttendancePage({
   // Fetch attendance data for the date range
   const startDate = new Date(startStr + "T00:00:00Z");
   const endDate = new Date(startStr + "T00:00:00Z");
-  endDate.setDate(endDate.getDate() + 35);
+  endDate.setDate(endDate.getDate() + dayCount);
   const soldierIds = soldiers.map((s) => s.id);
 
   const plans = await prisma.attendancePlan.findMany({
@@ -169,11 +193,6 @@ export default async function AttendancePage({
     statusId: r.statusId,
   }));
 
-  const allEmployments = await prisma.employment.findMany({
-    where: { battalionId: bId, active: true },
-    orderBy: { startDate: "desc" },
-    select: { id: true, name: true, startDate: true, endDate: true, totalDays: true, mode: true },
-  });
   const employmentsForClient = allEmployments.map((e) => ({
     id: e.id,
     name: e.name,
@@ -182,10 +201,6 @@ export default async function AttendancePage({
     totalDays: e.totalDays,
     mode: e.mode,
   }));
-
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  const resolvedEmpId = sp.employmentId
-    ?? allEmployments.find((e) => e.startDate.toISOString().slice(0, 10) <= todayStr && e.endDate.toISOString().slice(0, 10) >= todayStr)?.id;
 
   let selectedEmployment: {
     id: string; name: string; startDate: string; endDate: string; totalDays: number; mode: string;
