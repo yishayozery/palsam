@@ -98,6 +98,7 @@ export default function TemplatesClient({
   const selectedVehicle = useMemo(() => vehicles.find((v) => v.id === vehicleId), [vehicles, vehicleId]);
 
   const canDrive = useCallback((soldier: Soldier) => {
+    if (soldier.licenseIds.length === 0) return false;
     if (!selectedVehicle || selectedVehicle.requiredLicenseIds.length === 0) return true;
     return selectedVehicle.requiredLicenseIds.some((lid) => soldier.licenseIds.includes(lid));
   }, [selectedVehicle]);
@@ -336,14 +337,19 @@ export default function TemplatesClient({
     const warnings: Record<string, string[]> = {};
     for (const t of templates) {
       const v = vehicles.find((v) => v.id === t.vehicleSerialUnitId);
-      if (!v || v.requiredLicenseIds.length === 0) continue;
       const driverSoldiers = t.soldiers.filter((s) => s.role === "נהג");
       for (const ds of driverSoldiers) {
         const fullSoldier = soldiers.find((s) => s.id === ds.id);
         if (!fullSoldier) continue;
-        const hasLicense = v.requiredLicenseIds.some((lid) => fullSoldier.licenseIds.includes(lid));
-        if (!hasLicense) {
+        if (fullSoldier.licenseIds.length === 0) {
           (warnings[t.id] ??= []).push(ds.fullName);
+          continue;
+        }
+        if (v && v.requiredLicenseIds.length > 0) {
+          const hasLicense = v.requiredLicenseIds.some((lid) => fullSoldier.licenseIds.includes(lid));
+          if (!hasLicense) {
+            (warnings[t.id] ??= []).push(ds.fullName);
+          }
         }
       }
     }

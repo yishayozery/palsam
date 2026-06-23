@@ -100,14 +100,14 @@ export default async function DispatchTemplatesPage() {
           licenseNames: s.drivingLicenses.map((dl) => dl.licenseType.name),
         }))}
         companies={companies.map((c) => ({ id: c.id, name: c.name }))}
-        templates={templates.map((t) => ({
+        templates={templates.filter((t) => t.vehicleSerialUnit).map((t) => ({
           id: t.id,
           name: t.name,
           vehicleSerialUnitId: t.vehicleSerialUnitId,
           vehicleItemTypeId: t.vehicleSerialUnit.itemType.id,
           vehicleName: t.vehicleSerialUnit.itemType.name,
           vehicleSerial: t.vehicleSerialUnit.serialNumber,
-          soldiers: t.soldiers.map((ts) => ({
+          soldiers: t.soldiers.filter((ts) => ts.soldier).map((ts) => ({
             id: ts.soldier.id,
             fullName: ts.soldier.fullName,
             personalNumber: ts.soldier.personalNumber,
