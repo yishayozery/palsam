@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/guard";
-import { can } from "@/lib/rbac";
+import { can, canEdit } from "@/lib/rbac";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, LinkButton } from "@/components/ui";
@@ -13,8 +13,8 @@ export default async function EmploymentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const user = await requireUser();
-  const canManage = can(user, "attendance.manage");
-  const canView = can(user, "attendance.view");
+  const canManage = canEdit(user, "employment");
+  const canView = can(user, "employment");
   if (!canManage && !canView) redirect("/dashboard");
   const bId = user.battalionId!;
   const { id } = await params;

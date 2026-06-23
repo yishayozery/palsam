@@ -2,14 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireCapability } from "@/lib/guard";
+import { requireUser } from "@/lib/guard";
+import { canEdit } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 
 export async function upsertAllocation(
   formData: FormData,
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireCapability("weapons.approve");
+    const user = await requireUser();
+    if (!canEdit(user, "armory_allocations")) return { error: "אין הרשאה" };
     const bId = user.battalionId!;
     const companyId = String(formData.get("companyId") || "");
     const itemTypeId = String(formData.get("itemTypeId") || "");

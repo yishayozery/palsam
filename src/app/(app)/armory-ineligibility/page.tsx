@@ -1,4 +1,4 @@
-import { requireCapability } from "@/lib/guard";
+import { requireScreen } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card } from "@/components/ui";
 import IneligibilityTable from "./IneligibilityTable";
@@ -6,7 +6,7 @@ import IneligibilityTable from "./IneligibilityTable";
 export const dynamic = "force-dynamic";
 
 export default async function IneligibilityReportPage() {
-  const user = await requireCapability("weapons.view");
+  const user = await requireScreen("armory_reports");
   const bId = user.battalionId!;
 
   const soldiers = await prisma.soldier.findMany({

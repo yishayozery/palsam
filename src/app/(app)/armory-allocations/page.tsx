@@ -1,4 +1,4 @@
-import { requireCapability } from "@/lib/guard";
+import { requireScreen } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import AllocationsClient from "./AllocationsClient";
@@ -6,7 +6,7 @@ import AllocationsClient from "./AllocationsClient";
 export const dynamic = "force-dynamic";
 
 export default async function ArmoryAllocationsPage() {
-  const user = await requireCapability("weapons.approve");
+  const user = await requireScreen("armory_allocations");
   const bId = user.battalionId!;
 
   const companies = await prisma.holder.findMany({

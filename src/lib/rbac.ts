@@ -6,13 +6,16 @@ export const SCREENS = {
   dashboard: "דשבורד",
   soldiers: "חיילים",
   attendance: "נוכחות",
+  employment: "תעסוקה (ימי מילואים)",
   dispatch: "שבצ\"ק",
   driving_licenses: "הרשאות נהיגה",
   stock: "מלאי",
   signatures: "החתמות/זיכוי",
   counts: "ספירות",
   gaps: "פערים",
-  armory: "ארמון",
+  armory: "ארמון (אישור נשק)",
+  armory_reports: "דוח זכאות נשק",
+  armory_allocations: "הקצאות לפלוגה",
   maintenance: "תחזוקה/רכבים",
   transfers: "מסירות",
   kits: "ערכות",
@@ -58,7 +61,8 @@ export type Capability =
   | "weapons.approve"
   | "weapons.view"
   | "attendance.manage"
-  | "attendance.view";
+  | "attendance.view"
+  | "weapons.view_report";
 
 const CAP_TO_SCREEN: Record<Capability, { screen: Screen; needsEdit: boolean }> = {
   "battalions.manage": { screen: "settings", needsEdit: true },
@@ -87,6 +91,7 @@ const CAP_TO_SCREEN: Record<Capability, { screen: Screen; needsEdit: boolean }> 
   "weapons.view": { screen: "armory", needsEdit: false },
   "attendance.manage": { screen: "attendance", needsEdit: true },
   "attendance.view": { screen: "attendance", needsEdit: false },
+  "weapons.view_report": { screen: "armory_reports", needsEdit: false },
 };
 
 // ===================== SessionUser permissions =====================
@@ -155,7 +160,7 @@ const LEGACY_MATRIX: Record<Role, Capability[]> = {
     "warehouse.operate", "catalog.manage", "kits.manage", "dictionaries.manage",
     "locations.manage", "reps.manage", "company.manage", "donations.manage",
     "transfer.approve", "signatures.manage", "counts.manage", "counts.execute",
-    "gaps.resolve", "reports.view", "dispatch.manage", "weapons.view",
+    "gaps.resolve", "reports.view", "dispatch.manage", "weapons.view_report",
     "attendance.manage", "attendance.view",
   ],
   COMPANY_REP: [
@@ -219,7 +224,6 @@ export const PRESET_ROLES: {
     permissions: buildPerms("EDIT"),
   },
   {
-    // מג"ד — רואה הכל, עורך רק ארמון (אישור נשק). אותו דבר כמו סמג"ד ומפ"מ
     name: 'מג"ד', isAdmin: false, isCommander: false, sortOrder: 1,
     permissions: buildPerms("EDIT", {}, ["settings"]),
   },
@@ -228,27 +232,25 @@ export const PRESET_ROLES: {
     permissions: buildPerms("EDIT", {}, ["settings"]),
   },
   {
-    // מפ"מ — מנהל מערכת תפעולי, עורך הכל
     name: 'מפ"מ', isAdmin: false, isCommander: false, sortOrder: 3,
     permissions: buildPerms("EDIT"),
   },
 
   // ===== רמת פלוגה =====
   {
-    // מפ — מפקד פלוגה, רואה רק את הפלוגה שלו
     name: "מפ", isAdmin: false, isCommander: true, sortOrder: 4,
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
-      { screen: "attendance", level: "EDIT" }, { screen: "dispatch", level: "EDIT" },
+      { screen: "attendance", level: "EDIT" }, { screen: "employment", level: "VIEW" },
+      { screen: "dispatch", level: "EDIT" },
       { screen: "signatures", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
       { screen: "counts", level: "EDIT" }, { screen: "donations", level: "EDIT" },
       { screen: "vacation", level: "EDIT" },
       { screen: "stock", level: "VIEW" }, { screen: "gaps", level: "VIEW" },
-      { screen: "reports", level: "VIEW" },
+      { screen: "reports", level: "VIEW" }, { screen: "armory_allocations", level: "VIEW" },
     ],
   },
   {
-    // מפקד מחלקה — מתחת למפ, רואה חיילים/נוכחות/שבצק של הפלוגה
     name: "מפקד מחלקה", isAdmin: false, isCommander: true, sortOrder: 5,
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "VIEW" },
@@ -267,16 +269,15 @@ export const PRESET_ROLES: {
 
   // ===== תפקידי מטה =====
   {
-    // קשר"ג — אחראי ציוד תקשוב, רואה כל הגדוד
     name: 'קשר"ג', isAdmin: false, isCommander: false, sortOrder: 7,
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
-      { screen: "attendance", level: "EDIT" }, { screen: "dispatch", level: "EDIT" },
+      { screen: "dispatch", level: "EDIT" },
       { screen: "stock", level: "EDIT" }, { screen: "catalog", level: "EDIT" },
       { screen: "signatures", level: "EDIT" }, { screen: "counts", level: "EDIT" },
       { screen: "gaps", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
       { screen: "kits", level: "EDIT" }, { screen: "donations", level: "EDIT" },
-      { screen: "reports", level: "VIEW" }, { screen: "armory", level: "VIEW" },
+      { screen: "reports", level: "VIEW" }, { screen: "armory_reports", level: "VIEW" },
     ],
   },
   {
@@ -285,7 +286,7 @@ export const PRESET_ROLES: {
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
       { screen: "dispatch", level: "EDIT" }, { screen: "reports", level: "VIEW" },
-      { screen: "armory", level: "VIEW" },
+      { screen: "armory_reports", level: "VIEW" },
     ],
   },
   {
@@ -299,16 +300,15 @@ export const PRESET_ROLES: {
 
   // ===== קציני מקצוע =====
   {
-    // ק.רכב — אחראי רכבים
     name: "ק.רכב", isAdmin: false, isCommander: false, sortOrder: 10,
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
-      { screen: "attendance", level: "EDIT" }, { screen: "dispatch", level: "EDIT" },
+      { screen: "dispatch", level: "EDIT" },
       { screen: "driving_licenses", level: "EDIT" }, { screen: "maintenance", level: "EDIT" },
       { screen: "stock", level: "EDIT" }, { screen: "catalog", level: "EDIT" },
       { screen: "signatures", level: "EDIT" }, { screen: "counts", level: "EDIT" },
       { screen: "gaps", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
-      { screen: "reports", level: "VIEW" },
+      { screen: "reports", level: "VIEW" }, { screen: "armory_reports", level: "VIEW" },
     ],
   },
   {

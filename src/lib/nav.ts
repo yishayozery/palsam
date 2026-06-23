@@ -19,17 +19,18 @@ export const NAV: NavItem[] = [
   { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "ראשי", screen: "settings" },
   { href: "/dashboard", label: "דשבורד", icon: "📊", group: "ראשי", screen: "dashboard" },
   { href: "/attendance", label: "נוכחות בתעסוקה", icon: "📋", group: "ראשי", screen: "attendance" },
+  { href: "/employment", label: "תעסוקה (ימי מילואים)", icon: "📅", group: "ראשי", screen: "employment" },
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "ראשי", screen: "soldiers" },
   { href: "/soldiers", label: "חיילים (עריכה + ציוד)", icon: "🪖", group: "ראשי", screen: "soldiers" },
   { href: "/permanent-items", label: "ציוד קבוע לפלוגה", icon: "📌", group: "ראשי", screen: "allocations" },
-  { href: "/armory-allocations", label: "הקצאות לפלוגה", icon: "📦", group: "ראשי", screen: "armory" },
+  { href: "/armory-allocations", label: "הקצאות לפלוגה", icon: "📦", group: "ראשי", screen: "armory_allocations" },
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "ראשי", screen: "dispatch" },
   { href: "/driving-licenses", label: "הרשאות נהיגה", icon: "🪪", group: "ראשי", screen: "driving_licenses" },
   { href: "/maintenance", label: "סטטוס רכבים", icon: "🔧", group: "ראשי", screen: "maintenance" },
 
   // ===== ארמון =====
   { href: "/armory-approvals", label: "אישור חיילים לנשק", icon: "🔫", group: "ארמון", screen: "armory" },
-  { href: "/armory-ineligibility", label: "דוח תהליך זכאות", icon: "📊", group: "ארמון", screen: "armory" },
+  { href: "/armory-ineligibility", label: "דוח תהליך זכאות", icon: "📊", group: "ארמון", screen: "armory_reports" },
 
   // ===== מחסנים (מפמ + מגד + סמגד) =====
   { href: "/warehouses", label: "מחסני הגדוד", icon: "🏪", group: "מחסנים", screen: "warehouses" },
@@ -42,13 +43,14 @@ export const NAV: NavItem[] = [
 
   // ===== שלישות =====
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "שלישות", screen: "soldiers" },
-  { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "שלישות", screen: "armory" },
+  { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "שלישות", screen: "armory_reports" },
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "שלישות", screen: "dispatch" },
 
   // ===== הפלוגה שלי (רס"פ פלוגה — תפעול ברמת פלוגה) =====
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "הפלוגה שלי", screen: "dispatch" },
   { href: "/soldiers", label: "חיילי הפלוגה", icon: "🪖", group: "הפלוגה שלי", screen: "soldiers" },
   { href: "/attendance", label: "נוכחות בתעסוקה", icon: "📋", group: "הפלוגה שלי", screen: "attendance" },
+  { href: "/employment", label: "תעסוקה (ימי מילואים)", icon: "📅", group: "הפלוגה שלי", screen: "employment" },
   { href: "/donations", label: "תרומות פלוגתיות", icon: "🎁", group: "הפלוגה שלי", screen: "donations" },
   { href: "/my-inventory", label: "מלאי הפלוגה", icon: "📦", group: "הפלוגה שלי", screen: "soldiers" },
   { href: "/my-inventory/locations", label: "מיקומי ציוד", icon: "📍", group: "הפלוגה שלי", screen: "soldiers" },
@@ -70,9 +72,10 @@ export const NAV: NavItem[] = [
   { href: "/donations", label: "מלאי תרומה", icon: "🎁", group: "המחסנים שלי", screen: "donations" },
   { href: "/transfers", label: "קבלות ממתינות", icon: "📥", group: "המחסנים שלי", screen: "transfers" },
   { href: "/kits", label: "ערכות החתמה", icon: "📦", group: "המחסנים שלי", screen: "kits" },
-  { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "המחסנים שלי", screen: "armory" },
+  { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "המחסנים שלי", screen: "armory_reports" },
   { href: "/soldiers", label: "חיילים (עריכה + ציוד)", icon: "🪖", group: "המחסנים שלי", screen: "soldiers" },
   { href: "/attendance", label: "נוכחות בתעסוקה", icon: "📋", group: "המחסנים שלי", screen: "attendance" },
+  { href: "/employment", label: "תעסוקה (ימי מילואים)", icon: "📅", group: "המחסנים שלי", screen: "employment" },
 
   // ===== דוחות ובקרה =====
   { href: "/reports", label: "דוחות", icon: "📈", group: "דוחות ובקרה", screen: "reports" },

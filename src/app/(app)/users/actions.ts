@@ -59,8 +59,14 @@ export async function saveUser(formData: FormData) {
     if (companyHolderId) holderIds = [companyHolderId];
   }
 
-  // Primary holderId: company takes priority for scoping, else first warehouse
-  const holderId = companyHolderId || warehouseIds[0] || null;
+  // Primary holderId: warehouse managers use their first warehouse as primary;
+  // company reps use company. This determines sidebar context (warehouse vs company nav).
+  let holderId: string | null;
+  if (role === "WAREHOUSE_MANAGER") {
+    holderId = warehouseIds[0] || companyHolderId || null;
+  } else {
+    holderId = companyHolderId || warehouseIds[0] || null;
+  }
 
   const squadIds = formData.getAll("squadId").map(String).filter(Boolean);
 

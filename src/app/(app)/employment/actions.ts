@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/guard";
-import { can } from "@/lib/rbac";
+import { canEdit } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 
 export async function saveEmployment(
@@ -11,7 +11,7 @@ export async function saveEmployment(
 ): Promise<{ ok?: boolean; id?: string; error?: string }> {
   try {
     const user = await requireUser();
-    if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
+    if (!canEdit(user, "employment")) return { error: "אין הרשאה" };
     const bId = user.battalionId!;
 
     const id = formData.get("id") as string | null;
@@ -58,7 +58,7 @@ export async function deleteEmployment(
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
     const user = await requireUser();
-    if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
+    if (!canEdit(user, "employment")) return { error: "אין הרשאה" };
     const bId = user.battalionId!;
 
     const id = formData.get("id") as string;
@@ -81,7 +81,7 @@ export async function saveAllocations(
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
     const user = await requireUser();
-    if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
+    if (!canEdit(user, "employment")) return { error: "אין הרשאה" };
     const bId = user.battalionId!;
 
     const employmentId = formData.get("employmentId") as string;
