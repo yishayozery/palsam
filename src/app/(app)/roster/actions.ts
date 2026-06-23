@@ -55,6 +55,7 @@ export async function updateSoldier(formData: FormData) {
   const companyId = String(formData.get("companyId") || "") || null;
   const squadId = String(formData.get("squadId") || "") || null;
   const platoon = String(formData.get("platoon") || "").trim() || null;
+  const personalNumber = String(formData.get("personalNumber") || "").replace(/\D/g, "").trim() || null;
   const attached = formData.get("attached") === "on";
   if (!firstName || !lastName) throw new Error("שם פרטי + שם משפחה חובה");
 
@@ -63,7 +64,7 @@ export async function updateSoldier(formData: FormData) {
 
   await prisma.soldier.update({
     where: { id },
-    data: { firstName, lastName, fullName: `${firstName} ${lastName}`, phone, companyId, squadId, platoon, attached },
+    data: { firstName, lastName, fullName: `${firstName} ${lastName}`, phone, companyId, squadId, platoon, attached, personalNumber },
   });
   await audit(user.id, "UPDATE_SOLDIER", "Soldier", id);
   revalidatePath("/roster");

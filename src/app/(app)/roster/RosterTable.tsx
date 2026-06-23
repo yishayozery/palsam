@@ -66,14 +66,14 @@ function AddForm({ companies, squads, onDone }: { companies: Company[]; squads: 
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-slate-600 mb-1">מספר אישי (אופציונלי — ספרות)</label>
-          <input name="personalNumber" inputMode="numeric" pattern="\d*"
+          <label className="block text-xs text-slate-600 mb-1">מספר אישי</label>
+          <input name="personalNumber" inputMode="numeric" pattern="\d+" required
             onInput={(e) => { e.currentTarget.value = e.currentTarget.value.replace(/\D/g, ""); }}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
         </div>
         <div>
-          <label className="block text-xs text-slate-600 mb-1">נייד (אופציונלי)</label>
-          <input name="phone" placeholder="05X-XXXXXXX" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <label className="block text-xs text-slate-600 mb-1">נייד</label>
+          <input name="phone" placeholder="05X-XXXXXXX" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
       </div>
       <label className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer">
@@ -127,7 +127,6 @@ function EditForm({ soldier, companies, squads, onDone }: { soldier: Soldier; co
         </div>
       </div>
 
-      <div className="text-xs text-slate-500 font-mono">מ.א.: {soldier.personalNumber || "—"}</div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs text-slate-600 mb-1">שם פרטי</label>
@@ -152,6 +151,12 @@ function EditForm({ soldier, companies, squads, onDone }: { soldier: Soldier; co
           <label className="block text-xs text-slate-600 mb-1">נייד</label>
           <input name="phone" defaultValue={soldier.phone ?? ""} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
+      </div>
+      <div>
+        <label className="block text-xs text-slate-600 mb-1">מספר אישי</label>
+        <input name="personalNumber" defaultValue={soldier.personalNumber ?? ""} inputMode="numeric" pattern="\d*"
+          onInput={(e) => { e.currentTarget.value = e.currentTarget.value.replace(/\D/g, ""); }}
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
       </div>
       <div>
         <label className="block text-xs text-slate-600 mb-1">מחלקה</label>
