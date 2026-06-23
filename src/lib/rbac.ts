@@ -248,6 +248,7 @@ export const PRESET_ROLES: {
       { screen: "vacation", level: "EDIT" },
       { screen: "stock", level: "VIEW" }, { screen: "gaps", level: "VIEW" },
       { screen: "reports", level: "VIEW" }, { screen: "armory_allocations", level: "VIEW" },
+      { screen: "maintenance", level: "VIEW" },
     ],
   },
   {
