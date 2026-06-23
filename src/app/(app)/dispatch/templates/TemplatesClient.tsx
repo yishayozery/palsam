@@ -163,7 +163,7 @@ export default function TemplatesClient({
     return warnings;
   }, [templates, vehicles, soldiers, drivingRefreshDays]);
 
-  const hasGaps = gaps.missingDriver > 0 || gaps.missingCommander > 0 || gaps.missingMedic > 0;
+  const hasGaps = gaps.missingDriver > 0 || gaps.missingCommander > 0;
 
   const displayTemplates = useMemo(() => {
     let list = filteredTemplates;
@@ -203,7 +203,15 @@ export default function TemplatesClient({
   }
 
   function removeSoldier(soldierId: string) {
-    setAssignments((prev) => prev.filter((a) => a.soldierId !== soldierId).map((a, i) => ({ ...a, seatIndex: i })));
+    setAssignments((prev) => {
+      const removed = prev.find((a) => a.soldierId === soldierId);
+      if (removed) {
+        if (removed.role === "נהג") setStep("driver");
+        else if (removed.role === "מפקד") setStep("commander");
+        else setAddingRole(removed.role);
+      }
+      return prev.filter((a) => a.soldierId !== soldierId).map((a, i) => ({ ...a, seatIndex: i }));
+    });
   }
 
   function changeRole(soldierId: string, role: string) {
@@ -301,6 +309,8 @@ export default function TemplatesClient({
                   if (isInOther && !confirm(`${s.fullName} כבר משובצ/ת ב"${otherTemplate}". להוסיף?`)) return;
                   if (!multi) {
                     setAssignments((prev) => [...prev.filter((a) => a.role !== currentRole), { soldierId: s.id, role: currentRole, seatIndex: prev.length }]);
+                    if (currentRole === "נהג") setStep("commander");
+                    else if (currentRole === "מפקד") { setAddingRole("לוחם"); setStep("soldiers"); }
                   } else {
                     addSoldier(s.id);
                   }
@@ -509,12 +519,12 @@ export default function TemplatesClient({
               onClick={() => gaps.missingMedic > 0 && setGapFilter(gapFilter === "חובש" ? null : "חובש")}
               className={`rounded-lg p-2 text-center transition ${
                 gaps.missingMedic > 0
-                  ? `bg-yellow-100 border border-yellow-300 cursor-pointer hover:ring-2 hover:ring-yellow-400 ${gapFilter === "חובש" ? "ring-2 ring-yellow-500" : ""}`
+                  ? `bg-slate-100 border border-slate-300 cursor-pointer hover:ring-2 hover:ring-slate-400 ${gapFilter === "חובש" ? "ring-2 ring-slate-500" : ""}`
                   : "bg-white border border-slate-200 cursor-default"
               }`}
             >
-              <div className="text-lg font-bold">{gaps.missingMedic > 0 ? gaps.missingMedic : "✓"}</div>
-              <div className="text-[10px] text-slate-600">🏥 חסרי חובש</div>
+              <div className="text-lg font-bold text-slate-500">{gaps.missingMedic > 0 ? gaps.missingMedic : "✓"}</div>
+              <div className="text-[10px] text-slate-500">🏥 ללא חובש</div>
             </button>
           </div>
         </div>
@@ -699,7 +709,6 @@ function TemplateCard({ template, onEdit, onDelete, licenseWarnings }: { templat
   const missingRoles: string[] = [];
   if (!driver) missingRoles.push("נהג");
   if (!commander) missingRoles.push("מפקד");
-  if (!medic) missingRoles.push("חובש");
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
@@ -768,9 +777,9 @@ function TemplateCard({ template, onEdit, onDelete, licenseWarnings }: { templat
       {/* Status bar */}
       <div className={`px-2 py-1.5 text-center text-[10px] border-t ${missingRoles.length > 0 ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-emerald-50 border-emerald-200 text-emerald-700"}`}>
         {missingRoles.length > 0 ? (
-          <span>⚠️ חסרים: {missingRoles.map((r) => `${ROLE_ICONS[r]} ${r}`).join(" · ")}</span>
+          <span>⚠️ חסרים: {missingRoles.map((r) => `${ROLE_ICONS[r]} ${r}`).join(" · ")}{!medic ? " · 🏥 ללא חובש" : ""}</span>
         ) : (
-          <span>✅ מאויש · {template.soldiers.length} משובצים</span>
+          <span>{!medic ? "ℹ️ ללא חובש · " : "✅ "}מאויש · {template.soldiers.length} משובצים</span>
         )}
       </div>
     </div>

@@ -13,7 +13,8 @@ export default async function DispatchPage() {
   // לקשר"ג עם מחלקות — מוצאים את הפלוגה דרך המחלקות
   const companies = await prisma.holder.findMany({
     where: { battalionId: bId, kind: "COMPANY", active: true },
-    select: { id: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
   });
   const isCompanyHolder = user.holderId ? companies.some((c) => c.id === user.holderId) : false;
   let effectiveCompanyId: string | null = null;
@@ -108,6 +109,7 @@ export default async function DispatchPage() {
         <DispatchClient
           battalionName={battalion?.name ?? ""}
           myCompanyId={effectiveCompanyId}
+          companies={companies.map((c) => ({ id: c.id, name: c.name }))}
           templates={templates.filter((t) => t.vehicleSerialUnit).map((t) => ({
             id: t.id,
             name: t.name,
