@@ -317,42 +317,96 @@ export default function TemplatesClient({
   }
 
   // Gaps dashboard
+  const [gapFilter, setGapFilter] = useState<string | null>(null);
+
   const gaps = useMemo(() => {
     let missingDriver = 0, missingCommander = 0, missingMedic = 0, totalSoldiers = 0;
+    const noDriver: string[] = [], noCommander: string[] = [], noMedic: string[] = [];
     for (const t of templates) {
-      if (!t.soldiers.some((s) => s.role === "נהג")) missingDriver++;
-      if (!t.soldiers.some((s) => s.role === "מפקד")) missingCommander++;
-      if (!t.soldiers.some((s) => s.role === "חובש")) missingMedic++;
+      if (!t.soldiers.some((s) => s.role === "נהג")) { missingDriver++; noDriver.push(t.id); }
+      if (!t.soldiers.some((s) => s.role === "מפקד")) { missingCommander++; noCommander.push(t.id); }
+      if (!t.soldiers.some((s) => s.role === "חובש")) { missingMedic++; noMedic.push(t.id); }
       totalSoldiers += t.soldiers.length;
     }
-    return { missingDriver, missingCommander, missingMedic, totalSoldiers, total: templates.length };
+    return { missingDriver, missingCommander, missingMedic, totalSoldiers, total: templates.length, noDriver, noCommander, noMedic };
   }, [templates]);
 
+  // License warnings: check if drivers have proper licenses
+  const driverWarnings = useMemo(() => {
+    const warnings: Record<string, string[]> = {};
+    for (const t of templates) {
+      const v = vehicles.find((v) => v.id === t.vehicleSerialUnitId);
+      if (!v || v.requiredLicenseIds.length === 0) continue;
+      const driverSoldiers = t.soldiers.filter((s) => s.role === "נהג");
+      for (const ds of driverSoldiers) {
+        const fullSoldier = soldiers.find((s) => s.id === ds.id);
+        if (!fullSoldier) continue;
+        const hasLicense = v.requiredLicenseIds.some((lid) => fullSoldier.licenseIds.includes(lid));
+        if (!hasLicense) {
+          (warnings[t.id] ??= []).push(ds.fullName);
+        }
+      }
+    }
+    return warnings;
+  }, [templates, vehicles, soldiers]);
+
   const hasGaps = gaps.missingDriver > 0 || gaps.missingCommander > 0 || gaps.missingMedic > 0;
+
+  const displayTemplates = useMemo(() => {
+    let list = filteredTemplates;
+    if (gapFilter === "נהג") list = list.filter((t) => gaps.noDriver.includes(t.id));
+    else if (gapFilter === "מפקד") list = list.filter((t) => gaps.noCommander.includes(t.id));
+    else if (gapFilter === "חובש") list = list.filter((t) => gaps.noMedic.includes(t.id));
+    return list;
+  }, [filteredTemplates, gapFilter, gaps]);
 
   return (
     <div className="space-y-4">
       {/* Gaps dashboard */}
       {templates.length > 0 && (
-        <div className={`rounded-xl border p-4 ${hasGaps ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"}`}>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">{hasGaps ? "⚠️" : "✅"}</span>
-            <span className="font-bold text-sm">{hasGaps ? "יש פערים בשבצ\"קים" : "כל השבצ\"קים מאוישים"}</span>
-            <span className="text-xs text-slate-500 mr-auto">{gaps.total} רכבים · {gaps.totalSoldiers} חיילים משובצים</span>
+        <div className={`rounded-xl border p-3 ${hasGaps ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm">{hasGaps ? "⚠️" : "✅"}</span>
+            <span className="font-bold text-xs">{hasGaps ? "פערים בשבצ\"קים" : "הכל מאויש"}</span>
+            <span className="text-[10px] text-slate-500 mr-auto">{gaps.total} רכבים · {gaps.totalSoldiers} משובצים</span>
+            {gapFilter && (
+              <button onClick={() => setGapFilter(null)} className="text-[10px] text-blue-600 underline">הצג הכל</button>
+            )}
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div className={`rounded-lg p-2.5 text-center ${gaps.missingDriver > 0 ? "bg-rose-100 border border-rose-300" : "bg-white border border-slate-200"}`}>
-              <div className="text-2xl font-bold">{gaps.missingDriver > 0 ? gaps.missingDriver : "✓"}</div>
-              <div className="text-[11px] text-slate-600">🚗 חסרי נהג</div>
-            </div>
-            <div className={`rounded-lg p-2.5 text-center ${gaps.missingCommander > 0 ? "bg-amber-100 border border-amber-300" : "bg-white border border-slate-200"}`}>
-              <div className="text-2xl font-bold">{gaps.missingCommander > 0 ? gaps.missingCommander : "✓"}</div>
-              <div className="text-[11px] text-slate-600">⭐ חסרי מפקד</div>
-            </div>
-            <div className={`rounded-lg p-2.5 text-center ${gaps.missingMedic > 0 ? "bg-yellow-100 border border-yellow-300" : "bg-white border border-slate-200"}`}>
-              <div className="text-2xl font-bold">{gaps.missingMedic > 0 ? gaps.missingMedic : "✓"}</div>
-              <div className="text-[11px] text-slate-600">🏥 חסרי חובש</div>
-            </div>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => gaps.missingDriver > 0 && setGapFilter(gapFilter === "נהג" ? null : "נהג")}
+              className={`rounded-lg p-2 text-center transition ${
+                gaps.missingDriver > 0
+                  ? `bg-rose-100 border border-rose-300 cursor-pointer hover:ring-2 hover:ring-rose-400 ${gapFilter === "נהג" ? "ring-2 ring-rose-500" : ""}`
+                  : "bg-white border border-slate-200 cursor-default"
+              }`}
+            >
+              <div className="text-lg font-bold">{gaps.missingDriver > 0 ? gaps.missingDriver : "✓"}</div>
+              <div className="text-[10px] text-slate-600">🚗 חסרי נהג</div>
+            </button>
+            <button
+              onClick={() => gaps.missingCommander > 0 && setGapFilter(gapFilter === "מפקד" ? null : "מפקד")}
+              className={`rounded-lg p-2 text-center transition ${
+                gaps.missingCommander > 0
+                  ? `bg-amber-100 border border-amber-300 cursor-pointer hover:ring-2 hover:ring-amber-400 ${gapFilter === "מפקד" ? "ring-2 ring-amber-500" : ""}`
+                  : "bg-white border border-slate-200 cursor-default"
+              }`}
+            >
+              <div className="text-lg font-bold">{gaps.missingCommander > 0 ? gaps.missingCommander : "✓"}</div>
+              <div className="text-[10px] text-slate-600">⭐ חסרי מפקד</div>
+            </button>
+            <button
+              onClick={() => gaps.missingMedic > 0 && setGapFilter(gapFilter === "חובש" ? null : "חובש")}
+              className={`rounded-lg p-2 text-center transition ${
+                gaps.missingMedic > 0
+                  ? `bg-yellow-100 border border-yellow-300 cursor-pointer hover:ring-2 hover:ring-yellow-400 ${gapFilter === "חובש" ? "ring-2 ring-yellow-500" : ""}`
+                  : "bg-white border border-slate-200 cursor-default"
+              }`}
+            >
+              <div className="text-lg font-bold">{gaps.missingMedic > 0 ? gaps.missingMedic : "✓"}</div>
+              <div className="text-[10px] text-slate-600">🏥 חסרי חובש</div>
+            </button>
           </div>
         </div>
       )}
@@ -366,12 +420,14 @@ export default function TemplatesClient({
         )}
       </div>
 
-      {filteredTemplates.length === 0 ? (
-        <div className="text-sm text-slate-500 p-4">אין שבצ&quot;קים קבועים. צור חדש למעלה.</div>
+      {displayTemplates.length === 0 ? (
+        <div className="text-sm text-slate-500 p-4">
+          {gapFilter ? `אין רכבים עם חוסר ב${gapFilter}` : "אין שבצ\"קים קבועים. צור חדש למעלה."}
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredTemplates.map((t) => (
-            <TemplateCard key={t.id} template={t} onEdit={() => openEdit(t)} onDelete={() => handleDelete(t.id)} />
+          {displayTemplates.map((t) => (
+            <TemplateCard key={t.id} template={t} onEdit={() => openEdit(t)} onDelete={() => handleDelete(t.id)} licenseWarnings={driverWarnings[t.id]} />
           ))}
         </div>
       )}
@@ -526,7 +582,7 @@ function SeatCard({
   );
 }
 
-function TemplateCard({ template, onEdit, onDelete }: { template: Template; onEdit: () => void; onDelete: () => void }) {
+function TemplateCard({ template, onEdit, onDelete, licenseWarnings }: { template: Template; onEdit: () => void; onDelete: () => void; licenseWarnings?: string[] }) {
   const driver = template.soldiers.find((s) => s.role === "נהג");
   const commander = template.soldiers.find((s) => s.role === "מפקד");
   const medic = template.soldiers.find((s) => s.role === "חובש");
@@ -539,45 +595,37 @@ function TemplateCard({ template, onEdit, onDelete }: { template: Template; onEd
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
       {/* Header */}
-      <div className="bg-slate-800 text-white p-3 flex items-center justify-between">
+      <div className="bg-slate-800 text-white p-2 flex items-center justify-between">
         <div className="min-w-0">
-          <div className="font-bold text-sm truncate">{template.name}</div>
-          <div className="text-[11px] text-slate-300 font-mono">{template.vehicleName} · {template.vehicleSerial}</div>
+          <div className="font-bold text-xs truncate">{template.name}</div>
+          <div className="text-[10px] text-slate-300 font-mono">{template.vehicleName} · {template.vehicleSerial}</div>
         </div>
-        <div className="flex gap-1.5 shrink-0">
-          <button onClick={onEdit} className="text-[11px] bg-slate-700 hover:bg-slate-600 rounded px-2 py-1">✏️</button>
-          <button onClick={onDelete} className="text-[11px] bg-slate-700 hover:bg-rose-600 rounded px-2 py-1">🗑️</button>
+        <div className="flex gap-1 shrink-0">
+          <button onClick={onEdit} className="text-[10px] bg-slate-700 hover:bg-slate-600 rounded px-1.5 py-0.5">✏️</button>
+          <button onClick={onDelete} className="text-[10px] bg-slate-700 hover:bg-rose-600 rounded px-1.5 py-0.5">🗑️</button>
         </div>
       </div>
 
-      {/* Vehicle top-down view */}
-      <div className="p-4 flex justify-center">
-        <div className="relative w-48">
-          {/* Vehicle body */}
-          <div className="relative bg-gradient-to-b from-slate-700 via-slate-600 to-slate-700 rounded-t-[2rem] rounded-b-2xl border-2 border-slate-500 overflow-hidden shadow-lg">
+      {/* Compact vehicle top-down view */}
+      <div className="p-2 flex justify-center">
+        <div className="relative w-36">
+          <div className="relative bg-gradient-to-b from-slate-700 via-slate-600 to-slate-700 rounded-t-[1.5rem] rounded-b-xl border-2 border-slate-500 overflow-hidden shadow">
             {/* Windshield */}
-            <div className="bg-sky-200/60 border-b-2 border-slate-400 pt-3 pb-1 px-2">
-              <div className="bg-sky-300/40 rounded-t-xl h-3 mx-4 border border-sky-400/50" />
+            <div className="bg-sky-200/60 border-b border-slate-400 pt-2 pb-0.5 px-1">
+              <div className="bg-sky-300/40 rounded-t-lg h-2 mx-3 border border-sky-400/50" />
             </div>
+            <div className="h-0.5 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 mx-4" />
 
-            {/* Hood accent */}
-            <div className="h-1 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 mx-6" />
-
-            {/* Front seats: driver + commander */}
-            <div className="grid grid-cols-2 gap-2 p-3 pb-2">
-              <SeatBubble name={driver?.fullName} role="נהג" icon="🚗" filled={!!driver} color="blue" />
+            {/* Front seats */}
+            <div className="grid grid-cols-2 gap-1.5 p-2 pb-1">
+              <SeatBubble name={driver?.fullName} role="נהג" icon="🚗" filled={!!driver} color="blue" warn={licenseWarnings?.includes(driver?.fullName || "")} />
               <SeatBubble name={commander?.fullName} role="מפקד" icon="⭐" filled={!!commander} color="amber" />
             </div>
 
-            {/* Divider */}
-            <div className="flex items-center gap-1 px-3">
-              <div className="flex-1 border-t border-dashed border-slate-400" />
-              <span className="text-[8px] text-slate-400">מושבים אחוריים</span>
-              <div className="flex-1 border-t border-dashed border-slate-400" />
-            </div>
+            <div className="border-t border-dashed border-slate-400 mx-2" />
 
             {/* Back seats */}
-            <div className="grid grid-cols-2 gap-2 p-3 pt-2">
+            <div className="grid grid-cols-2 gap-1.5 p-2 pt-1">
               {back.length > 0 ? back.map((s) => (
                 <SeatBubble key={s.id} name={s.fullName} role={s.role} icon={ROLE_ICONS[s.role] || "🎖️"} filled color={s.role === "חובש" ? "green" : "slate"} />
               )) : (
@@ -588,35 +636,39 @@ function TemplateCard({ template, onEdit, onDelete }: { template: Template; onEd
               )}
             </div>
 
-            {/* Tailgate */}
-            <div className="h-2 bg-gradient-to-r from-rose-500 via-rose-400 to-rose-500 mx-4 mb-2 rounded-full opacity-70" />
+            <div className="h-1.5 bg-gradient-to-r from-rose-500 via-rose-400 to-rose-500 mx-3 mb-1.5 rounded-full opacity-70" />
           </div>
 
-          {/* Wheels */}
-          <div className="absolute top-12 -right-2.5 w-5 h-8 bg-slate-900 rounded-full border-2 border-slate-600" />
-          <div className="absolute top-12 -left-2.5 w-5 h-8 bg-slate-900 rounded-full border-2 border-slate-600" />
-          <div className="absolute bottom-8 -right-2.5 w-5 h-8 bg-slate-900 rounded-full border-2 border-slate-600" />
-          <div className="absolute bottom-8 -left-2.5 w-5 h-8 bg-slate-900 rounded-full border-2 border-slate-600" />
-
-          {/* Side mirrors */}
-          <div className="absolute top-10 -right-4 w-2 h-3 bg-slate-500 rounded-sm" />
-          <div className="absolute top-10 -left-4 w-2 h-3 bg-slate-500 rounded-sm" />
+          {/* Wheels - smaller */}
+          <div className="absolute top-8 -right-2 w-4 h-6 bg-slate-900 rounded-full border border-slate-600" />
+          <div className="absolute top-8 -left-2 w-4 h-6 bg-slate-900 rounded-full border border-slate-600" />
+          <div className="absolute bottom-5 -right-2 w-4 h-6 bg-slate-900 rounded-full border border-slate-600" />
+          <div className="absolute bottom-5 -left-2 w-4 h-6 bg-slate-900 rounded-full border border-slate-600" />
+          <div className="absolute top-7 -right-3 w-1.5 h-2 bg-slate-500 rounded-sm" />
+          <div className="absolute top-7 -left-3 w-1.5 h-2 bg-slate-500 rounded-sm" />
         </div>
       </div>
 
+      {/* License warning */}
+      {licenseWarnings && licenseWarnings.length > 0 && (
+        <div className="px-2 py-1 bg-rose-50 border-t border-rose-200 text-[10px] text-rose-700 text-center">
+          🚨 {licenseWarnings.join(", ")} — ללא הרשאת נהיגה / ריענון
+        </div>
+      )}
+
       {/* Status bar */}
-      <div className={`px-3 py-2 text-center text-[11px] border-t ${missingRoles.length > 0 ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-emerald-50 border-emerald-200 text-emerald-700"}`}>
+      <div className={`px-2 py-1.5 text-center text-[10px] border-t ${missingRoles.length > 0 ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-emerald-50 border-emerald-200 text-emerald-700"}`}>
         {missingRoles.length > 0 ? (
           <span>⚠️ חסרים: {missingRoles.map((r) => `${ROLE_ICONS[r]} ${r}`).join(" · ")}</span>
         ) : (
-          <span>✅ מאויש מלא · {template.soldiers.length} משובצים</span>
+          <span>✅ מאויש · {template.soldiers.length} משובצים</span>
         )}
       </div>
     </div>
   );
 }
 
-function SeatBubble({ name, role, icon, filled, color }: { name?: string; role: string; icon: string; filled: boolean; color: string }) {
+function SeatBubble({ name, role, icon, filled, color, warn }: { name?: string; role: string; icon: string; filled: boolean; color: string; warn?: boolean }) {
   const filledColors: Record<string, string> = {
     blue: "bg-blue-500 text-white border-blue-300 shadow-blue-500/30",
     amber: "bg-amber-500 text-white border-amber-300 shadow-amber-500/30",
@@ -630,12 +682,13 @@ function SeatBubble({ name, role, icon, filled, color }: { name?: string; role: 
     slate: "border-dashed border-slate-400/60 text-slate-400",
   };
   return (
-    <div className={`rounded-lg border p-1.5 text-center transition ${
+    <div className={`rounded-lg border p-1 text-center transition ${
+      warn ? "bg-rose-500 text-white border-rose-300 shadow-rose-500/30 shadow-md ring-1 ring-rose-400" :
       filled ? `${filledColors[color]} shadow-md` : `bg-slate-700/50 ${emptyColors[color]}`
     }`}>
-      <div className="text-sm leading-none">{icon}</div>
-      <div className="text-[9px] font-bold truncate mt-0.5 leading-tight">{name || role}</div>
-      {filled && name && <div className="text-[8px] opacity-70 leading-tight">{role}</div>}
+      <div className="text-xs leading-none">{warn ? "⚠️" : icon}</div>
+      <div className="text-[8px] font-bold truncate mt-0.5 leading-tight">{name || role}</div>
+      {filled && name && <div className="text-[7px] opacity-70 leading-tight">{warn ? "אין הרשאה!" : role}</div>}
     </div>
   );
 }

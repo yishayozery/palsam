@@ -24,10 +24,6 @@ export async function saveTemplate(formData: FormData): Promise<{ ok?: boolean; 
 
     if (!name) return { error: "הזן שם לשבצ\"ק" };
     if (!vehicleSerialUnitId) return { error: "בחר רכב" };
-    if (assignments.length === 0) return { error: "הוסף לפחות חייל אחד" };
-
-    const hasDriver = assignments.some((a) => a.role === "נהג");
-    if (!hasDriver) return { error: "חייב להגדיר נהג" };
 
     const vehicle = await prisma.serialUnit.findUnique({
       where: { id: vehicleSerialUnitId },
@@ -37,8 +33,8 @@ export async function saveTemplate(formData: FormData): Promise<{ ok?: boolean; 
 
     const requiredLicenseIds = vehicle.itemType.requiredLicenses.map((rl) => rl.licenseTypeId);
 
-    if (requiredLicenseIds.length > 0) {
-      const driverIds = assignments.filter((a) => a.role === "נהג").map((a) => a.soldierId);
+    const driverIds = assignments.filter((a) => a.role === "נהג").map((a) => a.soldierId);
+    if (requiredLicenseIds.length > 0 && driverIds.length > 0) {
       const driversWithLicenses = await prisma.soldierDrivingLicense.findMany({
         where: { soldierId: { in: driverIds }, licenseTypeId: { in: requiredLicenseIds } },
         select: { soldierId: true },
