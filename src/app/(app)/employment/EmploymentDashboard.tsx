@@ -52,6 +52,9 @@ export default function EmploymentDashboard({ data }: { data: DashboardEntry[] }
           ? Math.round((cumulativeActual / cumulativeAllocated) * 100)
           : 0;
 
+        const totalAllocated = entry.allocations.reduce((s, a) => s + a.allocated, 0);
+        const overage = totalAllocated - entry.totalDays;
+
         const companyIds = [...new Set(entry.allocations.map((a) => a.companyId))];
         const companyMap = new Map<string, string>();
         for (const a of entry.allocations) companyMap.set(a.companyId, a.companyName);
@@ -69,6 +72,9 @@ export default function EmploymentDashboard({ data }: { data: DashboardEntry[] }
           const cumAct = entry.attendanceCounts
             .filter((c) => c.companyId === cid)
             .reduce((s, c) => s + c.count, 0);
+          const companyTotalAlloc = entry.allocations
+            .filter((a) => a.companyId === cid)
+            .reduce((s, a) => s + a.allocated, 0);
 
           return {
             name: companyMap.get(cid) || cid,
@@ -78,17 +84,26 @@ export default function EmploymentDashboard({ data }: { data: DashboardEntry[] }
             cumPct: cumAlloc > 0 ? Math.round((cumAct / cumAlloc) * 100) : 0,
             cumAct,
             cumAlloc,
+            companyTotalAlloc,
           };
         });
 
         return (
           <Card key={idx} className="p-4 md:p-6">
             <h3 className="text-lg font-bold text-slate-800 mb-4">{entry.employmentName}</h3>
+
+            {/* Overage warning */}
+            {overage > 0 && (
+              <div className="bg-rose-50 border border-rose-300 rounded-lg p-2 text-sm text-rose-800 mb-4">
+                ⚠️ חריגה: סה״כ הקצאות ({totalAllocated}) חורג מ-{entry.totalDays} ימי מילואים ב-<strong>{overage}</strong> ימים
+              </div>
+            )}
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <StatCard
                 label="נוכחות היום"
                 value={`${todayPct}%`}
-                hint={`${todayActualTotal} / ${todayAllocatedTotal}`}
+                hint={`${todayActualTotal} / ${todayAllocatedTotal} אושרו`}
                 tone={toneForPercent(todayPct)}
               />
               <StatCard
@@ -98,9 +113,10 @@ export default function EmploymentDashboard({ data }: { data: DashboardEntry[] }
                 tone={toneForPercent(cumulativePct)}
               />
               <StatCard
-                label="סה״כ ימי מילואים מתוכננים"
+                label="סה״כ מתוכננים"
                 value={entry.totalDays}
-                tone="slate"
+                hint={`הוקצו: ${totalAllocated}${overage > 0 ? ` (+${overage} חריגה)` : ""}`}
+                tone={overage > 0 ? "rose" : "slate"}
               />
               <StatCard
                 label="ימי מילואים שנוצלו"
@@ -119,7 +135,10 @@ export default function EmploymentDashboard({ data }: { data: DashboardEntry[] }
                       key={co.name}
                       className={`rounded-lg p-3 border ${bgClass(co.cumPct)} border-slate-200`}
                     >
-                      <div className="font-medium text-sm text-slate-800">{co.name}</div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-sm text-slate-800">{co.name}</span>
+                        <span className="text-[10px] text-slate-500">מכסה: {co.companyTotalAlloc}</span>
+                      </div>
                       <div className="flex gap-4 mt-1 text-xs">
                         <span className={colorClass(co.todayPct)}>
                           היום: {co.todayAct}/{co.todayAlloc} ({co.todayPct}%)

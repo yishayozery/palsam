@@ -75,6 +75,7 @@ export default async function EmploymentDetailPage({
         dates={dates}
         initialAllocations={allocationMap}
         dailyAverage={dailyAverage}
+        totalDays={employment.totalDays}
         canManage={canManage}
       />
     </div>

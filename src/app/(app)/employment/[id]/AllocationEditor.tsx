@@ -13,6 +13,7 @@ export default function AllocationEditor({
   dates,
   initialAllocations,
   dailyAverage,
+  totalDays,
   canManage,
 }: {
   employmentId: string;
@@ -20,6 +21,7 @@ export default function AllocationEditor({
   dates: string[];
   initialAllocations: Record<string, number>;
   dailyAverage: number | null;
+  totalDays: number;
   canManage: boolean;
 }) {
   const router = useRouter();
@@ -27,6 +29,14 @@ export default function AllocationEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [companyPcts, setCompanyPcts] = useState<Record<string, number>>(() => {
+    const even = Math.floor(100 / companies.length);
+    const pcts: Record<string, number> = {};
+    companies.forEach((c, i) => {
+      pcts[c.id] = i === companies.length - 1 ? 100 - even * (companies.length - 1) : even;
+    });
+    return pcts;
+  });
 
   const getValue = useCallback(
     (companyId: string, date: string) => {
@@ -56,6 +66,8 @@ export default function AllocationEditor({
     }
     return { byDate, byCompany, grand };
   }, [companies, dates, getValue]);
+
+  const overage = totals.grand - totalDays;
 
   function formatDateShort(iso: string) {
     const d = new Date(iso + "T00:00:00Z");
@@ -107,20 +119,92 @@ export default function AllocationEditor({
     setSuccess(false);
   }
 
+  function distributeByPercentage() {
+    const pctSum = Object.values(companyPcts).reduce((s, v) => s + v, 0);
+    if (pctSum === 0) return;
+    const dailyTotal = Math.ceil(totalDays / dates.length);
+    const next: Record<string, number> = {};
+    for (const co of companies) {
+      const pct = companyPcts[co.id] || 0;
+      const perDay = Math.round((dailyTotal * pct) / pctSum);
+      for (const dt of dates) {
+        next[`${co.id}_${dt}`] = perDay;
+      }
+    }
+    setAllocations(next);
+    setSuccess(false);
+  }
+
+  function setCompanyTotal(companyId: string, newTotal: number) {
+    const perDay = dates.length > 0 ? Math.ceil(newTotal / dates.length) : 0;
+    setAllocations((prev) => {
+      const next = { ...prev };
+      for (const dt of dates) {
+        next[`${companyId}_${dt}`] = perDay;
+      }
+      return next;
+    });
+    setSuccess(false);
+  }
+
   return (
     <Card className="p-2 md:p-4">
       {canManage && (
-        <div className="flex flex-wrap gap-2 mb-4 items-center">
-          <Button type="button" onClick={handleSave} disabled={saving}>
-            {saving ? "שומר..." : "שמור הקצאות"}
-          </Button>
-          {dailyAverage !== null && (
-            <Button type="button" variant="secondary" onClick={fillAverage}>
-              מלא ממוצע ({dailyAverage} ליום)
+        <div className="space-y-3 mb-4">
+          <div className="flex flex-wrap gap-2 items-center">
+            <Button type="button" onClick={handleSave} disabled={saving}>
+              {saving ? "שומר..." : "שמור הקצאות"}
             </Button>
+            {dailyAverage !== null && (
+              <Button type="button" variant="secondary" onClick={fillAverage}>
+                מלא ממוצע ({dailyAverage} ליום)
+              </Button>
+            )}
+            <Button type="button" variant="secondary" onClick={distributeByPercentage}>
+              חלק לפי אחוזים
+            </Button>
+            {error && <span className="text-sm text-rose-600">{error}</span>}
+            {success && <span className="text-sm text-emerald-600">נשמר בהצלחה</span>}
+          </div>
+
+          {/* Percentage distribution controls */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="text-xs font-semibold text-blue-800 mb-2">חלוקה באחוזים ({totalDays} ימי מילואים)</div>
+            <div className="flex flex-wrap gap-3 items-end">
+              {companies.map((co) => (
+                <div key={co.id} className="flex flex-col items-center">
+                  <label className="text-[10px] text-slate-600 mb-0.5">{co.name}</label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number" min={0} max={100}
+                      value={companyPcts[co.id] || 0}
+                      onChange={(e) => setCompanyPcts((prev) => ({ ...prev, [co.id]: parseInt(e.target.value, 10) || 0 }))}
+                      className="w-14 text-center rounded border border-blue-300 px-1 py-1 text-sm"
+                    />
+                    <span className="text-[10px] text-slate-500">%</span>
+                  </div>
+                  <span className="text-[10px] text-blue-600 mt-0.5">
+                    {Math.round((totalDays * (companyPcts[co.id] || 0)) / Math.max(1, Object.values(companyPcts).reduce((s, v) => s + v, 0)))} ימים
+                  </span>
+                </div>
+              ))}
+              <div className="text-xs text-slate-500">
+                סה״כ: {Object.values(companyPcts).reduce((s, v) => s + v, 0)}%
+              </div>
+            </div>
+          </div>
+
+          {/* Overage warning */}
+          {overage > 0 && (
+            <div className="bg-rose-50 border border-rose-300 rounded-lg p-2 text-sm text-rose-800">
+              ⚠️ חריגה: סה״כ הקצאות ({totals.grand}) חורג מ-{totalDays} ימי מילואים ב-<strong>{overage}</strong> ימים
+            </div>
           )}
-          {error && <span className="text-sm text-rose-600">{error}</span>}
-          {success && <span className="text-sm text-emerald-600">נשמר בהצלחה</span>}
+          {overage < 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-sm text-amber-700">
+              נותרו {Math.abs(overage)} ימים לא מוקצים מתוך {totalDays}
+            </div>
+          )}
         </div>
       )}
 
@@ -150,6 +234,11 @@ export default function AllocationEditor({
               <th className="px-3 py-2 text-center border border-slate-200 bg-slate-100 font-semibold text-slate-600">
                 סה״כ
               </th>
+              {canManage && (
+                <th className="px-2 py-2 text-center border border-slate-200 bg-blue-50 font-semibold text-blue-700 text-xs">
+                  עריכת סה״כ
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -181,20 +270,36 @@ export default function AllocationEditor({
                 <td className="px-3 py-1 border border-slate-200 text-center font-semibold bg-slate-50">
                   {totals.byCompany[co.id] || 0}
                 </td>
+                {canManage && (
+                  <td className="px-0 py-0 border border-slate-200 bg-blue-50/50">
+                    <input
+                      type="number" min={0}
+                      value={totals.byCompany[co.id] || ""}
+                      onChange={(e) => setCompanyTotal(co.id, parseInt(e.target.value, 10) || 0)}
+                      className="w-16 text-center py-1 text-sm border-0 bg-transparent focus:ring-2 focus:ring-blue-300 rounded font-semibold text-blue-700"
+                    />
+                  </td>
+                )}
               </tr>
             ))}
             <tr className="bg-slate-100 font-semibold">
               <td className="sticky right-0 z-10 bg-slate-100 px-3 py-2 border border-slate-200 text-slate-700">
-                סה״כ
+                סה״כ יומי
               </td>
               {dates.map((dt) => (
                 <td key={dt} className="px-1 py-2 border border-slate-200 text-center text-xs">
                   {totals.byDate[dt] || 0}
                 </td>
               ))}
-              <td className="px-3 py-2 border border-slate-200 text-center text-blue-700">
+              <td className={`px-3 py-2 border border-slate-200 text-center ${overage > 0 ? "text-rose-700 bg-rose-50" : "text-blue-700"}`}>
                 {totals.grand}
+                {overage !== 0 && (
+                  <div className={`text-[10px] ${overage > 0 ? "text-rose-600" : "text-amber-600"}`}>
+                    ({overage > 0 ? "+" : ""}{overage})
+                  </div>
+                )}
               </td>
+              {canManage && <td className="border border-slate-200" />}
             </tr>
           </tbody>
         </table>
