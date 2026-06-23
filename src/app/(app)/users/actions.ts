@@ -38,7 +38,12 @@ export async function saveUser(formData: FormData) {
   let systemRoleId: string | null = null;
   if (systemRoleIdRaw) {
     const sr = await prisma.systemRole.findUnique({ where: { id: systemRoleIdRaw } });
-    if (sr && sr.battalionId === battalionId) systemRoleId = sr.id;
+    if (sr && sr.battalionId === battalionId) {
+      systemRoleId = sr.id;
+      if (sr.isAdmin) role = "BATTALION_ADMIN" as Role;
+      else if (sr.isCommander) role = "COMPANY_REP" as Role;
+      else if (!role || role === "VIEWER") role = "VIEWER" as Role;
+    }
   }
 
   // קצין מחסן יכול להיות משויך לכמה מחסנים (getAll). שאר התפקידים — מחזיק יחיד.

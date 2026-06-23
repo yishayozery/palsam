@@ -31,7 +31,7 @@ type User = {
 type Holder = { id: string; name: string; kind: string };
 type Squad = { id: string; name: string; companyId: string; companyName: string };
 type CustomRole = { id: string; name: string; template: string };
-type SystemRoleOpt = { id: string; name: string };
+type SystemRoleOpt = { id: string; name: string; isAdmin: boolean; isCommander: boolean };
 
 const ROLE_FILTER_OPTS: { v: Role; l: string }[] = [
   { v: "BATTALION_ADMIN", l: 'מפ״מ' },
@@ -109,9 +109,12 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
   const [check, setCheck] = useState<{ available?: boolean; taken?: boolean; recommended?: string | null }>({});
   const [checking, setChecking] = useState(false);
 
-  const effectiveTemplate = role.startsWith("custom:")
-    ? customRoles.find((c) => c.id === role.slice(7))?.template ?? "VIEWER"
-    : role;
+  const selectedSR = systemRoles.find((r) => r.id === selectedSystemRoleId);
+  const effectiveTemplate = selectedSR
+    ? (selectedSR.isAdmin ? "BATTALION_ADMIN" : selectedSR.isCommander ? "COMPANY_REP" : "VIEWER")
+    : role.startsWith("custom:")
+      ? customRoles.find((c) => c.id === role.slice(7))?.template ?? "VIEWER"
+      : role;
 
   const warehouses = holders.filter((h) => h.kind === "WAREHOUSE");
   const companies = holders.filter((h) => h.kind === "COMPANY");
@@ -241,33 +244,50 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
             </div>
           )}
 
-          {/* Role */}
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">תפקיד במערכת</label>
-            <select name="role" value={role} onChange={(e) => { setRole(e.target.value); setSelectedHolderIds(new Set()); setSelectedSquadIds(new Set()); }}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-              <optgroup label="תפקידים בסיסיים">
-                {ROLE_OPTS.map((r) => <option key={r} value={r}>{BUILTIN_LABELS[r]}</option>)}
-              </optgroup>
-              {customRoles.length > 0 && (
-                <optgroup label="תפקידים מותאמים">
-                  {customRoles.map((c) => <option key={c.id} value={`custom:${c.id}`}>{c.name}</option>)}
-                </optgroup>
-              )}
-            </select>
-          </div>
-
-          {/* SystemRole — screen-level permissions */}
-          {systemRoles.length > 0 && (
+          {/* Role — SystemRole is primary when roles exist */}
+          {systemRoles.length > 0 ? (
             <div>
-              <label className="block text-xs text-slate-500 mb-1">פרופיל הרשאות (הרשאות מסכים)</label>
-              <select name="systemRoleId" value={selectedSystemRoleId} onChange={(e) => setSelectedSystemRoleId(e.target.value)}
+              <label className="block text-xs text-slate-500 mb-1">תפקיד</label>
+              <select name="systemRoleId" value={selectedSystemRoleId} onChange={(e) => {
+                setSelectedSystemRoleId(e.target.value);
+                const sr = systemRoles.find((r) => r.id === e.target.value);
+                if (sr) {
+                  setRole(sr.isAdmin ? "BATTALION_ADMIN" : sr.isCommander ? "COMPANY_REP" : "VIEWER");
+                }
+                setSelectedHolderIds(new Set());
+                setSelectedSquadIds(new Set());
+              }}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                <option value="">ברירת מחדל (לפי תפקיד)</option>
+                <option value="">— בחר תפקיד —</option>
                 {systemRoles.map((sr) => <option key={sr.id} value={sr.id}>{sr.name}</option>)}
               </select>
+              <input type="hidden" name="role" value={role} />
+              {selectedSystemRoleId && (() => {
+                const sr = systemRoles.find((r) => r.id === selectedSystemRoleId);
+                return sr ? (
+                  <p className="text-[11px] mt-1 text-slate-500">
+                    {sr.isAdmin ? "🔑 מנהל — רואה את כל הגדוד" : sr.isCommander ? "🪖 מפקד — משויך לפלוגה" : "👤 צופה — הרשאות לפי מסכים"}
+                    {" · "}<a href="/roles" className="text-blue-600 hover:underline">ניהול תפקידים</a>
+                  </p>
+                ) : null;
+              })()}
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">תפקיד במערכת</label>
+              <select name="role" value={role} onChange={(e) => { setRole(e.target.value); setSelectedHolderIds(new Set()); setSelectedSquadIds(new Set()); }}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <optgroup label="תפקידים בסיסיים">
+                  {ROLE_OPTS.map((r) => <option key={r} value={r}>{BUILTIN_LABELS[r]}</option>)}
+                </optgroup>
+                {customRoles.length > 0 && (
+                  <optgroup label="תפקידים מותאמים">
+                    {customRoles.map((c) => <option key={c.id} value={`custom:${c.id}`}>{c.name}</option>)}
+                  </optgroup>
+                )}
+              </select>
               <p className="text-[11px] text-slate-400 mt-1">
-                פרופיל הרשאות קובע לאילו מסכים למשתמש יש גישה. ניהול פרופילים ב<a href="/roles" className="text-blue-600 hover:underline">ניהול הרשאות</a>.
+                💡 הגדר תפקידים עם הרשאות מסכים ב<a href="/roles" className="text-blue-600 hover:underline">הרשאות ותפקידים</a>
               </p>
             </div>
           )}
