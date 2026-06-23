@@ -12,14 +12,15 @@ export async function saveCompanyRole(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
   const isCommander = formData.get("isCommander") === "on" || formData.get("isCommander") === "true";
   const sortOrder = parseInt(String(formData.get("sortOrder") || "0"), 10) || 0;
-  if (!name) return;
+  const companyId = user.holderId || String(formData.get("companyId") || "");
+  if (!name || !companyId) return;
 
   if (id) {
     await prisma.companyRole.update({ where: { id }, data: { name, isCommander, sortOrder } });
   } else {
-    await prisma.companyRole.create({ data: { battalionId: bId, name, isCommander, sortOrder } });
+    await prisma.companyRole.create({ data: { battalionId: bId, companyId, name, isCommander, sortOrder } });
   }
-  await audit(user.id, id ? "UPDATE" : "CREATE", "CompanyRole", id || name);
+  await audit(user.id, id ? "UPDATE" : "CREATE", "CompanyRole", id || name, { companyId });
   revalidatePath("/soldiers");
 }
 

@@ -4,6 +4,17 @@ import { useState, useMemo, useEffect } from "react";
 import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
 import { saveUser, regenerateInvite, toggleUser, clearRateLimits } from "../actions";
 
+const HEB_MAP: Record<string, string> = {
+  א:"a",ב:"b",ג:"g",ד:"d",ה:"h",ו:"v",ז:"z",ח:"ch",ט:"t",י:"y",
+  כ:"k",ך:"k",ל:"l",מ:"m",ם:"m",נ:"n",ן:"n",ס:"s",ע:"a",פ:"p",
+  ף:"f",צ:"tz",ץ:"tz",ק:"k",ר:"r",ש:"sh",ת:"t",
+};
+function transliterate(heb: string): string {
+  let out = "";
+  for (const ch of heb) out += HEB_MAP[ch] ?? (/[A-Za-z0-9._-]/.test(ch) ? ch : "");
+  return out.toLowerCase();
+}
+
 type Role = "SUPER_ADMIN" | "BATTALION_ADMIN" | "WAREHOUSE_MANAGER" | "COMPANY_REP" | "VIEWER" | "SHALISH" | "MAGAD" | "SAMAGAD";
 type User = {
   id: string;
@@ -212,15 +223,16 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, soldi
   }, [relevantSquads]);
 
   useEffect(() => {
-    if (!isNew || username) return;
+    if (!isNew) return;
     if (!fullName.trim()) return;
-    const first = fullName.trim().split(/\s+/)[0] ?? "";
-    const slug = first.replace(/[^A-Za-z֐-׿0-9_.-]+/g, "").slice(0, 24);
-    if (slug) {
-      const suffix = brigade || battalionCode;
-      setUsername(suffix ? `${slug}.${suffix}` : slug);
-    }
-  }, [fullName, isNew, username, brigade, battalionCode]);
+    const parts = fullName.trim().split(/\s+/);
+    const first = transliterate(parts[0] ?? "");
+    const last = transliterate(parts[parts.length - 1] ?? "");
+    const slug = parts.length > 1 && last ? `${first}${last}` : first;
+    if (!slug) return;
+    const suffix = brigade || battalionCode;
+    setUsername(suffix ? `${slug}.${suffix}` : slug);
+  }, [fullName, isNew, brigade, battalionCode]);
 
   useEffect(() => {
     if (!isNew) return;

@@ -68,8 +68,13 @@ export default async function SoldiersPage({
       include: { company: { select: { name: true } } },
     }),
     prisma.companyRole.findMany({
-      where: { battalionId: bId, active: true },
+      where: {
+        battalionId: bId,
+        active: true,
+        ...(effectiveCompanyId ? { companyId: effectiveCompanyId } : {}),
+      },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: { company: { select: { name: true } } },
     }),
   ]);
 
@@ -301,16 +306,30 @@ export default async function SoldiersPage({
           { name: "name", label: "שם התפקיד" },
           { name: "isCommander", label: "פיקודי", type: "checkbox" as const },
           { name: "sortOrder", label: "סדר", type: "number" as const },
+          ...(user.holderId
+            ? []
+            : [{
+                name: "companyId",
+                label: "פלוגה",
+                type: "select" as const,
+                options: companies.map((c) => ({ value: c.id, label: c.name })),
+              }]),
         ]}
         saveAction={saveCompanyRole}
         deleteAction={toggleCompanyRole}
         rows={companyRoles.map((r) => ({
           id: r.id,
-          values: { name: r.name, isCommander: r.isCommander, sortOrder: String(r.sortOrder) },
+          values: {
+            name: r.name,
+            isCommander: r.isCommander,
+            sortOrder: String(r.sortOrder),
+            companyId: r.companyId ?? "",
+          },
           display: (
             <span className="flex items-center gap-2">
               <span className="font-medium">{r.name}</span>
               {r.isCommander && <Badge className="bg-amber-100 text-amber-800">⭐ פיקודי</Badge>}
+              {!user.holderId && r.company && <Badge>{r.company.name}</Badge>}
             </span>
           ),
         }))}

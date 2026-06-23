@@ -353,6 +353,7 @@ model Holder {
   companyItemBaselines CompanyItemBaseline[] @relation("HolderBaselines")
   companyAllocations   CompanyAllocation[]  @relation("HolderAllocations")
   squads               Squad[]
+  companyRoles         CompanyRole[]
   dispatchAssignments VehicleAssignment[] @relation("CompanyDispatch")
   // קשרי מחסן↔פלוגה (איזה פלוגות המחסן עובד מולן)
   warehouseLinks   WarehouseCompany[] @relation("WarehouseSide")
@@ -1168,6 +1169,8 @@ model CompanyRole {
   id          String   @id @default(cuid())
   battalionId String
   battalion   Battalion @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  companyId   String?
+  company     Holder?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name        String
   isCommander Boolean  @default(false)
   sortOrder   Int      @default(0)
@@ -1176,8 +1179,9 @@ model CompanyRole {
 
   soldiers    Soldier[]
 
-  @@unique([battalionId, name])
+  @@unique([companyId, name])
   @@index([battalionId])
+  @@index([companyId])
 }
 
 // ===================== נוכחות (Attendance) =====================

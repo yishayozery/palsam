@@ -127,7 +127,11 @@ export default async function AttendancePage({
       select: { id: true, name: true },
     }),
     prisma.companyRole.findMany({
-      where: { battalionId: bId, active: true },
+      where: {
+        battalionId: bId,
+        active: true,
+        ...(isAll ? {} : { companyId: selectedCompanyId }),
+      },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       select: { id: true, name: true, isCommander: true },
     }),
