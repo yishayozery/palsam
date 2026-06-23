@@ -3,12 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/guard";
-import { can } from "@/lib/rbac";
+import { canEdit } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 
 export async function saveCertificationType(formData: FormData) {
   const user = await requireUser();
-  if (!can(user, "dispatch.manage")) return;
+  if (!canEdit(user, "certifications")) return;
   const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
@@ -27,7 +27,7 @@ export async function saveCertificationType(formData: FormData) {
 
 export async function toggleCertificationType(formData: FormData) {
   const user = await requireUser();
-  if (!can(user, "dispatch.manage")) return;
+  if (!canEdit(user, "certifications")) return;
   const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
   const existing = await prisma.certificationType.findUnique({ where: { id } });
@@ -39,7 +39,7 @@ export async function toggleCertificationType(formData: FormData) {
 
 export async function saveSoldierCertifications(formData: FormData) {
   const user = await requireUser();
-  if (!can(user, "dispatch.manage")) return;
+  if (!canEdit(user, "certifications")) return;
   const bId = user.battalionId!;
 
   const soldierId = String(formData.get("soldierId") || "");

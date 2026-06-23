@@ -243,7 +243,7 @@ export const PRESET_ROLES: {
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
       { screen: "attendance", level: "EDIT" }, { screen: "employment", level: "VIEW" },
-      { screen: "dispatch", level: "EDIT" }, { screen: "certifications", level: "EDIT" },
+      { screen: "dispatch", level: "EDIT" }, { screen: "certifications", level: "VIEW" },
       { screen: "signatures", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
       { screen: "counts", level: "EDIT" }, { screen: "donations", level: "EDIT" },
       { screen: "vacation", level: "EDIT" },
@@ -274,7 +274,7 @@ export const PRESET_ROLES: {
     name: 'קשר"ג', isAdmin: false, isCommander: false, sortOrder: 7,
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
-      { screen: "dispatch", level: "EDIT" }, { screen: "certifications", level: "EDIT" },
+      { screen: "dispatch", level: "EDIT" }, { screen: "certifications", level: "VIEW" },
       { screen: "stock", level: "EDIT" }, { screen: "catalog", level: "EDIT" },
       { screen: "signatures", level: "EDIT" }, { screen: "counts", level: "EDIT" },
       { screen: "gaps", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
@@ -306,7 +306,7 @@ export const PRESET_ROLES: {
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
       { screen: "dispatch", level: "EDIT" },
-      { screen: "driving_licenses", level: "EDIT" }, { screen: "certifications", level: "EDIT" }, { screen: "maintenance", level: "EDIT" },
+      { screen: "driving_licenses", level: "EDIT" }, { screen: "certifications", level: "VIEW" }, { screen: "maintenance", level: "EDIT" },
       { screen: "stock", level: "EDIT" }, { screen: "catalog", level: "EDIT" },
       { screen: "signatures", level: "EDIT" }, { screen: "counts", level: "EDIT" },
       { screen: "gaps", level: "EDIT" }, { screen: "transfers", level: "EDIT" },

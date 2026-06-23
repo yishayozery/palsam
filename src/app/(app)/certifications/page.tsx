@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/guard";
-import { can } from "@/lib/rbac";
+import { can, canEdit } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui";
@@ -15,12 +15,13 @@ export default async function CertificationsPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const user = await requireUser();
-  if (!can(user, "dispatch.manage")) redirect("/dashboard");
+  const canView = can(user, "certifications");
+  if (!canView) redirect("/dashboard");
   const bId = user.battalionId!;
   const { tab = "soldiers" } = await searchParams;
 
-  const canManageTypes = can(user, "battalion.profile") || user.role === "WAREHOUSE_MANAGER";
-  const canEditCerts = canManageTypes || can(user, "dispatch.manage");
+  const canEditCerts = canEdit(user, "certifications");
+  const canManageTypes = canEditCerts;
 
   const [certTypes, soldiers, companies] = await Promise.all([
     prisma.certificationType.findMany({
