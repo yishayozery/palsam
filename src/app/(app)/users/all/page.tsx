@@ -38,7 +38,7 @@ export default async function AllUsersPage({
       include: { company: { select: { id: true, name: true } } },
     }),
     prisma.customRole.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" } }),
-    prisma.systemRole.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, isAdmin: true, isCommander: true } }),
+    prisma.systemRole.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, isAdmin: true, isCommander: true, permissions: { select: { screen: true, level: true } } } }),
   ]);
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
@@ -64,7 +64,7 @@ export default async function AllUsersPage({
         holders={holders.map((h) => ({ id: h.id, name: h.name, kind: h.kind }))}
         squads={squads.map((s) => ({ id: s.id, name: s.name, companyId: s.company.id, companyName: s.company.name }))}
         customRoles={customRoles.map((r) => ({ id: r.id, name: r.name, template: r.template }))}
-        systemRoles={systemRoles.map((r) => ({ id: r.id, name: r.name, isAdmin: r.isAdmin, isCommander: r.isCommander }))}
+        systemRoles={systemRoles.map((r) => ({ id: r.id, name: r.name, isAdmin: r.isAdmin, isCommander: r.isCommander, screens: r.permissions.map((p) => p.screen) }))}
         brigade={battalion?.brigade ?? ""}
         battalionCode={battalion?.code ?? ""}
         users={users.map((u) => ({

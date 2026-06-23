@@ -46,11 +46,21 @@ export async function saveUser(formData: FormData) {
     }
   }
 
-  // קצין מחסן יכול להיות משויך לכמה מחסנים (getAll). שאר התפקידים — מחזיק יחיד.
-  let holderIds = formData.getAll("holderId").map(String).filter(Boolean);
-  if (role !== "WAREHOUSE_MANAGER" && role !== "COMPANY_REP" && role !== "VIEWER") holderIds = [];
-  if (role !== "WAREHOUSE_MANAGER") holderIds = holderIds.slice(0, 1); // יחיד לרס"פ/צופה
-  const holderId = holderIds[0] || null;
+  // holderId = warehouse checkboxes, companyHolderId = company dropdown
+  const warehouseIds = formData.getAll("holderId").map(String).filter(Boolean);
+  const companyHolderId = String(formData.get("companyHolderId") || "").trim() || null;
+
+  // Combine: warehouses + optional company
+  let holderIds: string[] = [];
+  if (role === "WAREHOUSE_MANAGER") {
+    holderIds = [...warehouseIds];
+    if (companyHolderId) holderIds.push(companyHolderId);
+  } else if (role === "COMPANY_REP" || role === "VIEWER") {
+    if (companyHolderId) holderIds = [companyHolderId];
+  }
+
+  // Primary holderId: company takes priority for scoping, else first warehouse
+  const holderId = companyHolderId || warehouseIds[0] || null;
 
   const squadIds = formData.getAll("squadId").map(String).filter(Boolean);
 

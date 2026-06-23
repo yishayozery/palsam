@@ -31,7 +31,7 @@ type User = {
 type Holder = { id: string; name: string; kind: string };
 type Squad = { id: string; name: string; companyId: string; companyName: string };
 type CustomRole = { id: string; name: string; template: string };
-type SystemRoleOpt = { id: string; name: string; isAdmin: boolean; isCommander: boolean };
+type SystemRoleOpt = { id: string; name: string; isAdmin: boolean; isCommander: boolean; screens: string[] };
 
 const ROLE_FILTER_OPTS: { v: Role; l: string }[] = [
   { v: "BATTALION_ADMIN", l: 'מפ״מ' },
@@ -87,6 +87,9 @@ function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
   );
 }
 
+const WAREHOUSE_SCREENS = new Set(["stock", "catalog", "signatures", "counts", "gaps", "transfers", "kits", "donations"]);
+const COMPANY_SCREENS = new Set(["soldiers", "attendance", "dispatch", "armory"]);
+
 function UserFormDialog({ user, holders, squads, customRoles, systemRoles, brigade, battalionCode, onClose }: {
   user: User | null;
   holders: Holder[];
@@ -100,12 +103,13 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
   const isNew = !user;
   const [role, setRole] = useState<string>(user?.customRoleId ? `custom:${user.customRoleId}` : user?.role ?? "VIEWER");
   const [selectedSystemRoleId, setSelectedSystemRoleId] = useState<string>(user?.systemRoleId ?? "");
-  const initialScope = user?.systemRoleId && user?.holderKind === "WAREHOUSE" ? "warehouse" as const
-    : user?.systemRoleId && user?.role === "COMPANY_REP" && !systemRoles.find((r) => r.id === user.systemRoleId)?.isCommander ? "company" as const
-    : "" as const;
-  const [selectedHolderIds, setSelectedHolderIds] = useState<Set<string>>(
-    new Set(user ? (user.holderIds.length > 0 ? user.holderIds : (user.holderId ? [user.holderId] : [])) : [])
-  );
+
+  const existingWarehouseIds = user ? user.holderIds.filter((id) => holders.find((h) => h.id === id && h.kind === "WAREHOUSE")) : [];
+  const existingCompanyId = user?.holderId && holders.find((h) => h.id === user.holderId && h.kind === "COMPANY") ? user.holderId
+    : user ? user.holderIds.find((id) => holders.find((h) => h.id === id && h.kind === "COMPANY")) ?? null : null;
+
+  const [selectedWarehouseIds, setSelectedWarehouseIds] = useState<Set<string>>(new Set(existingWarehouseIds));
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(existingCompanyId ?? "");
   const [selectedSquadIds, setSelectedSquadIds] = useState<Set<string>>(new Set(user?.squadIds ?? []));
   const [username, setUsername] = useState(user?.username ?? "");
   const [fullName, setFullName] = useState(user?.fullName ?? "");
@@ -113,13 +117,16 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
   const [checking, setChecking] = useState(false);
 
   const selectedSR = systemRoles.find((r) => r.id === selectedSystemRoleId);
-  const [scopeOverride, setScopeOverride] = useState<"" | "company" | "warehouse">(initialScope);
+
+  const hasWarehouseScreens = selectedSR ? selectedSR.screens.some((s) => WAREHOUSE_SCREENS.has(s)) : false;
+  const hasCompanyScreens = selectedSR ? selectedSR.isCommander || selectedSR.screens.some((s) => COMPANY_SCREENS.has(s)) : false;
 
   const effectiveTemplate = selectedSR
     ? (selectedSR.isAdmin ? "BATTALION_ADMIN"
       : selectedSR.isCommander ? "COMPANY_REP"
-      : scopeOverride === "company" ? "COMPANY_REP"
-      : scopeOverride === "warehouse" ? "WAREHOUSE_MANAGER"
+      : hasWarehouseScreens && !hasCompanyScreens ? "WAREHOUSE_MANAGER"
+      : hasCompanyScreens && !hasWarehouseScreens ? "COMPANY_REP"
+      : hasWarehouseScreens && hasCompanyScreens ? "DUAL"
       : "VIEWER")
     : role.startsWith("custom:")
       ? customRoles.find((c) => c.id === role.slice(7))?.template ?? "VIEWER"
@@ -128,12 +135,9 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
   const warehouses = holders.filter((h) => h.kind === "WAREHOUSE");
   const companies = holders.filter((h) => h.kind === "COMPANY");
 
-  const showHolderPicker = ["WAREHOUSE_MANAGER", "COMPANY_REP", "VIEWER"].includes(effectiveTemplate);
-  const isMultiHolder = effectiveTemplate === "WAREHOUSE_MANAGER";
-  const holderOpts = isMultiHolder ? warehouses : companies;
-  const holderLabel = isMultiHolder ? "מחסנים" : effectiveTemplate === "COMPANY_REP" ? "פלוגה" : "פלוגה (אופציונלי)";
+  const showWarehousePicker = effectiveTemplate === "WAREHOUSE_MANAGER" || effectiveTemplate === "DUAL";
+  const showCompanyPicker = effectiveTemplate === "COMPANY_REP" || effectiveTemplate === "DUAL" || effectiveTemplate === "VIEWER";
 
-  const selectedCompanyId = !isMultiHolder && selectedHolderIds.size === 1 ? [...selectedHolderIds][0] : null;
   const relevantSquads = selectedCompanyId
     ? squads.filter((s) => s.companyId === selectedCompanyId)
     : squads;
@@ -148,7 +152,6 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
     return [...map.values()];
   }, [relevantSquads]);
 
-  // Auto-generate username from fullName for new users
   useEffect(() => {
     if (!isNew || username) return;
     if (!fullName.trim()) return;
@@ -160,7 +163,6 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
     }
   }, [fullName, isNew, username, brigade, battalionCode]);
 
-  // Username availability check for new users
   useEffect(() => {
     if (!isNew) return;
     const u = username.trim().toLowerCase();
@@ -176,10 +178,10 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
     return () => clearTimeout(t);
   }, [username, isNew]);
 
-  const toggleHolder = (id: string) => {
-    const next = new Set(selectedHolderIds);
+  const toggleWarehouse = (id: string) => {
+    const next = new Set(selectedWarehouseIds);
     if (next.has(id)) next.delete(id); else next.add(id);
-    setSelectedHolderIds(next);
+    setSelectedWarehouseIds(next);
   };
 
   const toggleSquad = (id: string) => {
@@ -201,6 +203,13 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
           )}
         </span>
       ) : null;
+
+  const effectiveRole = effectiveTemplate === "DUAL"
+    ? (selectedWarehouseIds.size > 0 ? "WAREHOUSE_MANAGER" : selectedCompanyId ? "COMPANY_REP" : "VIEWER")
+    : effectiveTemplate === "BATTALION_ADMIN" ? "BATTALION_ADMIN"
+    : effectiveTemplate === "WAREHOUSE_MANAGER" ? "WAREHOUSE_MANAGER"
+    : effectiveTemplate === "COMPANY_REP" ? "COMPANY_REP"
+    : role.startsWith("custom:") ? role : "VIEWER";
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -263,46 +272,27 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
                 if (sr) {
                   setRole(sr.isAdmin ? "BATTALION_ADMIN" : sr.isCommander ? "COMPANY_REP" : "VIEWER");
                 }
-                setSelectedHolderIds(new Set());
+                setSelectedWarehouseIds(new Set());
+                setSelectedCompanyId("");
                 setSelectedSquadIds(new Set());
               }}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                 <option value="">— בחר תפקיד —</option>
                 {systemRoles.map((sr) => <option key={sr.id} value={sr.id}>{sr.name}</option>)}
               </select>
-              <input type="hidden" name="role" value={role} />
-              {selectedSystemRoleId && (() => {
-                const sr = systemRoles.find((r) => r.id === selectedSystemRoleId);
-                if (!sr) return null;
-                return sr.isAdmin ? (
-                  <p className="text-[11px] mt-1 text-slate-500">🔑 מנהל — גישה מלאה לכל הגדוד · <a href="/roles" className="text-blue-600 hover:underline">ניהול תפקידים</a></p>
-                ) : sr.isCommander ? (
-                  <p className="text-[11px] mt-1 text-slate-500">🪖 מפקד — משויך לפלוגה · <a href="/roles" className="text-blue-600 hover:underline">ניהול תפקידים</a></p>
-                ) : (
-                  <div className="mt-2">
-                    <label className="block text-xs text-slate-500 mb-1">שיוך נתונים</label>
-                    <select value={scopeOverride} onChange={(e) => {
-                      const v = e.target.value as "" | "company" | "warehouse";
-                      setScopeOverride(v);
-                      setSelectedHolderIds(new Set());
-                      setRole(v === "company" ? "COMPANY_REP" : v === "warehouse" ? "WAREHOUSE_MANAGER" : "VIEWER");
-                    }}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                      <option value="">כל הגדוד (ללא סינון)</option>
-                      <option value="company">פלוגה ספציפית</option>
-                      <option value="warehouse">מחסנים</option>
-                    </select>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      <a href="/roles" className="text-blue-600 hover:underline">ניהול תפקידים</a>
-                    </p>
-                  </div>
-                );
-              })()}
+              <input type="hidden" name="role" value={effectiveRole} />
+              {selectedSR && (
+                <p className="text-[11px] mt-1 text-slate-500">
+                  {selectedSR.isAdmin ? "🔑 מנהל — גישה מלאה לכל הגדוד" : selectedSR.isCommander ? "🪖 מפקד — משויך לפלוגה" : `📋 ${selectedSR.screens.length} מסכים`}
+                  {" · "}
+                  <a href="/roles" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">ניהול תפקידים ↗</a>
+                </p>
+              )}
             </div>
           ) : (
             <div>
               <label className="block text-xs text-slate-500 mb-1">תפקיד במערכת</label>
-              <select name="role" value={role} onChange={(e) => { setRole(e.target.value); setSelectedHolderIds(new Set()); setSelectedSquadIds(new Set()); }}
+              <select name="role" value={role} onChange={(e) => { setRole(e.target.value); setSelectedWarehouseIds(new Set()); setSelectedCompanyId(""); setSelectedSquadIds(new Set()); }}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                 <optgroup label="תפקידים בסיסיים">
                   {ROLE_OPTS.map((r) => <option key={r} value={r}>{BUILTIN_LABELS[r]}</option>)}
@@ -314,39 +304,43 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
                 )}
               </select>
               <p className="text-[11px] text-slate-400 mt-1">
-                💡 הגדר תפקידים עם הרשאות מסכים ב<a href="/roles" className="text-blue-600 hover:underline">הרשאות ותפקידים</a>
+                💡 הגדר תפקידים עם הרשאות מסכים ב<a href="/roles" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">הרשאות ותפקידים ↗</a>
               </p>
             </div>
           )}
 
-          {/* Holder assignment */}
-          {showHolderPicker && (
+          {/* Warehouse assignment — auto-shown when role has warehouse screens */}
+          {showWarehousePicker && warehouses.length > 0 && (
             <div>
-              <label className="block text-xs text-slate-500 mb-1">{holderLabel}</label>
-              {isMultiHolder ? (
-                <div className="rounded-lg border border-slate-300 p-2 space-y-1 max-h-32 overflow-y-auto">
-                  {holderOpts.map((h) => (
-                    <label key={h.id} className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" name="holderId" value={h.id}
-                        checked={selectedHolderIds.has(h.id)}
-                        onChange={() => toggleHolder(h.id)}
-                        className="w-4 h-4" /> {h.name}
-                    </label>
-                  ))}
-                </div>
-              ) : (
-                <select name="holderId" defaultValue={user?.holderId ?? ""}
-                  onChange={(e) => setSelectedHolderIds(e.target.value ? new Set([e.target.value]) : new Set())}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                  {effectiveTemplate === "VIEWER" && <option value="">כל הגדוד</option>}
-                  {holderOpts.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-                </select>
-              )}
+              <label className="block text-xs text-slate-500 mb-1">🏪 מחסנים</label>
+              <div className="rounded-lg border border-slate-300 p-2 space-y-1 max-h-32 overflow-y-auto">
+                {warehouses.map((h) => (
+                  <label key={h.id} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="holderId" value={h.id}
+                      checked={selectedWarehouseIds.has(h.id)}
+                      onChange={() => toggleWarehouse(h.id)}
+                      className="w-4 h-4" /> {h.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Company assignment — auto-shown when role has company screens */}
+          {showCompanyPicker && companies.length > 0 && (
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">🪖 פלוגה{effectiveTemplate === "VIEWER" ? " (אופציונלי)" : ""}</label>
+              <select name="companyHolderId" value={selectedCompanyId}
+                onChange={(e) => { setSelectedCompanyId(e.target.value); setSelectedSquadIds(new Set()); }}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <option value="">{effectiveTemplate === "VIEWER" ? "כל הגדוד" : "— בחר פלוגה —"}</option>
+                {companies.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+              </select>
             </div>
           )}
 
           {/* Squad assignment */}
-          {squads.length > 0 && (
+          {squads.length > 0 && (showCompanyPicker || selectedSR?.isAdmin) && (
             <div>
               <label className="block text-xs text-slate-500 mb-1">
                 מחלקות משויכות
