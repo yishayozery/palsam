@@ -159,6 +159,7 @@ model Battalion {
   attendanceStatuses AttendanceStatus[]
   vacationBoards     VacationBoard[]
   vacationStatuses   VacationStatus[]
+  dispatchRoles      DispatchRole[] @relation("BattalionDispatchRoles")
   dispatchTemplates  DispatchTemplate[] @relation("BattalionDispatchTemplates")
   drivingLicenseTypes DrivingLicenseType[] @relation("BattalionDrivingLicenseTypes")
   systemRoles        SystemRole[]      @relation("BattalionSystemRoles")
@@ -710,6 +711,7 @@ model ItemType {
   holderLocations ItemHolderLocation[]
   inSignableKits SignableKitLine[] @relation("KitLineItem")
   requiredLicenses VehicleTypeLicense[] @relation("ItemTypeRequiredLicense")
+  dispatchTemplates DispatchTemplate[] @relation("DispatchTemplateVehicleType")
 
   @@unique([battalionId, sku])
   @@index([categoryId])
@@ -1344,6 +1346,25 @@ model VacationEntry {
   @@index([userId])
 }
 
+// ===================== תפקידי שבצ"ק =====================
+
+model DispatchRole {
+  id          String @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation("BattalionDispatchRoles", fields: [battalionId], references: [id], onDelete: Cascade)
+  name        String
+  icon        String  @default("🎖️")
+  isDriver    Boolean @default(false)
+  active      Boolean @default(true)
+  sortOrder   Int     @default(0)
+  createdAt   DateTime @default(now())
+
+  templateSlots DispatchTemplateSoldier[]
+
+  @@unique([battalionId, name])
+  @@index([battalionId])
+}
+
 // ===================== שבצ"ק קבוע (תבנית) =====================
 
 model DispatchTemplate {
@@ -1351,6 +1372,8 @@ model DispatchTemplate {
   battalionId         String
   battalion           Battalion @relation("BattalionDispatchTemplates", fields: [battalionId], references: [id], onDelete: Cascade)
   name                String
+  vehicleItemTypeId   String?
+  vehicleItemType     ItemType? @relation("DispatchTemplateVehicleType", fields: [vehicleItemTypeId], references: [id], onDelete: SetNull)
   vehicleSerialUnitId String?
   vehicleSerialUnit   SerialUnit? @relation("DispatchTemplateVehicle", fields: [vehicleSerialUnitId], references: [id], onDelete: SetNull)
   active              Boolean @default(true)
@@ -1359,22 +1382,23 @@ model DispatchTemplate {
   createdById         String
   createdBy           AppUser @relation("DispatchTemplateCreatedBy", fields: [createdById], references: [id])
 
-  soldiers            DispatchTemplateSoldier[]
+  slots               DispatchTemplateSoldier[]
 
   @@unique([battalionId, name])
   @@index([battalionId])
 }
 
 model DispatchTemplateSoldier {
-  id         String @id @default(cuid())
-  templateId String
-  template   DispatchTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  soldierId  String
-  soldier    Soldier @relation("SoldierDispatchTemplate", fields: [soldierId], references: [id], onDelete: Cascade)
-  role       String  @default("לוחם") // נהג, מפקד, חובש, לוחם, ...
-  seatIndex  Int     @default(0) // מיקום מושב ויזואלי
+  id             String @id @default(cuid())
+  templateId     String
+  template       DispatchTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  dispatchRoleId String
+  dispatchRole   DispatchRole @relation(fields: [dispatchRoleId], references: [id], onDelete: Cascade)
+  soldierId      String?
+  soldier        Soldier? @relation("SoldierDispatchTemplate", fields: [soldierId], references: [id], onDelete: SetNull)
+  seatIndex      Int     @default(0)
 
-  @@unique([templateId, soldierId])
+  @@index([templateId])
   @@index([soldierId])
 }
 

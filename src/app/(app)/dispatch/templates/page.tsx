@@ -16,7 +16,19 @@ export default async function DispatchTemplatesPage() {
   });
   const drivingRefreshDays = battalion?.drivingRefreshDays ?? 180;
 
-  const [vehicles, soldiers, templates, vehicleTypeLicenses, companies] = await Promise.all([
+  const vehicleCategory = await prisma.category.findFirst({
+    where: { battalionId: bId, warehouseType: "VEHICLES" },
+    select: { id: true },
+  });
+
+  const [vehicleTypes, vehicles, soldiers, templates, vehicleTypeLicenses, companies, dispatchRoles] = await Promise.all([
+    vehicleCategory
+      ? prisma.itemType.findMany({
+          where: { battalionId: bId, categoryId: vehicleCategory.id, active: true },
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
     prisma.serialUnit.findMany({
       where: {
         battalionId: bId,
@@ -46,9 +58,11 @@ export default async function DispatchTemplatesPage() {
     prisma.dispatchTemplate.findMany({
       where: { battalionId: bId, active: true },
       include: {
+        vehicleItemType: { select: { id: true, name: true } },
         vehicleSerialUnit: { include: { itemType: { select: { id: true, name: true } } } },
-        soldiers: {
+        slots: {
           include: {
+            dispatchRole: { select: { id: true, name: true, icon: true, isDriver: true } },
             soldier: {
               select: {
                 id: true,
@@ -59,6 +73,7 @@ export default async function DispatchTemplatesPage() {
               },
             },
           },
+          orderBy: { seatIndex: "asc" },
         },
       },
       orderBy: { name: "asc" },
@@ -72,6 +87,10 @@ export default async function DispatchTemplatesPage() {
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
+    prisma.dispatchRole.findMany({
+      where: { battalionId: bId, active: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    }),
   ]);
 
   const vtlMap: Record<string, string[]> = {};
@@ -84,10 +103,11 @@ export default async function DispatchTemplatesPage() {
     <div>
       <PageHeader
         title='שבצ"ק קבוע'
-        subtitle={`${templates.length} תבניות · ${vehicles.length} רכבים`}
+        subtitle={`${templates.length} תבניות · ${vehicleTypes.length} סוגי רכב`}
         action={<Link href="/dispatch" className="text-sm text-blue-600 hover:underline">← חזרה לשבצ&quot;ק</Link>}
       />
       <TemplatesClient
+        vehicleTypes={vehicleTypes}
         vehicles={vehicles.map((v) => ({
           id: v.id,
           itemTypeId: v.itemType.id,
@@ -109,21 +129,29 @@ export default async function DispatchTemplatesPage() {
         }))}
         companies={companies.map((c) => ({ id: c.id, name: c.name }))}
         drivingRefreshDays={drivingRefreshDays}
+        dispatchRoles={dispatchRoles.map((r) => ({
+          id: r.id,
+          name: r.name,
+          icon: r.icon,
+          isDriver: r.isDriver,
+          sortOrder: r.sortOrder,
+        }))}
         templates={templates.map((t) => ({
           id: t.id,
           name: t.name,
+          vehicleItemTypeId: t.vehicleItemTypeId ?? "",
+          vehicleItemTypeName: t.vehicleItemType?.name ?? "",
           vehicleSerialUnitId: t.vehicleSerialUnitId ?? "",
-          vehicleItemTypeId: t.vehicleSerialUnit?.itemType.id ?? "",
-          vehicleName: t.vehicleSerialUnit?.itemType.name ?? "",
           vehicleSerial: t.vehicleSerialUnit?.serialNumber ?? "",
-          soldiers: t.soldiers.filter((ts) => ts.soldier).map((ts) => ({
-            id: ts.soldier.id,
-            fullName: ts.soldier.fullName,
-            personalNumber: ts.soldier.personalNumber,
-            companyName: ts.soldier.company?.name ?? null,
-            roleName: ts.soldier.companyRole?.name ?? null,
-            role: ts.role,
-            seatIndex: ts.seatIndex,
+          slots: t.slots.map((s) => ({
+            dispatchRoleId: s.dispatchRoleId,
+            roleName: s.dispatchRole.name,
+            roleIcon: s.dispatchRole.icon,
+            isDriver: s.dispatchRole.isDriver,
+            soldierId: s.soldier?.id ?? null,
+            soldierName: s.soldier?.fullName ?? null,
+            soldierCompany: s.soldier?.company?.name ?? null,
+            seatIndex: s.seatIndex,
           })),
         }))}
       />

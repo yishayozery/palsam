@@ -74,7 +74,7 @@ export default async function DispatchPage() {
       where: { battalionId: bId, active: true },
       include: {
         vehicleSerialUnit: { include: { itemType: { select: { name: true } } } },
-        soldiers: { include: { soldier: { select: { id: true, fullName: true } } } },
+        slots: { include: { soldier: { select: { id: true, fullName: true } } } },
       },
       orderBy: { name: "asc" },
     }),
@@ -116,7 +116,7 @@ export default async function DispatchPage() {
             vehicleSerialUnitId: t.vehicleSerialUnitId!,
             vehicleName: t.vehicleSerialUnit!.itemType.name,
             vehicleSerial: t.vehicleSerialUnit!.serialNumber,
-            soldierIds: t.soldiers.filter((ts) => ts.soldier).map((ts) => ts.soldier.id),
+            soldierIds: t.slots.filter((ts) => ts.soldier).map((ts) => ts.soldier!.id),
           }))}
           vehicles={vehicles.map((v) => ({
             id: v.id,
