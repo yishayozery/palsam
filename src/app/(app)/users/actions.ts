@@ -149,6 +149,18 @@ export async function deleteAllUsersExceptMe() {
   revalidatePath("/users/all");
 }
 
+export async function clearRateLimits(formData: FormData) {
+  const admin = await requireCapability("users.manage");
+  const userId = String(formData.get("userId") || "");
+  const user = userId ? await prisma.appUser.findUnique({ where: { id: userId }, select: { id: true, username: true } }) : null;
+
+  const deleted = await prisma.rateLimitHit.deleteMany({
+    where: { scope: "login" },
+  });
+  await audit(admin.id, "CLEAR_RATE_LIMIT", "RateLimitHit", user?.username ?? "all", { count: deleted.count });
+  revalidatePath("/users/all");
+}
+
 export async function toggleUser(formData: FormData) {
   const admin = await requireCapability("users.manage");
   const id = String(formData.get("id") || "");

@@ -11,6 +11,7 @@ import { importItems } from "../catalog/import-actions";
 import {
   saveCategory, deleteCategory, saveStatus, deleteStatus,
 } from "../dictionaries/actions";
+import { archiveItemType, restoreItemType } from "../catalog/actions";
 import ItemsFilters from "./ItemsFilters";
 import CategoriesFilters from "./CategoriesFilters";
 import ItemLocationsTab from "../locations/ItemLocationsTab";
@@ -26,24 +27,23 @@ const ASSOC: Record<string, { label: string; cls: string }> = {
 export default async function ItemsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; q?: string; category?: string; warehouse?: string; catQ?: string; catWh?: string; holder?: string }>;
+  searchParams: Promise<{ tab?: string; q?: string; category?: string; warehouse?: string; status?: string; catQ?: string; catWh?: string; holder?: string }>;
 }) {
   const user = await requireCapability("catalog.manage");
   const bId = user.battalionId!;
-  const { tab, q = "", category = "", warehouse = "", catQ = "", catWh = "", holder: selectedHolderParam = "" } = await searchParams;
+  const { tab, q = "", category = "", warehouse = "", status = "", catQ = "", catWh = "", holder: selectedHolderParam = "" } = await searchParams;
   const active = tab || "items";
 
   // סקופ לקצין מחסן: רק טיפוסי המחסנים שלו
-  const isWarehouseManager = user.role === "WAREHOUSE_MANAGER";
   const myWarehouseTypes: string[] = [];
-  if (isWarehouseManager && user.holderIds?.length) {
+  if (!user.isAdmin && user.holderIds?.length) {
     const myHolders = await prisma.holder.findMany({
       where: { id: { in: user.holderIds }, kind: "WAREHOUSE" },
       select: { warehouseType: true },
     });
     for (const h of myHolders) if (h.warehouseType) myWarehouseTypes.push(h.warehouseType);
   }
-  const scoped = isWarehouseManager && myWarehouseTypes.length > 0;
+  const scoped = !user.isAdmin && myWarehouseTypes.length > 0;
   const scopeFilter = scoped ? { category: { warehouseType: { in: myWarehouseTypes as ("EQUIPMENT"|"COMMS"|"AMMO"|"ARMORY"|"VEHICLES"|"MEDICAL"|"GENERAL")[] } } } : {};
   const categoryScopeFilter = scoped ? { warehouseType: { in: myWarehouseTypes as ("EQUIPMENT"|"COMMS"|"AMMO"|"ARMORY"|"VEHICLES"|"MEDICAL"|"GENERAL")[] } } : {};
 
@@ -55,9 +55,11 @@ export default async function ItemsPage({
   ];
 
   const search = q.trim();
+  const activeFilter = status === "archived" ? { active: false } : status === "all" ? {} : { active: true };
   const itemWhere = {
     battalionId: bId,
     ...scopeFilter,
+    ...activeFilter,
     ...(search ? { OR: [
       { name: { contains: search, mode: "insensitive" as const } },
       { sku: { contains: search, mode: "insensitive" as const } },
@@ -119,6 +121,7 @@ export default async function ItemsPage({
             initialQ={q}
             initialCategory={category}
             initialWarehouse={warehouse}
+            initialStatus={status}
             categories={allCategories.map((c) => ({ id: c.id, name: c.name, warehouseType: c.warehouseType }))}
           />
           <Card>
@@ -133,7 +136,7 @@ export default async function ItemsPage({
                         <img src={i.imageData} alt={i.name} className="w-9 h-9 object-cover rounded-md border border-slate-200" />
                       ) : <div className="w-9 h-9 rounded-md bg-slate-100 flex items-center justify-center text-slate-300">📦</div>}
                     </Td>
-                    <Td className="font-medium">{i.name}</Td>
+                    <Td className="font-medium">{i.name}{!i.active && <Badge className="bg-amber-100 text-amber-700 mr-1">ארכיון</Badge>}</Td>
                     <Td className="font-mono text-xs text-slate-500">{i.sku ?? "—"}</Td>
                     <Td>{i.category?.name ?? "—"}</Td>
                     <Td className="text-xs">
@@ -145,12 +148,25 @@ export default async function ItemsPage({
                     <Td><Badge className={ASSOC[i.association].cls}>{ASSOC[i.association].label}</Badge></Td>
                     <Td className="text-center">{i._count.serialUnits + i._count.stockBalances > 0 ? "✓" : "—"}</Td>
                     <Td>
-                      <a href={`/items/${i.id}/history`} className="text-xs text-blue-600 hover:underline ml-2">היסטוריה</a>
-                      <CatalogManager
-                        categories={categories.map((c) => ({ id: c.id, name: c.name }))}
-                        locations={locOptions}
-                        edit={{ id: i.id, sku: i.sku ?? "", name: i.name, categoryId: i.categoryId ?? "", trackingMethod: i.trackingMethod, unit: i.unit, association: i.association, signMode: i.signMode, imageData: i.imageData, homeLocationId: i.homeLocationId, trackExpiry: i.trackExpiry }}
-                      />
+                      <div className="flex items-center gap-1">
+                        <a href={`/items/${i.id}/history`} className="text-xs text-blue-600 hover:underline">היסטוריה</a>
+                        <CatalogManager
+                          categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+                          locations={locOptions}
+                          edit={{ id: i.id, sku: i.sku ?? "", name: i.name, categoryId: i.categoryId ?? "", trackingMethod: i.trackingMethod, unit: i.unit, association: i.association, signMode: i.signMode, imageData: i.imageData, homeLocationId: i.homeLocationId, trackExpiry: i.trackExpiry }}
+                        />
+                        {i.active ? (
+                          <form action={archiveItemType}>
+                            <input type="hidden" name="id" value={i.id} />
+                            <button type="submit" className="text-xs text-amber-600 hover:text-amber-800 hover:underline" title="העבר לארכיון">📥 ארכיון</button>
+                          </form>
+                        ) : (
+                          <form action={restoreItemType}>
+                            <input type="hidden" name="id" value={i.id} />
+                            <button type="submit" className="text-xs text-green-600 hover:text-green-800 hover:underline" title="שחזר מארכיון">♻️ שחזר</button>
+                          </form>
+                        )}
+                      </div>
                     </Td>
                   </tr>
                 ))}

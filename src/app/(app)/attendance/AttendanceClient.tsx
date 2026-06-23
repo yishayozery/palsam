@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
-import { saveAttendance, assignSquad } from "./actions";
+import { saveAttendance, assignSquad, openCallup, closeCallup, deleteCallup } from "./actions";
 import { upsertSquad, deleteSquad } from "../attendance-settings/actions";
 import type { DayInfo } from "@/lib/hebrew-dates";
 
@@ -29,10 +29,11 @@ type EmploymentOption = { id: string; name: string; startDate: string; endDate: 
 type SelectedEmployment = EmploymentOption & {
   allocations: { companyId: string; date: string; allocated: number }[];
 };
+type CallupPeriod = { id: string; soldierId: string; startDate: string; endDate: string | null };
 
 export default function AttendanceClient({
   companies, selectedCompanyId, soldiers, squads, companyRoles, statuses, days, plans, records, mode, canManage, startDate,
-  employments, selectedEmployment,
+  employments, selectedEmployment, callupPeriods,
 }: {
   companies: { id: string; name: string }[];
   selectedCompanyId: string;
@@ -48,12 +49,45 @@ export default function AttendanceClient({
   startDate: string;
   employments: EmploymentOption[];
   selectedEmployment: SelectedEmployment | null;
+  callupPeriods: CallupPeriod[];
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [pendingChanges, setPendingChanges] = useState<Map<string, string | null>>(new Map());
   const [selectedSquadId, setSelectedSquadId] = useState<string>("");
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
+  const [showCallupModal, setShowCallupModal] = useState<{ soldierId: string; soldierName: string } | null>(null);
+  const [callupDate, setCallupDate] = useState("");
+  const [callupSaving, setCallupSaving] = useState(false);
+
+  // שמ"פ helpers — build lookup maps
+  const callupMap = useMemo(() => {
+    const m = new Map<string, CallupPeriod[]>();
+    for (const c of callupPeriods) {
+      const arr = m.get(c.soldierId) ?? [];
+      arr.push(c);
+      m.set(c.soldierId, arr);
+    }
+    return m;
+  }, [callupPeriods]);
+
+  const isInShmap = useCallback((soldierId: string, date: string): boolean => {
+    const periods = callupMap.get(soldierId);
+    if (!periods) return false;
+    return periods.some((p) => date >= p.startDate && (!p.endDate || date <= p.endDate));
+  }, [callupMap]);
+
+  const isShmapLocked = useCallback((soldierId: string, date: string): boolean => {
+    const periods = callupMap.get(soldierId);
+    if (!periods) return false;
+    return periods.some((p) => p.endDate && date >= p.startDate && date <= p.endDate);
+  }, [callupMap]);
+
+  const getActiveCallup = useCallback((soldierId: string): CallupPeriod | null => {
+    const periods = callupMap.get(soldierId);
+    if (!periods) return null;
+    return periods.find((p) => !p.endDate) ?? null;
+  }, [callupMap]);
 
   const data = mode === "plan" ? plans : records;
 
@@ -74,6 +108,7 @@ export default function AttendanceClient({
 
   function cycleStatus(soldierId: string, date: string) {
     if (!canManage) return;
+    if (isShmapLocked(soldierId, date)) return;
     const current = getStatus(soldierId, date);
     const idx = current ? statuses.findIndex((s) => s.id === current) : -1;
     const next = idx + 1 < statuses.length ? statuses[idx + 1].id : null;
@@ -86,6 +121,7 @@ export default function AttendanceClient({
 
   function setStatusDirectly(soldierId: string, date: string, statusId: string | null) {
     if (!canManage) return;
+    if (isShmapLocked(soldierId, date)) return;
     setPendingChanges((prev) => {
       const m = new Map(prev);
       m.set(`${soldierId}:${date}`, statusId);
@@ -247,6 +283,26 @@ export default function AttendanceClient({
 
     return { all, bySquad, byRole };
   }, [filteredSoldiers, grouped, statuses, getStatus, today]);
+
+  // שמ"פ stats
+  const shmapStats = useMemo(() => {
+    let inShmap = 0;
+    let shmapClosed = 0;
+    const inShmapSoldiers: SoldierRow[] = [];
+    for (const s of filteredSoldiers) {
+      const active = getActiveCallup(s.id);
+      if (active) {
+        inShmap++;
+        inShmapSoldiers.push(s);
+      }
+      const periods = callupMap.get(s.id);
+      if (periods) {
+        const hasClosed = periods.some((p) => p.endDate);
+        if (hasClosed) shmapClosed++;
+      }
+    }
+    return { inShmap, shmapClosed, inShmapSoldiers, total: filteredSoldiers.length, inEmployment: filteredSoldiers.length - inShmap };
+  }, [filteredSoldiers, getActiveCallup, callupMap]);
 
   const employmentDash = useMemo(() => {
     if (!selectedEmployment) return null;
@@ -438,6 +494,16 @@ export default function AttendanceClient({
             <div className="text-[10px] text-slate-500">לא סומנו</div>
           </div>
         )}
+        {shmapStats.inShmap > 0 && (
+          <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-center">
+            <div className="text-lg font-bold text-purple-700">{shmapStats.inShmap}</div>
+            <div className="text-[10px] text-purple-600">בשמ״פ</div>
+          </div>
+        )}
+        <div className="bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 text-center">
+          <div className="text-lg font-bold text-teal-700">{shmapStats.inEmployment}</div>
+          <div className="text-[10px] text-teal-600">בתעסוקה</div>
+        </div>
       </div>
 
       {/* Per-squad present/absent */}
@@ -733,9 +799,11 @@ export default function AttendanceClient({
                   )}
                   {g.soldiers.map((soldier) => {
                     const isDischarged = !!soldier.callupClosedAt && soldier.callupClosedAt < today;
+                    const activeCallup = getActiveCallup(soldier.id);
+                    const hasShmap = !!activeCallup;
                     return (
                     <tr key={soldier.id} className={`border-b border-slate-50 ${isDischarged ? "opacity-50" : "hover:bg-blue-50/20"}`}>
-                      <td className={`sticky right-0 z-10 px-2 py-1.5 border-l border-slate-100 ${isDischarged ? "bg-slate-100" : "bg-white"}`}>
+                      <td className={`sticky right-0 z-10 px-2 py-1.5 border-l border-slate-100 ${isDischarged ? "bg-slate-100" : hasShmap ? "bg-purple-50" : "bg-white"}`}>
                         <div className={`font-medium truncate max-w-[160px] ${isDischarged ? "text-slate-400 line-through" : "text-slate-800"}`}>
                           {soldier.fullName}
                           {soldier.companyRoleName && (
@@ -744,13 +812,30 @@ export default function AttendanceClient({
                             </span>
                           )}
                           {isDischarged && <span className="mr-1 text-[9px] text-rose-400">שוחרר</span>}
+                          {hasShmap && <span className="mr-1 text-[9px] bg-purple-100 text-purple-700 rounded px-1">בשמ״פ</span>}
                         </div>
-                        {soldier.personalNumber && (
-                          <div className="text-[9px] font-mono text-slate-400">{soldier.personalNumber}</div>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {soldier.personalNumber && (
+                            <span className="text-[9px] font-mono text-slate-400">{soldier.personalNumber}</span>
+                          )}
+                          {canManage && !isDischarged && (
+                            <button
+                              onClick={() => {
+                                setCallupDate(today);
+                                setShowCallupModal({ soldierId: soldier.id, soldierName: soldier.fullName });
+                              }}
+                              className={`text-[9px] px-1 rounded ${hasShmap ? "bg-purple-200 text-purple-800 hover:bg-purple-300" : "text-purple-400 hover:text-purple-600"}`}
+                              title={hasShmap ? "ניהול שמ\"פ" : "פתח שמ\"פ"}
+                            >
+                              {hasShmap ? "🟣" : "⊕"}
+                            </button>
+                          )}
+                        </div>
                       </td>
                       {days.map((d) => {
                         const afterDischarge = isDischarged && d.date > soldier.callupClosedAt!;
+                        const locked = isShmapLocked(soldier.id, d.date);
+                        const inShmapDay = isInShmap(soldier.id, d.date);
                         const statusId = getStatus(soldier.id, d.date);
                         const status = statusId ? statuses.find((s) => s.id === statusId) : null;
                         const isPending = pendingChanges.has(`${soldier.id}:${d.date}`);
@@ -758,16 +843,20 @@ export default function AttendanceClient({
                         return (
                           <td
                             key={d.date}
-                            onClick={() => !afterDischarge && cycleStatus(soldier.id, d.date)}
-                            onContextMenu={(e) => !afterDischarge && handleContextMenu(e, soldier.id, d.date)}
+                            onClick={() => !afterDischarge && !locked && cycleStatus(soldier.id, d.date)}
+                            onContextMenu={(e) => !afterDischarge && !locked && handleContextMenu(e, soldier.id, d.date)}
                             className={`text-center select-none transition-colors border-l border-slate-50
-                              ${afterDischarge ? "bg-slate-200/50 cursor-not-allowed" : "cursor-pointer hover:bg-slate-100"}
-                              ${d.date === today && !afterDischarge ? "bg-blue-50" : isWeekend && !afterDischarge ? "bg-slate-50/50" : ""}
+                              ${afterDischarge || locked ? "cursor-not-allowed" : "cursor-pointer hover:bg-slate-100"}
+                              ${locked ? "bg-purple-100/60" : afterDischarge ? "bg-slate-200/50" : ""}
+                              ${inShmapDay && !locked ? "bg-purple-50/40" : ""}
+                              ${d.date === today && !afterDischarge && !locked ? "bg-blue-50" : isWeekend && !afterDischarge && !locked ? "bg-slate-50/50" : ""}
                               ${isPending ? "ring-2 ring-inset ring-amber-400" : ""}`}
-                            title={afterDischarge ? `${soldier.fullName} — שוחרר` : `${soldier.fullName} — ${d.date}${status ? ` — ${status.name}` : ""}`}
+                            title={afterDischarge ? `${soldier.fullName} — שוחרר` : locked ? `${soldier.fullName} — נעול (שמ"פ סגור)` : inShmapDay ? `${soldier.fullName} — בשמ"פ — ${d.date}${status ? ` — ${status.name}` : ""}` : `${soldier.fullName} — ${d.date}${status ? ` — ${status.name}` : ""}`}
                           >
                             {afterDischarge ? (
                               <span className="text-slate-300 text-[9px]">—</span>
+                            ) : locked ? (
+                              <span className="text-purple-400 text-[9px]">🔒</span>
                             ) : status ? (
                               <span className="text-base md:text-sm leading-none" style={{ color: status.color }}
                                 title={status.name}>
@@ -857,6 +946,105 @@ export default function AttendanceClient({
             className="text-blue-200 hover:text-white text-sm">
             ביטול
           </button>
+        </div>
+      )}
+
+      {/* שמ"פ Modal */}
+      {showCallupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowCallupModal(null)}>
+          <div className="bg-white rounded-xl shadow-2xl p-6 min-w-[340px] max-w-md" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-slate-800 mb-3">🟣 שמ״פ — {showCallupModal.soldierName}</h3>
+
+            {/* Active callup */}
+            {(() => {
+              const active = getActiveCallup(showCallupModal.soldierId);
+              if (active) return (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3">
+                  <div className="text-sm font-medium text-purple-800">שמ״פ פתוח</div>
+                  <div className="text-xs text-purple-600 mt-1">מתאריך: {active.startDate}</div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <input type="date" value={callupDate} onChange={(e) => setCallupDate(e.target.value)}
+                      className="rounded border border-purple-300 px-2 py-1 text-sm flex-1" />
+                    <button
+                      disabled={callupSaving || !callupDate}
+                      onClick={async () => {
+                        setCallupSaving(true);
+                        const res = await closeCallup(active.id, callupDate);
+                        setCallupSaving(false);
+                        if (res.error) alert(res.error);
+                        else { setShowCallupModal(null); router.refresh(); }
+                      }}
+                      className="bg-purple-600 text-white rounded px-3 py-1 text-xs hover:bg-purple-700 disabled:opacity-50"
+                    >
+                      {callupSaving ? "..." : "סגור שמ\"פ"}
+                    </button>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (!confirm("למחוק את תקופת השמ\"פ?")) return;
+                      setCallupSaving(true);
+                      const res = await deleteCallup(active.id);
+                      setCallupSaving(false);
+                      if (res.error) alert(res.error);
+                      else { setShowCallupModal(null); router.refresh(); }
+                    }}
+                    className="text-[10px] text-rose-400 hover:text-rose-600 mt-2"
+                  >
+                    מחק תקופה
+                  </button>
+                </div>
+              );
+              return (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3">
+                  <div className="text-sm text-slate-600">אין שמ״פ פתוח</div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <input type="date" value={callupDate} onChange={(e) => setCallupDate(e.target.value)}
+                      className="rounded border border-slate-300 px-2 py-1 text-sm flex-1" />
+                    <button
+                      disabled={callupSaving || !callupDate}
+                      onClick={async () => {
+                        setCallupSaving(true);
+                        const res = await openCallup(showCallupModal.soldierId, callupDate);
+                        setCallupSaving(false);
+                        if (res.error) alert(res.error);
+                        else { setShowCallupModal(null); router.refresh(); }
+                      }}
+                      className="bg-purple-600 text-white rounded px-3 py-1 text-xs hover:bg-purple-700 disabled:opacity-50"
+                    >
+                      {callupSaving ? "..." : "פתח שמ\"פ"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* History */}
+            {(() => {
+              const periods = callupMap.get(showCallupModal.soldierId)?.filter((p) => p.endDate) ?? [];
+              if (periods.length === 0) return null;
+              return (
+                <div className="mt-3">
+                  <h4 className="text-xs font-semibold text-slate-600 mb-1">היסטוריית שמ״פ</h4>
+                  <div className="space-y-1 max-h-32 overflow-auto">
+                    {periods.map((p) => (
+                      <div key={p.id} className="flex items-center justify-between bg-slate-50 rounded px-2 py-1 text-xs">
+                        <span className="text-slate-600">{p.startDate} — {p.endDate}</span>
+                        <button onClick={async () => {
+                          if (!confirm("למחוק?")) return;
+                          await deleteCallup(p.id);
+                          router.refresh();
+                        }} className="text-rose-400 hover:text-rose-600 text-[10px]">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            <button onClick={() => setShowCallupModal(null)} className="mt-4 w-full text-center text-sm text-slate-500 hover:text-slate-700">
+              סגור
+            </button>
+          </div>
         </div>
       )}
     </>

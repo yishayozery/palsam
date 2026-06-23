@@ -109,13 +109,13 @@ export default async function DispatchTemplatesPage() {
         }))}
         companies={companies.map((c) => ({ id: c.id, name: c.name }))}
         drivingRefreshDays={drivingRefreshDays}
-        templates={templates.filter((t) => t.vehicleSerialUnit).map((t) => ({
+        templates={templates.map((t) => ({
           id: t.id,
           name: t.name,
-          vehicleSerialUnitId: t.vehicleSerialUnitId,
-          vehicleItemTypeId: t.vehicleSerialUnit.itemType.id,
-          vehicleName: t.vehicleSerialUnit.itemType.name,
-          vehicleSerial: t.vehicleSerialUnit.serialNumber,
+          vehicleSerialUnitId: t.vehicleSerialUnitId ?? "",
+          vehicleItemTypeId: t.vehicleSerialUnit?.itemType.id ?? "",
+          vehicleName: t.vehicleSerialUnit?.itemType.name ?? "",
+          vehicleSerial: t.vehicleSerialUnit?.serialNumber ?? "",
           soldiers: t.soldiers.filter((ts) => ts.soldier).map((ts) => ({
             id: ts.soldier.id,
             fullName: ts.soldier.fullName,

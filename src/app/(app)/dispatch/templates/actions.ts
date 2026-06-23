@@ -23,15 +23,16 @@ export async function saveTemplate(formData: FormData): Promise<{ ok?: boolean; 
     try { assignments = JSON.parse(String(formData.get("assignments") || "[]")); } catch { return { error: "פורמט חיילים שגוי" }; }
 
     if (!name) return { error: "הזן שם לשבצ\"ק" };
-    if (!vehicleSerialUnitId) return { error: "בחר רכב" };
 
-    const vehicle = await prisma.serialUnit.findUnique({
-      where: { id: vehicleSerialUnitId },
-      select: { battalionId: true, itemType: { select: { id: true, requiredLicenses: { select: { licenseTypeId: true } } } } },
-    });
-    if (!vehicle || vehicle.battalionId !== bId) return { error: "רכב לא נמצא" };
-
-    const requiredLicenseIds = vehicle.itemType.requiredLicenses.map((rl) => rl.licenseTypeId);
+    let requiredLicenseIds: string[] = [];
+    if (vehicleSerialUnitId) {
+      const vehicle = await prisma.serialUnit.findUnique({
+        where: { id: vehicleSerialUnitId },
+        select: { battalionId: true, itemType: { select: { id: true, requiredLicenses: { select: { licenseTypeId: true } } } } },
+      });
+      if (!vehicle || vehicle.battalionId !== bId) return { error: "רכב לא נמצא" };
+      requiredLicenseIds = vehicle.itemType.requiredLicenses.map((rl) => rl.licenseTypeId);
+    }
 
     const driverIds = assignments.filter((a) => a.role === "נהג").map((a) => a.soldierId);
     if (requiredLicenseIds.length > 0 && driverIds.length > 0) {
@@ -51,7 +52,7 @@ export async function saveTemplate(formData: FormData): Promise<{ ok?: boolean; 
       const existing = await prisma.dispatchTemplate.findUnique({ where: { id }, select: { battalionId: true } });
       if (!existing || existing.battalionId !== bId) return { error: "תבנית לא נמצאה" };
       await prisma.$transaction(async (tx) => {
-        await tx.dispatchTemplate.update({ where: { id }, data: { name, vehicleSerialUnitId } });
+        await tx.dispatchTemplate.update({ where: { id }, data: { name, vehicleSerialUnitId: vehicleSerialUnitId || null } });
         await tx.dispatchTemplateSoldier.deleteMany({ where: { templateId: id } });
         await tx.dispatchTemplateSoldier.createMany({
           data: assignments.map((a) => ({
@@ -66,7 +67,7 @@ export async function saveTemplate(formData: FormData): Promise<{ ok?: boolean; 
     } else {
       const created = await prisma.$transaction(async (tx) => {
         const t = await tx.dispatchTemplate.create({
-          data: { battalionId: bId, name, vehicleSerialUnitId, createdById: user.id },
+          data: { battalionId: bId, name, vehicleSerialUnitId: vehicleSerialUnitId || null, createdById: user.id },
         });
         await tx.dispatchTemplateSoldier.createMany({
           data: assignments.map((a) => ({

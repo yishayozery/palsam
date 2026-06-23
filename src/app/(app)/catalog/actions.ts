@@ -41,20 +41,25 @@ export async function saveItemType(formData: FormData) {
   revalidatePath("/catalog");
 }
 
-export async function deleteItemType(formData: FormData) {
+export async function archiveItemType(formData: FormData) {
   const user = await requireCapability("catalog.manage");
   const id = String(formData.get("id") || "");
-  const inUse =
-    (await prisma.serialUnit.count({ where: { itemTypeId: id } })) +
-    (await prisma.stockBalance.count({ where: { itemTypeId: id } }));
-  if (inUse > 0) {
-    // לא מוחקים פריט בשימוש — מסמנים כלא פעיל
-    await prisma.itemType.update({ where: { id }, data: { active: false } });
-  } else {
-    await prisma.kitComponent.deleteMany({ where: { kitItemTypeId: id } });
-    await prisma.itemType.delete({ where: { id } });
-  }
-  await audit(user.id, "DELETE", "ItemType", id);
+  const item = await prisma.itemType.findUnique({ where: { id }, select: { battalionId: true } });
+  if (!item || item.battalionId !== user.battalionId) return;
+  await prisma.itemType.update({ where: { id }, data: { active: false } });
+  await audit(user.id, "ARCHIVE", "ItemType", id);
+  revalidatePath("/items");
+  revalidatePath("/catalog");
+}
+
+export async function restoreItemType(formData: FormData) {
+  const user = await requireCapability("catalog.manage");
+  const id = String(formData.get("id") || "");
+  const item = await prisma.itemType.findUnique({ where: { id }, select: { battalionId: true } });
+  if (!item || item.battalionId !== user.battalionId) return;
+  await prisma.itemType.update({ where: { id }, data: { active: true } });
+  await audit(user.id, "RESTORE", "ItemType", id);
+  revalidatePath("/items");
   revalidatePath("/catalog");
 }
 

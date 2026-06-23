@@ -23,6 +23,31 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   }
 }
 
+export const PASSWORD_RULES = {
+  minLength: 12,
+  maxLength: 128,
+  requireUppercase: true,
+  requireLowercase: true,
+  requireDigit: true,
+  requireSpecial: true,
+};
+
+export function validatePassword(password: string): string | null {
+  if (password.length < PASSWORD_RULES.minLength)
+    return `סיסמה חייבת להיות לפחות ${PASSWORD_RULES.minLength} תווים`;
+  if (password.length > PASSWORD_RULES.maxLength)
+    return `סיסמה ארוכה מדי (מקסימום ${PASSWORD_RULES.maxLength} תווים)`;
+  if (PASSWORD_RULES.requireUppercase && !/[A-Z]/.test(password))
+    return "סיסמה חייבת לכלול לפחות אות גדולה באנגלית (A-Z)";
+  if (PASSWORD_RULES.requireLowercase && !/[a-z]/.test(password))
+    return "סיסמה חייבת לכלול לפחות אות קטנה באנגלית (a-z)";
+  if (PASSWORD_RULES.requireDigit && !/\d/.test(password))
+    return "סיסמה חייבת לכלול לפחות ספרה (0-9)";
+  if (PASSWORD_RULES.requireSpecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(password))
+    return "סיסמה חייבת לכלול לפחות תו מיוחד (!@#$%...)";
+  return null;
+}
+
 export async function isPasswordPwned(password: string): Promise<boolean> {
   const sha1 = createHash("sha1").update(password).digest("hex").toUpperCase();
   const prefix = sha1.slice(0, 5);

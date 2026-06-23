@@ -163,6 +163,7 @@ model Battalion {
   drivingLicenseTypes DrivingLicenseType[] @relation("BattalionDrivingLicenseTypes")
   systemRoles        SystemRole[]      @relation("BattalionSystemRoles")
   employments        Employment[]
+  certificationTypes CertificationType[] @relation("BattalionCertificationTypes")
 }
 
 // ===================== משתמשים =====================
@@ -504,8 +505,10 @@ model Soldier {
   dispatchAssignments VehicleAssignmentSoldier[] @relation("SoldierDispatch")
   dispatchTemplates   DispatchTemplateSoldier[] @relation("SoldierDispatchTemplate")
   drivingLicenses     SoldierDrivingLicense[]   @relation("SoldierDrivingLicenses")
+  certifications      SoldierCertification[]    @relation("SoldierCertifications")
   attendancePlans    AttendancePlan[]
   attendanceRecords  AttendanceRecord[]
+  callupPeriods      CallupPeriod[]
   // מקושר למשתמש מערכת (קצין/רס"פ)
   appUser            AppUser?      @relation("SoldierAsUser")
 
@@ -1230,6 +1233,23 @@ model AttendanceRecord {
   @@index([date])
 }
 
+// ===================== שמ"פ (שירות מילואים פעיל) =====================
+
+model CallupPeriod {
+  id          String    @id @default(cuid())
+  soldierId   String
+  soldier     Soldier   @relation(fields: [soldierId], references: [id], onDelete: Cascade)
+  startDate   DateTime  @db.Date
+  endDate     DateTime? @db.Date
+  createdById String?
+  closedById  String?
+  closedAt    DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([soldierId])
+  @@index([startDate])
+}
+
 // ===================== תעסוקה (Employment) =====================
 
 model Employment {
@@ -1327,8 +1347,8 @@ model DispatchTemplate {
   battalionId         String
   battalion           Battalion @relation("BattalionDispatchTemplates", fields: [battalionId], references: [id], onDelete: Cascade)
   name                String
-  vehicleSerialUnitId String
-  vehicleSerialUnit   SerialUnit @relation("DispatchTemplateVehicle", fields: [vehicleSerialUnitId], references: [id], onDelete: Cascade)
+  vehicleSerialUnitId String?
+  vehicleSerialUnit   SerialUnit? @relation("DispatchTemplateVehicle", fields: [vehicleSerialUnitId], references: [id], onDelete: SetNull)
   active              Boolean @default(true)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -1391,5 +1411,30 @@ model SoldierDrivingLicense {
   licenseType   DrivingLicenseType @relation(fields: [licenseTypeId], references: [id], onDelete: Cascade)
 
   @@unique([soldierId, licenseTypeId])
+  @@index([soldierId])
+}
+
+model CertificationType {
+  id          String   @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation("BattalionCertificationTypes", fields: [battalionId], references: [id], onDelete: Cascade)
+  name        String
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  soldiers    SoldierCertification[]
+
+  @@unique([battalionId, name])
+  @@index([battalionId])
+}
+
+model SoldierCertification {
+  id                  String @id @default(cuid())
+  soldierId           String
+  soldier             Soldier @relation("SoldierCertifications", fields: [soldierId], references: [id], onDelete: Cascade)
+  certificationTypeId String
+  certificationType   CertificationType @relation(fields: [certificationTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([soldierId, certificationTypeId])
   @@index([soldierId])
 }

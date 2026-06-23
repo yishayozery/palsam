@@ -9,6 +9,7 @@ export const SCREENS = {
   employment: "תעסוקה (ימי מילואים)",
   dispatch: "שבצ\"ק",
   driving_licenses: "הרשאות נהיגה",
+  certifications: "הסמכות",
   stock: "מלאי",
   signatures: "החתמות/זיכוי",
   counts: "ספירות",
@@ -242,7 +243,7 @@ export const PRESET_ROLES: {
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
       { screen: "attendance", level: "EDIT" }, { screen: "employment", level: "VIEW" },
-      { screen: "dispatch", level: "EDIT" },
+      { screen: "dispatch", level: "EDIT" }, { screen: "certifications", level: "EDIT" },
       { screen: "signatures", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
       { screen: "counts", level: "EDIT" }, { screen: "donations", level: "EDIT" },
       { screen: "vacation", level: "EDIT" },
@@ -255,7 +256,7 @@ export const PRESET_ROLES: {
     name: "מפקד מחלקה", isAdmin: false, isCommander: true, sortOrder: 5,
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "VIEW" },
-      { screen: "attendance", level: "EDIT" }, { screen: "dispatch", level: "VIEW" },
+      { screen: "attendance", level: "EDIT" }, { screen: "dispatch", level: "VIEW" }, { screen: "certifications", level: "VIEW" },
       { screen: "vacation", level: "VIEW" },
     ],
   },
@@ -273,7 +274,7 @@ export const PRESET_ROLES: {
     name: 'קשר"ג', isAdmin: false, isCommander: false, sortOrder: 7,
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
-      { screen: "dispatch", level: "EDIT" },
+      { screen: "dispatch", level: "EDIT" }, { screen: "certifications", level: "EDIT" },
       { screen: "stock", level: "EDIT" }, { screen: "catalog", level: "EDIT" },
       { screen: "signatures", level: "EDIT" }, { screen: "counts", level: "EDIT" },
       { screen: "gaps", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
@@ -286,7 +287,7 @@ export const PRESET_ROLES: {
     name: "שליש", isAdmin: false, isCommander: false, sortOrder: 8,
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
-      { screen: "dispatch", level: "EDIT" }, { screen: "reports", level: "VIEW" },
+      { screen: "dispatch", level: "EDIT" }, { screen: "certifications", level: "EDIT" }, { screen: "reports", level: "VIEW" },
       { screen: "armory_reports", level: "VIEW" },
     ],
   },
@@ -305,7 +306,7 @@ export const PRESET_ROLES: {
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
       { screen: "dispatch", level: "EDIT" },
-      { screen: "driving_licenses", level: "EDIT" }, { screen: "maintenance", level: "EDIT" },
+      { screen: "driving_licenses", level: "EDIT" }, { screen: "certifications", level: "EDIT" }, { screen: "maintenance", level: "EDIT" },
       { screen: "stock", level: "EDIT" }, { screen: "catalog", level: "EDIT" },
       { screen: "signatures", level: "EDIT" }, { screen: "counts", level: "EDIT" },
       { screen: "gaps", level: "EDIT" }, { screen: "transfers", level: "EDIT" },

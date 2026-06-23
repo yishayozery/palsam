@@ -45,7 +45,7 @@ export default async function AppLayout({
   if (user.role === "COMPANY_REP" && user.holderId) {
     const holder = await prisma.holder.findUnique({ where: { id: user.holderId }, select: { name: true } });
     if (holder?.name?.includes("טנא") && !items.some((n) => n.href === "/maintenance")) {
-      items.push({ href: "/maintenance", label: "סטטוס רכבים (טנא)", icon: "🔧", group: "הפלוגה שלי" });
+      items.push({ href: "/maintenance", label: "סטטוס רכבים (טנא)", icon: "🔧", group: "מבצעי" });
     }
   }
   // הזרקה דינמית: קצין רכב (מנהל מחסן רכב) רואה /maintenance כ-"סטטוס רכבים"
@@ -56,7 +56,7 @@ export default async function AppLayout({
     });
     const isVehicleOfficer = myHolders.some((h) => h.warehouseType === "VEHICLES");
     if (isVehicleOfficer && !items.some((n) => n.href === "/maintenance")) {
-      items.push({ href: "/maintenance", label: "סטטוס רכבים", icon: "🚙", group: "המחסנים שלי" });
+      items.push({ href: "/maintenance", label: "סטטוס רכבים", icon: "🚙", group: "מבצעי" });
     }
   }
 

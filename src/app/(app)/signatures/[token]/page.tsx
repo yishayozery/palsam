@@ -26,7 +26,7 @@ export default async function SignatureTokenPage({
   });
   if (!sig) notFound();
 
-  const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const base = process.env.NEXT_PUBLIC_APP_URL || "";
   const signUrl = `${base}/sign/${token}`;
   const qrDataUrl = await QRCode.toDataURL(signUrl, { width: 280, margin: 1 });
 

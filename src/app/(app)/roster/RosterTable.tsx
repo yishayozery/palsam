@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { Card, Table, Th, Td, Badge } from "@/components/ui";
 import { createSoldier, updateSoldier, enlistSoldier, dischargeSoldier, deactivateSoldier } from "./actions";
-import { importSoldiersRoster, seedSampleSoldiers } from "./import-actions";
+import { importSoldiersRoster } from "./import-actions";
 
 type Company = { id: string; name: string };
 type SquadOption = { id: string; name: string; companyId: string };
@@ -192,7 +192,6 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
 
   const [importBusy, setImportBusy] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; errors: string[] } | null>(null);
-  const [seedBusy, setSeedBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
@@ -209,20 +208,6 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
     } finally {
       setImportBusy(false);
       e.target.value = "";
-    }
-  }
-
-  async function handleSeed() {
-    if (!confirm("יוצר 5 חיילי דוגמה לכל פלוגה (מאושרים לחתימה). להמשיך?")) return;
-    setSeedBusy(true);
-    try {
-      const r = await seedSampleSoldiers();
-      const errStr = r.errors && r.errors.length > 0 ? `\n\nשגיאות:\n${r.errors.join("\n")}` : "";
-      alert(`✓ נוצרו ${r.created} חיילים${errStr}`);
-    } catch (e) {
-      alert(`שגיאה: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setSeedBusy(false);
     }
   }
 
@@ -294,11 +279,6 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
               {importBusy ? "מייבא..." : "⬆ ייבוא Excel"}
               <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importBusy} onChange={handleImport} />
             </label>
-            <button onClick={handleSeed} disabled={seedBusy}
-              className="text-xs bg-amber-100 border border-amber-300 text-amber-800 rounded-lg px-3 py-2 hover:bg-amber-200 disabled:opacity-50"
-              title="הקמה מהירה: 5 חיילי דוגמה לכל פלוגה — לבדיקה">
-              {seedBusy ? "יוצר..." : "🌱 5 לכל פלוגה (בדיקה)"}
-            </button>
             <button onClick={() => setAddOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
               + הוסף חייל
             </button>

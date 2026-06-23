@@ -50,6 +50,68 @@ export async function saveAttendance(
   }
 }
 
+// ===================== שמ"פ (שירות מילואים פעיל) =====================
+
+export async function openCallup(
+  soldierId: string,
+  startDate: string,
+): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireUser();
+    if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
+    const existing = await prisma.callupPeriod.findFirst({
+      where: { soldierId, endDate: null },
+    });
+    if (existing) return { error: "לחייל כבר יש שמ\"פ פתוח" };
+    await prisma.callupPeriod.create({
+      data: {
+        soldierId,
+        startDate: new Date(startDate + "T00:00:00Z"),
+        createdById: user.id,
+      },
+    });
+    revalidatePath("/attendance");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+export async function closeCallup(
+  callupId: string,
+  endDate: string,
+): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireUser();
+    if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
+    const period = await prisma.callupPeriod.findUnique({ where: { id: callupId } });
+    if (!period) return { error: "תקופת שמ\"פ לא נמצאה" };
+    if (period.endDate) return { error: "שמ\"פ כבר סגור" };
+    await prisma.callupPeriod.update({
+      where: { id: callupId },
+      data: { endDate: new Date(endDate + "T00:00:00Z"), closedById: user.id, closedAt: new Date() },
+    });
+    revalidatePath("/attendance");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+export async function deleteCallup(
+  callupId: string,
+): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireUser();
+    if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
+    await prisma.callupPeriod.delete({ where: { id: callupId } });
+    revalidatePath("/attendance");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
 export async function assignSquad(
   soldierId: string,
   squadId: string | null,

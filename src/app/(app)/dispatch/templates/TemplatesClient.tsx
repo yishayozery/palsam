@@ -349,7 +349,7 @@ export default function TemplatesClient({
             <div>
               <label className="text-sm font-medium block mb-1">רכב</label>
               <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} className="border rounded-lg px-3 py-2 text-sm w-full">
-                <option value="">בחר רכב...</option>
+                <option value="">ללא רכב (צוות בלבד)</option>
                 {vehicles.map((v) => (
                   <option key={v.id} value={v.id}>{v.itemName} - {v.serialNumber}{v.holderName ? ` (${v.holderName})` : ""}</option>
                 ))}
@@ -468,7 +468,7 @@ export default function TemplatesClient({
               )}
               <div className="flex justify-between pt-2 border-t border-slate-200">
                 <button onClick={() => setStep("soldiers")} className="px-4 py-2 bg-slate-200 rounded-lg text-sm">‹ חזרה</button>
-                <button onClick={handleSave} disabled={pending || !name || !vehicleId} className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 disabled:opacity-50 shadow-md">
+                <button onClick={handleSave} disabled={pending || !name} className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 disabled:opacity-50 shadow-md">
                   {pending ? "שומר..." : "✅ שמור שבצ\"ק"}
                 </button>
               </div>
@@ -575,7 +575,7 @@ function VehicleLayout({
 }) {
   return (
     <div className="bg-gradient-to-b from-slate-50 to-slate-100 rounded-xl border-2 border-slate-300 p-4 relative">
-      <div className="text-center text-xs text-slate-400 mb-3">{vehicleName} {vehicleSerial && `(${vehicleSerial})`}</div>
+      <div className="text-center text-xs text-slate-400 mb-3">{vehicleName ? `${vehicleName} ${vehicleSerial ? `(${vehicleSerial})` : ""}` : "צוות ללא רכב"}</div>
 
       <div className="relative mx-auto max-w-md">
         <div className="flex justify-center mb-2">
@@ -716,7 +716,7 @@ function TemplateCard({ template, onEdit, onDelete, licenseWarnings }: { templat
       <div className="bg-slate-800 text-white p-2 flex items-center justify-between">
         <div className="min-w-0">
           <div className="font-bold text-xs truncate">{template.name}</div>
-          <div className="text-[10px] text-slate-300 font-mono">{template.vehicleName} · {template.vehicleSerial}</div>
+          <div className="text-[10px] text-slate-300 font-mono">{template.vehicleName ? `${template.vehicleName} · ${template.vehicleSerial}` : "ללא רכב"}</div>
         </div>
         <div className="flex gap-1 shrink-0">
           <button onClick={onEdit} className="text-[10px] bg-slate-700 hover:bg-slate-600 rounded px-1.5 py-0.5">✏️</button>

@@ -54,7 +54,7 @@ export async function createBattalion(formData: FormData) {
     for (const w of WH_DEFS) {
       await tx.holder.create({ data: { battalionId: bat.id, kind: "WAREHOUSE", warehouseType: w.type, name: w.name } });
     }
-    // סטטוסי בסיס
+    // סטטוסי בסיס — פריטים
     for (const [n, flags] of [
       ["תקין", { isDefault: true }],
       ["בלאי", { isWear: true }],
@@ -63,6 +63,18 @@ export async function createBattalion(formData: FormData) {
       ["אבוד", { isLoss: true }],
     ] as const) {
       await tx.itemStatus.create({ data: { battalionId: bat.id, name: n, ...flags } });
+    }
+    // סטטוסי בסיס — נוכחות
+    const attDefs: { name: string; icon: string; isPresent: boolean }[] = [
+      { name: "נמצא", icon: "✅", isPresent: true },
+      { name: "יום יציאה", icon: "⬅️", isPresent: true },
+      { name: "יום חזרה", icon: "➡️", isPresent: true },
+      { name: "יציאת קו", icon: "🏠", isPresent: false },
+    ];
+    for (let i = 0; i < attDefs.length; i++) {
+      await tx.attendanceStatus.create({
+        data: { battalionId: bat.id, name: attDefs[i].name, icon: attDefs[i].icon, isPresent: attDefs[i].isPresent, color: "#10b981", sortOrder: i },
+      });
     }
   });
 

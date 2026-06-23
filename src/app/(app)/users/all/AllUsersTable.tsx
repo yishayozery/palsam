@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
-import { saveUser, regenerateInvite, toggleUser } from "../actions";
+import { saveUser, regenerateInvite, toggleUser, clearRateLimits } from "../actions";
 
 type Role = "SUPER_ADMIN" | "BATTALION_ADMIN" | "WAREHOUSE_MANAGER" | "COMPANY_REP" | "VIEWER" | "SHALISH" | "MAGAD" | "SAMAGAD";
 type User = {
@@ -511,6 +511,12 @@ export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, i
               <option value="inactive">מושבתים</option>
             </select>
           </div>
+          <form action={clearRateLimits} className="inline">
+            <button className="rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-3 py-2 text-sm hover:bg-amber-100 whitespace-nowrap"
+              title="מנקה את כל חסימות הכניסה (rate limit) כדי לאפשר למשתמשים חסומים להתחבר מחדש">
+              🔓 פתח חסימות
+            </button>
+          </form>
           <button onClick={() => setShowCreate(true)}
             className="bg-slate-800 text-white rounded-lg px-4 py-2 text-sm hover:bg-slate-900 whitespace-nowrap">
             + הוסף משתמש

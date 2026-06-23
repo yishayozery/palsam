@@ -181,6 +181,19 @@ export default async function AttendancePage({
     select: { soldierId: true, date: true, statusId: true },
   });
 
+  // Fetch callup periods (שמ"פ) for soldiers in view
+  const callupPeriods = await prisma.callupPeriod.findMany({
+    where: { soldierId: { in: soldierIds } },
+    orderBy: { startDate: "desc" },
+    select: { id: true, soldierId: true, startDate: true, endDate: true },
+  });
+  const callupData = callupPeriods.map((c) => ({
+    id: c.id,
+    soldierId: c.soldierId,
+    startDate: c.startDate.toISOString().slice(0, 10),
+    endDate: c.endDate?.toISOString().slice(0, 10) ?? null,
+  }));
+
   // Serialize dates
   const planData = plans.map((p) => ({
     soldierId: p.soldierId,
@@ -268,6 +281,7 @@ export default async function AttendancePage({
         startDate={startStr}
         employments={employmentsForClient}
         selectedEmployment={selectedEmployment}
+        callupPeriods={callupData}
       />
     </div>
   );

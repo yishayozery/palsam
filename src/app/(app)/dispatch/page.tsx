@@ -113,9 +113,9 @@ export default async function DispatchPage() {
           templates={templates.filter((t) => t.vehicleSerialUnit).map((t) => ({
             id: t.id,
             name: t.name,
-            vehicleSerialUnitId: t.vehicleSerialUnitId,
-            vehicleName: t.vehicleSerialUnit.itemType.name,
-            vehicleSerial: t.vehicleSerialUnit.serialNumber,
+            vehicleSerialUnitId: t.vehicleSerialUnitId!,
+            vehicleName: t.vehicleSerialUnit!.itemType.name,
+            vehicleSerial: t.vehicleSerialUnit!.serialNumber,
             soldierIds: t.soldiers.filter((ts) => ts.soldier).map((ts) => ts.soldier.id),
           }))}
           vehicles={vehicles.map((v) => ({

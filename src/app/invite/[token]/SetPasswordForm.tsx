@@ -16,13 +16,21 @@ export default function SetPasswordForm({ token, username }: { token: string; us
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">סיסמה חדשה</label>
-        <input type="password" name="password" autoFocus minLength={6}
+        <input type="password" name="password" autoFocus minLength={12}
           className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-500" />
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">אימות סיסמה</label>
-        <input type="password" name="confirm" minLength={6}
+        <input type="password" name="confirm" minLength={12}
           className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-500" />
+      </div>
+      <div className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3 space-y-1">
+        <div className="font-medium text-slate-600 mb-1">דרישות סיסמה:</div>
+        <div>12 תווים לפחות</div>
+        <div>אות גדולה באנגלית (A-Z)</div>
+        <div>אות קטנה באנגלית (a-z)</div>
+        <div>ספרה (0-9)</div>
+        <div>תו מיוחד (!@#$%...)</div>
       </div>
       {state.error && <p className="text-sm text-rose-600 bg-rose-50 rounded-lg px-3 py-2">{state.error}</p>}
       <button type="submit" disabled={pending}

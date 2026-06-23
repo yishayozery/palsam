@@ -26,7 +26,7 @@ export default async function VacationPage() {
   const allUsers = isAdmin
     ? await prisma.appUser.findMany({
         where: { battalionId: bId, active: true },
-        select: { id: true, fullName: true, title: true, role: true },
+        select: { id: true, fullName: true, title: true },
         orderBy: { fullName: "asc" },
       })
     : [];
