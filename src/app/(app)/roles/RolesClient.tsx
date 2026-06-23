@@ -55,6 +55,24 @@ export default function RolesClient({
     setPerms({});
   }
 
+  function duplicateRole(role: RoleRow) {
+    setEditingId("new");
+    setName(role.name + " (עותק)");
+    setIsCommander(role.isCommander);
+    const p: Record<string, string> = {};
+    for (const [k, v] of Object.entries(role.permissions)) p[k] = v;
+    setPerms(p);
+  }
+
+  function copyPermsFrom(roleId: string) {
+    const source = roles.find((r) => r.id === roleId);
+    if (!source) return;
+    const p: Record<string, string> = {};
+    for (const [k, v] of Object.entries(source.permissions)) p[k] = v;
+    setPerms(p);
+    setIsCommander(source.isCommander);
+  }
+
   function cancelEdit() {
     setEditingId(null);
   }
@@ -157,6 +175,16 @@ export default function RolesClient({
 
               <Badge className="bg-blue-50 text-blue-700 text-[10px] shrink-0">{role.userCount} משתמשים</Badge>
 
+              {!isEditing && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); duplicateRole(role); }}
+                  className="text-[10px] text-slate-400 hover:text-blue-600 px-1.5 py-0.5 rounded hover:bg-blue-50 shrink-0"
+                  title="שכפל תפקיד"
+                >
+                  📋
+                </button>
+              )}
+
               <span className="text-slate-400 text-xs shrink-0">{isEditing ? "▲" : "▼"}</span>
             </div>
 
@@ -171,14 +199,17 @@ export default function RolesClient({
                     className="flex-1 px-3 py-2 border rounded-lg text-sm"
                     autoFocus
                   />
-                  <label className="flex items-center gap-2 text-sm whitespace-nowrap">
-                    <input
-                      type="checkbox"
-                      checked={isCommander}
-                      onChange={(e) => setIsCommander(e.target.checked)}
-                    />
-                    תפקיד פיקודי (משויך לפלוגה)
-                  </label>
+                  <div className="shrink-0">
+                    <label className="flex items-center gap-2 text-sm whitespace-nowrap cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isCommander}
+                        onChange={(e) => setIsCommander(e.target.checked)}
+                      />
+                      רואה רק את הפלוגה שלו
+                    </label>
+                    <div className="text-[10px] text-slate-400 mr-6">הדלק למפ&quot;ם, מפלג, שליש. כבה לקשר&quot;ג, ק.רכב</div>
+                  </div>
                 </div>
 
                 <div>
@@ -263,23 +294,41 @@ export default function RolesClient({
             <span className="font-bold text-sm">תפקיד חדש</span>
           </div>
           <div className="p-4 space-y-4">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="שם התפקיד"
-                className="flex-1 px-3 py-2 border rounded-lg text-sm"
+                className="flex-1 px-3 py-2 border rounded-lg text-sm min-w-[160px]"
                 autoFocus
               />
-              <label className="flex items-center gap-2 text-sm whitespace-nowrap">
-                <input
-                  type="checkbox"
-                  checked={isCommander}
-                  onChange={(e) => setIsCommander(e.target.checked)}
-                />
-                תפקיד פיקודי (משויך לפלוגה)
-              </label>
+              <div className="shrink-0">
+                <label className="flex items-center gap-2 text-sm whitespace-nowrap cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isCommander}
+                    onChange={(e) => setIsCommander(e.target.checked)}
+                  />
+                  רואה רק את הפלוגה שלו
+                </label>
+                <div className="text-[10px] text-slate-400 mr-6">הדלק למפ&quot;ם, מפלג, שליש. כבה לקשר&quot;ג, ק.רכב</div>
+              </div>
             </div>
+
+            {/* Copy from existing role */}
+            {roles.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">העתק הרשאות מתפקיד:</span>
+                <select
+                  onChange={(e) => { if (e.target.value) copyPermsFrom(e.target.value); e.target.value = ""; }}
+                  className="border rounded-lg px-2 py-1 text-xs text-slate-600"
+                  defaultValue=""
+                >
+                  <option value="" disabled>בחר תפקיד...</option>
+                  {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+              </div>
+            )}
 
             <div>
               <div className="flex items-center justify-between mb-2">

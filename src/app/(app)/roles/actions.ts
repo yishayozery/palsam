@@ -11,10 +11,15 @@ export async function seedPresetRoles() {
   const user = await requireAdmin();
   const bId = user.battalionId!;
 
-  const existing = await prisma.systemRole.count({ where: { battalionId: bId } });
-  if (existing > 0) return;
+  const existing = await prisma.systemRole.findMany({
+    where: { battalionId: bId, isPreset: true },
+    select: { name: true },
+  });
+  const existingNames = new Set(existing.map((r) => r.name));
 
+  let created = 0;
   for (const preset of PRESET_ROLES) {
+    if (existingNames.has(preset.name)) continue;
     await prisma.systemRole.create({
       data: {
         battalionId: bId,
@@ -28,9 +33,12 @@ export async function seedPresetRoles() {
         },
       },
     });
+    created++;
   }
 
-  await audit(user.id, "CREATE", "SystemRole", "seed-presets", { count: PRESET_ROLES.length });
+  if (created > 0) {
+    await audit(user.id, "CREATE", "SystemRole", "seed-presets", { count: created });
+  }
   revalidatePath("/roles");
 }
 

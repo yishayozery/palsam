@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card } from "@/components/ui";
-import { SCREENS, SCREEN_KEYS } from "@/lib/rbac";
+import { SCREENS, SCREEN_KEYS, PRESET_ROLES } from "@/lib/rbac";
 import SettingsTabs from "@/components/SettingsTabs";
 import RolesClient from "./RolesClient";
 import { seedPresetRoles } from "./actions";
@@ -21,7 +21,9 @@ export default async function RolesPage() {
     },
   });
 
-  const hasPresets = roles.some((r) => r.isPreset);
+  const presetNames = new Set(roles.filter((r) => r.isPreset).map((r) => r.name));
+  const missingPresets = PRESET_ROLES.filter((p) => !presetNames.has(p.name));
+  const hasAllPresets = missingPresets.length === 0;
 
   return (
     <div>
@@ -31,15 +33,17 @@ export default async function RolesPage() {
       />
       <SettingsTabs active="roles" />
 
-      {!hasPresets && (
+      {!hasAllPresets && (
         <Card className="p-4 mb-4 bg-amber-50 border-amber-200">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-amber-800">
-              לא נמצאו תפקידים מוגדרים. לחץ כדי ליצור את תפקידי ברירת המחדל.
+              {presetNames.size === 0
+                ? "לא נמצאו תפקידים מוגדרים. לחץ כדי ליצור את תפקידי ברירת המחדל."
+                : `חסרים ${missingPresets.length} תפקידים מובנים (${missingPresets.map((p) => p.name).join(", ")}). לחץ להוספה.`}
             </p>
             <form action={seedPresetRoles}>
-              <button className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700">
-                יצירת תפקידי ברירת מחדל
+              <button className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 whitespace-nowrap">
+                {presetNames.size === 0 ? "יצירת תפקידי ברירת מחדל" : "הוסף תפקידים חסרים"}
               </button>
             </form>
           </div>
