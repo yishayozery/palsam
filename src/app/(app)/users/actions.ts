@@ -124,6 +124,20 @@ export async function regenerateInvite(formData: FormData) {
   revalidatePath("/users/all");
 }
 
+export async function deleteAllUsersExceptMe() {
+  const admin = await requireCapability("users.manage");
+  const bId = admin.battalionId!;
+  const others = await prisma.appUser.findMany({
+    where: { battalionId: bId, id: { not: admin.id } },
+    select: { id: true },
+  });
+  for (const u of others) {
+    await prisma.appUser.delete({ where: { id: u.id } });
+  }
+  await audit(admin.id, "DELETE", "AppUser", "bulk-delete", { count: others.length });
+  revalidatePath("/users/all");
+}
+
 export async function toggleUser(formData: FormData) {
   const admin = await requireCapability("users.manage");
   const id = String(formData.get("id") || "");

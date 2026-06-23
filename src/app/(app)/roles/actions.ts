@@ -42,6 +42,44 @@ export async function seedPresetRoles() {
   revalidatePath("/roles");
 }
 
+export async function resetPresetRoles() {
+  const user = await requireAdmin();
+  const bId = user.battalionId!;
+
+  const oldPresets = await prisma.systemRole.findMany({
+    where: { battalionId: bId, isPreset: true },
+    include: { _count: { select: { users: true } } },
+  });
+
+  for (const old of oldPresets) {
+    if (old._count.users > 0) {
+      await prisma.systemRole.update({ where: { id: old.id }, data: { active: false, isPreset: false } });
+    } else {
+      await prisma.screenPermission.deleteMany({ where: { roleId: old.id } });
+      await prisma.systemRole.delete({ where: { id: old.id } });
+    }
+  }
+
+  for (const preset of PRESET_ROLES) {
+    await prisma.systemRole.create({
+      data: {
+        battalionId: bId,
+        name: preset.name,
+        isPreset: true,
+        isAdmin: preset.isAdmin,
+        isCommander: preset.isCommander,
+        sortOrder: preset.sortOrder,
+        permissions: {
+          create: preset.permissions.map((p) => ({ screen: p.screen, level: p.level })),
+        },
+      },
+    });
+  }
+
+  await audit(user.id, "UPDATE", "SystemRole", "reset-presets", { count: PRESET_ROLES.length });
+  revalidatePath("/roles");
+}
+
 export async function saveSystemRole(formData: FormData) {
   const user = await requireAdmin();
   const bId = user.battalionId!;
@@ -94,7 +132,6 @@ export async function deleteSystemRole(formData: FormData) {
     include: { _count: { select: { users: true } } },
   });
   if (!role || role.battalionId !== user.battalionId) return;
-  if (role.isPreset) return;
 
   if (role._count.users > 0) {
     await prisma.systemRole.update({ where: { id }, data: { active: false } });

@@ -256,13 +256,15 @@ export default function RolesClient({
 
                 <div className="flex justify-between items-center pt-2 border-t border-slate-200">
                   <div>
-                    {!role.isPreset && role.userCount === 0 && (
+                    {role.userCount === 0 ? (
                       <button
                         onClick={() => handleDelete(role.id)}
                         className="px-3 py-1.5 text-xs text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg"
                       >
                         🗑️ מחיקה
                       </button>
+                    ) : (
+                      <span className="text-[10px] text-slate-400">{role.userCount} משתמשים משויכים — לא ניתן למחוק</span>
                     )}
                   </div>
                   <div className="flex gap-2">

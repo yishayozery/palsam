@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
-import { saveUser, regenerateInvite, toggleUser } from "../actions";
+import { saveUser, regenerateInvite, toggleUser, deleteAllUsersExceptMe } from "../actions";
 
 type Role = "SUPER_ADMIN" | "BATTALION_ADMIN" | "WAREHOUSE_MANAGER" | "COMPANY_REP" | "VIEWER" | "SHALISH" | "MAGAD" | "SAMAGAD";
 type User = {
@@ -456,6 +456,14 @@ export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, i
           <button onClick={() => setShowCreate(true)}
             className="bg-slate-800 text-white rounded-lg px-4 py-2 text-sm hover:bg-slate-900 whitespace-nowrap">
             + הוסף משתמש
+          </button>
+          <button onClick={() => {
+              if (!confirm("למחוק את כל המשתמשים מלבדך? פעולה זו בלתי הפיכה!")) return;
+              if (!confirm("בטוח? כל המשתמשים ימחקו לצמיתות.")) return;
+              deleteAllUsersExceptMe();
+            }}
+            className="text-[10px] text-rose-400 hover:text-rose-600 underline whitespace-nowrap self-end pb-2">
+            🗑️ מחק הכל חוץ ממני
           </button>
           <span className="text-xs text-slate-500 self-end pb-2">{filtered.length} משתמשים</span>
         </div>

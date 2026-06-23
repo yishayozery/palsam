@@ -197,96 +197,139 @@ export function permissionsFromLegacyRole(role: Role): UserPermissions {
 
 // ===================== Preset role definitions =====================
 
+// Helper: build permissions list from overrides map, ensuring no duplicates
+function buildPerms(
+  base: PermissionLevel,
+  overrides: Partial<Record<Screen, PermissionLevel>> = {},
+  exclude: Screen[] = [],
+): { screen: Screen; level: PermissionLevel }[] {
+  return SCREEN_KEYS
+    .filter((s) => !exclude.includes(s))
+    .map((s) => ({ screen: s, level: overrides[s] ?? base }))
+    .filter((p) => p.level !== ("NONE" as PermissionLevel));
+}
+
 export const PRESET_ROLES: {
   name: string; isAdmin: boolean; isCommander: boolean; sortOrder: number;
   permissions: { screen: Screen; level: PermissionLevel }[];
 }[] = [
+  // ===== רמת גדוד =====
   {
     name: "מנהל מערכת", isAdmin: true, isCommander: false, sortOrder: 0,
-    permissions: SCREEN_KEYS.map((s) => ({ screen: s, level: "EDIT" as const })),
+    permissions: buildPerms("EDIT"),
   },
   {
-    name: 'מג"ד', isAdmin: false, isCommander: true, sortOrder: 1,
-    permissions: [
-      ...SCREEN_KEYS.filter((s) => !["settings"].includes(s)).map((s) => ({ screen: s, level: "VIEW" as const })),
-      { screen: "armory", level: "EDIT" as const },
-    ],
+    // מג"ד — רואה הכל, עורך רק ארמון (אישור נשק). אותו דבר כמו סמג"ד ומפ"מ
+    name: 'מג"ד', isAdmin: false, isCommander: false, sortOrder: 1,
+    permissions: buildPerms("EDIT", {}, ["settings"]),
   },
   {
-    name: 'סמג"ד', isAdmin: false, isCommander: true, sortOrder: 2,
-    permissions: [
-      ...SCREEN_KEYS.filter((s) => !["settings"].includes(s)).map((s) => ({ screen: s, level: "VIEW" as const })),
-      { screen: "armory", level: "EDIT" as const },
-    ],
+    name: 'סמג"ד', isAdmin: false, isCommander: false, sortOrder: 2,
+    permissions: buildPerms("EDIT", {}, ["settings"]),
   },
   {
+    // מפ"מ — מנהל מערכת תפעולי, עורך הכל
     name: 'מפ"מ', isAdmin: false, isCommander: false, sortOrder: 3,
-    permissions: SCREEN_KEYS.map((s) => ({ screen: s, level: "EDIT" as const })),
+    permissions: buildPerms("EDIT"),
   },
+
+  // ===== רמת פלוגה =====
   {
+    // מפ — מפקד פלוגה, רואה רק את הפלוגה שלו
     name: "מפ", isAdmin: false, isCommander: true, sortOrder: 4,
     permissions: [
-      { screen: "soldiers", level: "EDIT" }, { screen: "attendance", level: "EDIT" },
-      { screen: "dispatch", level: "EDIT" }, { screen: "signatures", level: "EDIT" },
-      { screen: "stock", level: "VIEW" }, { screen: "transfers", level: "EDIT" },
-      { screen: "counts", level: "EDIT" }, { screen: "gaps", level: "VIEW" },
-      { screen: "reports", level: "VIEW" }, { screen: "dashboard", level: "VIEW" },
-      { screen: "donations", level: "EDIT" }, { screen: "vacation", level: "VIEW" },
+      { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
+      { screen: "attendance", level: "EDIT" }, { screen: "dispatch", level: "EDIT" },
+      { screen: "signatures", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
+      { screen: "counts", level: "EDIT" }, { screen: "donations", level: "EDIT" },
+      { screen: "vacation", level: "EDIT" },
+      { screen: "stock", level: "VIEW" }, { screen: "gaps", level: "VIEW" },
+      { screen: "reports", level: "VIEW" },
     ],
   },
   {
-    name: "מפלג", isAdmin: false, isCommander: false, sortOrder: 5,
+    // מפקד מחלקה — מתחת למפ, רואה חיילים/נוכחות/שבצק של הפלוגה
+    name: "מפקד מחלקה", isAdmin: false, isCommander: true, sortOrder: 5,
     permissions: [
-      { screen: "soldiers", level: "VIEW" }, { screen: "attendance", level: "VIEW" },
-      { screen: "dashboard", level: "VIEW" }, { screen: "dispatch", level: "VIEW" },
+      { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "VIEW" },
+      { screen: "attendance", level: "EDIT" }, { screen: "dispatch", level: "VIEW" },
+      { screen: "vacation", level: "VIEW" },
     ],
   },
   {
-    name: 'קשר"ג', isAdmin: false, isCommander: false, sortOrder: 6,
+    // מפלג — רואה בלבד ברמת פלוגה
+    name: "מפלג", isAdmin: false, isCommander: true, sortOrder: 6,
     permissions: [
+      { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "VIEW" },
+      { screen: "attendance", level: "VIEW" }, { screen: "dispatch", level: "VIEW" },
+    ],
+  },
+
+  // ===== תפקידי מטה =====
+  {
+    // קשר"ג — אחראי ציוד תקשוב, רואה כל הגדוד
+    name: 'קשר"ג', isAdmin: false, isCommander: false, sortOrder: 7,
+    permissions: [
+      { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
+      { screen: "attendance", level: "EDIT" }, { screen: "dispatch", level: "EDIT" },
       { screen: "stock", level: "EDIT" }, { screen: "catalog", level: "EDIT" },
       { screen: "signatures", level: "EDIT" }, { screen: "counts", level: "EDIT" },
       { screen: "gaps", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
-      { screen: "kits", level: "EDIT" }, { screen: "soldiers", level: "EDIT" },
+      { screen: "kits", level: "EDIT" }, { screen: "donations", level: "EDIT" },
+      { screen: "reports", level: "VIEW" }, { screen: "armory", level: "VIEW" },
+    ],
+  },
+  {
+    // שליש — גדודי, סמכויות מוגבלות
+    name: "שליש", isAdmin: false, isCommander: false, sortOrder: 8,
+    permissions: [
+      { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
+      { screen: "dispatch", level: "EDIT" }, { screen: "reports", level: "VIEW" },
+      { screen: "armory", level: "VIEW" },
+    ],
+  },
+  {
+    // רב — צופה בלבד
+    name: "רב", isAdmin: false, isCommander: false, sortOrder: 9,
+    permissions: [
+      { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "VIEW" },
+      { screen: "reports", level: "VIEW" },
+    ],
+  },
+
+  // ===== קציני מקצוע =====
+  {
+    // ק.רכב — אחראי רכבים
+    name: "ק.רכב", isAdmin: false, isCommander: false, sortOrder: 10,
+    permissions: [
+      { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
       { screen: "attendance", level: "EDIT" }, { screen: "dispatch", level: "EDIT" },
-      { screen: "reports", level: "VIEW" }, { screen: "dashboard", level: "VIEW" },
-      { screen: "donations", level: "EDIT" }, { screen: "armory", level: "VIEW" },
+      { screen: "driving_licenses", level: "EDIT" }, { screen: "maintenance", level: "EDIT" },
+      { screen: "stock", level: "EDIT" }, { screen: "catalog", level: "EDIT" },
+      { screen: "signatures", level: "EDIT" }, { screen: "counts", level: "EDIT" },
+      { screen: "gaps", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
+      { screen: "reports", level: "VIEW" },
     ],
   },
   {
-    name: "שליש", isAdmin: false, isCommander: false, sortOrder: 7,
+    // ק.אג"ם — אחראי ציוד כללי
+    name: 'ק.אג"ם', isAdmin: false, isCommander: false, sortOrder: 11,
     permissions: [
-      { screen: "soldiers", level: "EDIT" }, { screen: "reports", level: "VIEW" },
-      { screen: "dispatch", level: "EDIT" }, { screen: "armory", level: "VIEW" },
-      { screen: "dashboard", level: "VIEW" },
-    ],
-  },
-  {
-    name: "רב", isAdmin: false, isCommander: false, sortOrder: 8,
-    permissions: [
-      { screen: "soldiers", level: "VIEW" }, { screen: "reports", level: "VIEW" },
-      { screen: "dashboard", level: "VIEW" },
-    ],
-  },
-  {
-    name: "ק.רכב", isAdmin: false, isCommander: false, sortOrder: 9,
-    permissions: [
-      { screen: "dispatch", level: "EDIT" }, { screen: "driving_licenses", level: "EDIT" },
-      { screen: "maintenance", level: "EDIT" }, { screen: "stock", level: "EDIT" },
+      { screen: "dashboard", level: "VIEW" }, { screen: "stock", level: "EDIT" },
       { screen: "catalog", level: "EDIT" }, { screen: "signatures", level: "EDIT" },
       { screen: "counts", level: "EDIT" }, { screen: "gaps", level: "EDIT" },
-      { screen: "transfers", level: "EDIT" }, { screen: "reports", level: "VIEW" },
-      { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
-      { screen: "attendance", level: "EDIT" },
+      { screen: "transfers", level: "EDIT" }, { screen: "kits", level: "EDIT" },
+      { screen: "reports", level: "VIEW" },
     ],
   },
   {
-    name: 'ק.אג"ם', isAdmin: false, isCommander: false, sortOrder: 10,
+    // מנהל מחסן — אחראי מחסן ספציפי
+    name: "מנהל מחסן", isAdmin: false, isCommander: false, sortOrder: 12,
     permissions: [
-      { screen: "stock", level: "EDIT" }, { screen: "catalog", level: "EDIT" },
+      { screen: "dashboard", level: "VIEW" }, { screen: "stock", level: "EDIT" },
       { screen: "signatures", level: "EDIT" }, { screen: "counts", level: "EDIT" },
       { screen: "gaps", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
-      { screen: "reports", level: "VIEW" }, { screen: "dashboard", level: "VIEW" },
+      { screen: "reports", level: "VIEW" },
     ],
   },
 ];

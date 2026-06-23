@@ -4,7 +4,7 @@ import { PageHeader, Card } from "@/components/ui";
 import { SCREENS, SCREEN_KEYS, PRESET_ROLES } from "@/lib/rbac";
 import SettingsTabs from "@/components/SettingsTabs";
 import RolesClient from "./RolesClient";
-import { seedPresetRoles } from "./actions";
+import { seedPresetRoles, resetPresetRoles } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -33,22 +33,31 @@ export default async function RolesPage() {
       />
       <SettingsTabs active="roles" />
 
-      {!hasAllPresets && (
-        <Card className="p-4 mb-4 bg-amber-50 border-amber-200">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-amber-800">
-              {presetNames.size === 0
+      <Card className="p-4 mb-4 bg-amber-50 border-amber-200">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-amber-800">
+            {!hasAllPresets
+              ? presetNames.size === 0
                 ? "לא נמצאו תפקידים מוגדרים. לחץ כדי ליצור את תפקידי ברירת המחדל."
-                : `חסרים ${missingPresets.length} תפקידים מובנים (${missingPresets.map((p) => p.name).join(", ")}). לחץ להוספה.`}
-            </p>
-            <form action={seedPresetRoles}>
-              <button className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 whitespace-nowrap">
-                {presetNames.size === 0 ? "יצירת תפקידי ברירת מחדל" : "הוסף תפקידים חסרים"}
+                : `חסרים ${missingPresets.length} תפקידים מובנים (${missingPresets.map((p) => p.name).join(", ")}).`
+              : `${presetNames.size} תפקידים מובנים טעונים.`}
+          </p>
+          <div className="flex gap-2">
+            {!hasAllPresets && (
+              <form action={seedPresetRoles}>
+                <button className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 whitespace-nowrap">
+                  {presetNames.size === 0 ? "יצירת תפקידי ברירת מחדל" : "הוסף חסרים"}
+                </button>
+              </form>
+            )}
+            <form action={resetPresetRoles}>
+              <button className="px-4 py-2 bg-slate-600 text-white rounded-lg text-sm font-medium hover:bg-slate-700 whitespace-nowrap">
+                🔄 איפוס תפקידים מובנים
               </button>
             </form>
           </div>
-        </Card>
-      )}
+        </div>
+      </Card>
 
       <RolesClient
         roles={roles.map((r) => ({
