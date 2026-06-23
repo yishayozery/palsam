@@ -263,12 +263,11 @@ export default function AttendanceClient({
     }
     const todayPct = todayAllocatedTotal > 0 ? Math.round((todayActualTotal / todayAllocatedTotal) * 100) : 0;
 
-    const pastAllocs = allocs.filter((a) => a.date <= today);
-    const cumulativeAllocated = pastAllocs.reduce((s, a) => s + a.allocated, 0);
+    const allDates = [...new Set(allocs.map((a) => a.date))];
+    const cumulativeAllocated = allocs.reduce((s, a) => s + a.allocated, 0);
 
-    const pastDates = [...new Set(pastAllocs.map((a) => a.date))];
     let cumulativeActual = 0;
-    for (const d of pastDates) {
+    for (const d of allDates) {
       for (const s of soldiers) {
         const st = getStatus(s.id, d);
         if (st && presentStatusIds.has(st)) cumulativeActual++;
@@ -289,8 +288,8 @@ export default function AttendanceClient({
           const st = getStatus(s.id, today);
           if (st && presentStatusIds.has(st)) tAct++;
         }
-        const cAlloc = pastAllocs.filter((a) => a.companyId === cid).reduce((s, a) => s + a.allocated, 0);
-        const cDates = [...new Set(pastAllocs.filter((a) => a.companyId === cid).map((a) => a.date))];
+        const cAlloc = allocs.filter((a) => a.companyId === cid).reduce((s, a) => s + a.allocated, 0);
+        const cDates = [...new Set(allocs.filter((a) => a.companyId === cid).map((a) => a.date))];
         let cAct = 0;
         for (const d of cDates) {
           for (const s of companySoldiers) {
@@ -310,7 +309,7 @@ export default function AttendanceClient({
       });
     }
 
-    const dailyBreakdown = pastDates.sort().map((d) => {
+    const dailyBreakdown = allDates.sort().map((d) => {
       const dayAlloc = allocs.filter((a) => a.date === d).reduce((s, a) => s + a.allocated, 0);
       let dayActual = 0;
       for (const s of soldiers) {
