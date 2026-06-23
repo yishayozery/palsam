@@ -129,6 +129,13 @@ export default function RolesClient({
 
   return (
     <div className="space-y-3 mt-4">
+      <button
+        onClick={startNew}
+        className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-5 py-2.5 text-sm font-bold shadow-md hover:shadow-lg transition"
+      >
+        + תפקיד חדש
+      </button>
+
       {/* Compact role rows */}
       {roles.map((role) => {
         const isEditing = editingId === role.id;
