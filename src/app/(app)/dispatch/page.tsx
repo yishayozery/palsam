@@ -27,7 +27,7 @@ export default async function DispatchPage() {
     effectiveCompanyId = sq?.companyId ?? null;
   }
 
-  const [battalion, vehicles, soldiers, assignments, templates] = await Promise.all([
+  const [battalion, vehicles, soldiers, assignments, templates, vehicleTypeLicenses] = await Promise.all([
     prisma.battalion.findUnique({ where: { id: bId }, select: { name: true } }),
     // כל רכבי הגדוד התקינים
     prisma.serialUnit.findMany({
@@ -43,10 +43,14 @@ export default async function DispatchPage() {
       },
       orderBy: [{ itemType: { name: "asc" } }, { serialNumber: "asc" }],
     }),
-    // כל חיילי הגדוד הפעילים
+    // כל חיילי הגדוד הפעילים + הרשאות נהיגה
     prisma.soldier.findMany({
       where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
-      select: { id: true, fullName: true, personalNumber: true, phone: true, companyId: true, company: { select: { name: true } } },
+      select: {
+        id: true, fullName: true, personalNumber: true, phone: true, companyId: true,
+        company: { select: { name: true } },
+        drivingLicenses: { include: { licenseType: { select: { id: true, name: true } } } },
+      },
       orderBy: { fullName: "asc" },
     }),
     // כל השיבוצים - גלוי לכולם
@@ -73,7 +77,16 @@ export default async function DispatchPage() {
       },
       orderBy: { name: "asc" },
     }),
+    prisma.vehicleTypeLicense.findMany({
+      where: { itemType: { battalionId: bId } },
+      select: { itemTypeId: true, licenseTypeId: true },
+    }),
   ]);
+
+  const vtlMap: Record<string, string[]> = {};
+  for (const vl of vehicleTypeLicenses) {
+    (vtlMap[vl.itemTypeId] ??= []).push(vl.licenseTypeId);
+  }
 
   return (
     <div>
@@ -105,6 +118,7 @@ export default async function DispatchPage() {
           }))}
           vehicles={vehicles.map((v) => ({
             id: v.id,
+            itemTypeId: v.itemTypeId,
             itemName: v.itemType.name,
             serialNumber: v.serialNumber,
             statusName: v.status.name,
@@ -113,10 +127,12 @@ export default async function DispatchPage() {
             holderId: v.currentHolderId,
             holderName: v.currentHolder?.name ?? null,
             holderKind: v.currentHolder?.kind ?? null,
+            requiredLicenseIds: vtlMap[v.itemTypeId] ?? [],
           }))}
           soldiers={soldiers.map((s) => ({
             id: s.id, fullName: s.fullName, personalNumber: s.personalNumber, phone: s.phone,
             companyId: s.companyId, companyName: s.company?.name ?? null,
+            licenseIds: s.drivingLicenses.map((dl) => dl.licenseType.id),
           }))}
           assignments={assignments.map((a) => ({
             id: a.id,

@@ -7,13 +7,15 @@ import { useEscClose } from "@/lib/useEscClose";
 import { saveAssignment, deleteAssignment, toggleAssignmentComplete } from "./actions";
 
 type Vehicle = {
-  id: string; itemName: string; serialNumber: string;
+  id: string; itemTypeId: string; itemName: string; serialNumber: string;
   statusName: string; isWear: boolean; isLoss: boolean;
   holderId: string | null; holderName: string | null; holderKind: string | null;
+  requiredLicenseIds: string[];
 };
 type Soldier = {
   id: string; fullName: string; personalNumber: string | null; phone: string | null;
   companyId: string | null; companyName: string | null;
+  licenseIds: string[];
 };
 type Assignment = {
   id: string;
@@ -74,6 +76,15 @@ export default function DispatchClient({
   const [soldierSearch, setSoldierSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [shareOpenId, setShareOpenId] = useState<string | null>(null);
+  const [showVehicleList, setShowVehicleList] = useState(false);
+  const [showSoldierList, setShowSoldierList] = useState(false);
+
+  const selectedVehicle = useMemo(() => vehicles.find((v) => v.id === vehicleId), [vehicles, vehicleId]);
+
+  function soldierCanDrive(s: Soldier): boolean {
+    if (!selectedVehicle || selectedVehicle.requiredLicenseIds.length === 0) return true;
+    return selectedVehicle.requiredLicenseIds.some((lid) => s.licenseIds.includes(lid));
+  }
 
   function openNew() {
     setEditingId("new");
@@ -81,6 +92,8 @@ export default function DispatchClient({
     setMissionDate("");
     setDepartureTime("");
     setChosenSoldiers([]);
+    setShowVehicleList(true);
+    setShowSoldierList(false);
     setError(null);
   }
   function loadFromTemplate(tplId: string) {
@@ -95,6 +108,8 @@ export default function DispatchClient({
         .map((sid) => soldiers.find((s) => s.id === sid))
         .filter((s): s is Soldier => !!s)
     );
+    setShowVehicleList(false);
+    setShowSoldierList(false);
     setError(null);
   }
 
@@ -103,16 +118,23 @@ export default function DispatchClient({
     setVehicleId(a.vehicleSerialUnitId);
     setMissionDate(a.missionDate);
     setDepartureTime(a.departureTime);
-    setChosenSoldiers(a.soldiers.map((s) => ({
-      id: s.id, fullName: s.fullName, personalNumber: s.personalNumber, phone: null,
-      companyId: null, companyName: s.companyName,
-    })));
+    setChosenSoldiers(a.soldiers.map((s) => {
+      const full = soldiers.find((sol) => sol.id === s.id);
+      return {
+        id: s.id, fullName: s.fullName, personalNumber: s.personalNumber, phone: null,
+        companyId: full?.companyId ?? null, companyName: s.companyName,
+        licenseIds: full?.licenseIds ?? [],
+      };
+    }));
+    setShowVehicleList(false);
+    setShowSoldierList(false);
     setError(null);
   }
   function cancelEdit() {
     setEditingId(null);
     setVehicleSearch(""); setSoldierSearch("");
     setVehicleExpand(false); setSoldierExpand(false);
+    setShowVehicleList(false); setShowSoldierList(false);
   }
 
   useEscClose(!!editingId, cancelEdit);
@@ -158,6 +180,12 @@ export default function DispatchClient({
     if (chosenSoldiers.length === 0) { setError("הוסף לפחות חייל אחד"); return; }
     if (!missionDate) { setError("בחר תאריך משימה"); return; }
     if (!departureTime) { setError("בחר שעת יציאה"); return; }
+    // ולידציית נהג — הראשון ברשימה הוא הנהג, חייב הרשאת נהיגה
+    const driver = chosenSoldiers[0];
+    if (driver && !soldierCanDrive(driver)) {
+      setError(`⛔ ${driver.fullName} (נהג) אין לו הרשאת נהיגה לרכב זה. יש לשנות נהג או רכב.`);
+      return;
+    }
     setBusy(true);
     try {
       const fd = new FormData();
@@ -458,43 +486,81 @@ export default function DispatchClient({
                 </div>
               </div>
 
-              {/* סיכום ויזואלי של הרכב — כשנטען מתבנית או כשנבחר רכב+חיילים */}
+              {/* סיכום ויזואלי של הרכב — עם כפתורי החלפה */}
               {vehicleId && chosenSoldiers.length > 0 && (() => {
                 const v = vehicles.find((x) => x.id === vehicleId);
                 if (!v) return null;
+                const driverWarning = chosenSoldiers.length > 0 && !soldierCanDrive(chosenSoldiers[0]);
+                const otherWarnings = chosenSoldiers.slice(1).filter((s) => !soldierCanDrive(s));
                 return (
                   <div className="bg-slate-800 text-white rounded-xl p-4">
                     <div className="flex items-center gap-3 mb-3">
                       <span className="text-3xl">🚗</span>
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <div className="font-bold text-lg">{v.itemName}</div>
                         <div className="text-sm text-slate-300 font-mono">{v.serialNumber} {v.holderName ? `· ${v.holderName}` : ""}</div>
                       </div>
+                      <button onClick={() => { setShowVehicleList(true); setShowSoldierList(false); }}
+                        className="text-xs bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 text-slate-200">
+                        🔄 החלף רכב
+                      </button>
                     </div>
+                    {driverWarning && (
+                      <div className="bg-rose-900/60 border border-rose-500 rounded-lg p-2 mb-2 text-xs text-rose-200">
+                        ⛔ <b>{chosenSoldiers[0].fullName}</b> (נהג) — אין הרשאת נהיגה לרכב זה! יש להחליף נהג או רכב.
+                      </div>
+                    )}
+                    {otherWarnings.length > 0 && (
+                      <div className="bg-amber-900/40 border border-amber-500 rounded-lg p-2 mb-2 text-xs text-amber-200">
+                        ⚠️ חיילים ללא הרשאת נהיגה (לא חוסם): {otherWarnings.map((s) => s.fullName).join(", ")}
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
-                      {chosenSoldiers.map((s, i) => (
-                        <div key={s.id} className="bg-slate-700 rounded-lg p-2 flex items-center gap-2">
-                          <span className="text-lg">{i === 0 ? "🚗" : "🪖"}</span>
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium truncate">{s.fullName}</div>
-                            <div className="text-[11px] text-slate-400">{i === 0 ? "נהג" : `מושב ${i + 1}`}{s.companyName ? ` · ${s.companyName}` : ""}</div>
+                      {chosenSoldiers.map((s, i) => {
+                        const isDriver = i === 0;
+                        const hasLicense = soldierCanDrive(s);
+                        return (
+                          <div key={s.id} className={`rounded-lg p-2 flex items-center gap-2 ${
+                            isDriver && !hasLicense ? "bg-rose-900/50 border border-rose-500" : "bg-slate-700"
+                          }`}>
+                            <span className="text-lg">{isDriver ? "🚗" : "🪖"}</span>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-medium truncate">{s.fullName}</div>
+                              <div className="text-[11px] text-slate-400">
+                                {isDriver ? "נהג" : `מושב ${i + 1}`}
+                                {s.companyName ? ` · ${s.companyName}` : ""}
+                                {isDriver && !hasLicense && <span className="text-rose-400 mr-1">· אין הרשאה!</span>}
+                                {!isDriver && !hasLicense && <span className="text-amber-400 mr-1">· ⚠️</span>}
+                              </div>
+                            </div>
+                            <button onClick={() => toggleSoldier(s)} className="text-slate-500 hover:text-rose-400 text-sm">✕</button>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
+                    </div>
+                    <div className="mt-2 flex justify-end">
+                      <button onClick={() => { setShowSoldierList(true); setShowVehicleList(false); }}
+                        className="text-xs bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 text-slate-200">
+                        🔄 החלף/הוסף חיילים
+                      </button>
                     </div>
                   </div>
                 );
               })()}
 
-              {/* 2. רכב */}
+              {/* רכב — מוצג תמיד אם אין רכב, או כש-showVehicleList פתוח */}
+              {(!vehicleId || showVehicleList) && (
               <div>
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <label className="text-sm font-semibold text-slate-700">🚗 רכב {vehicleId && "✓"}</label>
+                  <label className="text-sm font-semibold text-slate-700">🚗 {vehicleId ? "החלף רכב" : "בחר רכב"}</label>
                   {myCompanyId && (
                     <button onClick={() => setVehicleExpand(!vehicleExpand)}
                       className={`text-[11px] rounded px-2 py-0.5 ${vehicleExpand ? "bg-amber-100 text-amber-800 border border-amber-300" : "bg-slate-100 text-slate-600 border border-slate-200"}`}>
                       {vehicleExpand ? "🔓 כל הגדוד" : "🔒 רק הפלוגה שלי"}
                     </button>
+                  )}
+                  {vehicleId && showVehicleList && (
+                    <button onClick={() => setShowVehicleList(false)} className="text-xs text-slate-500 hover:text-slate-700 mr-auto">✕ סגור</button>
                   )}
                 </div>
                 <input value={vehicleSearch} onChange={(e) => setVehicleSearch(e.target.value)}
@@ -507,7 +573,7 @@ export default function DispatchClient({
                 ) : (
                   <div className="space-y-1 max-h-36 overflow-y-auto">
                     {filteredVehicles.map((v) => (
-                      <button key={v.id} onClick={() => setVehicleId(v.id)}
+                      <button key={v.id} onClick={() => { setVehicleId(v.id); setShowVehicleList(false); }}
                         className={`w-full text-right p-2 rounded-lg border flex items-center gap-2 text-sm ${
                           vehicleId === v.id ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:bg-slate-50"
                         }`}>
@@ -525,26 +591,41 @@ export default function DispatchClient({
                   </div>
                 )}
               </div>
+              )}
 
-              {/* 3. חיילים */}
+              {/* חיילים — מוצג תמיד אם אין חיילים, או כש-showSoldierList פתוח */}
+              {(chosenSoldiers.length === 0 || showSoldierList) && (
               <div>
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <label className="text-sm font-semibold text-slate-700">🪖 חיילים ({chosenSoldiers.length})</label>
+                  <label className="text-sm font-semibold text-slate-700">🪖 {chosenSoldiers.length > 0 ? "החלף/הוסף חיילים" : "בחר חיילים"} ({chosenSoldiers.length})</label>
                   {myCompanyId && (
                     <button onClick={() => setSoldierExpand(!soldierExpand)}
                       className={`text-[11px] rounded px-2 py-0.5 ${soldierExpand ? "bg-amber-100 text-amber-800 border border-amber-300" : "bg-slate-100 text-slate-600 border border-slate-200"}`}>
                       {soldierExpand ? "🔓 כל הגדוד" : "🔒 רק הפלוגה שלי"}
                     </button>
                   )}
+                  {chosenSoldiers.length > 0 && showSoldierList && (
+                    <button onClick={() => setShowSoldierList(false)} className="text-xs text-slate-500 hover:text-slate-700 mr-auto">✕ סגור</button>
+                  )}
                 </div>
                 {chosenSoldiers.length > 0 && (
                   <div className="mb-2 flex flex-wrap gap-1.5">
-                    {chosenSoldiers.map((s) => (
-                      <span key={s.id} className="bg-blue-100 text-blue-800 border border-blue-300 rounded-full px-2 py-0.5 text-xs flex items-center gap-1">
-                        {s.fullName}{s.personalNumber && <span className="text-blue-500">{s.personalNumber}</span>}
-                        <button onClick={() => toggleSoldier(s)} className="hover:text-rose-600 text-sm leading-none">✕</button>
-                      </span>
-                    ))}
+                    {chosenSoldiers.map((s, i) => {
+                      const isDriver = i === 0;
+                      const hasLicense = soldierCanDrive(s);
+                      return (
+                        <span key={s.id} className={`rounded-full px-2 py-0.5 text-xs flex items-center gap-1 border ${
+                          isDriver && !hasLicense ? "bg-rose-100 text-rose-800 border-rose-300" :
+                          !isDriver && !hasLicense ? "bg-amber-100 text-amber-800 border-amber-300" :
+                          "bg-blue-100 text-blue-800 border-blue-300"
+                        }`}>
+                          {isDriver ? "🚗" : "🪖"} {s.fullName}
+                          {isDriver && !hasLicense && <span className="text-rose-600">⛔</span>}
+                          {!isDriver && !hasLicense && <span className="text-amber-600">⚠️</span>}
+                          <button onClick={() => toggleSoldier(s)} className="hover:text-rose-600 text-sm leading-none">✕</button>
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
                 <input value={soldierSearch} onChange={(e) => setSoldierSearch(e.target.value)}
@@ -552,6 +633,7 @@ export default function DispatchClient({
                 <div className="space-y-1 max-h-36 overflow-y-auto">
                   {filteredSoldiers.map((s) => {
                     const chosen = chosenSoldiers.some((c) => c.id === s.id);
+                    const hasLicense = soldierCanDrive(s);
                     return (
                       <button key={s.id} onClick={() => toggleSoldier(s)}
                         className={`w-full text-right p-2 rounded-lg border flex items-center gap-2 text-sm ${
@@ -559,7 +641,10 @@ export default function DispatchClient({
                         }`}>
                         <span className="text-lg">🪖</span>
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium">{s.fullName} {s.personalNumber && <span className="font-mono text-xs text-slate-500">{s.personalNumber}</span>}</div>
+                          <div className="font-medium">
+                            {s.fullName} {s.personalNumber && <span className="font-mono text-xs text-slate-500">{s.personalNumber}</span>}
+                            {!hasLicense && <span className="text-amber-500 text-xs mr-1">⚠️ אין הרשאת נהיגה</span>}
+                          </div>
                           {s.companyName && <div className="text-xs text-slate-500">{s.companyName}</div>}
                         </div>
                         {chosen && <span className="text-blue-600 text-lg">✓</span>}
@@ -571,6 +656,7 @@ export default function DispatchClient({
                   )}
                 </div>
               </div>
+              )}
 
               {error && <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-lg p-2 text-sm">⚠️ {error}</div>}
             </div>
