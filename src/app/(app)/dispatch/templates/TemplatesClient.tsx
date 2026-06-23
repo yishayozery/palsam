@@ -108,6 +108,71 @@ export default function TemplatesClient({
     return selectedVehicle.requiredLicenseIds.some((lid) => soldier.licenseIds.includes(lid));
   }, [selectedVehicle]);
 
+  const filteredTemplates = useMemo(() => search.trim()
+    ? templates.filter((t) =>
+        t.name.toLowerCase().includes(search.toLowerCase()) ||
+        t.vehicleName.toLowerCase().includes(search.toLowerCase()) ||
+        t.vehicleSerial.toLowerCase().includes(search.toLowerCase())
+      )
+    : templates, [templates, search]);
+
+  const gaps = useMemo(() => {
+    let missingDriver = 0, missingCommander = 0, missingMedic = 0, totalSoldiers = 0;
+    const noDriver: string[] = [], noCommander: string[] = [], noMedic: string[] = [];
+    for (const t of templates) {
+      if (!t.soldiers.some((s) => s.role === "נהג")) { missingDriver++; noDriver.push(t.id); }
+      if (!t.soldiers.some((s) => s.role === "מפקד")) { missingCommander++; noCommander.push(t.id); }
+      if (!t.soldiers.some((s) => s.role === "חובש")) { missingMedic++; noMedic.push(t.id); }
+      totalSoldiers += t.soldiers.length;
+    }
+    return { missingDriver, missingCommander, missingMedic, totalSoldiers, total: templates.length, noDriver, noCommander, noMedic };
+  }, [templates]);
+
+  const driverWarnings = useMemo(() => {
+    const warnings: Record<string, string[]> = {};
+    for (const t of templates) {
+      const v = vehicles.find((v) => v.id === t.vehicleSerialUnitId);
+      const driverSoldiers = t.soldiers.filter((s) => s.role === "נהג");
+      for (const ds of driverSoldiers) {
+        const fullSoldier = soldiers.find((s) => s.id === ds.id);
+        if (!fullSoldier) continue;
+        if (fullSoldier.licenseIds.length === 0) {
+          (warnings[t.id] ??= []).push(ds.fullName);
+          continue;
+        }
+        if (v && v.requiredLicenseIds.length > 0) {
+          const hasLicense = v.requiredLicenseIds.some((lid) => fullSoldier.licenseIds.includes(lid));
+          if (!hasLicense) {
+            (warnings[t.id] ??= []).push(ds.fullName);
+            continue;
+          }
+        }
+        const rd = fullSoldier.drivingRefresherDate;
+        if (!rd) {
+          (warnings[t.id] ??= []).push(`${ds.fullName} (ריענון)`);
+          continue;
+        }
+        const expiry = new Date(rd);
+        expiry.setDate(expiry.getDate() + drivingRefreshDays);
+        const daysLeft = Math.ceil((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        if (daysLeft <= 30) {
+          (warnings[t.id] ??= []).push(`${ds.fullName} (ריענון)`);
+        }
+      }
+    }
+    return warnings;
+  }, [templates, vehicles, soldiers, drivingRefreshDays]);
+
+  const hasGaps = gaps.missingDriver > 0 || gaps.missingCommander > 0 || gaps.missingMedic > 0;
+
+  const displayTemplates = useMemo(() => {
+    let list = filteredTemplates;
+    if (gapFilter === "נהג") list = list.filter((t) => gaps.noDriver.includes(t.id));
+    else if (gapFilter === "מפקד") list = list.filter((t) => gaps.noCommander.includes(t.id));
+    else if (gapFilter === "חובש") list = list.filter((t) => gaps.noMedic.includes(t.id));
+    return list;
+  }, [filteredTemplates, gapFilter, gaps]);
+
   function openCreate() {
     setEditId(null);
     setName("");
@@ -171,14 +236,6 @@ export default function TemplatesClient({
       router.refresh();
     });
   }
-
-  const filteredTemplates = search.trim()
-    ? templates.filter((t) =>
-        t.name.toLowerCase().includes(search.toLowerCase()) ||
-        t.vehicleName.toLowerCase().includes(search.toLowerCase()) ||
-        t.vehicleSerial.toLowerCase().includes(search.toLowerCase())
-      )
-    : templates;
 
   const filteredSoldiers = useMemo(() => {
     let list = soldiers;
@@ -411,64 +468,6 @@ export default function TemplatesClient({
       </div>
     );
   }
-
-  const gaps = useMemo(() => {
-    let missingDriver = 0, missingCommander = 0, missingMedic = 0, totalSoldiers = 0;
-    const noDriver: string[] = [], noCommander: string[] = [], noMedic: string[] = [];
-    for (const t of templates) {
-      if (!t.soldiers.some((s) => s.role === "נהג")) { missingDriver++; noDriver.push(t.id); }
-      if (!t.soldiers.some((s) => s.role === "מפקד")) { missingCommander++; noCommander.push(t.id); }
-      if (!t.soldiers.some((s) => s.role === "חובש")) { missingMedic++; noMedic.push(t.id); }
-      totalSoldiers += t.soldiers.length;
-    }
-    return { missingDriver, missingCommander, missingMedic, totalSoldiers, total: templates.length, noDriver, noCommander, noMedic };
-  }, [templates]);
-
-  // License warnings: check if drivers have proper licenses
-  const driverWarnings = useMemo(() => {
-    const warnings: Record<string, string[]> = {};
-    for (const t of templates) {
-      const v = vehicles.find((v) => v.id === t.vehicleSerialUnitId);
-      const driverSoldiers = t.soldiers.filter((s) => s.role === "נהג");
-      for (const ds of driverSoldiers) {
-        const fullSoldier = soldiers.find((s) => s.id === ds.id);
-        if (!fullSoldier) continue;
-        if (fullSoldier.licenseIds.length === 0) {
-          (warnings[t.id] ??= []).push(ds.fullName);
-          continue;
-        }
-        if (v && v.requiredLicenseIds.length > 0) {
-          const hasLicense = v.requiredLicenseIds.some((lid) => fullSoldier.licenseIds.includes(lid));
-          if (!hasLicense) {
-            (warnings[t.id] ??= []).push(ds.fullName);
-            continue;
-          }
-        }
-        const rd = fullSoldier.drivingRefresherDate;
-        if (!rd) {
-          (warnings[t.id] ??= []).push(`${ds.fullName} (ריענון)`);
-          continue;
-        }
-        const expiry = new Date(rd);
-        expiry.setDate(expiry.getDate() + drivingRefreshDays);
-        const daysLeft = Math.ceil((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-        if (daysLeft <= 30) {
-          (warnings[t.id] ??= []).push(`${ds.fullName} (ריענון)`);
-        }
-      }
-    }
-    return warnings;
-  }, [templates, vehicles, soldiers, drivingRefreshDays]);
-
-  const hasGaps = gaps.missingDriver > 0 || gaps.missingCommander > 0 || gaps.missingMedic > 0;
-
-  const displayTemplates = useMemo(() => {
-    let list = filteredTemplates;
-    if (gapFilter === "נהג") list = list.filter((t) => gaps.noDriver.includes(t.id));
-    else if (gapFilter === "מפקד") list = list.filter((t) => gaps.noCommander.includes(t.id));
-    else if (gapFilter === "חובש") list = list.filter((t) => gaps.noMedic.includes(t.id));
-    return list;
-  }, [filteredTemplates, gapFilter, gaps]);
 
   return (
     <div className="space-y-4">
