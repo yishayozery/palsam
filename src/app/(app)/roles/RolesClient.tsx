@@ -17,6 +17,12 @@ type RoleRow = {
   permissions: Record<string, PermissionLevel>;
 };
 
+const PERM_LABELS: Record<string, string> = { VIEW: "צפייה", EDIT: "עריכה" };
+const PERM_DOT: Record<string, string> = {
+  VIEW: "bg-blue-500",
+  EDIT: "bg-emerald-500",
+};
+
 export default function RolesClient({
   roles,
   screens,
@@ -99,74 +105,221 @@ export default function RolesClient({
     });
   }
 
-  const PERM_COLORS: Record<string, string> = {
-    VIEW: "bg-blue-100 text-blue-700",
-    EDIT: "bg-green-100 text-green-700",
-  };
-  const PERM_LABELS: Record<string, string> = {
-    VIEW: "צפייה",
-    EDIT: "עריכה",
-  };
+  const permCount = (r: RoleRow) => Object.keys(r.permissions).length;
+  const editCount = (r: RoleRow) => Object.values(r.permissions).filter((v) => v === "EDIT").length;
+  const viewCount = (r: RoleRow) => Object.values(r.permissions).filter((v) => v === "VIEW").length;
 
   return (
-    <div className="space-y-4">
-      {/* Roles list */}
-      {roles.map((role) => (
-        <Card key={role.id} className="p-4">
-          {editingId === role.id ? (
-            <EditForm />
-          ) : (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-lg">{role.name}</span>
-                  {role.isPreset && <Badge className="bg-slate-100 text-slate-600">מובנה</Badge>}
-                  {role.isAdmin && <Badge className="bg-purple-100 text-purple-700">מנהל</Badge>}
-                  {role.isCommander && <Badge className="bg-amber-100 text-amber-700">פיקודי</Badge>}
-                  <Badge className="bg-blue-100 text-blue-700">{role.userCount} משתמשים</Badge>
+    <div className="space-y-3 mt-4">
+      {/* Compact role rows */}
+      {roles.map((role) => {
+        const isEditing = editingId === role.id;
+
+        return (
+          <Card key={role.id} className={`overflow-hidden ${isEditing ? "ring-2 ring-blue-400" : ""}`}>
+            {/* Compact header row — always visible */}
+            <div
+              className={`p-3 flex items-center gap-3 cursor-pointer hover:bg-slate-50 transition ${isEditing ? "bg-blue-50 border-b border-blue-200" : ""}`}
+              onClick={() => isEditing ? cancelEdit() : startEdit(role)}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-sm">{role.name}</span>
+                  {role.isPreset && <Badge className="bg-slate-100 text-slate-500 text-[10px]">מובנה</Badge>}
+                  {role.isAdmin && <Badge className="bg-purple-100 text-purple-700 text-[10px]">מנהל</Badge>}
+                  {role.isCommander && <Badge className="bg-amber-100 text-amber-700 text-[10px]">פיקודי</Badge>}
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => startEdit(role)}
-                    className="px-3 py-1.5 text-sm bg-slate-100 hover:bg-slate-200 rounded-lg"
-                  >
-                    עריכה
-                  </button>
-                  {!role.isPreset && role.userCount === 0 && (
+                {/* Mini permission dots */}
+                {!role.isAdmin && (
+                  <div className="flex items-center gap-1 mt-1">
+                    {screenKeys.map((screen) => {
+                      const level = role.permissions[screen];
+                      return (
+                        <div
+                          key={screen}
+                          title={`${screens[screen]}: ${level ? PERM_LABELS[level] : "אין גישה"}`}
+                          className={`w-2 h-2 rounded-full ${level ? PERM_DOT[level] : "bg-slate-200"}`}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Stats */}
+              <div className="text-[11px] text-slate-500 text-left shrink-0">
+                {role.isAdmin ? (
+                  <span>כל המסכים</span>
+                ) : (
+                  <span>{permCount(role)}/{screenKeys.length} מסכים ({editCount(role)} עריכה, {viewCount(role)} צפייה)</span>
+                )}
+              </div>
+
+              <Badge className="bg-blue-50 text-blue-700 text-[10px] shrink-0">{role.userCount} משתמשים</Badge>
+
+              <span className="text-slate-400 text-xs shrink-0">{isEditing ? "▲" : "▼"}</span>
+            </div>
+
+            {/* Expanded edit form */}
+            {isEditing && (
+              <div className="p-4 space-y-4 bg-white">
+                <div className="flex items-center gap-4">
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="שם התפקיד"
+                    className="flex-1 px-3 py-2 border rounded-lg text-sm"
+                    autoFocus
+                  />
+                  <label className="flex items-center gap-2 text-sm whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={isCommander}
+                      onChange={(e) => setIsCommander(e.target.checked)}
+                    />
+                    תפקיד פיקודי (משויך לפלוגה)
+                  </label>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-slate-700">הרשאות מסכים:</span>
+                    <div className="flex gap-1.5">
+                      <button onClick={() => setAllPerms("VIEW")} className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
+                        הכל צפייה
+                      </button>
+                      <button onClick={() => setAllPerms("EDIT")} className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200">
+                        הכל עריכה
+                      </button>
+                      <button onClick={() => setAllPerms("")} className="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200">
+                        נקה הכל
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
+                    {screenKeys.map((screen) => {
+                      const level = perms[screen] || "";
+                      return (
+                        <button
+                          key={screen}
+                          onClick={() => cyclePerm(screen)}
+                          className={`px-2.5 py-2 rounded-lg text-xs text-right border transition ${
+                            level === "EDIT"
+                              ? "bg-green-50 border-green-300 text-green-800"
+                              : level === "VIEW"
+                                ? "bg-blue-50 border-blue-300 text-blue-800"
+                                : "bg-white border-slate-200 text-slate-400"
+                          }`}
+                        >
+                          <div className="font-medium">{screens[screen]}</div>
+                          <div className="text-[10px] mt-0.5">
+                            {level ? PERM_LABELS[level] : "—"}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">לחיצה: ללא → צפייה → עריכה → ללא</p>
+                </div>
+
+                <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                  <div>
+                    {!role.isPreset && role.userCount === 0 && (
+                      <button
+                        onClick={() => handleDelete(role.id)}
+                        className="px-3 py-1.5 text-xs text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg"
+                      >
+                        🗑️ מחיקה
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
                     <button
-                      onClick={() => handleDelete(role.id)}
-                      className="px-3 py-1.5 text-sm bg-rose-100 text-rose-700 hover:bg-rose-200 rounded-lg"
+                      onClick={cancelEdit}
+                      className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800"
                     >
-                      מחיקה
+                      ביטול
                     </button>
-                  )}
+                    <button
+                      onClick={handleSave}
+                      disabled={!name.trim() || isPending}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {isPending ? "שומר..." : "שמירה"}
+                    </button>
+                  </div>
                 </div>
               </div>
-              {!role.isAdmin && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {screenKeys.map((screen) => {
-                    const level = role.permissions[screen];
-                    if (!level) return null;
-                    return (
-                      <span key={screen} className={`text-xs px-2 py-0.5 rounded-full ${PERM_COLORS[level]}`}>
-                        {screens[screen]} — {PERM_LABELS[level]}
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-              {role.isAdmin && (
-                <p className="text-sm text-slate-500 mt-1">גישה מלאה לכל המסכים</p>
-              )}
-            </div>
-          )}
-        </Card>
-      ))}
+            )}
+          </Card>
+        );
+      })}
 
-      {/* New / Edit Form */}
+      {/* New role form */}
       {editingId === "new" && (
-        <Card className="p-4 border-blue-300 bg-blue-50/30">
-          <EditForm />
+        <Card className="overflow-hidden ring-2 ring-blue-400">
+          <div className="bg-blue-50 p-3 border-b border-blue-200">
+            <span className="font-bold text-sm">תפקיד חדש</span>
+          </div>
+          <div className="p-4 space-y-4">
+            <div className="flex items-center gap-4">
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="שם התפקיד"
+                className="flex-1 px-3 py-2 border rounded-lg text-sm"
+                autoFocus
+              />
+              <label className="flex items-center gap-2 text-sm whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={isCommander}
+                  onChange={(e) => setIsCommander(e.target.checked)}
+                />
+                תפקיד פיקודי (משויך לפלוגה)
+              </label>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-slate-700">הרשאות מסכים:</span>
+                <div className="flex gap-1.5">
+                  <button onClick={() => setAllPerms("VIEW")} className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">הכל צפייה</button>
+                  <button onClick={() => setAllPerms("EDIT")} className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200">הכל עריכה</button>
+                  <button onClick={() => setAllPerms("")} className="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200">נקה הכל</button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
+                {screenKeys.map((screen) => {
+                  const level = perms[screen] || "";
+                  return (
+                    <button
+                      key={screen}
+                      onClick={() => cyclePerm(screen)}
+                      className={`px-2.5 py-2 rounded-lg text-xs text-right border transition ${
+                        level === "EDIT" ? "bg-green-50 border-green-300 text-green-800"
+                        : level === "VIEW" ? "bg-blue-50 border-blue-300 text-blue-800"
+                        : "bg-white border-slate-200 text-slate-400"
+                      }`}
+                    >
+                      <div className="font-medium">{screens[screen]}</div>
+                      <div className="text-[10px] mt-0.5">{level ? PERM_LABELS[level] : "—"}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">לחיצה: ללא → צפייה → עריכה → ללא</p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+              <button onClick={cancelEdit} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">ביטול</button>
+              <button onClick={handleSave} disabled={!name.trim() || isPending}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                {isPending ? "שומר..." : "שמירה"}
+              </button>
+            </div>
+          </div>
         </Card>
       )}
 
@@ -178,88 +331,13 @@ export default function RolesClient({
           + תפקיד חדש
         </button>
       )}
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 text-[11px] text-slate-400 pt-2">
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> עריכה</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" /> צפייה</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-200 inline-block" /> אין גישה</span>
+      </div>
     </div>
   );
-
-  function EditForm() {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-4">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="שם התפקיד"
-            className="flex-1 px-3 py-2 border rounded-lg text-sm"
-            autoFocus
-          />
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={isCommander}
-              onChange={(e) => setIsCommander(e.target.checked)}
-            />
-            תפקיד פיקודי
-          </label>
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-slate-700">הרשאות מסכים:</span>
-            <div className="flex gap-1.5">
-              <button onClick={() => setAllPerms("VIEW")} className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
-                הכל צפייה
-              </button>
-              <button onClick={() => setAllPerms("EDIT")} className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200">
-                הכל עריכה
-              </button>
-              <button onClick={() => setAllPerms("")} className="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200">
-                נקה הכל
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
-            {screenKeys.map((screen) => {
-              const level = perms[screen] || "";
-              return (
-                <button
-                  key={screen}
-                  onClick={() => cyclePerm(screen)}
-                  className={`px-2.5 py-2 rounded-lg text-xs text-right border transition ${
-                    level === "EDIT"
-                      ? "bg-green-50 border-green-300 text-green-800"
-                      : level === "VIEW"
-                        ? "bg-blue-50 border-blue-300 text-blue-800"
-                        : "bg-white border-slate-200 text-slate-400"
-                  }`}
-                >
-                  <div className="font-medium">{screens[screen]}</div>
-                  <div className="text-[10px] mt-0.5">
-                    {level ? PERM_LABELS[level] : "—"}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          <p className="text-[10px] text-slate-400 mt-1">לחיצה: ללא → צפייה → עריכה → ללא</p>
-        </div>
-
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={cancelEdit}
-            className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800"
-          >
-            ביטול
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!name.trim() || isPending}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-          >
-            {isPending ? "שומר..." : "שמירה"}
-          </button>
-        </div>
-      </div>
-    );
-  }
 }

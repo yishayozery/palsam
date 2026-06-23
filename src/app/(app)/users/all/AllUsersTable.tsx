@@ -100,6 +100,9 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
   const isNew = !user;
   const [role, setRole] = useState<string>(user?.customRoleId ? `custom:${user.customRoleId}` : user?.role ?? "VIEWER");
   const [selectedSystemRoleId, setSelectedSystemRoleId] = useState<string>(user?.systemRoleId ?? "");
+  const initialScope = user?.systemRoleId && user?.holderKind === "WAREHOUSE" ? "warehouse" as const
+    : user?.systemRoleId && user?.role === "COMPANY_REP" && !systemRoles.find((r) => r.id === user.systemRoleId)?.isCommander ? "company" as const
+    : "" as const;
   const [selectedHolderIds, setSelectedHolderIds] = useState<Set<string>>(
     new Set(user ? (user.holderIds.length > 0 ? user.holderIds : (user.holderId ? [user.holderId] : [])) : [])
   );
@@ -110,8 +113,14 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
   const [checking, setChecking] = useState(false);
 
   const selectedSR = systemRoles.find((r) => r.id === selectedSystemRoleId);
+  const [scopeOverride, setScopeOverride] = useState<"" | "company" | "warehouse">(initialScope);
+
   const effectiveTemplate = selectedSR
-    ? (selectedSR.isAdmin ? "BATTALION_ADMIN" : selectedSR.isCommander ? "COMPANY_REP" : "VIEWER")
+    ? (selectedSR.isAdmin ? "BATTALION_ADMIN"
+      : selectedSR.isCommander ? "COMPANY_REP"
+      : scopeOverride === "company" ? "COMPANY_REP"
+      : scopeOverride === "warehouse" ? "WAREHOUSE_MANAGER"
+      : "VIEWER")
     : role.startsWith("custom:")
       ? customRoles.find((c) => c.id === role.slice(7))?.template ?? "VIEWER"
       : role;
@@ -125,7 +134,7 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
   const holderLabel = isMultiHolder ? "מחסנים" : effectiveTemplate === "COMPANY_REP" ? "פלוגה" : "פלוגה (אופציונלי)";
 
   const selectedCompanyId = !isMultiHolder && selectedHolderIds.size === 1 ? [...selectedHolderIds][0] : null;
-  const relevantSquads = effectiveTemplate === "COMPANY_REP" && selectedCompanyId
+  const relevantSquads = selectedCompanyId
     ? squads.filter((s) => s.companyId === selectedCompanyId)
     : squads;
 
@@ -264,12 +273,30 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, briga
               <input type="hidden" name="role" value={role} />
               {selectedSystemRoleId && (() => {
                 const sr = systemRoles.find((r) => r.id === selectedSystemRoleId);
-                return sr ? (
-                  <p className="text-[11px] mt-1 text-slate-500">
-                    {sr.isAdmin ? "🔑 מנהל — רואה את כל הגדוד" : sr.isCommander ? "🪖 מפקד — משויך לפלוגה" : "👤 צופה — הרשאות לפי מסכים"}
-                    {" · "}<a href="/roles" className="text-blue-600 hover:underline">ניהול תפקידים</a>
-                  </p>
-                ) : null;
+                if (!sr) return null;
+                return sr.isAdmin ? (
+                  <p className="text-[11px] mt-1 text-slate-500">🔑 מנהל — גישה מלאה לכל הגדוד · <a href="/roles" className="text-blue-600 hover:underline">ניהול תפקידים</a></p>
+                ) : sr.isCommander ? (
+                  <p className="text-[11px] mt-1 text-slate-500">🪖 מפקד — משויך לפלוגה · <a href="/roles" className="text-blue-600 hover:underline">ניהול תפקידים</a></p>
+                ) : (
+                  <div className="mt-2">
+                    <label className="block text-xs text-slate-500 mb-1">שיוך נתונים</label>
+                    <select value={scopeOverride} onChange={(e) => {
+                      const v = e.target.value as "" | "company" | "warehouse";
+                      setScopeOverride(v);
+                      setSelectedHolderIds(new Set());
+                      setRole(v === "company" ? "COMPANY_REP" : v === "warehouse" ? "WAREHOUSE_MANAGER" : "VIEWER");
+                    }}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                      <option value="">כל הגדוד (ללא סינון)</option>
+                      <option value="company">פלוגה ספציפית</option>
+                      <option value="warehouse">מחסנים</option>
+                    </select>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      <a href="/roles" className="text-blue-600 hover:underline">ניהול תפקידים</a>
+                    </p>
+                  </div>
+                );
               })()}
             </div>
           ) : (
