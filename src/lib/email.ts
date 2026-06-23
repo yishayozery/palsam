@@ -42,21 +42,16 @@ export async function sendEmail(opts: {
   }
 }
 
-/** רשימת אקשנים מבצעיים שמעניינים גיבוי-מייל (לא login וכו') */
+/** רשימת אקשנים — מייל רק על תנועות מלאי (Transfer / Signature) */
 const NOTIFY_ACTIONS = new Set([
   "CREATE", "UPDATE", "DELETE",
   "INTAKE", "ISSUE", "RETURN", "SIGNOUT", "CHECKIN", "CHECKIN_QTY",
   "SIGN", "CANCEL_SIGNATURE",
   "COMPANY_SIGN_OUT", "COMPANY_SIGN", "COMPANY_RETURN",
-  "MISSION_COMPLETE", "MISSION_REOPEN",
-  "SET_BASELINE", "SET_BASELINES_BULK",
-  "MOVE_STOCK_LOCATION", "UPDATE_LOCATION",
 ]);
 
 const NOTIFY_ENTITIES = new Set([
-  "Transfer", "TransferLine", "Signature", "SerialUnit", "Soldier",
-  "VehicleAssignment", "CompanyItemBaseline", "StockBalance",
-  "SoldierItemLocation",
+  "Transfer", "TransferLine", "Signature",
 ]);
 
 /**
