@@ -14,7 +14,7 @@ export default async function AllUsersPage({
 }) {
   const admin = await requireCapability("users.manage");
   const bId = admin.battalionId!;
-  const { q = "", role = "", status = "" } = await searchParams;
+  const { q = "", role = "", status = "active" } = await searchParams;
 
   const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { name: true, brigade: true, code: true } });
 
