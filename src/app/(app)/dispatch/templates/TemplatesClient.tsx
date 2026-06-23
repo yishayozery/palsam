@@ -84,7 +84,6 @@ export default function TemplatesClient({
   const [roleFilter, setRoleFilter] = useState("");
   const [addingRole, setAddingRole] = useState<string>("לוחם");
   const [pending, startTransition] = useTransition();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const allAssignedSoldierIds = useMemo(() => {
     const map = new Map<string, string>();
@@ -331,37 +330,10 @@ export default function TemplatesClient({
       {filteredTemplates.length === 0 ? (
         <div className="text-sm text-slate-500 p-4">אין שבצ&quot;קים קבועים. צור חדש למעלה.</div>
       ) : (
-        <div className="grid gap-4">
-          {filteredTemplates.map((t) => {
-            const isExpanded = expandedId === t.id;
-            const driver = t.soldiers.find((s) => s.role === "נהג");
-            const commander = t.soldiers.find((s) => s.role === "מפקד");
-            return (
-              <div key={t.id} className="bg-white rounded-xl border border-slate-200 p-4">
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setExpandedId(isExpanded ? null : t.id)} className="text-slate-400 hover:text-slate-600">
-                    {isExpanded ? "▼" : "▶"}
-                  </button>
-                  <div className="flex-1">
-                    <span className="font-bold">{t.name}</span>
-                    <span className="text-sm text-slate-500 mr-2">🚗 {t.vehicleName} - {t.vehicleSerial}</span>
-                    <span className="text-xs text-slate-400 mr-2">({t.soldiers.length} משובצים)</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {driver && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">🚗 {driver.fullName}</span>}
-                    {commander && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">⭐ {commander.fullName}</span>}
-                  </div>
-                  <button onClick={() => openEdit(t)} className="text-xs text-blue-600 hover:underline">עריכה</button>
-                  <button onClick={() => handleDelete(t.id)} className="text-xs text-rose-500 hover:underline">מחיקה</button>
-                </div>
-                {isExpanded && (
-                  <div className="mt-3">
-                    <TemplateVehicleView template={t} />
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filteredTemplates.map((t) => (
+            <TemplateCard key={t.id} template={t} onEdit={() => openEdit(t)} onDelete={() => handleDelete(t.id)} />
+          ))}
         </div>
       )}
     </div>
@@ -515,47 +487,75 @@ function SeatCard({
   );
 }
 
-function TemplateVehicleView({ template }: { template: Template }) {
+function TemplateCard({ template, onEdit, onDelete }: { template: Template; onEdit: () => void; onDelete: () => void }) {
   const driver = template.soldiers.find((s) => s.role === "נהג");
   const commander = template.soldiers.find((s) => s.role === "מפקד");
-  const medics = template.soldiers.filter((s) => s.role === "חובש");
-  const fighters = template.soldiers.filter((s) => s.role === "לוחם");
-  const others = template.soldiers.filter((s) => !["נהג", "מפקד", "חובש", "לוחם"].includes(s.role));
+  const back = template.soldiers.filter((s) => s.role !== "נהג" && s.role !== "מפקד");
 
   return (
-    <div className="bg-gradient-to-b from-slate-50 to-slate-100 rounded-xl border border-slate-200 p-4 mr-8">
-      <div className="text-center text-xs text-slate-400 mb-2">🚗 {template.vehicleName} - {template.vehicleSerial}</div>
-      <div className="text-[10px] text-center text-slate-400 mb-2">▲ קדמת הרכב</div>
-
-      <div className="grid grid-cols-2 gap-2 max-w-sm mx-auto mb-2">
-        <ViewSeat name={driver?.fullName} role="נהג" icon="🚗" color="bg-blue-50 border-blue-200" />
-        <ViewSeat name={commander?.fullName} role="מפקד" icon="⭐" color="bg-amber-50 border-amber-200" />
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
+      {/* Header */}
+      <div className="bg-slate-800 text-white p-3 flex items-center justify-between">
+        <div className="min-w-0">
+          <div className="font-bold text-sm truncate">{template.name}</div>
+          <div className="text-[11px] text-slate-300 font-mono">{template.vehicleName} · {template.vehicleSerial}</div>
+        </div>
+        <div className="flex gap-1.5 shrink-0">
+          <button onClick={onEdit} className="text-[11px] bg-slate-700 hover:bg-slate-600 rounded px-2 py-1">✏️</button>
+          <button onClick={onDelete} className="text-[11px] bg-slate-700 hover:bg-rose-600 rounded px-2 py-1">🗑️</button>
+        </div>
       </div>
 
-      {(medics.length > 0 || fighters.length > 0 || others.length > 0) && (
-        <>
-          <div className="border-t border-slate-200 my-2 max-w-sm mx-auto" />
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-w-sm mx-auto">
-            {medics.map((s) => <ViewSeat key={s.id} name={s.fullName} role="חובש" icon="🏥" color="bg-green-50 border-green-200" />)}
-            {fighters.map((s) => <ViewSeat key={s.id} name={s.fullName} role="לוחם" icon="🎖️" color="bg-slate-50 border-slate-200" />)}
-            {others.map((s) => <ViewSeat key={s.id} name={s.fullName} role={s.role} icon="👤" color="bg-slate-50 border-slate-200" />)}
-          </div>
-        </>
-      )}
+      {/* Vehicle visual */}
+      <div className="p-3">
+        <div className="relative border-2 border-slate-300 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100 overflow-hidden">
+          {/* Vehicle shape indicator */}
+          <div className="bg-slate-200 text-center py-1 text-[10px] text-slate-500 font-medium">▲ קדמת הרכב</div>
 
-      <div className="text-[10px] text-center text-slate-400 mt-2">▼ אחורי הרכב</div>
+          {/* Front row: driver + commander */}
+          <div className="grid grid-cols-2 gap-1.5 p-2">
+            <VehicleSeat name={driver?.fullName} role="נהג" icon="🚗" accent="blue" />
+            <VehicleSeat name={commander?.fullName} role="מפקד" icon="⭐" accent="amber" />
+          </div>
+
+          {/* Back rows */}
+          {back.length > 0 && (
+            <>
+              <div className="border-t-2 border-dashed border-slate-300 mx-2" />
+              <div className="grid grid-cols-2 gap-1.5 p-2">
+                {back.map((s) => (
+                  <VehicleSeat key={s.id} name={s.fullName} role={s.role} icon={ROLE_ICONS[s.role] || "🎖️"} accent="slate" />
+                ))}
+              </div>
+            </>
+          )}
+
+          <div className="bg-slate-200 text-center py-1 text-[10px] text-slate-500 font-medium">▼ אחורי הרכב</div>
+        </div>
+
+        <div className="mt-2 text-center text-[11px] text-slate-400">
+          {template.soldiers.length} משובצים
+          {!driver && <span className="text-rose-500 font-medium mr-2">· ⚠️ חסר נהג</span>}
+        </div>
+      </div>
     </div>
   );
 }
 
-function ViewSeat({ name, role, icon, color }: { name?: string; role: string; icon: string; color: string }) {
+function VehicleSeat({ name, role, icon, accent }: { name?: string; role: string; icon: string; accent: string }) {
+  const colors: Record<string, string> = {
+    blue: name ? "bg-blue-100 border-blue-300 text-blue-900" : "bg-blue-50/50 border-dashed border-blue-200 text-blue-300",
+    amber: name ? "bg-amber-100 border-amber-300 text-amber-900" : "bg-amber-50/50 border-dashed border-amber-200 text-amber-300",
+    green: name ? "bg-green-100 border-green-300 text-green-900" : "bg-green-50/50 border-dashed border-green-200 text-green-300",
+    slate: name ? "bg-slate-100 border-slate-300 text-slate-800" : "bg-slate-50/50 border-dashed border-slate-200 text-slate-300",
+  };
   return (
-    <div className={`border rounded-lg p-2 text-xs ${color}`}>
+    <div className={`border rounded-lg p-1.5 text-[11px] ${colors[accent] || colors.slate}`}>
       <div className="flex items-center gap-1">
-        <span>{icon}</span>
+        <span className="text-sm">{icon}</span>
         <span className="font-medium truncate">{name || "—"}</span>
       </div>
-      <div className="text-[10px] opacity-60">{role}</div>
+      <div className="text-[10px] opacity-60 mr-5">{role}</div>
     </div>
   );
 }

@@ -278,7 +278,7 @@ export default function DispatchClient({
             ))}
           </select>
         )}
-        <a href="/dispatch/templates" className="text-xs text-blue-600 hover:underline self-center">ניהול תבניות →</a>
+        <a href="/dispatch/templates" className="text-xs text-blue-600 hover:underline self-center">שבצ&quot;ק קבוע →</a>
         <div className="flex bg-slate-100 rounded-lg p-1 gap-1">
           <button onClick={() => setTab("active")}
             className={`text-sm rounded-md px-3 py-1 transition ${
@@ -434,10 +434,62 @@ export default function DispatchClient({
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* 1. רכב */}
+              {/* 1. תאריך + שעה — למעלה כדי שתמיד ייראו */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-1">
+                    📅 תאריך משימה <span className="text-rose-600">*</span>
+                  </label>
+                  <input type="date" value={missionDate} onChange={(e) => setMissionDate(e.target.value)}
+                    required
+                    className={`w-full rounded-lg border-2 px-3 py-2 text-sm ${
+                      missionDate ? "border-emerald-300 bg-emerald-50" : "border-rose-300 bg-rose-50"
+                    }`} />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-1">
+                    ⏰ שעת יציאה <span className="text-rose-600">*</span>
+                  </label>
+                  <input type="time" value={departureTime} onChange={(e) => setDepartureTime(e.target.value)}
+                    required
+                    className={`w-full rounded-lg border-2 px-3 py-2 text-sm ${
+                      departureTime ? "border-emerald-300 bg-emerald-50" : "border-rose-300 bg-rose-50"
+                    }`} />
+                </div>
+              </div>
+
+              {/* סיכום ויזואלי של הרכב — כשנטען מתבנית או כשנבחר רכב+חיילים */}
+              {vehicleId && chosenSoldiers.length > 0 && (() => {
+                const v = vehicles.find((x) => x.id === vehicleId);
+                if (!v) return null;
+                return (
+                  <div className="bg-slate-800 text-white rounded-xl p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className="text-3xl">🚗</span>
+                      <div>
+                        <div className="font-bold text-lg">{v.itemName}</div>
+                        <div className="text-sm text-slate-300 font-mono">{v.serialNumber} {v.holderName ? `· ${v.holderName}` : ""}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {chosenSoldiers.map((s, i) => (
+                        <div key={s.id} className="bg-slate-700 rounded-lg p-2 flex items-center gap-2">
+                          <span className="text-lg">{i === 0 ? "🚗" : "🪖"}</span>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium truncate">{s.fullName}</div>
+                            <div className="text-[11px] text-slate-400">{i === 0 ? "נהג" : `מושב ${i + 1}`}{s.companyName ? ` · ${s.companyName}` : ""}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 2. רכב */}
               <div>
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <label className="text-sm font-semibold text-slate-700">1. רכב</label>
+                  <label className="text-sm font-semibold text-slate-700">🚗 רכב {vehicleId && "✓"}</label>
                   {myCompanyId && (
                     <button onClick={() => setVehicleExpand(!vehicleExpand)}
                       className={`text-[11px] rounded px-2 py-0.5 ${vehicleExpand ? "bg-amber-100 text-amber-800 border border-amber-300" : "bg-slate-100 text-slate-600 border border-slate-200"}`}>
@@ -453,7 +505,7 @@ export default function DispatchClient({
                     {!vehicleExpand && myCompanyId && <span> · נסה לפתוח לכלל הגדוד</span>}
                   </div>
                 ) : (
-                  <div className="space-y-1 max-h-44 overflow-y-auto">
+                  <div className="space-y-1 max-h-36 overflow-y-auto">
                     {filteredVehicles.map((v) => (
                       <button key={v.id} onClick={() => setVehicleId(v.id)}
                         className={`w-full text-right p-2 rounded-lg border flex items-center gap-2 text-sm ${
@@ -474,10 +526,10 @@ export default function DispatchClient({
                 )}
               </div>
 
-              {/* 2. חיילים */}
+              {/* 3. חיילים */}
               <div>
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <label className="text-sm font-semibold text-slate-700">2. חיילים ({chosenSoldiers.length})</label>
+                  <label className="text-sm font-semibold text-slate-700">🪖 חיילים ({chosenSoldiers.length})</label>
                   {myCompanyId && (
                     <button onClick={() => setSoldierExpand(!soldierExpand)}
                       className={`text-[11px] rounded px-2 py-0.5 ${soldierExpand ? "bg-amber-100 text-amber-800 border border-amber-300" : "bg-slate-100 text-slate-600 border border-slate-200"}`}>
@@ -497,7 +549,7 @@ export default function DispatchClient({
                 )}
                 <input value={soldierSearch} onChange={(e) => setSoldierSearch(e.target.value)}
                   placeholder="🔍 חיפוש חייל..." className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm mb-2" />
-                <div className="space-y-1 max-h-48 overflow-y-auto">
+                <div className="space-y-1 max-h-36 overflow-y-auto">
                   {filteredSoldiers.map((s) => {
                     const chosen = chosenSoldiers.some((c) => c.id === s.id);
                     return (
@@ -517,30 +569,6 @@ export default function DispatchClient({
                   {filteredSoldiers.length === 0 && (
                     <div className="text-xs text-slate-400 text-center py-3 bg-slate-50 rounded-lg">אין חיילים מתאימים</div>
                   )}
-                </div>
-              </div>
-
-              {/* 3. תאריך + שעה - שדות חובה */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-sm font-semibold text-slate-700 block mb-1">
-                    3. תאריך משימה <span className="text-rose-600">*</span>
-                  </label>
-                  <input type="date" value={missionDate} onChange={(e) => setMissionDate(e.target.value)}
-                    required
-                    className={`w-full rounded-lg border-2 px-3 py-1.5 text-sm ${
-                      missionDate ? "border-slate-300" : "border-rose-300 bg-rose-50"
-                    }`} />
-                </div>
-                <div>
-                  <label className="text-sm font-semibold text-slate-700 block mb-1">
-                    4. שעת יציאה <span className="text-rose-600">*</span>
-                  </label>
-                  <input type="time" value={departureTime} onChange={(e) => setDepartureTime(e.target.value)}
-                    required
-                    className={`w-full rounded-lg border-2 px-3 py-1.5 text-sm ${
-                      departureTime ? "border-slate-300" : "border-rose-300 bg-rose-50"
-                    }`} />
                 </div>
               </div>
 
