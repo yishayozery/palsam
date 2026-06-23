@@ -132,7 +132,13 @@ export async function deleteAllUsersExceptMe() {
     select: { id: true },
   });
   for (const u of others) {
-    await prisma.appUser.delete({ where: { id: u.id } });
+    await prisma.userHolder.deleteMany({ where: { userId: u.id } });
+    await prisma.userSquad.deleteMany({ where: { userId: u.id } });
+    try {
+      await prisma.appUser.delete({ where: { id: u.id } });
+    } catch {
+      await prisma.appUser.update({ where: { id: u.id }, data: { active: false } });
+    }
   }
   await audit(admin.id, "DELETE", "AppUser", "bulk-delete", { count: others.length });
   revalidatePath("/users/all");
