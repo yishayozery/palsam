@@ -29,7 +29,7 @@ export default async function AttendancePage({
   if (companies.length === 0) {
     return (
       <div>
-        <PageHeader title="📋 נוכחות חיילים" subtitle="תוכנית עבודה וביצוע בפועל" />
+        <PageHeader title="📋 נוכחות בתעסוקה" subtitle="תוכנית עבודה וביצוע בפועל" />
         <Card className="p-6"><EmptyState>אין פלוגות פעילות.</EmptyState></Card>
       </div>
     );
@@ -121,14 +121,17 @@ export default async function AttendancePage({
     "חופשה": "🏖️", "ג׳ובניק": "🔒",
   };
   const statuses = rawStatuses.map((s) => ({
-    ...s,
+    id: s.id,
+    name: s.name,
+    color: s.color,
     icon: s.icon || NAME_ICON_FALLBACK[s.name] || null,
+    isPresent: s.isPresent,
   }));
 
   if (statuses.length === 0) {
     return (
       <div>
-        <PageHeader title="📋 נוכחות חיילים" subtitle="תוכנית עבודה וביצוע בפועל" />
+        <PageHeader title="📋 נוכחות בתעסוקה" subtitle="תוכנית עבודה וביצוע בפועל" />
         <Card className="p-6">
           <EmptyState>
             לא הוגדרו סטטוסי נוכחות. <a href="/attendance-settings" className="text-blue-600 underline">הגדר סטטוסים</a> כדי להתחיל.
@@ -180,13 +183,17 @@ export default async function AttendancePage({
     mode: e.mode,
   }));
 
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const resolvedEmpId = sp.employmentId
+    ?? allEmployments.find((e) => e.startDate.toISOString().slice(0, 10) <= todayStr && e.endDate.toISOString().slice(0, 10) >= todayStr)?.id;
+
   let selectedEmployment: {
     id: string; name: string; startDate: string; endDate: string; totalDays: number; mode: string;
     allocations: { companyId: string; date: string; allocated: number }[];
   } | null = null;
 
-  if (sp.employmentId) {
-    const emp = allEmployments.find((e) => e.id === sp.employmentId);
+  if (resolvedEmpId) {
+    const emp = allEmployments.find((e) => e.id === resolvedEmpId);
     if (emp) {
       const allocs = await prisma.employmentAllocation.findMany({
         where: { employmentId: emp.id },
@@ -208,10 +215,14 @@ export default async function AttendancePage({
     }
   }
 
+  const pageTitle = selectedEmployment
+    ? `📋 נוכחות בתעסוקה — ${selectedEmployment.name}`
+    : "📋 נוכחות בתעסוקה";
+
   return (
     <div>
       <PageHeader
-        title="📋 נוכחות חיילים"
+        title={pageTitle}
         subtitle={mode === "plan" ? "תוכנית עבודה — תכנון נוכחות קדימה" : "ביצוע בפועל — נוכחות אמיתית"}
       />
       <AttendanceClient

@@ -18,7 +18,7 @@ export const NAV: NavItem[] = [
   { href: "/admin/battalions", label: "ניהול גדודים", icon: "🏛️", group: "ראשי", superAdminOnly: true },
   { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "ראשי", screen: "settings" },
   { href: "/dashboard", label: "דשבורד", icon: "📊", group: "ראשי", screen: "dashboard" },
-  { href: "/attendance", label: "נוכחות חיילים", icon: "📋", group: "ראשי", screen: "attendance" },
+  { href: "/attendance", label: "נוכחות בתעסוקה", icon: "📋", group: "ראשי", screen: "attendance" },
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "ראשי", screen: "soldiers" },
   { href: "/soldiers", label: "חיילים (עריכה + ציוד)", icon: "🪖", group: "ראשי", screen: "soldiers" },
   { href: "/permanent-items", label: "ציוד קבוע לפלוגה", icon: "📌", group: "ראשי", screen: "allocations" },
@@ -48,7 +48,7 @@ export const NAV: NavItem[] = [
   // ===== הפלוגה שלי (רס"פ פלוגה — תפעול ברמת פלוגה) =====
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "הפלוגה שלי", screen: "dispatch" },
   { href: "/soldiers", label: "חיילי הפלוגה", icon: "🪖", group: "הפלוגה שלי", screen: "soldiers" },
-  { href: "/attendance", label: "נוכחות חיילים", icon: "📋", group: "הפלוגה שלי", screen: "attendance" },
+  { href: "/attendance", label: "נוכחות בתעסוקה", icon: "📋", group: "הפלוגה שלי", screen: "attendance" },
   { href: "/donations", label: "תרומות פלוגתיות", icon: "🎁", group: "הפלוגה שלי", screen: "donations" },
   { href: "/my-inventory", label: "מלאי הפלוגה", icon: "📦", group: "הפלוגה שלי", screen: "soldiers" },
   { href: "/my-inventory/locations", label: "מיקומי ציוד", icon: "📍", group: "הפלוגה שלי", screen: "soldiers" },
@@ -72,7 +72,7 @@ export const NAV: NavItem[] = [
   { href: "/kits", label: "ערכות החתמה", icon: "📦", group: "המחסנים שלי", screen: "kits" },
   { href: "/armory-ineligibility", label: "דוח תהליך זכאות לנשק", icon: "📊", group: "המחסנים שלי", screen: "armory" },
   { href: "/soldiers", label: "חיילים (עריכה + ציוד)", icon: "🪖", group: "המחסנים שלי", screen: "soldiers" },
-  { href: "/attendance", label: "נוכחות חיילים", icon: "📋", group: "המחסנים שלי", screen: "attendance" },
+  { href: "/attendance", label: "נוכחות בתעסוקה", icon: "📋", group: "המחסנים שלי", screen: "attendance" },
 
   // ===== דוחות ובקרה =====
   { href: "/reports", label: "דוחות", icon: "📈", group: "דוחות ובקרה", screen: "reports" },

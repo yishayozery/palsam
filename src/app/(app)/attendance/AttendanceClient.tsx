@@ -707,22 +707,26 @@ export default function AttendanceClient({
                       ))}
                     </tr>
                   )}
-                  {g.soldiers.map((soldier) => (
-                    <tr key={soldier.id} className="border-b border-slate-50 hover:bg-blue-50/20">
-                      <td className="sticky right-0 bg-white z-10 px-2 py-1.5 border-l border-slate-100">
-                        <div className="font-medium text-slate-800 truncate max-w-[160px]">
+                  {g.soldiers.map((soldier) => {
+                    const isDischarged = !!soldier.callupClosedAt && soldier.callupClosedAt < today;
+                    return (
+                    <tr key={soldier.id} className={`border-b border-slate-50 ${isDischarged ? "opacity-50" : "hover:bg-blue-50/20"}`}>
+                      <td className={`sticky right-0 z-10 px-2 py-1.5 border-l border-slate-100 ${isDischarged ? "bg-slate-100" : "bg-white"}`}>
+                        <div className={`font-medium truncate max-w-[160px] ${isDischarged ? "text-slate-400 line-through" : "text-slate-800"}`}>
                           {soldier.fullName}
                           {soldier.companyRoleName && (
                             <span className={`mr-1 text-[9px] font-normal ${soldier.isCommander ? "text-amber-600" : "text-slate-400"}`}>
                               ({soldier.companyRoleName})
                             </span>
                           )}
+                          {isDischarged && <span className="mr-1 text-[9px] text-rose-400">שוחרר</span>}
                         </div>
                         {soldier.personalNumber && (
                           <div className="text-[9px] font-mono text-slate-400">{soldier.personalNumber}</div>
                         )}
                       </td>
                       {days.map((d) => {
+                        const afterDischarge = isDischarged && d.date > soldier.callupClosedAt!;
                         const statusId = getStatus(soldier.id, d.date);
                         const status = statusId ? statuses.find((s) => s.id === statusId) : null;
                         const isPending = pendingChanges.has(`${soldier.id}:${d.date}`);
@@ -730,15 +734,17 @@ export default function AttendanceClient({
                         return (
                           <td
                             key={d.date}
-                            onClick={() => cycleStatus(soldier.id, d.date)}
-                            onContextMenu={(e) => handleContextMenu(e, soldier.id, d.date)}
-                            className={`text-center cursor-pointer select-none transition-colors border-l border-slate-50
-                              ${d.date === today ? "bg-blue-50" : isWeekend ? "bg-slate-50/50" : ""}
-                              ${isPending ? "ring-2 ring-inset ring-amber-400" : ""}
-                              hover:bg-slate-100`}
-                            title={`${soldier.fullName} — ${d.date}${status ? ` — ${status.name}` : ""}`}
+                            onClick={() => !afterDischarge && cycleStatus(soldier.id, d.date)}
+                            onContextMenu={(e) => !afterDischarge && handleContextMenu(e, soldier.id, d.date)}
+                            className={`text-center select-none transition-colors border-l border-slate-50
+                              ${afterDischarge ? "bg-slate-200/50 cursor-not-allowed" : "cursor-pointer hover:bg-slate-100"}
+                              ${d.date === today && !afterDischarge ? "bg-blue-50" : isWeekend && !afterDischarge ? "bg-slate-50/50" : ""}
+                              ${isPending ? "ring-2 ring-inset ring-amber-400" : ""}`}
+                            title={afterDischarge ? `${soldier.fullName} — שוחרר` : `${soldier.fullName} — ${d.date}${status ? ` — ${status.name}` : ""}`}
                           >
-                            {status ? (
+                            {afterDischarge ? (
+                              <span className="text-slate-300 text-[9px]">—</span>
+                            ) : status ? (
                               <span className="text-base md:text-sm leading-none" style={{ color: status.color }}
                                 title={status.name}>
                                 {status.icon || "●"}
@@ -750,7 +756,8 @@ export default function AttendanceClient({
                         );
                       })}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </React.Fragment>
               );
             })}
