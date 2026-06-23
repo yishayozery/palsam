@@ -68,6 +68,17 @@ export async function saveSoldierLicenses(formData: FormData) {
   revalidatePath("/driving-licenses");
 }
 
+export async function updateRefreshDays(formData: FormData) {
+  const user = await requireUser();
+  if (!can(user, "battalion.profile")) return;
+  const bId = user.battalionId!;
+  const days = parseInt(String(formData.get("days") || "180"), 10);
+  if (isNaN(days) || days < 1) return;
+  await prisma.battalion.update({ where: { id: bId }, data: { drivingRefreshDays: days } });
+  await audit(user.id, "UPDATE", "Battalion", bId, { drivingRefreshDays: days });
+  revalidatePath("/driving-licenses");
+}
+
 export async function saveVehicleTypeLicenses(formData: FormData) {
   const user = await requireUser();
   const bId = user.battalionId!;

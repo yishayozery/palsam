@@ -22,6 +22,7 @@ type Soldier = {
   roleName: string | null;
   licenseIds: string[];
   licenseNames: string[];
+  drivingRefresherDate: string | null;
 };
 
 type TemplateSoldier = {
@@ -66,11 +67,13 @@ export default function TemplatesClient({
   soldiers,
   companies,
   templates,
+  drivingRefreshDays,
 }: {
   vehicles: Vehicle[];
   soldiers: Soldier[];
   companies: Company[];
   templates: Template[];
+  drivingRefreshDays: number;
 }) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
@@ -349,12 +352,24 @@ export default function TemplatesClient({
           const hasLicense = v.requiredLicenseIds.some((lid) => fullSoldier.licenseIds.includes(lid));
           if (!hasLicense) {
             (warnings[t.id] ??= []).push(ds.fullName);
+            continue;
           }
+        }
+        const rd = fullSoldier.drivingRefresherDate;
+        if (!rd) {
+          (warnings[t.id] ??= []).push(`${ds.fullName} (ריענון)`);
+          continue;
+        }
+        const expiry = new Date(rd);
+        expiry.setDate(expiry.getDate() + drivingRefreshDays);
+        const daysLeft = Math.ceil((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        if (daysLeft <= 30) {
+          (warnings[t.id] ??= []).push(`${ds.fullName} (ריענון)`);
         }
       }
     }
     return warnings;
-  }, [templates, vehicles, soldiers]);
+  }, [templates, vehicles, soldiers, drivingRefreshDays]);
 
   const hasGaps = gaps.missingDriver > 0 || gaps.missingCommander > 0 || gaps.missingMedic > 0;
 

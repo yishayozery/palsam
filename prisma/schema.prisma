@@ -127,6 +127,7 @@ model Battalion {
   notificationEmail           String? // אם מוגדר → מייל אוטומטי על כל פעולה מבצעית (חתימה/זיכוי/מסירה/שיבוץ)
   emailToBattalion            Boolean @default(true) // האם לשלוח התראות גם למייל הגדוד (בנוסף למחסן/פלוגה)
   armoryTestUrl               String? // קישור למבחן נוהל ארמון חיצוני (אם יש)
+  drivingRefreshDays          Int     @default(180) // ימי תוקף ריענון נהיגה
   createdAt DateTime @default(now())
 
   users         AppUser[]
@@ -161,6 +162,7 @@ model Battalion {
   dispatchTemplates  DispatchTemplate[] @relation("BattalionDispatchTemplates")
   drivingLicenseTypes DrivingLicenseType[] @relation("BattalionDrivingLicenseTypes")
   systemRoles        SystemRole[]      @relation("BattalionSystemRoles")
+  employments        Employment[]
 }
 
 // ===================== משתמשים =====================
@@ -356,6 +358,7 @@ model Holder {
   companyLinks     WarehouseCompany[] @relation("CompanySide")
   ownedDonations   ItemType[]         @relation("ItemOwnerHolder")
   signableKits     SignableKit[]      @relation("SignableKitHolder")
+  employmentAllocations EmploymentAllocation[] @relation("CompanyEmploymentAllocations")
 
   @@index([battalionId])
   @@index([kind])
@@ -1225,6 +1228,38 @@ model AttendanceRecord {
   @@unique([soldierId, date])
   @@index([soldierId])
   @@index([date])
+}
+
+// ===================== תעסוקה (Employment) =====================
+
+model Employment {
+  id          String   @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  name        String   // שם התעסוקה
+  startDate   DateTime @db.Date
+  endDate     DateTime @db.Date
+  totalDays   Int      // סה"כ ימי מילואים מאושרים
+  mode        String   @default("daily") // "daily" = הקצאה יומית, "total" = סה"כ לתעסוקה
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  allocations EmploymentAllocation[]
+
+  @@index([battalionId])
+}
+
+model EmploymentAllocation {
+  id           String     @id @default(cuid())
+  employmentId String
+  employment   Employment @relation(fields: [employmentId], references: [id], onDelete: Cascade)
+  companyId    String
+  company      Holder     @relation("CompanyEmploymentAllocations", fields: [companyId], references: [id])
+  date         DateTime   @db.Date
+  allocated    Int        // כמות משובצים מתוכננת ליום זה
+
+  @@unique([employmentId, companyId, date])
+  @@index([employmentId])
 }
 
 // ===================== לוח זמינות (חופשות) =====================

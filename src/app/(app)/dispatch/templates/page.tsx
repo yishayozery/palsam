@@ -10,6 +10,12 @@ export default async function DispatchTemplatesPage() {
   const user = await requireCapability("dispatch.manage");
   const bId = user.battalionId!;
 
+  const battalion = await prisma.battalion.findUnique({
+    where: { id: bId },
+    select: { drivingRefreshDays: true },
+  });
+  const drivingRefreshDays = battalion?.drivingRefreshDays ?? 180;
+
   const [vehicles, soldiers, templates, vehicleTypeLicenses, companies] = await Promise.all([
     prisma.serialUnit.findMany({
       where: {
@@ -30,6 +36,7 @@ export default async function DispatchTemplatesPage() {
         fullName: true,
         personalNumber: true,
         companyId: true,
+        drivingRefresherDate: true,
         company: { select: { name: true } },
         companyRole: { select: { name: true } },
         drivingLicenses: { include: { licenseType: { select: { id: true, name: true } } } },
@@ -98,8 +105,10 @@ export default async function DispatchTemplatesPage() {
           roleName: s.companyRole?.name ?? null,
           licenseIds: s.drivingLicenses.map((dl) => dl.licenseType.id),
           licenseNames: s.drivingLicenses.map((dl) => dl.licenseType.name),
+          drivingRefresherDate: s.drivingRefresherDate ? s.drivingRefresherDate.toISOString().slice(0, 10) : null,
         }))}
         companies={companies.map((c) => ({ id: c.id, name: c.name }))}
+        drivingRefreshDays={drivingRefreshDays}
         templates={templates.filter((t) => t.vehicleSerialUnit).map((t) => ({
           id: t.id,
           name: t.name,

@@ -4,9 +4,10 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui";
 import CrudSection from "@/components/CrudSection";
-import { saveLicenseType, toggleLicenseType } from "./actions";
+import { saveLicenseType, toggleLicenseType, updateRefreshDays } from "./actions";
 import LicenseEditor from "./LicenseEditor";
 import VehicleTypeLicenseEditor from "./VehicleTypeLicenseEditor";
+import RefreshDaysSettings from "./RefreshDaysSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,12 @@ export default async function DrivingLicensesPage({
   const isVehicleOfficer = user.role === "WAREHOUSE_MANAGER";
   const canManageTypes = isAdmin || isVehicleOfficer;
   const canEditLicenses = isAdmin || isVehicleOfficer;
+
+  const battalion = await prisma.battalion.findUnique({
+    where: { id: bId },
+    select: { drivingRefreshDays: true },
+  });
+  const drivingRefreshDays = battalion?.drivingRefreshDays ?? 180;
 
   const [licenseTypes, soldiers, vehicleItemTypes, vehicleTypeLicenses] = await Promise.all([
     prisma.drivingLicenseType.findMany({
@@ -84,6 +91,8 @@ export default async function DrivingLicensesPage({
       </div>
 
       {tab === "types" && canManageTypes && (
+        <>
+        <RefreshDaysSettings currentDays={drivingRefreshDays} action={updateRefreshDays} />
         <CrudSection
           title="סוגי הרשאות"
           addLabel="סוג הרשאה"
@@ -96,6 +105,7 @@ export default async function DrivingLicensesPage({
             display: <span className="font-medium">{lt.name}</span>,
           }))}
         />
+        </>
       )}
 
       {tab === "vehicles" && (
@@ -123,6 +133,7 @@ export default async function DrivingLicensesPage({
           }))}
           licenseTypes={licenseTypes.map((lt) => ({ id: lt.id, name: lt.name }))}
           canEdit={canEditLicenses}
+          drivingRefreshDays={drivingRefreshDays}
         />
       )}
     </div>

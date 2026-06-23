@@ -15,14 +15,27 @@ type Soldier = {
   licenses: SoldierLicense[];
 };
 
+function getRefreshStatus(refresherDate: string | null, refreshDays: number): "ok" | "warning" | "expired" | "missing" {
+  if (!refresherDate) return "missing";
+  const expiry = new Date(refresherDate);
+  expiry.setDate(expiry.getDate() + refreshDays);
+  const now = new Date();
+  const daysLeft = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  if (daysLeft < 0) return "expired";
+  if (daysLeft <= 30) return "warning";
+  return "ok";
+}
+
 export default function LicenseEditor({
   soldiers,
   licenseTypes,
   canEdit,
+  drivingRefreshDays,
 }: {
   soldiers: Soldier[];
   licenseTypes: LicenseType[];
   canEdit: boolean;
+  drivingRefreshDays: number;
 }) {
   const [editingSoldier, setEditingSoldier] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -131,13 +144,19 @@ export default function LicenseEditor({
                         onChange={(e) => setRefresherDate(e.target.value)}
                         className="border rounded px-2 py-1 text-xs w-32"
                       />
-                    ) : s.drivingRefresherDate ? (
-                      <span className="text-xs text-slate-600">
-                        {new Date(s.drivingRefresherDate).toLocaleDateString("he-IL")}
-                      </span>
-                    ) : (
-                      <span className="text-slate-200 text-xs">-</span>
-                    )}
+                    ) : (() => {
+                      const hasLicenses = s.licenses.length > 0;
+                      const status = hasLicenses ? getRefreshStatus(s.drivingRefresherDate, drivingRefreshDays) : "ok";
+                      if (!hasLicenses) return <span className="text-slate-200 text-xs">-</span>;
+                      if (status === "missing") return <span className="text-xs text-rose-600 font-medium">לא בוצע</span>;
+                      if (status === "expired") return <span className="text-xs text-rose-600 font-medium">{new Date(s.drivingRefresherDate!).toLocaleDateString("he-IL")} (פג)</span>;
+                      if (status === "warning") return <span className="text-xs text-amber-600 font-medium">{new Date(s.drivingRefresherDate!).toLocaleDateString("he-IL")} (עומד לפוג)</span>;
+                      return (
+                        <span className="text-xs text-slate-600">
+                          {new Date(s.drivingRefresherDate!).toLocaleDateString("he-IL")}
+                        </span>
+                      );
+                    })()}
                   </td>
                   {canEdit && (
                     <td className="px-2 py-2 border-b text-center">

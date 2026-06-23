@@ -40,6 +40,12 @@ export default async function SoldiersPage({
   const companyFilter = effectiveCompanyId ? { companyId: effectiveCompanyId } : {};
   const where = { battalionId: bId, ...companyFilter, ...squadFilter };
 
+  const battalion = await prisma.battalion.findUnique({
+    where: { id: bId },
+    select: { drivingRefreshDays: true },
+  });
+  const drivingRefreshDays = battalion?.drivingRefreshDays ?? 180;
+
   const [soldiers, squads, companyRoles] = await Promise.all([
     prisma.soldier.findMany({
       where,
@@ -235,6 +241,15 @@ export default async function SoldiersPage({
                 {s.drivingLicenses.length > 0 && (
                   <Badge className="bg-green-100 text-green-700">🪪 {s.drivingLicenses.map((dl) => dl.licenseType.name).join(", ")}</Badge>
                 )}
+                {s.drivingLicenses.length > 0 && (() => {
+                  const rd = s.drivingRefresherDate;
+                  if (!rd) return <Badge className="bg-rose-100 text-rose-700">ריענון נהיגה</Badge>;
+                  const expiry = new Date(rd);
+                  expiry.setDate(expiry.getDate() + drivingRefreshDays);
+                  const daysLeft = Math.ceil((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                  if (daysLeft <= 30) return <Badge className={daysLeft < 0 ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}>ריענון נהיגה</Badge>;
+                  return null;
+                })()}
                 <SoldierEquipmentButton
                   soldierId={s.id} soldierName={s.fullName}
                   signedSerials={serials} signedQty={qty}
