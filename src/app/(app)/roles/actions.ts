@@ -53,7 +53,8 @@ export async function resetPresetRoles() {
 
   for (const old of oldPresets) {
     if (old._count.users > 0) {
-      await prisma.systemRole.update({ where: { id: old.id }, data: { active: false, isPreset: false } });
+      const suffix = `_old_${Date.now()}`;
+      await prisma.systemRole.update({ where: { id: old.id }, data: { name: old.name + suffix, active: false, isPreset: false } });
     } else {
       await prisma.screenPermission.deleteMany({ where: { roleId: old.id } });
       await prisma.systemRole.delete({ where: { id: old.id } });
