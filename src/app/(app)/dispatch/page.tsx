@@ -108,13 +108,13 @@ export default async function DispatchPage() {
         <DispatchClient
           battalionName={battalion?.name ?? ""}
           myCompanyId={effectiveCompanyId}
-          templates={templates.map((t) => ({
+          templates={templates.filter((t) => t.vehicleSerialUnit).map((t) => ({
             id: t.id,
             name: t.name,
             vehicleSerialUnitId: t.vehicleSerialUnitId,
             vehicleName: t.vehicleSerialUnit.itemType.name,
             vehicleSerial: t.vehicleSerialUnit.serialNumber,
-            soldierIds: t.soldiers.map((ts) => ts.soldier.id),
+            soldierIds: t.soldiers.filter((ts) => ts.soldier).map((ts) => ts.soldier.id),
           }))}
           vehicles={vehicles.map((v) => ({
             id: v.id,
@@ -147,7 +147,7 @@ export default async function DispatchPage() {
             createdByName: a.createdBy.fullName,
             createdAt: a.createdAt.toISOString(),
             completedAt: a.completedAt?.toISOString() ?? null,
-            soldiers: a.soldiers.map((s) => ({
+            soldiers: a.soldiers.filter((s) => s.soldier).map((s) => ({
               id: s.soldier.id,
               fullName: s.soldier.fullName,
               personalNumber: s.soldier.personalNumber,
