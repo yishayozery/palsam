@@ -15,7 +15,7 @@ export default async function AttendancePage({
 }) {
   const user = await requireUser();
   const canManage = can(user, "attendance.manage");
-  const canView = can(user, "attendance.view");
+  const canView = can(user, "attendance.view") || can(user, "employment");
   if (!canManage && !canView) redirect("/dashboard");
   const bId = user.battalionId!;
   const sp = await searchParams;

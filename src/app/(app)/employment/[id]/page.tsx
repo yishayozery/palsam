@@ -60,7 +60,7 @@ export default async function EmploymentDetailPage({
       <PageHeader
         title={`📅 ${employment.name}`}
         subtitle={`${new Date(startDate).toLocaleDateString("he-IL")} - ${new Date(endDate).toLocaleDateString("he-IL")} | ${dayCount} ימים | ${employment.totalDays} ימי מילואים`}
-        action={<LinkButton href="/employment" variant="secondary">חזרה לרשימה</LinkButton>}
+        action={<LinkButton href="/attendance" variant="secondary">← חזרה לנוכחות</LinkButton>}
       />
 
       {dailyAverage !== null && (

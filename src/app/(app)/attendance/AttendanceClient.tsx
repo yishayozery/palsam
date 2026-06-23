@@ -309,27 +309,7 @@ export default function AttendanceClient({
       });
     }
 
-    const dailyBreakdown = allDates.sort().map((d) => {
-      const dayAlloc = allocs.filter((a) => a.date === d).reduce((s, a) => s + a.allocated, 0);
-      let dayActual = 0;
-      for (const s of soldiers) {
-        const st = getStatus(s.id, d);
-        if (st && presentStatusIds.has(st)) dayActual++;
-      }
-      return { date: d, allocated: dayAlloc, actual: dayActual, pct: dayAlloc > 0 ? Math.round((dayActual / dayAlloc) * 100) : 0 };
-    });
-
-    let cumAllocRunning = 0;
-    let cumActualRunning = 0;
-    for (const db of dailyBreakdown) {
-      cumAllocRunning += db.allocated;
-      cumActualRunning += db.actual;
-      (db as any).cumAlloc = cumAllocRunning;
-      (db as any).cumActual = cumActualRunning;
-      (db as any).cumPct = cumAllocRunning > 0 ? Math.round((cumActualRunning / cumAllocRunning) * 100) : 0;
-    }
-
-    return { todayAllocatedTotal, todayActualTotal, todayPct, cumulativeAllocated, cumulativeActual, cumulativePct, perCompany, dailyBreakdown: dailyBreakdown as (typeof dailyBreakdown[0] & { cumAlloc: number; cumActual: number; cumPct: number })[] };
+    return { todayAllocatedTotal, todayActualTotal, todayPct, cumulativeAllocated, cumulativeActual, cumulativePct, perCompany };
   }, [selectedEmployment, filteredSoldiers, soldiers, statuses, getStatus, today, selectedCompanyId, companies]);
 
   // Daily summary: count present soldiers per day
@@ -400,8 +380,20 @@ export default function AttendanceClient({
             </select>
           </div>
           {canManage && (
-            <a href="/employment" className="text-xs text-blue-600 hover:text-blue-800 underline">
-              ניהול תעסוקות
+            <div className="flex items-center gap-3">
+              <a href="/employment" className="text-xs text-blue-600 hover:text-blue-800 underline">
+                ניהול תעסוקות
+              </a>
+              {selectedEmployment && (
+                <a href={`/employment/${selectedEmployment.id}`} className="text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-2 py-1 rounded-lg font-medium">
+                  ⚙️ תקני פלוגות
+                </a>
+              )}
+            </div>
+          )}
+          {!canManage && selectedEmployment && (
+            <a href={`/employment/${selectedEmployment.id}`} className="text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-2 py-1 rounded-lg font-medium">
+              📋 תקני פלוגות
             </a>
           )}
         </div>
@@ -524,46 +516,16 @@ export default function AttendanceClient({
             </div>
           )}
 
-          {/* Daily cross-reference table */}
-          {employmentDash.dailyBreakdown.length > 0 && (
-            <div className="mt-3">
-              <h4 className="text-xs font-semibold text-slate-600 mb-2">הצלבה יומית — תכנון מול ביצוע</h4>
-              <div className="overflow-x-auto">
-                <table className="text-xs border-collapse w-full">
-                  <thead>
-                    <tr className="bg-slate-50">
-                      <th className="px-2 py-1 border border-slate-200 text-right">תאריך</th>
-                      <th className="px-2 py-1 border border-slate-200 text-center">תכנון</th>
-                      <th className="px-2 py-1 border border-slate-200 text-center">בפועל</th>
-                      <th className="px-2 py-1 border border-slate-200 text-center">%</th>
-                      <th className="px-2 py-1 border border-slate-200 text-center">מצטבר תכנון</th>
-                      <th className="px-2 py-1 border border-slate-200 text-center">מצטבר בפועל</th>
-                      <th className="px-2 py-1 border border-slate-200 text-center">% מצטבר</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {employmentDash.dailyBreakdown.map((db) => {
-                      const isToday = db.date === today;
-                      const pctColor = db.pct >= 90 ? "text-emerald-600" : db.pct >= 70 ? "text-amber-600" : "text-rose-600";
-                      const cumColor = db.cumPct >= 90 ? "text-emerald-600" : db.cumPct >= 70 ? "text-amber-600" : "text-rose-600";
-                      return (
-                        <tr key={db.date} className={isToday ? "bg-blue-50 font-semibold" : ""}>
-                          <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
-                            {isToday && "▸ "}
-                            {new Date(db.date + "T00:00:00Z").toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", weekday: "short", timeZone: "UTC" })}
-                          </td>
-                          <td className="px-2 py-1 border border-slate-200 text-center">{db.allocated}</td>
-                          <td className="px-2 py-1 border border-slate-200 text-center">{db.actual}</td>
-                          <td className={`px-2 py-1 border border-slate-200 text-center font-semibold ${pctColor}`}>{db.pct}%</td>
-                          <td className="px-2 py-1 border border-slate-200 text-center text-slate-500">{db.cumAlloc}</td>
-                          <td className="px-2 py-1 border border-slate-200 text-center text-slate-500">{db.cumActual}</td>
-                          <td className={`px-2 py-1 border border-slate-200 text-center font-semibold ${cumColor}`}>{db.cumPct}%</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+          {/* Link to daily report */}
+          {selectedEmployment && (
+            <div className="mt-3 flex items-center gap-3">
+              <a
+                href={`/attendance/daily-report?employmentId=${selectedEmployment.id}`}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 transition"
+              >
+                📊 דוח הצלבה יומי
+              </a>
+              <span className="text-xs text-slate-500">פירוט יומי מלא עם אפשרות ייצוא לאקסל</span>
             </div>
           )}
         </Card>
