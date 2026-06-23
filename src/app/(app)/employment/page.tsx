@@ -21,8 +21,8 @@ export default async function EmploymentPage() {
     include: { _count: { select: { allocations: true } } },
   });
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   let dashboardData: {
     employment: (typeof employments)[0];
@@ -38,29 +38,15 @@ export default async function EmploymentPage() {
 
     if (allocations.length === 0) continue;
 
-    const startDate = new Date(emp.startDate);
-    const endDateCapped = today < new Date(emp.endDate) ? today : new Date(emp.endDate);
-
-    if (endDateCapped < startDate) {
-      dashboardData.push({
-        employment: emp,
-        allocations: allocations.map((a) => ({
-          companyId: a.companyId,
-          companyName: a.company.name,
-          date: a.date.toISOString().slice(0, 10),
-          allocated: a.allocated,
-        })),
-        attendanceCounts: [],
-      });
-      continue;
-    }
+    const startDate = emp.startDate;
+    const endDate = emp.endDate;
 
     const companyIds = [...new Set(allocations.map((a) => a.companyId))];
 
     const attendanceRecords = await prisma.attendanceRecord.findMany({
       where: {
-        soldier: { companyId: { in: companyIds } },
-        date: { gte: startDate, lte: endDateCapped },
+        soldier: { companyId: { in: companyIds }, battalionId: bId },
+        date: { gte: startDate, lte: endDate },
         status: { isPresent: true },
       },
       select: { soldier: { select: { companyId: true } }, date: true },
@@ -101,9 +87,13 @@ export default async function EmploymentPage() {
         subtitle="תכנון אסטרטגי של ימי מילואים — הקצאת חיילים לפלוגות לפי ימים"
       />
 
+      <EmploymentClient employments={serialized} canManage={canManage} />
+
       {dashboardData.length > 0 && (
-        <div className="mb-6">
+        <div className="mt-6">
+          <h2 className="text-lg font-bold text-slate-800 mb-3">📊 דשבורד נוכחות מול הקצאה</h2>
           <EmploymentDashboard
+            today={todayStr}
             data={dashboardData.map((d) => ({
               employmentName: d.employment.name,
               startDate: d.employment.startDate.toISOString().slice(0, 10),
@@ -115,8 +105,6 @@ export default async function EmploymentPage() {
           />
         </div>
       )}
-
-      <EmploymentClient employments={serialized} canManage={canManage} />
     </div>
   );
 }

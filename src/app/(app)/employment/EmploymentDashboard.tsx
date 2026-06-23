@@ -30,8 +30,7 @@ function bgClass(pct: number): string {
   return "bg-rose-50";
 }
 
-export default function EmploymentDashboard({ data }: { data: DashboardEntry[] }) {
-  const today = new Date().toISOString().slice(0, 10);
+export default function EmploymentDashboard({ data, today }: { data: DashboardEntry[]; today: string }) {
 
   return (
     <div className="space-y-4">
