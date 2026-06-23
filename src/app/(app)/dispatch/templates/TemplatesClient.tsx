@@ -87,6 +87,8 @@ export default function TemplatesClient({
   const [roleFilter, setRoleFilter] = useState("");
   const [addingRole, setAddingRole] = useState<string>("לוחם");
   const [pending, startTransition] = useTransition();
+  const [gapFilter, setGapFilter] = useState<string | null>(null);
+  const [step, setStep] = useState<"driver" | "commander" | "soldiers" | "confirm">("driver");
 
   const allAssignedSoldierIds = useMemo(() => {
     const map = new Map<string, string>();
@@ -114,6 +116,7 @@ export default function TemplatesClient({
     setSoldierSearch("");
     setCompanyFilter("");
     setRoleFilter("");
+    setStep("driver");
     setShowForm(true);
   }
 
@@ -125,6 +128,7 @@ export default function TemplatesClient({
     setSoldierSearch("");
     setCompanyFilter("");
     setRoleFilter("");
+    setStep("confirm");
     setShowForm(true);
   }
 
@@ -194,21 +198,81 @@ export default function TemplatesClient({
     return list;
   }, [soldiers, soldierSearch, companyFilter, roleFilter]);
 
-  if (showForm) {
-    const assignedSoldiers = assignments.map((a) => ({
+  const assignedSoldiers = useMemo(() =>
+    assignments.map((a) => ({
       ...a,
       soldier: soldiers.find((s) => s.id === a.soldierId)!,
-    })).filter((a) => a.soldier);
+    })).filter((a) => a.soldier),
+  [assignments, soldiers]);
 
-    const driver = assignedSoldiers.find((a) => a.role === "נהג");
-    const commander = assignedSoldiers.find((a) => a.role === "מפקד");
-    const medics = assignedSoldiers.filter((a) => a.role === "חובש");
-    const fighters = assignedSoldiers.filter((a) => a.role === "לוחם");
+  const formDriver = assignedSoldiers.find((a) => a.role === "נהג");
+  const formCommander = assignedSoldiers.find((a) => a.role === "מפקד");
+  const formOthers = assignedSoldiers.filter((a) => a.role !== "נהג" && a.role !== "מפקד");
 
+  const STEPS = [
+    { key: "driver" as const, label: "נהג", icon: "🚗", done: !!formDriver },
+    { key: "commander" as const, label: "מפקד", icon: "⭐", done: !!formCommander },
+    { key: "soldiers" as const, label: "חיילים", icon: "🎖️", done: formOthers.length > 0 },
+    { key: "confirm" as const, label: "אישור", icon: "✅", done: false },
+  ];
+
+  function renderSoldierPicker(role: string, multi: boolean) {
+    const currentRole = role;
+    const isDriverRole = currentRole === "נהג";
+    return (
+      <div className="border rounded-xl p-3 bg-slate-50">
+        <div className="flex gap-2 mb-2 flex-wrap">
+          <input value={soldierSearch} onChange={(e) => setSoldierSearch(e.target.value)} placeholder="🔍 שם / מ.א..." className="border rounded-lg px-3 py-1.5 text-sm flex-1 min-w-[140px]" />
+          <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm">
+            <option value="">כל הפלוגות</option>
+            {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div className="max-h-56 overflow-y-auto space-y-0.5">
+          {filteredSoldiers.map((s) => {
+            const isAssigned = assignments.some((a) => a.soldierId === s.id);
+            const otherTemplate = allAssignedSoldierIds.get(s.id);
+            const isInOther = !!otherTemplate && (!editId || !templates.find((t) => t.id === editId)?.soldiers.some((ts) => ts.id === s.id));
+            const hasLicense = canDrive(s);
+            return (
+              <div
+                key={s.id}
+                className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm ${isAssigned ? "bg-blue-50 opacity-50" : "hover:bg-white cursor-pointer"} ${isDriverRole && !hasLicense ? "opacity-60" : ""}`}
+                onClick={() => {
+                  if (isAssigned) return;
+                  if (isDriverRole && !hasLicense) { alert(`ל${s.fullName} אין הרשאת נהיגה מתאימה`); return; }
+                  if (isInOther && !confirm(`${s.fullName} כבר משובצ/ת ב"${otherTemplate}". להוסיף?`)) return;
+                  if (!multi) {
+                    setAssignments((prev) => [...prev.filter((a) => a.role !== currentRole), { soldierId: s.id, role: currentRole, seatIndex: prev.length }]);
+                  } else {
+                    addSoldier(s.id);
+                  }
+                }}
+              >
+                <span className={isAssigned ? "line-through" : ""}>{s.fullName}</span>
+                {s.personalNumber && <span className="text-[10px] text-slate-400 font-mono">{s.personalNumber}</span>}
+                {s.companyName && <span className="text-[10px] text-slate-400">({s.companyName})</span>}
+                {s.roleName && <span className="text-[10px] text-purple-500">{s.roleName}</span>}
+                {s.licenseNames.length > 0 && <span className="text-[10px] text-green-600">🪪 {s.licenseNames.join(", ")}</span>}
+                {isDriverRole && !hasLicense && <span className="text-[10px] text-rose-500">⚠️ אין הרשאה</span>}
+                {isInOther && <span className="text-[10px] text-amber-600">⚠️ משובץ ב-{otherTemplate}</span>}
+                {isAssigned && <span className="text-[10px] text-blue-500 mr-auto">✓</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (showForm) {
     return (
       <div className="space-y-4">
         <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
-          <h3 className="font-bold text-lg">{editId ? "עריכת שבצ\"ק קבוע" : "שבצ\"ק קבוע חדש"}</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-lg">{editId ? "עריכת שבצ\"ק קבוע" : "שבצ\"ק קבוע חדש"}</h3>
+            <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -226,102 +290,127 @@ export default function TemplatesClient({
             </div>
           </div>
 
-          {/* Visual vehicle layout */}
-          {assignments.length > 0 && (
-            <VehicleLayout
-              driver={driver}
-              commander={commander}
-              medics={medics}
-              fighters={fighters}
-              vehicleName={selectedVehicle?.itemName || ""}
-              vehicleSerial={selectedVehicle?.serialNumber || ""}
-              onRemove={removeSoldier}
-              onChangeRole={changeRole}
-            />
+          {/* Step indicator */}
+          <div className="flex gap-1 border-b border-slate-200 pb-2">
+            {STEPS.map((s, i) => (
+              <button
+                key={s.key}
+                onClick={() => setStep(s.key)}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-t-lg text-xs font-medium transition ${
+                  step === s.key ? "bg-blue-100 text-blue-800 border-b-2 border-blue-600" : s.done ? "text-emerald-600" : "text-slate-400 hover:text-slate-600"
+                }`}
+              >
+                <span>{s.done && step !== s.key ? "✅" : s.icon}</span>
+                <span>{s.label}</span>
+                {i < STEPS.length - 1 && <span className="text-slate-300 mr-1">›</span>}
+              </button>
+            ))}
+          </div>
+
+          {/* Step: Driver */}
+          {step === "driver" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-sm">🚗 בחר נהג</h4>
+                {formDriver && (
+                  <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5 text-sm">
+                    <span className="font-bold">{formDriver.soldier.fullName}</span>
+                    <button onClick={() => removeSoldier(formDriver.soldier.id)} className="text-rose-400 hover:text-rose-600">✕</button>
+                  </div>
+                )}
+              </div>
+              {!formDriver && <p className="text-xs text-slate-500">בחר חייל עם הרשאת נהיגה מתאימה לרכב</p>}
+              {renderSoldierPicker("נהג", false)}
+              <div className="flex justify-end">
+                <button onClick={() => setStep("commander")} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+                  {formDriver ? "המשך למפקד ›" : "דלג ›"}
+                </button>
+              </div>
+            </div>
           )}
 
-          {/* Add soldiers section */}
-          <div className="border rounded-xl p-3 bg-slate-50">
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <label className="text-sm font-medium">הוסף חיילים</label>
-              <span className="text-xs text-slate-400">({assignments.length} משובצים)</span>
-              <select value={addingRole} onChange={(e) => setAddingRole(e.target.value)} className="border rounded px-2 py-1 text-xs mr-auto">
-                {ROLES.map((r) => <option key={r} value={r}>{ROLE_ICONS[r]} {r}</option>)}
-              </select>
-            </div>
-
-            <div className="flex gap-2 mb-2 flex-wrap">
-              <input
-                value={soldierSearch}
-                onChange={(e) => setSoldierSearch(e.target.value)}
-                placeholder="🔍 שם / מ.א..."
-                className="border rounded-lg px-3 py-1.5 text-sm flex-1 min-w-[140px]"
-              />
-              <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm">
-                <option value="">כל הפלוגות</option>
-                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <input
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-                placeholder="סנן תפקיד..."
-                className="border rounded-lg px-2 py-1.5 text-sm w-28"
-              />
-            </div>
-
-            <div className="max-h-48 overflow-y-auto space-y-0.5">
-              {filteredSoldiers.map((s) => {
-                const isAssigned = assignments.some((a) => a.soldierId === s.id);
-                const otherTemplate = allAssignedSoldierIds.get(s.id);
-                const isInOtherTemplate = !!otherTemplate && (!editId || !templates.find((t) => t.id === editId)?.soldiers.some((ts) => ts.id === s.id));
-                const hasLicense = canDrive(s);
-                const isDriverRole = addingRole === "נהג";
-
-                return (
-                  <div
-                    key={s.id}
-                    className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm ${
-                      isAssigned ? "bg-blue-50 opacity-50" : "hover:bg-white cursor-pointer"
-                    } ${isDriverRole && !hasLicense ? "opacity-60" : ""}`}
-                    onClick={() => {
-                      if (isAssigned) return;
-                      if (isDriverRole && !hasLicense) {
-                        alert(`ל${s.fullName} אין הרשאת נהיגה מתאימה לרכב זה`);
-                        return;
-                      }
-                      if (isInOtherTemplate) {
-                        if (!confirm(`${s.fullName} כבר משובצ/ת בשבצ"ק "${otherTemplate}". להוסיף בכל זאת?`)) return;
-                      }
-                      addSoldier(s.id);
-                    }}
-                  >
-                    <span className={isAssigned ? "line-through" : ""}>{s.fullName}</span>
-                    {s.personalNumber && <span className="text-[10px] text-slate-400 font-mono">{s.personalNumber}</span>}
-                    {s.companyName && <span className="text-[10px] text-slate-400">({s.companyName})</span>}
-                    {s.roleName && <span className="text-[10px] text-purple-500">{s.roleName}</span>}
-                    {s.licenseNames.length > 0 && <span className="text-[10px] text-green-600">🪪 {s.licenseNames.join(", ")}</span>}
-                    {isDriverRole && !hasLicense && <span className="text-[10px] text-rose-500">⚠️ אין הרשאה</span>}
-                    {isInOtherTemplate && <span className="text-[10px] text-amber-600">⚠️ משובץ ב-{otherTemplate}</span>}
-                    {isAssigned && <span className="text-[10px] text-blue-500 mr-auto">✓ משובץ</span>}
+          {/* Step: Commander */}
+          {step === "commander" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-sm">⭐ בחר מפקד</h4>
+                {formCommander && (
+                  <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 text-sm">
+                    <span className="font-bold">{formCommander.soldier.fullName}</span>
+                    <button onClick={() => removeSoldier(formCommander.soldier.id)} className="text-rose-400 hover:text-rose-600">✕</button>
                   </div>
-                );
-              })}
+                )}
+              </div>
+              {renderSoldierPicker("מפקד", false)}
+              <div className="flex justify-between">
+                <button onClick={() => setStep("driver")} className="px-4 py-2 bg-slate-200 rounded-lg text-sm">‹ חזרה</button>
+                <button onClick={() => { setAddingRole("לוחם"); setStep("soldiers"); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+                  {formCommander ? "המשך לחיילים ›" : "דלג ›"}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="flex gap-2 pt-2">
-            <button onClick={handleSave} disabled={pending || !name || !vehicleId} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50">
-              {pending ? "שומר..." : "שמור"}
-            </button>
-            <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-slate-200 rounded-lg text-sm">ביטול</button>
-          </div>
+          {/* Step: Soldiers */}
+          {step === "soldiers" && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <h4 className="font-medium text-sm">🎖️ הוסף חיילים</h4>
+                <select value={addingRole} onChange={(e) => setAddingRole(e.target.value)} className="border rounded px-2 py-1 text-xs">
+                  {ROLES.filter((r) => r !== "נהג" && r !== "מפקד").map((r) => <option key={r} value={r}>{ROLE_ICONS[r]} {r}</option>)}
+                </select>
+                <span className="text-xs text-slate-400">({formOthers.length} משובצים)</span>
+              </div>
+              {formOthers.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {formOthers.map(({ soldier, role }) => (
+                    <div key={soldier.id} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs border ${ROLE_COLORS[role]}`}>
+                      <span>{ROLE_ICONS[role]}</span>
+                      <span className="font-medium">{soldier.fullName}</span>
+                      <button onClick={() => removeSoldier(soldier.id)} className="text-rose-400 hover:text-rose-600">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {renderSoldierPicker(addingRole, true)}
+              <div className="flex justify-between">
+                <button onClick={() => setStep("commander")} className="px-4 py-2 bg-slate-200 rounded-lg text-sm">‹ חזרה</button>
+                <button onClick={() => setStep("confirm")} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">סיכום ואישור ›</button>
+              </div>
+            </div>
+          )}
+
+          {/* Step: Confirm */}
+          {step === "confirm" && (
+            <div className="space-y-3">
+              <h4 className="font-medium text-sm">סיכום השבצ&quot;ק</h4>
+              {assignments.length > 0 && (
+                <VehicleLayout
+                  driver={formDriver}
+                  commander={formCommander}
+                  medics={assignedSoldiers.filter((a) => a.role === "חובש")}
+                  fighters={assignedSoldiers.filter((a) => a.role === "לוחם")}
+                  vehicleName={selectedVehicle?.itemName || ""}
+                  vehicleSerial={selectedVehicle?.serialNumber || ""}
+                  onRemove={removeSoldier}
+                  onChangeRole={changeRole}
+                />
+              )}
+              {assignments.length === 0 && (
+                <div className="text-center text-sm text-slate-400 py-6 border-2 border-dashed rounded-xl">אין חיילים משובצים</div>
+              )}
+              <div className="flex justify-between pt-2 border-t border-slate-200">
+                <button onClick={() => setStep("soldiers")} className="px-4 py-2 bg-slate-200 rounded-lg text-sm">‹ חזרה</button>
+                <button onClick={handleSave} disabled={pending || !name || !vehicleId} className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 disabled:opacity-50 shadow-md">
+                  {pending ? "שומר..." : "✅ שמור שבצ\"ק"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
   }
-
-  // Gaps dashboard
-  const [gapFilter, setGapFilter] = useState<string | null>(null);
 
   const gaps = useMemo(() => {
     let missingDriver = 0, missingCommander = 0, missingMedic = 0, totalSoldiers = 0;
