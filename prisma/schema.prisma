@@ -355,7 +355,8 @@ model Holder {
   companyAllocations   CompanyAllocation[]  @relation("HolderAllocations")
   squads               Squad[]
   companyRoles         CompanyRole[]
-  dispatchAssignments VehicleAssignment[] @relation("CompanyDispatch")
+  dispatchAssignments  VehicleAssignment[] @relation("CompanyDispatch")
+  dispatchTemplates    DispatchTemplate[]  @relation("DispatchTemplateCompany")
   // קשרי מחסן↔פלוגה (איזה פלוגות המחסן עובד מולן)
   warehouseLinks   WarehouseCompany[] @relation("WarehouseSide")
   companyLinks     WarehouseCompany[] @relation("CompanySide")
@@ -1379,6 +1380,9 @@ model DispatchTemplate {
   vehicleItemType     ItemType? @relation("DispatchTemplateVehicleType", fields: [vehicleItemTypeId], references: [id], onDelete: SetNull)
   vehicleSerialUnitId String?
   vehicleSerialUnit   SerialUnit? @relation("DispatchTemplateVehicle", fields: [vehicleSerialUnitId], references: [id], onDelete: SetNull)
+  round               Int?
+  companyId           String?
+  company             Holder? @relation("DispatchTemplateCompany", fields: [companyId], references: [id], onDelete: SetNull)
   active              Boolean @default(true)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt

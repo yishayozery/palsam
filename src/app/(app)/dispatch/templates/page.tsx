@@ -61,6 +61,7 @@ export default async function DispatchTemplatesPage() {
       include: {
         vehicleItemType: { select: { id: true, name: true } },
         vehicleSerialUnit: { include: { itemType: { select: { id: true, name: true } } } },
+        company: { select: { id: true, name: true } },
         slots: {
           include: {
             dispatchRole: { select: { id: true, name: true, icon: true, isDriver: true } },
@@ -148,6 +149,9 @@ export default async function DispatchTemplatesPage() {
         templates={templates.map((t) => ({
           id: t.id,
           name: t.name,
+          round: t.round,
+          companyId: t.companyId ?? "",
+          companyName: t.company?.name ?? "",
           vehicleItemTypeId: t.vehicleItemTypeId ?? "",
           vehicleItemTypeName: t.vehicleItemType?.name ?? "",
           vehicleSerialUnitId: t.vehicleSerialUnitId ?? "",

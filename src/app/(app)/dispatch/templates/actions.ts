@@ -20,6 +20,9 @@ export async function saveTemplate(formData: FormData): Promise<{ ok?: boolean; 
     const name = String(formData.get("name") || "").trim();
     const vehicleItemTypeId = String(formData.get("vehicleItemTypeId") || "").trim() || null;
     const vehicleSerialUnitId = String(formData.get("vehicleSerialUnitId") || "").trim() || null;
+    const roundStr = String(formData.get("round") || "").trim();
+    const round = roundStr ? parseInt(roundStr, 10) || null : null;
+    const companyId = String(formData.get("companyId") || "").trim() || null;
     let slots: SlotAssignment[] = [];
     try { slots = JSON.parse(String(formData.get("slots") || "[]")); } catch { return { error: "פורמט שגוי" }; }
 
@@ -58,6 +61,8 @@ export async function saveTemplate(formData: FormData): Promise<{ ok?: boolean; 
       name,
       vehicleItemTypeId,
       vehicleSerialUnitId,
+      round,
+      companyId,
     };
 
     if (id) {

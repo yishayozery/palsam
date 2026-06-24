@@ -41,6 +41,9 @@ type TemplateSlot = {
 type Template = {
   id: string;
   name: string;
+  round: number | null;
+  companyId: string;
+  companyName: string;
   vehicleItemTypeId: string;
   vehicleItemTypeName: string;
   vehicleSerialUnitId: string;
@@ -88,12 +91,16 @@ export default function TemplatesClient({
   const [name, setName] = useState("");
   const [vehicleTypeId, setVehicleTypeId] = useState("");
   const [vehicleSerialId, setVehicleSerialId] = useState("");
+  const [round, setRound] = useState("");
+  const [templateCompanyId, setTemplateCompanyId] = useState("");
   const [slots, setSlots] = useState<SlotDraft[]>([]);
   const [search, setSearch] = useState("");
   const [soldierSearch, setSoldierSearch] = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
   const [pending, startTransition] = useTransition();
   const [gapFilter, setGapFilter] = useState<string | null>(null);
+  const [filterRound, setFilterRound] = useState("");
+  const [filterCompany, setFilterCompany] = useState("");
 
   const roleMap = useMemo(() => {
     const m: Record<string, DispatchRoleType> = {};
@@ -151,14 +158,18 @@ export default function TemplatesClient({
       const tIds = gaps[gapFilter]?.templateIds ?? [];
       list = list.filter((t) => tIds.includes(t.id));
     }
+    if (filterRound) list = list.filter((t) => t.round === parseInt(filterRound));
+    if (filterCompany) list = list.filter((t) => t.companyId === filterCompany);
     return list;
-  }, [templates, search, gapFilter, gaps]);
+  }, [templates, search, gapFilter, gaps, filterRound, filterCompany]);
 
   function openCreate() {
     setEditId(null);
     setName("");
     setVehicleTypeId("");
     setVehicleSerialId("");
+    setRound("");
+    setTemplateCompanyId("");
     setSlots([]);
     setSoldierSearch("");
     setCompanyFilter("");
@@ -170,6 +181,8 @@ export default function TemplatesClient({
     setName(t.name);
     setVehicleTypeId(t.vehicleItemTypeId);
     setVehicleSerialId(t.vehicleSerialUnitId);
+    setRound(t.round ? String(t.round) : "");
+    setTemplateCompanyId(t.companyId);
     setSlots(t.slots.map((s) => ({ dispatchRoleId: s.dispatchRoleId, soldierId: s.soldierId, seatIndex: s.seatIndex })));
     setSoldierSearch("");
     setCompanyFilter("");
@@ -194,6 +207,8 @@ export default function TemplatesClient({
     fd.set("name", name);
     fd.set("vehicleItemTypeId", vehicleTypeId);
     fd.set("vehicleSerialUnitId", vehicleSerialId);
+    fd.set("round", round);
+    fd.set("companyId", templateCompanyId);
     fd.set("slots", JSON.stringify(slots));
     startTransition(async () => {
       const res = await saveTemplate(fd);
@@ -305,6 +320,27 @@ export default function TemplatesClient({
                 </select>
               </div>
             )}
+          </div>
+
+          {/* Round + Company */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium block mb-1">סבב (לא חובה)</label>
+              <select value={round} onChange={(e) => setRound(e.target.value)} className="border rounded-lg px-3 py-2 text-sm w-full">
+                <option value="">ללא</option>
+                <option value="1">סבב 1</option>
+                <option value="2">סבב 2</option>
+                <option value="3">סבב 3</option>
+                <option value="4">סבב 4</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-1">שייכות לפלוגה (לא חובה)</label>
+              <select value={templateCompanyId} onChange={(e) => setTemplateCompanyId(e.target.value)} className="border rounded-lg px-3 py-2 text-sm w-full">
+                <option value="">כל הגדוד</option>
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
           </div>
 
           {/* Slots */}
@@ -478,8 +514,22 @@ export default function TemplatesClient({
             <button onClick={openCreate} className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-5 py-2.5 text-sm font-bold shadow-md hover:shadow-lg transition">
               + שבצ&quot;ק קבוע חדש
             </button>
-            {templates.length > 3 && (
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 חיפוש..." className="border rounded-lg px-3 py-2 text-sm w-60" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 חיפוש..." className="border rounded-lg px-3 py-2 text-sm w-48" />
+            <select value={filterRound} onChange={(e) => setFilterRound(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
+              <option value="">כל הסבבים</option>
+              <option value="1">סבב 1</option>
+              <option value="2">סבב 2</option>
+              <option value="3">סבב 3</option>
+              <option value="4">סבב 4</option>
+            </select>
+            <select value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
+              <option value="">כל הפלוגות</option>
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            {(filterRound || filterCompany || gapFilter) && (
+              <button onClick={() => { setFilterRound(""); setFilterCompany(""); setGapFilter(null); }} className="text-xs text-blue-600 hover:underline">
+                נקה סינון
+              </button>
             )}
           </div>
 
@@ -640,7 +690,11 @@ function TemplateCard({ template, onEdit, onDelete }: { template: Template; onEd
       {/* Header */}
       <div className="bg-slate-800 text-white p-2 flex items-center justify-between">
         <div className="min-w-0">
-          <div className="font-bold text-xs truncate">{template.name}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold text-xs truncate">{template.name}</span>
+            {template.round && <span className="text-[9px] bg-blue-500 text-white rounded px-1">סבב {template.round}</span>}
+            {template.companyName && <span className="text-[9px] bg-slate-600 text-slate-200 rounded px-1">{template.companyName}</span>}
+          </div>
           <div className="text-[10px] text-slate-300 font-mono">
             {template.vehicleItemTypeName
               ? `${template.vehicleItemTypeName}${template.vehicleSerial ? ` · ${template.vehicleSerial}` : ""}`
