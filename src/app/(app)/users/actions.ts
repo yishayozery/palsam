@@ -97,7 +97,7 @@ export async function saveUser(formData: FormData) {
       const username = await resolveUniqueUsername(enteredUsername, suffix, id);
       await prisma.appUser.update({
         where: { id },
-        data: { username, fullName, phone, title, role, customRoleId, systemRoleId, holderId, ...(soldierId ? { soldierId } : {}) },
+        data: { username, fullName, phone, title, role, customRoleId, systemRoleId, holderId, soldierId },
       });
       await syncHolders(id);
       await syncSquads(id);
@@ -169,5 +169,24 @@ export async function toggleUser(formData: FormData) {
   if (!u) return;
   await prisma.appUser.update({ where: { id }, data: { active: !u.active } });
   await audit(admin.id, "UPDATE", "AppUser", id, { active: !u.active });
+  revalidatePath("/users/all");
+}
+
+export async function deleteUser(formData: FormData) {
+  const admin = await requireCapability("users.manage");
+  const id = String(formData.get("id") || "");
+  if (!id || id === admin.id) throw new Error("לא ניתן למחוק את עצמך");
+  const u = await prisma.appUser.findUnique({ where: { id }, select: { id: true, username: true, fullName: true, battalionId: true } });
+  if (!u || u.battalionId !== admin.battalionId) throw new Error("משתמש לא נמצא");
+
+  await prisma.userHolder.deleteMany({ where: { userId: id } });
+  await prisma.userSquad.deleteMany({ where: { userId: id } });
+  try {
+    await prisma.appUser.delete({ where: { id } });
+  } catch {
+    await prisma.appUser.update({ where: { id }, data: { active: false } });
+    throw new Error("לא ניתן למחוק — המשתמש מקושר לנתונים במערכת. הושבת במקום.");
+  }
+  await audit(admin.id, "DELETE", "AppUser", u.username, { fullName: u.fullName });
   revalidatePath("/users/all");
 }

@@ -152,3 +152,26 @@ export async function toggleAttached(formData: FormData) {
   await audit(user.id, "TOGGLE_ATTACHED", "Soldier", id, { attached: !s.attached });
   revalidatePath("/roster");
 }
+
+export async function deleteSoldier(formData: FormData) {
+  const user = await requireCapability("soldiers.roster");
+  const bId = user.battalionId!;
+  const id = String(formData.get("id") || "");
+  const s = await prisma.soldier.findUnique({
+    where: { id },
+    select: { id: true, fullName: true, personalNumber: true, battalionId: true,
+      _count: { select: { signedSerialUnits: true, signedKitInstances: true } } },
+  });
+  if (!s || s.battalionId !== bId) throw new Error("חייל לא נמצא");
+  if (s._count.signedSerialUnits > 0 || s._count.signedKitInstances > 0) {
+    throw new Error(`לא ניתן למחוק — לחייל ${s._count.signedSerialUnits + s._count.signedKitInstances} פריטים חתומים. יש לזכות אותו קודם.`);
+  }
+
+  try {
+    await prisma.soldier.delete({ where: { id } });
+  } catch {
+    throw new Error("לא ניתן למחוק — החייל מקושר לנתונים במערכת.");
+  }
+  await audit(user.id, "DELETE", "Soldier", id, { fullName: s.fullName, pn: s.personalNumber });
+  revalidatePath("/roster");
+}

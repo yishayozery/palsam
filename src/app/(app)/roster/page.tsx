@@ -14,7 +14,7 @@ export default async function RosterPage({
   const bId = user.battalionId!;
   const { q = "", company = "", status = "" } = await searchParams;
 
-  const [companies, soldiers, squads] = await Promise.all([
+  const [companies, soldiers, squads, attachmentRequests] = await Promise.all([
     prisma.holder.findMany({
       where: { battalionId: bId, kind: "COMPANY", active: true },
       orderBy: { name: "asc" },
@@ -33,6 +33,15 @@ export default async function RosterPage({
       where: { battalionId: bId },
       orderBy: [{ companyId: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
       select: { id: true, name: true, companyId: true },
+    }),
+    prisma.attachmentRequest.findMany({
+      where: { battalionId: bId },
+      orderBy: { requestedAt: "desc" },
+      include: {
+        soldier: { select: { id: true, fullName: true, personalNumber: true, company: { select: { name: true } } } },
+        requestedBy: { select: { fullName: true } },
+        respondedBy: { select: { fullName: true } },
+      },
     }),
   ]);
 
@@ -81,6 +90,20 @@ export default async function RosterPage({
         initialQ={q}
         initialCompany={company}
         initialStatus={status}
+        attachmentRequests={attachmentRequests.map((r) => ({
+          id: r.id,
+          soldierName: r.soldier.fullName,
+          soldierPN: r.soldier.personalNumber,
+          soldierCompany: r.soldier.company?.name ?? null,
+          fromDate: r.fromDate.toISOString().slice(0, 10),
+          toDate: r.toDate.toISOString().slice(0, 10),
+          status: r.status,
+          requestedBy: r.requestedBy.fullName,
+          requestedAt: r.requestedAt.toISOString(),
+          respondedBy: r.respondedBy?.fullName ?? null,
+          respondedAt: r.respondedAt?.toISOString() ?? null,
+          notes: r.notes,
+        }))}
       />
       {soldiers.length === 0 && (
         <Card className="mt-2">

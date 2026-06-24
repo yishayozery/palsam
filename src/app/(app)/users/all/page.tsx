@@ -89,6 +89,7 @@ export default async function AllUsersPage({
           holderIds: u.assignedHolders.map((h) => h.holder.id),
           extraHolders: u.assignedHolders.map((h) => h.holder.name).filter((n) => n !== u.holder?.name),
           squadIds: u.assignedSquads.map((s) => s.squadId),
+          soldierId: u.soldier?.id ?? null,
           soldierFullName: u.soldier?.fullName ?? null,
           soldierPN: u.soldier?.personalNumber ?? null,
           active: u.active,

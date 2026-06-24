@@ -165,7 +165,8 @@ model Battalion {
   systemRoles        SystemRole[]      @relation("BattalionSystemRoles")
   employments        Employment[]
   certificationTypes CertificationType[] @relation("BattalionCertificationTypes")
-  scheduleEvents     ScheduleEvent[]
+  scheduleEvents         ScheduleEvent[]
+  attachmentRequests     AttachmentRequest[]
 }
 
 // ===================== משתמשים =====================
@@ -219,6 +220,8 @@ model AppUser {
   vacationEntries   VacationEntry[]
   scheduleForces    ScheduleForce[]  @relation("ScheduleForceUser")
   scheduleApprovals ScheduleApprover[] @relation("ScheduleApproverUser")
+  attachmentRequested AttachmentRequest[] @relation("AttachmentRequestedBy")
+  attachmentResponded AttachmentRequest[] @relation("AttachmentRespondedBy")
 }
 
 // ===================== תפקידים =====================
@@ -461,6 +464,33 @@ enum SoldierStatus {
   INACTIVE     // ⛔ לא פעיל
 }
 
+enum AttachmentRequestStatus {
+  PENDING    // ממתין לאישור
+  APPROVED   // אושר
+  REJECTED   // נדחה
+}
+
+model AttachmentRequest {
+  id            String                  @id @default(cuid())
+  battalionId   String
+  battalion     Battalion               @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  soldierId     String
+  soldier       Soldier                 @relation(fields: [soldierId], references: [id], onDelete: Cascade)
+  fromDate      DateTime                @db.Date
+  toDate        DateTime                @db.Date
+  status        AttachmentRequestStatus @default(PENDING)
+  requestedById String
+  requestedBy   AppUser                 @relation("AttachmentRequestedBy", fields: [requestedById], references: [id])
+  requestedAt   DateTime                @default(now())
+  respondedById String?
+  respondedBy   AppUser?                @relation("AttachmentRespondedBy", fields: [respondedById], references: [id])
+  respondedAt   DateTime?
+  notes         String?
+  @@index([battalionId])
+  @@index([soldierId])
+  @@index([status])
+}
+
 // ===================== חיילים =====================
 
 model Soldier {
@@ -516,6 +546,7 @@ model Soldier {
   attendanceRecords  AttendanceRecord[]
   callupPeriods      CallupPeriod[]
   scheduleDaySoldiers ScheduleDaySoldier[] @relation("SoldierScheduleDay")
+  attachmentRequests  AttachmentRequest[]
   // מקושר למשתמש מערכת (קצין/רס"פ)
   appUser            AppUser?      @relation("SoldierAsUser")
 

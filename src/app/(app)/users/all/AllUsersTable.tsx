@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
-import { saveUser, regenerateInvite, toggleUser, clearRateLimits } from "../actions";
+import { saveUser, regenerateInvite, toggleUser, clearRateLimits, deleteUser } from "../actions";
 
 const HEB_MAP: Record<string, string> = {
   א:"a",ב:"b",ג:"g",ד:"d",ה:"h",ו:"v",ז:"z",ח:"ch",ט:"t",י:"y",
@@ -32,6 +32,7 @@ type User = {
   holderIds: string[];
   extraHolders: string[];
   squadIds: string[];
+  soldierId: string | null;
   soldierFullName: string | null;
   soldierPN: string | null;
   active: boolean;
@@ -182,9 +183,23 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, soldi
   const [selectedSquadIds, setSelectedSquadIds] = useState<Set<string>>(new Set(user?.squadIds ?? []));
   const [username, setUsername] = useState(user?.username ?? "");
   const [fullName, setFullName] = useState(user?.fullName ?? "");
-  const [selectedSoldierId, setSelectedSoldierId] = useState("");
+  const [selectedSoldierId, setSelectedSoldierId] = useState(user?.soldierId ?? "");
   const [check, setCheck] = useState<{ available?: boolean; taken?: boolean; recommended?: string | null }>({});
   const [checking, setChecking] = useState(false);
+
+  const handleSoldierChange = (id: string) => {
+    setSelectedSoldierId(id);
+    if (id) {
+      const s = soldiers.find((s) => s.id === id);
+      if (s) {
+        setFullName(s.fullName);
+        if (s.phone) {
+          const phoneInput = document.querySelector<HTMLInputElement>('input[name="phone"]');
+          if (phoneInput && !phoneInput.value) phoneInput.value = s.phone;
+        }
+      }
+    }
+  };
 
   const selectedSR = systemRoles.find((r) => r.id === selectedSystemRoleId);
 
@@ -325,18 +340,16 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, soldi
             </div>
           </div>
 
-          {isNew && (
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">🔗 קישור לחייל (אופציונלי)</label>
-              <SoldierPicker soldiers={soldiers} value={selectedSoldierId} onChange={setSelectedSoldierId} />
-              <input type="hidden" name="soldierId" value={selectedSoldierId} />
-              <p className="text-[11px] text-slate-400 mt-1">
-                בחר חייל קיים. לא מצאת?{" "}
-                <a href="/soldiers" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">הקם חייל חדש ↗</a>
-                {" "}וחזור לבחור אותו.
-              </p>
-            </div>
-          )}
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">🔗 קישור לחייל (אופציונלי)</label>
+            <SoldierPicker soldiers={soldiers} value={selectedSoldierId} onChange={handleSoldierChange} />
+            <input type="hidden" name="soldierId" value={selectedSoldierId} />
+            <p className="text-[11px] text-slate-400 mt-1">
+              בחר חייל קיים. לא מצאת?{" "}
+              <a href="/roster" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">הקם חייל חדש ↗</a>
+              {" "}וחזור לבחור אותו.
+            </p>
+          </div>
 
           {/* Role — SystemRole is primary when roles exist */}
           {systemRoles.length > 0 ? (
@@ -572,6 +585,12 @@ export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, i
                         <input type="hidden" name="id" value={u.id} />
                         <button className="text-xs text-rose-500 hover:text-rose-700">{u.active ? "השבת" : "הפעל"}</button>
                       </form>
+                      <button onClick={async () => {
+                        if (!confirm(`למחוק את המשתמש ${u.fullName}?`)) return;
+                        if (!confirm(`בטוח? פעולה זו לא ניתנת לביטול.`)) return;
+                        const fd = new FormData(); fd.set("id", u.id);
+                        try { await deleteUser(fd); } catch (e) { alert(e instanceof Error ? e.message : "שגיאה"); }
+                      }} className="text-xs text-rose-500 hover:text-rose-700">🗑️</button>
                     </div>
                   </Td>
                 </tr>

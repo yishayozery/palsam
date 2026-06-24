@@ -2,8 +2,9 @@
 
 import { useState, useMemo } from "react";
 import { Card, Table, Th, Td, Badge } from "@/components/ui";
-import { createSoldier, updateSoldier, enlistSoldier, dischargeSoldier, deactivateSoldier } from "./actions";
+import { createSoldier, updateSoldier, enlistSoldier, dischargeSoldier, deactivateSoldier, deleteSoldier } from "./actions";
 import { importSoldiersRoster } from "./import-actions";
+import { createAttachmentRequest, approveAttachmentRequest, rejectAttachmentRequest } from "./attachment-actions";
 
 type Company = { id: string; name: string };
 type SquadOption = { id: string; name: string; companyId: string };
@@ -14,6 +15,13 @@ type Soldier = {
   squadId: string | null; squadName: string | null;
   status: string; attached: boolean; signedCount: number;
   enlistedAt: string | null; dischargedAt: string | null;
+};
+type AttachmentReq = {
+  id: string; soldierName: string; soldierPN: string | null; soldierCompany: string | null;
+  fromDate: string; toDate: string; status: string;
+  requestedBy: string; requestedAt: string;
+  respondedBy: string | null; respondedAt: string | null;
+  notes: string | null;
 };
 
 function fmtDate(iso: string | null) {
@@ -180,13 +188,173 @@ function EditForm({ soldier, companies, squads, onDone }: { soldier: Soldier; co
   );
 }
 
-export default function RosterTable({ soldiers, companies, squads, initialQ, initialCompany, initialStatus }: {
+function AttachmentRequestForm({ soldiers, onDone }: { soldiers: Soldier[]; onDone: () => void }) {
+  const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [selectedSoldier, setSelectedSoldier] = useState<string>("");
+  const activeSoldiers = soldiers.filter((s) => s.status !== "DISCHARGED" && s.status !== "INACTIVE");
+  const filtered = q.trim()
+    ? activeSoldiers.filter((s) => s.fullName.includes(q) || (s.personalNumber ?? "").includes(q)).slice(0, 10)
+    : [];
+
+  async function submit(fd: FormData) {
+    setError(null);
+    try { await createAttachmentRequest(fd); onDone(); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
+
+  const selected = soldiers.find((s) => s.id === selectedSoldier);
+
+  return (
+    <form action={submit} className="p-5 space-y-3">
+      {error && <div className="bg-rose-50 border border-rose-300 rounded-lg p-2.5 text-sm text-rose-800">{error}</div>}
+      <input type="hidden" name="soldierId" value={selectedSoldier} />
+      <div>
+        <label className="block text-xs text-slate-600 mb-1">בחר חייל</label>
+        {selected ? (
+          <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <span className="font-medium text-sm">{selected.fullName}</span>
+            {selected.personalNumber && <span className="text-xs text-slate-500 font-mono">({selected.personalNumber})</span>}
+            {selected.companyName && <span className="text-xs text-slate-400">{selected.companyName}</span>}
+            <button type="button" onClick={() => { setSelectedSoldier(""); setQ(""); }}
+              className="mr-auto text-xs text-rose-500 hover:text-rose-700">✕ שנה</button>
+          </div>
+        ) : (
+          <div>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="חפש לפי שם או מ.א..."
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            {filtered.length > 0 && (
+              <div className="mt-1 border border-slate-200 rounded-lg max-h-40 overflow-y-auto">
+                {filtered.map((s) => (
+                  <button key={s.id} type="button"
+                    onClick={() => { setSelectedSoldier(s.id); setQ(""); }}
+                    className="w-full text-right px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 border-b border-slate-100 last:border-0">
+                    <span className="font-medium">{s.fullName}</span>
+                    {s.personalNumber && <span className="text-xs text-slate-400 font-mono">{s.personalNumber}</span>}
+                    {s.companyName && <span className="text-xs text-slate-400">{s.companyName}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-slate-600 mb-1">מתאריך *</label>
+          <input name="fromDate" type="date" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-600 mb-1">עד תאריך *</label>
+          <input name="toDate" type="date" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs text-slate-600 mb-1">הערות</label>
+        <input name="notes" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="סיבת הסיפוח..." />
+      </div>
+      <div className="flex justify-end gap-2 pt-2">
+        <button type="button" onClick={onDone} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
+        <button disabled={!selectedSoldier} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-5 py-2 text-sm font-medium disabled:opacity-50">שלח בקשת סיפוח</button>
+      </div>
+    </form>
+  );
+}
+
+function AttachmentRequestsPanel({ requests }: { requests: AttachmentReq[] }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const pending = requests.filter((r) => r.status === "PENDING");
+  const handled = requests.filter((r) => r.status !== "PENDING");
+
+  async function handleApprove(id: string) {
+    setBusy(id);
+    const fd = new FormData();
+    fd.set("id", id);
+    await approveAttachmentRequest(fd);
+    setBusy(null);
+  }
+
+  async function handleReject(id: string) {
+    if (!confirm("לדחות את בקשת הסיפוח?")) return;
+    setBusy(id);
+    const fd = new FormData();
+    fd.set("id", id);
+    await rejectAttachmentRequest(fd);
+    setBusy(null);
+  }
+
+  if (requests.length === 0) return null;
+
+  return (
+    <Card className="p-4 mb-4">
+      <h3 className="font-bold text-sm text-slate-700 mb-3 flex items-center gap-2">
+        📌 בקשות סיפוח
+        {pending.length > 0 && (
+          <Badge className="bg-amber-100 text-amber-700">{pending.length} ממתינות</Badge>
+        )}
+      </h3>
+
+      {pending.length > 0 && (
+        <div className="space-y-2 mb-3">
+          {pending.map((r) => (
+            <div key={r.id} className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <div className="flex-1">
+                <div className="font-medium text-sm">{r.soldierName}</div>
+                <div className="text-xs text-slate-500 flex gap-3 mt-0.5">
+                  {r.soldierPN && <span className="font-mono">{r.soldierPN}</span>}
+                  {r.soldierCompany && <span>{r.soldierCompany}</span>}
+                  <span>📅 {new Date(r.fromDate).toLocaleDateString("he-IL")} — {new Date(r.toDate).toLocaleDateString("he-IL")}</span>
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  ביקש: {r.requestedBy} · {new Date(r.requestedAt).toLocaleDateString("he-IL")}
+                  {r.notes && <span> · {r.notes}</span>}
+                </div>
+              </div>
+              <div className="flex gap-1.5 shrink-0">
+                <button onClick={() => handleApprove(r.id)} disabled={busy === r.id}
+                  className="text-xs bg-emerald-600 text-white rounded-md px-3 py-1.5 hover:bg-emerald-700 disabled:opacity-50">
+                  ✓ אשר
+                </button>
+                <button onClick={() => handleReject(r.id)} disabled={busy === r.id}
+                  className="text-xs bg-rose-100 text-rose-700 rounded-md px-3 py-1.5 hover:bg-rose-200 disabled:opacity-50">
+                  ✕ דחה
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {handled.length > 0 && (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-slate-500 hover:text-slate-700">היסטוריה ({handled.length})</summary>
+          <div className="mt-2 space-y-1">
+            {handled.map((r) => (
+              <div key={r.id} className={`flex items-center gap-3 rounded-lg p-2 ${r.status === "APPROVED" ? "bg-emerald-50" : "bg-rose-50"}`}>
+                <Badge className={r.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>
+                  {r.status === "APPROVED" ? "✓ מאושר" : "✕ נדחה"}
+                </Badge>
+                <span className="font-medium">{r.soldierName}</span>
+                <span className="text-slate-400">{new Date(r.fromDate).toLocaleDateString("he-IL")} — {new Date(r.toDate).toLocaleDateString("he-IL")}</span>
+                {r.respondedBy && <span className="text-slate-400">ע״י {r.respondedBy}</span>}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </Card>
+  );
+}
+
+export default function RosterTable({ soldiers, companies, squads, initialQ, initialCompany, initialStatus, attachmentRequests = [] }: {
   soldiers: Soldier[]; companies: Company[]; squads: SquadOption[]; initialQ: string; initialCompany: string; initialStatus: string;
+  attachmentRequests?: AttachmentReq[];
 }) {
   const [q, setQ] = useState(initialQ);
   const [company, setCompany] = useState(initialCompany);
   const [status, setStatus] = useState(initialStatus);
   const [addOpen, setAddOpen] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const editSoldier = soldiers.find((s) => s.id === editId) ?? null;
 
@@ -279,6 +447,9 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
               {importBusy ? "מייבא..." : "⬆ ייבוא Excel"}
               <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importBusy} onChange={handleImport} />
             </label>
+            <button onClick={() => setAttachOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
+              📌 בקשת סיפוח
+            </button>
             <button onClick={() => setAddOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
               + הוסף חייל
             </button>
@@ -297,6 +468,8 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
           </div>
         )}
       </Card>
+
+      <AttachmentRequestsPanel requests={attachmentRequests} />
 
       {actionError && (
         <div className="mb-3 bg-rose-50 border border-rose-300 rounded-lg p-3 text-sm text-rose-800 flex items-center justify-between">
@@ -358,6 +531,17 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
                       className="text-xs text-slate-500 hover:text-slate-800 border border-slate-300 rounded-md px-2.5 py-1 hover:bg-slate-50">
                       ✏️ עריכה
                     </button>
+                    <button onClick={async () => {
+                      if (!confirm(`למחוק את ${s.fullName}?`)) return;
+                      if (!confirm("בטוח? כל הנתונים של החייל יימחקו לצמיתות.")) return;
+                      setActionError(null);
+                      try {
+                        const fd = new FormData(); fd.set("id", s.id);
+                        await deleteSoldier(fd);
+                      } catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
+                    }} className="text-xs text-rose-500 hover:text-rose-700 border border-rose-200 rounded-md px-2.5 py-1 hover:bg-rose-50">
+                      🗑️
+                    </button>
                   </div>
                 </Td>
               </tr>
@@ -386,6 +570,18 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
               <button onClick={() => setEditId(null)} className="text-slate-400 hover:text-slate-700 text-xl">✕</button>
             </div>
             <EditForm soldier={editSoldier} companies={companies} squads={squads} onDone={() => setEditId(null)} />
+          </div>
+        </div>
+      )}
+
+      {attachOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <h3 className="font-bold text-slate-800">📌 בקשת סיפוח</h3>
+              <button onClick={() => setAttachOpen(false)} className="text-slate-400 hover:text-slate-700 text-xl">✕</button>
+            </div>
+            <AttachmentRequestForm soldiers={soldiers} onDone={() => setAttachOpen(false)} />
           </div>
         </div>
       )}
