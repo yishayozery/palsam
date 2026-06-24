@@ -360,7 +360,7 @@ export default function TemplatesClient({
                       assignedIds={assignedSoldierIds}
                       assignedMap={assignedSoldierMap}
                       isDriverRole={role?.isDriver ?? false}
-                      matchingCompanyRoleId={role?.companyRoleId ?? null}
+                      matchingRoleName={role?.name ?? null}
                       canDrive={canDrive}
                       onSelect={(id) => assignSoldier(idx, id)}
                       onClear={() => assignSoldier(idx, null)}
@@ -506,7 +506,7 @@ function SoldierPicker({
   assignedIds,
   assignedMap,
   isDriverRole,
-  matchingCompanyRoleId,
+  matchingRoleName,
   canDrive,
   onSelect,
   onClear,
@@ -521,7 +521,7 @@ function SoldierPicker({
   assignedIds: Set<string | null>;
   assignedMap: Map<string, string>;
   isDriverRole: boolean;
-  matchingCompanyRoleId: string | null;
+  matchingRoleName: string | null;
   canDrive: (s: Soldier) => boolean;
   onSelect: (id: string) => void;
   onClear: () => void;
@@ -534,6 +534,8 @@ function SoldierPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [onlyMatching, setOnlyMatching] = useState(false);
+
+  const isMatch = (s: Soldier) => !!matchingRoleName && s.roleName === matchingRoleName;
 
   if (!open) {
     return (
@@ -552,21 +554,11 @@ function SoldierPicker({
     );
   }
 
-  const filtered = onlyMatching && matchingCompanyRoleId
-    ? soldiers.filter((s) => s.companyRoleId === matchingCompanyRoleId)
-    : soldiers;
-
-  const sorted = matchingCompanyRoleId
-    ? [...filtered].sort((a, b) => {
-        const aMatch = a.companyRoleId === matchingCompanyRoleId ? 0 : 1;
-        const bMatch = b.companyRoleId === matchingCompanyRoleId ? 0 : 1;
-        return aMatch - bMatch;
-      })
+  const filtered = onlyMatching ? soldiers.filter(isMatch) : soldiers;
+  const sorted = matchingRoleName
+    ? [...filtered].sort((a, b) => (isMatch(a) ? 0 : 1) - (isMatch(b) ? 0 : 1))
     : filtered;
-
-  const matchCount = matchingCompanyRoleId
-    ? soldiers.filter((s) => s.companyRoleId === matchingCompanyRoleId).length
-    : 0;
+  const matchCount = soldiers.filter(isMatch).length;
 
   return (
     <div className="absolute left-0 top-full z-30 bg-white shadow-xl rounded-xl border border-slate-200 p-3 w-80 mt-1">
@@ -587,16 +579,16 @@ function SoldierPicker({
           {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
-      {matchingCompanyRoleId && (
-        <label className="flex items-center gap-1.5 mb-2 text-xs cursor-pointer">
+      {matchingRoleName && (
+        <label className="flex items-center gap-1.5 mb-2 text-xs cursor-pointer bg-purple-50 rounded-lg px-2 py-1.5">
           <input
             type="checkbox"
             checked={onlyMatching}
             onChange={(e) => setOnlyMatching(e.target.checked)}
             className="w-3.5 h-3.5 accent-purple-600"
           />
-          <span className="text-purple-700 font-medium">רק תפקיד תואם</span>
-          <span className="text-[10px] text-slate-400">({matchCount})</span>
+          <span className="text-purple-700 font-medium">רק &quot;{matchingRoleName}&quot;</span>
+          <span className="text-[10px] text-slate-500">({matchCount} חיילים)</span>
         </label>
       )}
       <div className="max-h-56 overflow-y-auto space-y-0.5">
@@ -605,13 +597,13 @@ function SoldierPicker({
           const assignedTo = assignedMap.get(s.id);
           const hasLicense = canDrive(s);
           const blocked = isDriverRole && !hasLicense;
-          const isMatch = matchingCompanyRoleId && s.companyRoleId === matchingCompanyRoleId;
+          const matched = isMatch(s);
           return (
             <div
               key={s.id}
               className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer ${
                 assigned ? "opacity-40" : blocked ? "opacity-50" : "hover:bg-blue-50"
-              } ${isMatch ? "bg-purple-50" : ""}`}
+              } ${matched ? "bg-purple-50" : ""}`}
               onClick={() => {
                 if (assigned) return;
                 if (blocked) { alert(`ל${s.fullName} אין הרשאת נהיגה מתאימה`); return; }
@@ -619,11 +611,11 @@ function SoldierPicker({
                 setOpen(false);
               }}
             >
-              {isMatch && <span className="text-[10px]">⭐</span>}
+              {matched && <span className="text-[10px]">⭐</span>}
               <span className={assigned ? "line-through" : ""}>{s.fullName}</span>
               {s.personalNumber && <span className="text-[10px] text-slate-400 font-mono">{s.personalNumber}</span>}
               {s.companyName && <span className="text-[10px] text-slate-400">({s.companyName})</span>}
-              {s.roleName && <span className="text-[10px] text-purple-600">{s.roleName}</span>}
+              {s.roleName && <span className={`text-[10px] ${matched ? "text-purple-700 font-bold" : "text-purple-500"}`}>{s.roleName}</span>}
               {s.licenseNames.length > 0 && <span className="text-[10px] text-green-600">🪪</span>}
               {blocked && <span className="text-[10px] text-rose-500">⚠️</span>}
               {assigned && assignedTo && <span className="text-[10px] text-blue-500 mr-auto">← {assignedTo}</span>}
