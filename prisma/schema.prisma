@@ -165,6 +165,7 @@ model Battalion {
   systemRoles        SystemRole[]      @relation("BattalionSystemRoles")
   employments        Employment[]
   certificationTypes CertificationType[] @relation("BattalionCertificationTypes")
+  scheduleEvents     ScheduleEvent[]
 }
 
 // ===================== משתמשים =====================
@@ -216,6 +217,7 @@ model AppUser {
   assignedSquads    UserSquad[]
   vacationAssignees VacationAssignee[]
   vacationEntries   VacationEntry[]
+  scheduleForces    ScheduleForce[]  @relation("ScheduleForceUser")
 }
 
 // ===================== תפקידים =====================
@@ -512,6 +514,7 @@ model Soldier {
   attendancePlans    AttendancePlan[]
   attendanceRecords  AttendanceRecord[]
   callupPeriods      CallupPeriod[]
+  scheduleDaySoldiers ScheduleDaySoldier[] @relation("SoldierScheduleDay")
   // מקושר למשתמש מערכת (קצין/רס"פ)
   appUser            AppUser?      @relation("SoldierAsUser")
 
@@ -1471,5 +1474,84 @@ model SoldierCertification {
   certificationType   CertificationType @relation(fields: [certificationTypeId], references: [id], onDelete: Cascade)
 
   @@unique([soldierId, certificationTypeId])
+  @@index([soldierId])
+}
+
+// ===================== ניהול לוז =====================
+
+enum ScheduleEventType {
+  MUKDAM_MEASEF   // מקדים/מאסף
+  PLUGATI         // לוז מפורט פלוגתי
+}
+
+model ScheduleEvent {
+  id          String            @id @default(cuid())
+  battalionId String
+  battalion   Battalion         @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  name        String
+  type        ScheduleEventType
+  startDate   DateTime          @db.Date
+  endDate     DateTime          @db.Date
+  notes       String?
+  active      Boolean           @default(true)
+  createdById String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  forces      ScheduleForce[]
+  dayEntries  ScheduleDayEntry[]
+
+  @@index([battalionId])
+  @@index([battalionId, startDate])
+}
+
+model ScheduleForce {
+  id          String        @id @default(cuid())
+  eventId     String
+  event       ScheduleEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId      String
+  user        AppUser       @relation("ScheduleForceUser", fields: [userId], references: [id])
+  forceName   String
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+
+  dayEntries  ScheduleDayEntry[]
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+}
+
+model ScheduleDayEntry {
+  id            String        @id @default(cuid())
+  eventId       String
+  event         ScheduleEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  forceId       String
+  force         ScheduleForce @relation(fields: [forceId], references: [id], onDelete: Cascade)
+  date          DateTime      @db.Date
+  plannedTasks  String?
+  actualTasks   String?
+  plannedNotes  String?
+  actualNotes   String?
+  updatedAt     DateTime      @updatedAt
+
+  soldiers    ScheduleDaySoldier[]
+
+  @@unique([forceId, date])
+  @@index([eventId])
+  @@index([forceId])
+  @@index([date])
+}
+
+model ScheduleDaySoldier {
+  id          String           @id @default(cuid())
+  dayEntryId  String
+  dayEntry    ScheduleDayEntry @relation(fields: [dayEntryId], references: [id], onDelete: Cascade)
+  soldierId   String
+  soldier     Soldier          @relation("SoldierScheduleDay", fields: [soldierId], references: [id], onDelete: Cascade)
+  phase       String           @default("planned") // "planned" | "actual"
+
+  @@unique([dayEntryId, soldierId, phase])
+  @@index([dayEntryId])
   @@index([soldierId])
 }

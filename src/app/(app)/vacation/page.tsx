@@ -5,8 +5,15 @@ import { PageHeader, Card, EmptyState } from "@/components/ui";
 import Link from "next/link";
 import CreateBoardForm from "./CreateBoardForm";
 import AssignUsersButton from "./AssignUsersButton";
+import TabNav from "@/components/TabNav";
 
 export const dynamic = "force-dynamic";
+
+const SCHEDULE_TABS = [
+  { key: "availability", label: "📅 זמינות", href: "/vacation" },
+  { key: "mukdam", label: "🏕️ מקדים/מאסף", href: "/vacation/schedule?type=MUKDAM_MEASEF" },
+  { key: "plugati", label: "📋 לוז פלוגתי", href: "/vacation/schedule?type=PLUGATI" },
+];
 
 export default async function VacationPage() {
   const user = await requireUser();
@@ -40,9 +47,10 @@ export default async function VacationPage() {
   return (
     <div>
       <PageHeader
-        title="🏖️ לוח זמינות"
-        subtitle="תכנון חופשות וזמינות — כל מזומן מעדכן בעצמו"
+        title="📅 ניהול לוז"
+        subtitle="זמינות, אירועי מקדים/מאסף ולוז פלוגתי"
       />
+      <TabNav tabs={SCHEDULE_TABS} active="availability" />
 
       {isAdmin && <CreateBoardForm />}
 
