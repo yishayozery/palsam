@@ -20,26 +20,23 @@ export const NAV: NavItem[] = [
   // ===== מבצעי =====
   { href: "/dashboard", label: "דשבורד", icon: "📊", group: "מבצעי", screen: "dashboard" },
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "מבצעי", screen: "soldiers" },
-  { href: "/soldiers", label: "חיילים (עריכה + ציוד)", icon: "👤", group: "מבצעי", screen: "soldiers" },
+  { href: "/soldiers", label: "חיילי הפלוגה", icon: "👤", group: "מבצעי", screen: "soldiers" },
   { href: "/attendance", label: "נוכחות בתעסוקה", icon: "📋", group: "מבצעי", screen: "attendance" },
-  { href: "/employment", label: "ניהול תעסוקות", icon: "📅", group: "מבצעי", screen: "employment" },
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "מבצעי", screen: "dispatch" },
-  { href: "/driving-licenses", label: "הרשאות נהיגה", icon: "🪪", group: "מבצעי", screen: "driving_licenses" },
-  { href: "/certifications", label: "הסמכות", icon: "🎖️", group: "מבצעי", screen: "certifications" },
-  { href: "/maintenance", label: "סטטוס רכבים", icon: "🔧", group: "מבצעי", screen: "maintenance" },
-  { href: "/vacation", label: "לוח זמינות", icon: "🏖️", group: "מבצעי" },
+  { href: "/driving-licenses", label: "קצין רכב", icon: "🪪", group: "מבצעי", screen: "driving_licenses" },
+  { href: "/maintenance", label: "סטטוס רכבים (טנ\"א)", icon: "🔧", group: "מבצעי", screen: "maintenance" },
+  { href: "/vacation", label: "ניהול לוז", icon: "📅", group: "מבצעי" },
+  { href: "/armory-allocations", label: "הקצאות לפלוגה", icon: "📦", group: "מבצעי", screen: "armory_allocations" },
 
   // ===== נשק =====
   { href: "/armory-approvals", label: "אישור חיילים לנשק", icon: "🔫", group: "נשק", screen: "armory" },
-  { href: "/armory-ineligibility", label: "דוח זכאות נשק", icon: "📊", group: "נשק", screen: "armory_reports" },
 
   // ===== לוגיסטי =====
+  { href: "/permanent-items", label: "ציוד קבוע לפלוגה", icon: "📌", group: "לוגיסטי", screen: "allocations" },
   { href: "/warehouses", label: "מחסנים", icon: "🏪", group: "לוגיסטי", screen: "warehouses" },
   { href: "/items", label: "הגדרות פריטים", icon: "🏷️", group: "לוגיסטי", screen: "catalog" },
   { href: "/stock", label: "מלאי", icon: "📋", group: "לוגיסטי", screen: "stock" },
   { href: "/stock/brigade", label: "החתמות חטיבה", icon: "🤝", group: "לוגיסטי", screen: "stock" },
-  { href: "/permanent-items", label: "ציוד קבוע לפלוגה", icon: "📌", group: "לוגיסטי", screen: "allocations" },
-  { href: "/armory-allocations", label: "הקצאות לפלוגה", icon: "📦", group: "לוגיסטי", screen: "armory_allocations" },
   { href: "/signatures", label: "החתמות", icon: "✍️", group: "לוגיסטי", screen: "signatures" },
   { href: "/counts", label: "ספירות מלאי", icon: "🔢", group: "לוגיסטי", screen: "counts" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "לוגיסטי", screen: "gaps" },
@@ -52,18 +49,16 @@ export const NAV: NavItem[] = [
   { href: "/reports", label: "דוחות", icon: "📈", group: "דוחות", screen: "reports" },
   { href: "/history", label: "היסטוריה", icon: "📜", group: "דוחות", screen: "history" },
   { href: "/audit", label: "יומן פעולות", icon: "🧾", group: "דוחות", screen: "audit" },
+  { href: "/armory-ineligibility", label: "דוח זכאות נשק", icon: "📊", group: "דוחות", screen: "armory_reports" },
 
   // ===== ניהול =====
   { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "ניהול", screen: "settings" },
-  { href: "/users/all", label: "ניהול משתמשים", icon: "👥", group: "ניהול", adminOnly: true },
-  { href: "/roles", label: "תפקידים והרשאות", icon: "🔑", group: "ניהול", adminOnly: true },
-  { href: "/org", label: "מבנה ארגוני", icon: "🏢", group: "ניהול", adminOnly: true },
-  { href: "/backup", label: "בדיקת גיבוי", icon: "📂", group: "ניהול", adminOnly: true },
   { href: "/setup-checklist", label: "צ'קליסט הקמה", icon: "📋", group: "ניהול", adminOnly: true },
 
   // ===== עזרה =====
   { href: "/security", label: "אבטחה (2FA)", icon: "🔐", group: "עזרה" },
   { href: "/help", label: "מקראת השימוש", icon: "📖", group: "עזרה" },
+  { href: "/backup", label: "בדיקת גיבוי", icon: "📂", group: "עזרה" },
 ];
 
 // Groups visible per context (holder type)
