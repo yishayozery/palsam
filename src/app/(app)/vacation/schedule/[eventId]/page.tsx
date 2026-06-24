@@ -25,7 +25,7 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
           dayEntries: {
             include: {
               soldiers: {
-                include: { soldier: { select: { id: true, fullName: true, personalNumber: true, company: { select: { name: true } } } } },
+                include: { soldier: { select: { id: true, fullName: true, personalNumber: true, companyId: true, company: { select: { name: true } }, companyRole: { select: { name: true } } } } },
               },
             },
           },
@@ -58,6 +58,7 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
       personalNumber: true,
       companyId: true,
       company: { select: { name: true } },
+      companyRole: { select: { name: true } },
     },
     orderBy: { fullName: "asc" },
   });
@@ -121,10 +122,10 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
                 approvedById: de.approvedById,
                 plannedSoldiers: de.soldiers
                   .filter((s) => s.phase === "planned")
-                  .map((s) => ({ id: s.soldier.id, name: s.soldier.fullName, company: s.soldier.company?.name })),
+                  .map((s) => ({ id: s.soldier.id, name: s.soldier.fullName, company: s.soldier.company?.name, companyId: s.soldier.companyId, role: s.soldier.companyRole?.name ?? null })),
                 actualSoldiers: de.soldiers
                   .filter((s) => s.phase === "actual")
-                  .map((s) => ({ id: s.soldier.id, name: s.soldier.fullName, company: s.soldier.company?.name })),
+                  .map((s) => ({ id: s.soldier.id, name: s.soldier.fullName, company: s.soldier.company?.name, companyId: s.soldier.companyId, role: s.soldier.companyRole?.name ?? null })),
               },
             ])
           ),
@@ -136,6 +137,7 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
           personalNumber: s.personalNumber,
           companyId: s.companyId,
           companyName: s.company?.name ?? null,
+          roleName: s.companyRole?.name ?? null,
         }))}
         companies={companies}
       />

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import { addForce, removeForce, saveDayEntry, approveDayEntry } from "../actions";
 
-type SoldierRef = { id: string; name: string; company?: string | null };
+type SoldierRef = { id: string; name: string; company?: string | null; companyId?: string | null; role?: string | null };
 type DayEntryData = {
   id: string;
   plannedTasks: string | null;
@@ -32,7 +32,18 @@ type SoldierOption = {
   personalNumber: string | null;
   companyId: string | null;
   companyName: string | null;
+  roleName: string | null;
 };
+
+function groupByCompany(soldiers: SoldierRef[]) {
+  const groups: Record<string, SoldierRef[]> = {};
+  for (const s of soldiers) {
+    const key = s.company || "ללא פלוגה";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(s);
+  }
+  return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+}
 
 export default function EventClient({
   eventId, eventName, eventType, startDate, endDate, notes,
@@ -63,13 +74,18 @@ export default function EventClient({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [showAddForce, setShowAddForce] = useState(false);
-  const [editingCell, setEditingCell] = useState<{ forceId: string; date: string } | null>(null);
+  const [editingCell, setEditingCell] = useState<{ forceId: string; date: string; phase: "planned" | "actual" } | null>(null);
   const canManage = isAdmin || createdById === currentUserId;
 
   const fmtDay = (d: string) => {
     const dt = new Date(d + "T00:00:00");
-    const dayNames = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
-    return { day: dayNames[dt.getDay()], date: `${dt.getDate()}/${dt.getMonth() + 1}` };
+    const dayNames = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+    const shortDays = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
+    return {
+      full: `יום ${dayNames[dt.getDay()]}`,
+      short: shortDays[dt.getDay()],
+      date: `${dt.getDate()}/${dt.getMonth() + 1}`,
+    };
   };
 
   async function handleAddForce(fd: FormData) {
@@ -94,47 +110,47 @@ export default function EventClient({
     startTransition(async () => { await approveDayEntry(fd); router.refresh(); });
   }
 
-  const editingForce = editingCell ? initialForces.find((f) => f.id === editingCell.forceId) : null;
-  const editingEntry = editingForce && editingCell ? editingForce.dayEntries[editingCell.date] : null;
   const canEditForce = (force: Force) => isAdmin || createdById === currentUserId || force.userId === currentUserId;
 
   const generateShareText = useCallback(() => {
     const typeLabel = eventType === "PLUGATI" ? "לוז פלוגתי" : "מקדים/מאסף";
     const fmtD = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
-    let text = `🏛️ *${battalionName}*\n`;
-    text += `📋 *${eventName}* — ${typeLabel}\n`;
-    text += `📅 ${fmtD(startDate)} — ${fmtD(endDate)}\n\n`;
-
-    for (const force of initialForces) {
-      text += `👥 *${force.forceName}* (${force.userName})\n`;
-      for (const d of dates) {
+    let text = `🏛️ *${battalionName}*\n📋 *${eventName}* — ${typeLabel}\n📅 ${fmtD(startDate)} — ${fmtD(endDate)}\n\n`;
+    for (const d of dates) {
+      const { full, date } = fmtDay(d);
+      let dayHasContent = false;
+      let dayText = `📅 *${full} ${date}*\n`;
+      for (const force of initialForces) {
         const entry = force.dayEntries[d];
         if (!entry) continue;
-        const { day, date } = fmtDay(d);
         const pCount = entry.plannedSoldiers?.length ?? 0;
         const aCount = entry.actualSoldiers?.length ?? 0;
-        if (pCount === 0 && aCount === 0 && !entry.plannedTasks && !entry.actualTasks) continue;
-
-        text += `  ${day} ${date}:`;
-        if (pCount > 0) text += ` תכנון(${pCount})`;
-        if (aCount > 0) text += ` ביצוע(${aCount})`;
-        if (entry.approved) text += ` ✅`;
-        text += "\n";
-        if (entry.plannedTasks) text += `    📋 ${entry.plannedTasks.split("\n").join(", ")}\n`;
-        if (entry.actualTasks) text += `    ✅ ${entry.actualTasks.split("\n").join(", ")}\n`;
-        if (pCount > 0) text += `    תכנון: ${entry.plannedSoldiers.map((s) => s.name).join(", ")}\n`;
-        if (aCount > 0) text += `    ביצוע: ${entry.actualSoldiers.map((s) => s.name).join(", ")}\n`;
+        if (pCount === 0 && aCount === 0 && !entry.plannedTasks) continue;
+        dayHasContent = true;
+        dayText += `  👥 ${force.forceName}:\n`;
+        if (entry.plannedTasks) dayText += `  📝 משימות: ${entry.plannedTasks.split("\n").join(", ")}\n`;
+        if (pCount > 0) {
+          const groups = groupByCompany(entry.plannedSoldiers);
+          for (const [company, soldiers] of groups) {
+            dayText += `    ${company}: ${soldiers.map((s) => `${s.name}${s.role ? ` (${s.role})` : ""}`).join(", ")}\n`;
+          }
+          dayText += `  סה"כ תכנון: ${pCount}\n`;
+        }
+        if (aCount > 0) dayText += `  ביצוע: ${aCount}/${pCount}\n`;
+        if (entry.approved) dayText += `  ✅ מאושר\n`;
       }
-      text += "\n";
+      if (dayHasContent) text += dayText + "\n";
     }
     return text.trim();
   }, [initialForces, dates, eventName, eventType, startDate, endDate, battalionName]);
 
   const [copied, setCopied] = useState(false);
+  const editingForce = editingCell ? initialForces.find((f) => f.id === editingCell.forceId) : null;
+  const editingEntry = editingForce && editingCell ? editingForce.dayEntries[editingCell.date] : null;
 
   return (
     <div className="space-y-4">
-      {/* Approvers & Share bar */}
+      {/* Share bar */}
       <div className="flex items-center gap-3 flex-wrap">
         {approverNames.length > 0 && (
           <div className="flex items-center gap-1.5">
@@ -145,23 +161,12 @@ export default function EventClient({
           </div>
         )}
         <div className="mr-auto flex gap-2">
-          <button
-            onClick={() => {
-              const text = generateShareText();
-              navigator.clipboard?.writeText(text);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
-            }}
-            className="text-xs bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-1.5"
-          >
+          <button onClick={() => { navigator.clipboard?.writeText(generateShareText()); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+            className="text-xs bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-1.5">
             {copied ? "✓ הועתק" : "📋 העתק"}
           </button>
-          <a
-            href={`https://wa.me/?text=${encodeURIComponent(generateShareText())}`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-lg px-3 py-1.5"
-          >
+          <a href={`https://wa.me/?text=${encodeURIComponent(generateShareText())}`} target="_blank" rel="noreferrer"
+            className="text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-lg px-3 py-1.5">
             📲 שלח בוואטסאפ
           </a>
         </div>
@@ -176,37 +181,29 @@ export default function EventClient({
               {showAddForce ? "ביטול" : "+ הזמן כח"}
             </button>
           </div>
-
           {showAddForce && (
             <form action={handleAddForce} className="flex flex-wrap items-end gap-3 mb-3 p-3 bg-slate-50 rounded-lg">
               <div>
                 <label className="block text-xs text-slate-500 mb-1">משתמש</label>
                 <select name="userId" required className="border rounded-lg px-3 py-2 text-sm">
                   <option value="">בחר משתמש</option>
-                  {allUsers.map((u) => (
-                    <option key={u.id} value={u.id}>{u.fullName}{u.title ? ` (${u.title})` : ""}</option>
-                  ))}
+                  {allUsers.map((u) => <option key={u.id} value={u.id}>{u.fullName}{u.title ? ` (${u.title})` : ""}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs text-slate-500 mb-1">שם הכח</label>
                 <input name="forceName" required className="border rounded-lg px-3 py-2 text-sm w-48" placeholder="למשל: צוות רחפנים" />
               </div>
-              <button disabled={pending} className="bg-emerald-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-emerald-700 disabled:opacity-50">
-                הוסף
-              </button>
+              <button disabled={pending} className="bg-emerald-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-emerald-700 disabled:opacity-50">הוסף</button>
             </form>
           )}
-
           {initialForces.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {initialForces.map((f) => (
                 <div key={f.id} className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">
                   <span className="text-sm font-bold text-blue-800">{f.forceName}</span>
                   <span className="text-xs text-blue-600">({f.userName})</span>
-                  {canManage && (
-                    <button onClick={() => handleRemoveForce(f.id)} className="text-xs text-rose-400 hover:text-rose-600">✕</button>
-                  )}
+                  {canManage && <button onClick={() => handleRemoveForce(f.id)} className="text-xs text-rose-400 hover:text-rose-600">✕</button>}
                 </div>
               ))}
             </div>
@@ -216,102 +213,173 @@ export default function EventClient({
         </Card>
       )}
 
-      {/* Schedule grid */}
-      {initialForces.length > 0 && (
-        <Card className="p-0 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse min-w-[600px]">
-              <thead>
-                <tr className="bg-slate-800 text-white">
-                  <th className="py-2 px-3 text-right font-bold border-l border-slate-700 sticky right-0 bg-slate-800 z-10 min-w-[120px]">כח</th>
-                  {dates.map((d) => {
-                    const { day, date } = fmtDay(d);
-                    const isToday = d === new Date().toISOString().slice(0, 10);
-                    return (
-                      <th key={d} className={`py-2 px-2 text-center border-l border-slate-700 min-w-[100px] ${isToday ? "bg-blue-900" : ""}`}>
-                        <div className="text-[10px] text-slate-300">{day}</div>
-                        <div>{date}</div>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {initialForces.map((force) => (
-                  <tr key={force.id} className="border-t border-slate-200 hover:bg-slate-50">
-                    <td className="py-2 px-3 font-bold text-slate-700 border-l border-slate-200 sticky right-0 bg-white z-10">
-                      <div>{force.forceName}</div>
-                      <div className="text-[10px] text-slate-400 font-normal">{force.userName}</div>
-                    </td>
-                    {dates.map((d) => {
-                      const entry = force.dayEntries[d];
-                      const plannedCount = entry?.plannedSoldiers?.length ?? 0;
-                      const actualCount = entry?.actualSoldiers?.length ?? 0;
-                      const hasTasks = !!(entry?.plannedTasks || entry?.actualTasks);
-                      const isEmpty = !entry || (plannedCount === 0 && actualCount === 0 && !hasTasks);
-                      const isToday = d === new Date().toISOString().slice(0, 10);
-                      const editable = canEditForce(force);
+      {/* Day-by-day detailed view */}
+      {initialForces.length > 0 && dates.map((d) => {
+        const { full, short, date } = fmtDay(d);
+        const isToday = d === new Date().toISOString().slice(0, 10);
 
-                      return (
-                        <td
-                          key={d}
-                          onClick={() => editable ? setEditingCell({ forceId: force.id, date: d }) : undefined}
-                          className={`py-1.5 px-2 border-l border-slate-200 text-center transition-colors ${
-                            editable ? "cursor-pointer hover:bg-blue-50" : ""
-                          } ${isToday ? "bg-blue-50/50" : ""} ${
-                            isEmpty ? "" : entry?.approved ? "bg-emerald-50 ring-1 ring-inset ring-emerald-300" : actualCount > 0 ? "bg-emerald-50" : "bg-amber-50"
-                          }`}
-                        >
-                          {!isEmpty && (
-                            <div className="space-y-0.5">
-                              {plannedCount > 0 && <div className="text-[10px] text-amber-700">📋 {plannedCount}</div>}
-                              {actualCount > 0 && <div className="text-[10px] text-emerald-700">✅ {actualCount}</div>}
-                              {hasTasks && <div className="text-[10px] text-slate-500">📝</div>}
-                              {entry?.approved && <div className="text-[10px] text-emerald-600 font-bold">✔ מאושר</div>}
-                              {isApprover && entry && !entry.approved && (plannedCount > 0 || actualCount > 0) && (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleApprove(entry.id, true); }}
-                                  className="text-[9px] bg-purple-100 text-purple-700 rounded px-1 hover:bg-purple-200"
-                                >
-                                  אשר
-                                </button>
+        return (
+          <Card key={d} className={`overflow-hidden ${isToday ? "ring-2 ring-blue-400" : ""}`}>
+            {/* Day header */}
+            <div className={`px-4 py-2.5 flex items-center justify-between ${isToday ? "bg-blue-800 text-white" : "bg-slate-800 text-white"}`}>
+              <div className="flex items-center gap-3">
+                <span className="text-lg font-bold">{date}</span>
+                <span className="text-sm text-slate-300">{full}</span>
+                {isToday && <span className="text-[10px] bg-blue-500 rounded-full px-2 py-0.5">היום</span>}
+              </div>
+            </div>
+
+            {/* Forces for this day */}
+            <div className="divide-y divide-slate-100">
+              {initialForces.map((force) => {
+                const entry = force.dayEntries[d];
+                const planned = entry?.plannedSoldiers ?? [];
+                const actual = entry?.actualSoldiers ?? [];
+                const editable = canEditForce(force);
+                const plannedGroups = groupByCompany(planned);
+                const actualGroups = groupByCompany(actual);
+                const missingIds = new Set(planned.map((s) => s.id));
+                actual.forEach((s) => missingIds.delete(s.id));
+                const missing = planned.filter((s) => missingIds.has(s.id));
+
+                return (
+                  <div key={force.id} className="p-4">
+                    {/* Force header */}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-slate-800">{force.forceName}</span>
+                        <span className="text-xs text-slate-400">({force.userName})</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {entry?.approved && <span className="text-xs bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5 font-bold">✔ מאושר</span>}
+                        {isApprover && entry && !entry.approved && planned.length > 0 && (
+                          <button onClick={() => handleApprove(entry.id, true)} disabled={pending}
+                            className="text-xs bg-purple-100 text-purple-700 rounded-lg px-2 py-1 hover:bg-purple-200 font-bold">
+                            ✔ אשר
+                          </button>
+                        )}
+                        {isApprover && entry?.approved && (
+                          <button onClick={() => handleApprove(entry.id, false)} disabled={pending}
+                            className="text-xs text-amber-600 hover:underline">
+                            בטל אישור
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {/* Tasks column */}
+                      <div className="bg-slate-50 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-bold text-slate-600">📝 משימות</span>
+                          {editable && (
+                            <button onClick={() => setEditingCell({ forceId: force.id, date: d, phase: "planned" })}
+                              className="text-[10px] text-blue-600 hover:underline">✏️ ערוך</button>
+                          )}
+                        </div>
+                        {entry?.plannedTasks ? (
+                          <div className="text-xs text-slate-700 whitespace-pre-line">{entry.plannedTasks}</div>
+                        ) : (
+                          <div className="text-xs text-slate-300">אין משימות</div>
+                        )}
+                        {entry?.plannedNotes && (
+                          <div className="text-[10px] text-slate-400 mt-1 border-t pt-1">{entry.plannedNotes}</div>
+                        )}
+                      </div>
+
+                      {/* Planned column */}
+                      <div className="bg-amber-50/50 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-bold text-amber-700">📋 תכנון ({planned.length})</span>
+                          {editable && (
+                            <button onClick={() => setEditingCell({ forceId: force.id, date: d, phase: "planned" })}
+                              className="text-[10px] text-blue-600 hover:underline">✏️ ערוך</button>
+                          )}
+                        </div>
+                        {plannedGroups.length > 0 ? (
+                          <div className="space-y-1.5">
+                            {plannedGroups.map(([company, groupSoldiers]) => (
+                              <div key={company}>
+                                <div className="text-[10px] font-bold text-slate-500 mb-0.5">{company} ({groupSoldiers.length})</div>
+                                {groupSoldiers.map((s) => (
+                                  <div key={s.id} className="text-xs text-slate-700 flex items-center gap-1 pr-2">
+                                    <span>•</span>
+                                    <span>{s.name}</span>
+                                    {s.role && <span className="text-[10px] text-purple-600">({s.role})</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            ))}
+                            <div className="text-[10px] font-bold text-amber-800 border-t border-amber-200 pt-1 mt-1">
+                              סה&quot;כ: {planned.length} חיילים
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-slate-300">לא שובצו חיילים</div>
+                        )}
+                      </div>
+
+                      {/* Actual column */}
+                      <div className={`rounded-lg p-3 ${actual.length > 0 ? "bg-emerald-50/50" : "bg-slate-50"}`}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-bold text-emerald-700">✅ בפועל ({actual.length}/{planned.length})</span>
+                          {editable && (
+                            <button onClick={() => setEditingCell({ forceId: force.id, date: d, phase: "actual" })}
+                              className="text-[10px] text-blue-600 hover:underline">✏️ ערוך</button>
+                          )}
+                        </div>
+                        {actualGroups.length > 0 ? (
+                          <div className="space-y-1.5">
+                            {actualGroups.map(([company, groupSoldiers]) => (
+                              <div key={company}>
+                                <div className="text-[10px] font-bold text-slate-500 mb-0.5">{company} ({groupSoldiers.length})</div>
+                                {groupSoldiers.map((s) => (
+                                  <div key={s.id} className="text-xs text-slate-700 flex items-center gap-1 pr-2">
+                                    <span>•</span>
+                                    <span>{s.name}</span>
+                                    {s.role && <span className="text-[10px] text-purple-600">({s.role})</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            ))}
+                            <div className="text-[10px] font-bold text-emerald-800 border-t border-emerald-200 pt-1 mt-1">
+                              סה&quot;כ: {actual.length}/{planned.length}
+                              {missing.length > 0 && (
+                                <span className="text-rose-600 font-normal mr-2">
+                                  חסרים: {missing.map((s) => s.name).join(", ")}
+                                </span>
                               )}
                             </div>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
+                          </div>
+                        ) : planned.length > 0 ? (
+                          <div className="text-xs text-slate-400">טרם עודכן</div>
+                        ) : (
+                          <div className="text-xs text-slate-300">—</div>
+                        )}
+                        {entry?.actualNotes && (
+                          <div className="text-[10px] text-slate-400 mt-1 border-t pt-1">{entry.actualNotes}</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        );
+      })}
 
-      {/* Legend */}
-      {initialForces.length > 0 && (
-        <div className="flex gap-4 text-[10px] text-slate-500 px-1 flex-wrap">
-          <span>📋 = תכנון</span>
-          <span>✅ = ביצוע</span>
-          <span>📝 = משימות</span>
-          <span className="text-emerald-600">✔ מאושר = אושר ע&quot;י גורם מאשר</span>
-          <span className="text-slate-400">לחץ על תא לעריכה</span>
-        </div>
-      )}
-
-      {/* Day entry editor modal */}
+      {/* Editor modal */}
       {editingCell && editingForce && (
-        <DayEntryEditor
+        <SoldierEditor
           eventId={eventId}
           forceId={editingCell.forceId}
           forceName={editingForce.forceName}
           date={editingCell.date}
+          phase={editingCell.phase}
           entry={editingEntry ?? null}
           soldiers={soldiers}
           companies={companies}
-          isApprover={isApprover}
-          onApprove={(entryId, approve) => handleApprove(entryId, approve)}
           onClose={() => setEditingCell(null)}
         />
       )}
@@ -319,34 +387,36 @@ export default function EventClient({
   );
 }
 
-// ========== Day Entry Editor ==========
-function DayEntryEditor({
-  eventId, forceId, forceName, date, entry, soldiers, companies, isApprover, onApprove, onClose,
+// ========== Soldier Editor (simplified — edits one phase at a time) ==========
+function SoldierEditor({
+  eventId, forceId, forceName, date, phase, entry, soldiers, companies, onClose,
 }: {
   eventId: string;
   forceId: string;
   forceName: string;
   date: string;
+  phase: "planned" | "actual";
   entry: DayEntryData | null;
   soldiers: SoldierOption[];
   companies: { id: string; name: string }[];
-  isApprover: boolean;
-  onApprove: (entryId: string, approve: boolean) => void;
   onClose: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+
   const [plannedTasks, setPlannedTasks] = useState(entry?.plannedTasks ?? "");
   const [actualTasks, setActualTasks] = useState(entry?.actualTasks ?? "");
   const [plannedNotes, setPlannedNotes] = useState(entry?.plannedNotes ?? "");
   const [actualNotes, setActualNotes] = useState(entry?.actualNotes ?? "");
   const [plannedIds, setPlannedIds] = useState<string[]>(entry?.plannedSoldiers?.map((s) => s.id) ?? []);
   const [actualIds, setActualIds] = useState<string[]>(entry?.actualSoldiers?.map((s) => s.id) ?? []);
-  const [activeTab, setActiveTab] = useState<"planned" | "actual">("planned");
   const [filterCompany, setFilterCompany] = useState("");
   const [search, setSearch] = useState("");
 
   const fmtDate = new Date(date + "T00:00:00").toLocaleDateString("he-IL", { weekday: "short", day: "numeric", month: "long" });
+  const isPlanned = phase === "planned";
+  const currentIds = isPlanned ? plannedIds : actualIds;
+  const setCurrentIds = isPlanned ? setPlannedIds : setActualIds;
 
   const filteredSoldiers = soldiers.filter((s) => {
     if (filterCompany && s.companyId !== filterCompany) return false;
@@ -354,11 +424,21 @@ function DayEntryEditor({
     return true;
   });
 
-  const currentIds = activeTab === "planned" ? plannedIds : actualIds;
-  const setCurrentIds = activeTab === "planned" ? setPlannedIds : setActualIds;
+  // For actual phase, show planned soldiers first
+  const sortedSoldiers = isPlanned
+    ? filteredSoldiers
+    : [...filteredSoldiers].sort((a, b) => {
+        const aPlanned = plannedIds.includes(a.id) ? 0 : 1;
+        const bPlanned = plannedIds.includes(b.id) ? 0 : 1;
+        return aPlanned - bPlanned;
+      });
 
   function toggleSoldier(id: string) {
     setCurrentIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  }
+
+  function selectAllPlanned() {
+    setActualIds([...plannedIds]);
   }
 
   async function handleSave() {
@@ -372,7 +452,6 @@ function DayEntryEditor({
     fd.set("actualNotes", actualNotes);
     fd.set("plannedSoldierIds", JSON.stringify(plannedIds));
     fd.set("actualSoldierIds", JSON.stringify(actualIds));
-
     startTransition(async () => {
       const res = await saveDayEntry(fd);
       if (res.ok) { onClose(); router.refresh(); }
@@ -381,68 +460,57 @@ function DayEntryEditor({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="bg-slate-800 text-white p-4 flex items-center justify-between">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className={`p-4 flex items-center justify-between ${isPlanned ? "bg-amber-600" : "bg-emerald-700"} text-white`}>
           <div>
-            <h2 className="font-bold">{forceName}</h2>
-            <div className="text-sm text-slate-300">{fmtDate}</div>
+            <h2 className="font-bold">{forceName} — {isPlanned ? "תכנון" : "בפועל"}</h2>
+            <div className="text-sm opacity-80">{fmtDate}</div>
           </div>
-          <div className="flex items-center gap-2">
-            {entry?.approved && (
-              <span className="text-xs bg-emerald-600 text-white rounded-full px-2 py-0.5">✔ מאושר</span>
-            )}
-            <button onClick={onClose} className="text-slate-300 hover:text-white text-xl">✕</button>
-          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-xl">✕</button>
         </div>
 
-        {/* Plan/Actual tabs */}
-        <div className="flex border-b border-slate-200">
-          <button
-            onClick={() => setActiveTab("planned")}
-            className={`flex-1 py-2.5 text-sm font-bold text-center ${activeTab === "planned" ? "bg-amber-50 text-amber-700 border-b-2 border-amber-500" : "text-slate-500 hover:text-slate-800"}`}
-          >
-            📋 תכנון ({plannedIds.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("actual")}
-            className={`flex-1 py-2.5 text-sm font-bold text-center ${activeTab === "actual" ? "bg-emerald-50 text-emerald-700 border-b-2 border-emerald-500" : "text-slate-500 hover:text-slate-800"}`}
-          >
-            ✅ ביצוע ({actualIds.length})
-          </button>
-        </div>
+        <div className="overflow-y-auto max-h-[65vh] p-4 space-y-3">
+          {/* Tasks & notes (only in planned phase) */}
+          {isPlanned && (
+            <>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">📝 משימות צפויות</label>
+                <textarea value={plannedTasks} onChange={(e) => setPlannedTasks(e.target.value)}
+                  rows={2} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="שורה לכל משימה..." />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">הערות</label>
+                <input value={plannedNotes} onChange={(e) => setPlannedNotes(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="הערות..." />
+              </div>
+            </>
+          )}
 
-        <div className="overflow-y-auto max-h-[60vh] p-4 space-y-4">
-          {/* Tasks */}
-          <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1">
-              {activeTab === "planned" ? "משימות מתוכננות" : "משימות שבוצעו"}
-            </label>
-            <textarea
-              value={activeTab === "planned" ? plannedTasks : actualTasks}
-              onChange={(e) => activeTab === "planned" ? setPlannedTasks(e.target.value) : setActualTasks(e.target.value)}
-              rows={2}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              placeholder="משימות (שורה לכל משימה)..."
-            />
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1">הערות</label>
-            <input
-              value={activeTab === "planned" ? plannedNotes : actualNotes}
-              onChange={(e) => activeTab === "planned" ? setPlannedNotes(e.target.value) : setActualNotes(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              placeholder="הערות..."
-            />
-          </div>
+          {!isPlanned && (
+            <>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">📝 משימות שבוצעו</label>
+                <textarea value={actualTasks} onChange={(e) => setActualTasks(e.target.value)}
+                  rows={2} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="מה בוצע בפועל..." />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">הערות</label>
+                <input value={actualNotes} onChange={(e) => setActualNotes(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="הערות..." />
+              </div>
+              {plannedIds.length > 0 && (
+                <button onClick={selectAllPlanned} className="text-xs bg-blue-50 text-blue-700 rounded-lg px-3 py-1.5 hover:bg-blue-100">
+                  📋 העתק את כל התכנון ({plannedIds.length})
+                </button>
+              )}
+            </>
+          )}
 
           {/* Soldiers */}
           <div>
             <label className="block text-xs font-bold text-slate-600 mb-2">חיילים ({currentIds.length} נבחרו)</label>
             <div className="flex gap-2 mb-2 flex-wrap">
-              <input value={search} onChange={(e) => setSearch(e.target.value)} className="border rounded-lg px-3 py-1.5 text-sm flex-1 min-w-[150px]" placeholder="🔍 חיפוש חייל..." />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} className="border rounded-lg px-3 py-1.5 text-sm flex-1 min-w-[140px]" placeholder="🔍 חיפוש..." />
               <select value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)} className="border rounded-lg px-3 py-1.5 text-sm">
                 <option value="">כל הפלוגות</option>
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -455,7 +523,7 @@ function DayEntryEditor({
                   const s = soldiers.find((x) => x.id === id);
                   if (!s) return null;
                   return (
-                    <span key={id} className={`text-xs rounded-full px-2 py-0.5 flex items-center gap-1 ${activeTab === "planned" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
+                    <span key={id} className={`text-xs rounded-full px-2 py-0.5 flex items-center gap-1 ${isPlanned ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
                       {s.fullName}
                       <button onClick={() => toggleSoldier(id)} className="hover:text-rose-600">✕</button>
                     </span>
@@ -465,41 +533,30 @@ function DayEntryEditor({
             )}
 
             <div className="border rounded-lg max-h-48 overflow-y-auto divide-y divide-slate-100">
-              {filteredSoldiers.map((s) => {
+              {sortedSoldiers.map((s) => {
                 const checked = currentIds.includes(s.id);
+                const wasPlanned = !isPlanned && plannedIds.includes(s.id);
                 return (
-                  <label key={s.id} className={`flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-blue-50 ${checked ? (activeTab === "planned" ? "bg-amber-50" : "bg-emerald-50") : ""}`}>
+                  <label key={s.id} className={`flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-blue-50 ${
+                    checked ? (isPlanned ? "bg-amber-50" : "bg-emerald-50") : wasPlanned ? "bg-blue-50/50" : ""
+                  }`}>
                     <input type="checkbox" checked={checked} onChange={() => toggleSoldier(s.id)} className="w-3.5 h-3.5" />
                     <span className="font-medium">{s.fullName}</span>
-                    {s.personalNumber && <span className="text-[10px] text-slate-400 font-mono">{s.personalNumber}</span>}
-                    {s.companyName && <span className="text-[10px] text-slate-400">({s.companyName})</span>}
+                    {s.roleName && <span className="text-[10px] text-purple-600">({s.roleName})</span>}
+                    {s.companyName && <span className="text-[10px] text-slate-400">{s.companyName}</span>}
+                    {wasPlanned && <span className="text-[10px] text-blue-500 mr-auto">📋</span>}
                   </label>
                 );
               })}
-              {filteredSoldiers.length === 0 && <div className="text-center text-xs text-slate-400 py-3">לא נמצאו חיילים</div>}
+              {sortedSoldiers.length === 0 && <div className="text-center text-xs text-slate-400 py-3">לא נמצאו חיילים</div>}
             </div>
           </div>
         </div>
 
-        {/* Footer */}
         <div className="border-t border-slate-200 p-4 flex items-center justify-between bg-slate-50">
-          <div className="flex items-center gap-2">
-            <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-800">ביטול</button>
-            {isApprover && entry && (
-              <button
-                onClick={() => { onApprove(entry.id, !entry.approved); onClose(); }}
-                disabled={pending}
-                className={`text-xs rounded-lg px-3 py-1.5 font-bold ${
-                  entry.approved
-                    ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                    : "bg-purple-100 text-purple-700 hover:bg-purple-200"
-                }`}
-              >
-                {entry.approved ? "↩ בטל אישור" : "✔ אשר תוכנית"}
-              </button>
-            )}
-          </div>
-          <button onClick={handleSave} disabled={pending} className="bg-blue-700 text-white rounded-lg px-6 py-2 text-sm font-bold hover:bg-blue-800 disabled:opacity-50">
+          <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-800">ביטול</button>
+          <button onClick={handleSave} disabled={pending}
+            className={`text-white rounded-lg px-6 py-2 text-sm font-bold disabled:opacity-50 ${isPlanned ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-700 hover:bg-emerald-800"}`}>
             {pending ? "שומר..." : "💾 שמירה"}
           </button>
         </div>
