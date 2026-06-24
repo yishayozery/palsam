@@ -2,10 +2,16 @@
 
 import { useState } from "react";
 
+const EMOJI_PALETTE = [
+  "🎖️", "🪖", "🚗", "🔫", "⛑️", "📡", "🛡️", "⚔️",
+  "🎯", "🔧", "💣", "🏥", "📋", "🔑", "⭐", "🦺",
+  "👑", "🎪", "🔥", "⚡", "🚀", "🏴", "🪂", "📦",
+];
+
 export type Field = {
   name: string;
   label: string;
-  type?: "text" | "number" | "checkbox" | "select";
+  type?: "text" | "number" | "checkbox" | "select" | "emoji";
   options?: { value: string; label: string }[];
   default?: string | boolean;
 };
@@ -77,6 +83,9 @@ export default function CrudSection({
                 </label>
               );
             }
+            if (f.type === "emoji") {
+              return <EmojiField key={f.name} name={f.name} label={f.label} initial={String(cur ?? f.default ?? "🎖️")} />;
+            }
             if (f.type === "select") {
               return (
                 <div key={f.name}>
@@ -142,6 +151,38 @@ export default function CrudSection({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function EmojiField({ name, label, initial }: { name: string; label: string; initial: string }) {
+  const [value, setValue] = useState(initial);
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <label className="block text-xs text-slate-500 mb-1">{label}</label>
+      <input type="hidden" name={name} value={value} />
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="rounded-lg border border-slate-300 px-3 py-1.5 text-lg bg-white hover:bg-slate-50 min-w-[48px]"
+      >
+        {value}
+      </button>
+      {open && (
+        <div className="absolute top-full mt-1 z-20 bg-white border border-slate-200 rounded-xl shadow-lg p-2 grid grid-cols-6 gap-1 w-56">
+          {EMOJI_PALETTE.map((e) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => { setValue(e); setOpen(false); }}
+              className={`text-xl p-1.5 rounded-lg hover:bg-slate-100 ${value === e ? "bg-blue-100 ring-2 ring-blue-400" : ""}`}
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

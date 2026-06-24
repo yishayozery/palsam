@@ -129,13 +129,14 @@ export async function saveDispatchRole(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
   const icon = String(formData.get("icon") || "🎖️").trim();
   const isDriver = formData.get("isDriver") === "on" || formData.get("isDriver") === "true";
+  const companyRoleId = String(formData.get("companyRoleId") || "").trim() || null;
   const sortOrder = parseInt(String(formData.get("sortOrder") || "0"), 10) || 0;
   if (!name) return;
 
   if (id) {
-    await prisma.dispatchRole.update({ where: { id }, data: { name, icon, isDriver, sortOrder } });
+    await prisma.dispatchRole.update({ where: { id }, data: { name, icon, isDriver, companyRoleId, sortOrder } });
   } else {
-    await prisma.dispatchRole.create({ data: { battalionId: bId, name, icon, isDriver, sortOrder } });
+    await prisma.dispatchRole.create({ data: { battalionId: bId, name, icon, isDriver, companyRoleId, sortOrder } });
   }
   await audit(user.id, id ? "UPDATE" : "CREATE", "DispatchRole", id || name);
   revalidatePath("/dispatch/templates");

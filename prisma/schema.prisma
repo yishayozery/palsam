@@ -1179,7 +1179,8 @@ model CompanyRole {
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
 
-  soldiers    Soldier[]
+  soldiers      Soldier[]
+  dispatchRoles DispatchRole[] @relation("DispatchRoleCompanyRole")
 
   @@unique([companyId, name])
   @@index([battalionId])
@@ -1349,15 +1350,17 @@ model VacationEntry {
 // ===================== תפקידי שבצ"ק =====================
 
 model DispatchRole {
-  id          String @id @default(cuid())
-  battalionId String
-  battalion   Battalion @relation("BattalionDispatchRoles", fields: [battalionId], references: [id], onDelete: Cascade)
-  name        String
-  icon        String  @default("🎖️")
-  isDriver    Boolean @default(false)
-  active      Boolean @default(true)
-  sortOrder   Int     @default(0)
-  createdAt   DateTime @default(now())
+  id            String @id @default(cuid())
+  battalionId   String
+  battalion     Battalion @relation("BattalionDispatchRoles", fields: [battalionId], references: [id], onDelete: Cascade)
+  name          String
+  icon          String  @default("🎖️")
+  isDriver      Boolean @default(false)
+  companyRoleId String?
+  companyRole   CompanyRole? @relation("DispatchRoleCompanyRole", fields: [companyRoleId], references: [id], onDelete: SetNull)
+  active        Boolean @default(true)
+  sortOrder     Int     @default(0)
+  createdAt     DateTime @default(now())
 
   templateSlots DispatchTemplateSoldier[]
 

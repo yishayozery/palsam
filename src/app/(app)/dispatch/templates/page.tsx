@@ -21,7 +21,7 @@ export default async function DispatchTemplatesPage() {
     select: { id: true },
   });
 
-  const [vehicleTypes, vehicles, soldiers, templates, vehicleTypeLicenses, companies, dispatchRoles] = await Promise.all([
+  const [vehicleTypes, vehicles, soldiers, templates, vehicleTypeLicenses, companies, dispatchRoles, companyRoles] = await Promise.all([
     vehicleCategory
       ? prisma.itemType.findMany({
           where: { battalionId: bId, categoryId: vehicleCategory.id, active: true },
@@ -48,6 +48,7 @@ export default async function DispatchTemplatesPage() {
         fullName: true,
         personalNumber: true,
         companyId: true,
+        companyRoleId: true,
         drivingRefresherDate: true,
         company: { select: { name: true } },
         companyRole: { select: { name: true } },
@@ -91,6 +92,11 @@ export default async function DispatchTemplatesPage() {
       where: { battalionId: bId, active: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
+    prisma.companyRole.findMany({
+      where: { battalionId: bId, active: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   const vtlMap: Record<string, string[]> = {};
@@ -121,6 +127,7 @@ export default async function DispatchTemplatesPage() {
           fullName: s.fullName,
           personalNumber: s.personalNumber,
           companyId: s.companyId,
+          companyRoleId: s.companyRoleId,
           companyName: s.company?.name ?? null,
           roleName: s.companyRole?.name ?? null,
           licenseIds: s.drivingLicenses.map((dl) => dl.licenseType.id),
@@ -129,11 +136,13 @@ export default async function DispatchTemplatesPage() {
         }))}
         companies={companies.map((c) => ({ id: c.id, name: c.name }))}
         drivingRefreshDays={drivingRefreshDays}
+        companyRoles={companyRoles}
         dispatchRoles={dispatchRoles.map((r) => ({
           id: r.id,
           name: r.name,
           icon: r.icon,
           isDriver: r.isDriver,
+          companyRoleId: r.companyRoleId,
           sortOrder: r.sortOrder,
         }))}
         templates={templates.map((t) => ({

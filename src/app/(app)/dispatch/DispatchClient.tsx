@@ -369,9 +369,13 @@ export default function DispatchClient({
     <>
       {/* כפתור יצירה + טאבים */}
       <div className="mb-3 flex items-center gap-3 flex-wrap">
+        <a href="/dispatch/templates"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
+          📋 שבצ&quot;ק קבוע
+        </a>
         <button onClick={openNew}
           className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-4 py-2 text-sm font-medium">
-          + שיבוץ חדש
+          + שבצ&quot;ק חדש
         </button>
         {templates.length > 0 && (
           <select
@@ -385,7 +389,6 @@ export default function DispatchClient({
             ))}
           </select>
         )}
-        <a href="/dispatch/templates" className="text-xs text-blue-600 hover:underline self-center">שבצ&quot;ק קבוע →</a>
         <div className="flex bg-slate-100 rounded-lg p-1 gap-1">
           <button onClick={() => setTab("active")}
             className={`text-sm rounded-md px-3 py-1 transition ${
@@ -443,7 +446,7 @@ export default function DispatchClient({
           <EmptyState>
             <div className="text-center">
               <p>אין שיבוצים עדיין.</p>
-              <p className="text-xs text-slate-500 mt-1">לחץ &quot;+ שיבוץ חדש&quot; כדי להתחיל</p>
+              <p className="text-xs text-slate-500 mt-1">לחץ &quot;+ שבצ&quot;ק חדש&quot; כדי להתחיל</p>
             </div>
           </EmptyState>
         </Card>
@@ -534,7 +537,7 @@ export default function DispatchClient({
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white p-4 flex items-center justify-between shrink-0">
               <div>
-                <h3 className="font-bold text-lg">🚗 {editing ? "עריכת שיבוץ" : "שיבוץ חדש"}</h3>
+                <h3 className="font-bold text-lg">🚗 {editing ? 'עריכת שבצ"ק' : 'שבצ"ק חדש'}</h3>
                 <p className="text-xs text-blue-100 mt-0.5">{battalionName}</p>
               </div>
               <button onClick={cancelEdit} className="text-blue-100 hover:text-white text-2xl">✕</button>

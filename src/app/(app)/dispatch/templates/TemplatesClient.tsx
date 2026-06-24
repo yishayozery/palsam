@@ -19,13 +19,15 @@ type Soldier = {
   fullName: string;
   personalNumber: string | null;
   companyId: string | null;
+  companyRoleId: string | null;
   companyName: string | null;
   roleName: string | null;
   licenseIds: string[];
   licenseNames: string[];
   drivingRefresherDate: string | null;
 };
-type DispatchRoleType = { id: string; name: string; icon: string; isDriver: boolean; sortOrder: number };
+type CompanyRoleOption = { id: string; name: string };
+type DispatchRoleType = { id: string; name: string; icon: string; isDriver: boolean; companyRoleId: string | null; sortOrder: number };
 type TemplateSlot = {
   dispatchRoleId: string;
   roleName: string;
@@ -68,6 +70,7 @@ export default function TemplatesClient({
   templates,
   drivingRefreshDays,
   dispatchRoles,
+  companyRoles,
 }: {
   vehicleTypes: VehicleType[];
   vehicles: Vehicle[];
@@ -76,6 +79,7 @@ export default function TemplatesClient({
   templates: Template[];
   drivingRefreshDays: number;
   dispatchRoles: DispatchRoleType[];
+  companyRoles: CompanyRoleOption[];
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<"templates" | "roles">("templates");
@@ -226,6 +230,16 @@ export default function TemplatesClient({
   }, [soldiers, soldierSearch, companyFilter]);
 
   const assignedSoldierIds = useMemo(() => new Set(slots.map((s) => s.soldierId).filter(Boolean)), [slots]);
+  const assignedSoldierMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of slots) {
+      if (s.soldierId) {
+        const role = roleMap[s.dispatchRoleId];
+        m.set(s.soldierId, role?.name ?? "?");
+      }
+    }
+    return m;
+  }, [slots, roleMap]);
 
   // ========== TABS ==========
   const TABS = [
@@ -237,6 +251,20 @@ export default function TemplatesClient({
   if (showForm) {
     return (
       <div className="space-y-4">
+        {/* Tab bar — visible even in form */}
+        <div className="flex gap-1 border-b border-slate-200">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => { setTab(t.key); if (t.key === "roles") setShowForm(false); }}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+                t.key === "templates" ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-lg">{editId ? 'עריכת שבצ"ק קבוע' : 'שבצ"ק קבוע חדש'}</h3>
@@ -330,7 +358,9 @@ export default function TemplatesClient({
                     <SoldierPicker
                       soldiers={filteredSoldiers}
                       assignedIds={assignedSoldierIds}
+                      assignedMap={assignedSoldierMap}
                       isDriverRole={role?.isDriver ?? false}
+                      matchingCompanyRoleId={role?.companyRoleId ?? null}
                       canDrive={canDrive}
                       onSelect={(id) => assignSoldier(idx, id)}
                       onClear={() => assignSoldier(idx, null)}
@@ -383,7 +413,8 @@ export default function TemplatesClient({
           addLabel="תפקיד"
           fields={[
             { name: "name", label: 'שם (למשל: נהג, חובש, מט"ב)' },
-            { name: "icon", label: "אייקון (emoji)", default: "🎖️" },
+            { name: "icon", label: "אייקון", type: "emoji" as const, default: "🎖️" },
+            { name: "companyRoleId", label: "תפקיד פלוגה מקושר", type: "select" as const, options: [{ value: "", label: "ללא" }, ...companyRoles.map((cr) => ({ value: cr.id, label: cr.name }))] },
             { name: "sortOrder", label: "סדר", type: "number" as const, default: "0" },
             { name: "isDriver", label: "תפקיד נהג?", type: "checkbox" as const },
           ]}
@@ -391,12 +422,13 @@ export default function TemplatesClient({
           deleteAction={toggleDispatchRole}
           rows={dispatchRoles.map((r) => ({
             id: r.id,
-            values: { name: r.name, icon: r.icon, sortOrder: String(r.sortOrder), isDriver: r.isDriver ? "true" : "" },
+            values: { name: r.name, icon: r.icon, companyRoleId: r.companyRoleId ?? "", sortOrder: String(r.sortOrder), isDriver: r.isDriver ? "true" : "" },
             display: (
               <span className="flex items-center gap-2">
                 <span>{r.icon}</span>
                 <span className="font-medium">{r.name}</span>
                 {r.isDriver && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 rounded">נהג</span>}
+                {r.companyRoleId && <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 rounded">🔗 {companyRoles.find((cr) => cr.id === r.companyRoleId)?.name}</span>}
               </span>
             ),
           }))}
@@ -472,7 +504,9 @@ export default function TemplatesClient({
 function SoldierPicker({
   soldiers,
   assignedIds,
+  assignedMap,
   isDriverRole,
+  matchingCompanyRoleId,
   canDrive,
   onSelect,
   onClear,
@@ -485,7 +519,9 @@ function SoldierPicker({
 }: {
   soldiers: Soldier[];
   assignedIds: Set<string | null>;
+  assignedMap: Map<string, string>;
   isDriverRole: boolean;
+  matchingCompanyRoleId: string | null;
   canDrive: (s: Soldier) => boolean;
   onSelect: (id: string) => void;
   onClear: () => void;
@@ -497,13 +533,21 @@ function SoldierPicker({
   companies: Company[];
 }) {
   const [open, setOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+
+  const matching = matchingCompanyRoleId
+    ? soldiers.filter((s) => s.companyRoleId === matchingCompanyRoleId)
+    : [];
+  const rest = matchingCompanyRoleId
+    ? soldiers.filter((s) => s.companyRoleId !== matchingCompanyRoleId)
+    : soldiers;
 
   if (!open) {
     return (
       <div className="flex gap-1">
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => { setOpen(true); setShowAll(!matchingCompanyRoleId); }}
           className="text-xs bg-white border border-slate-300 rounded px-2 py-1 hover:bg-slate-50"
         >
           {hasSoldier ? "🔄" : "👤 שבץ"}
@@ -514,6 +558,35 @@ function SoldierPicker({
       </div>
     );
   }
+
+  const renderSoldier = (s: Soldier) => {
+    const assigned = assignedIds.has(s.id);
+    const assignedTo = assignedMap.get(s.id);
+    const hasLicense = canDrive(s);
+    const blocked = isDriverRole && !hasLicense;
+    return (
+      <div
+        key={s.id}
+        className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer ${
+          assigned ? "opacity-40" : blocked ? "opacity-50" : "hover:bg-blue-50"
+        }`}
+        onClick={() => {
+          if (assigned) return;
+          if (blocked) { alert(`ל${s.fullName} אין הרשאת נהיגה מתאימה`); return; }
+          onSelect(s.id);
+          setOpen(false);
+        }}
+      >
+        <span className={assigned ? "line-through" : ""}>{s.fullName}</span>
+        {s.personalNumber && <span className="text-[10px] text-slate-400 font-mono">{s.personalNumber}</span>}
+        {s.companyName && <span className="text-[10px] text-slate-400">({s.companyName})</span>}
+        {s.roleName && <span className="text-[10px] text-purple-600">{s.roleName}</span>}
+        {s.licenseNames.length > 0 && <span className="text-[10px] text-green-600">🪪</span>}
+        {blocked && <span className="text-[10px] text-rose-500">⚠️</span>}
+        {assigned && assignedTo && <span className="text-[10px] text-blue-500 mr-auto">← {assignedTo}</span>}
+      </div>
+    );
+  };
 
   return (
     <div className="absolute left-0 top-full z-30 bg-white shadow-xl rounded-xl border border-slate-200 p-3 w-80 mt-1">
@@ -534,32 +607,29 @@ function SoldierPicker({
           {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
-      <div className="max-h-48 overflow-y-auto space-y-0.5">
-        {soldiers.map((s) => {
-          const assigned = assignedIds.has(s.id);
-          const hasLicense = canDrive(s);
-          const blocked = isDriverRole && !hasLicense;
-          return (
-            <div
-              key={s.id}
-              className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer ${
-                assigned ? "opacity-40 line-through" : blocked ? "opacity-50" : "hover:bg-blue-50"
-              }`}
-              onClick={() => {
-                if (assigned) return;
-                if (blocked) { alert(`ל${s.fullName} אין הרשאת נהיגה מתאימה`); return; }
-                onSelect(s.id);
-                setOpen(false);
-              }}
-            >
-              <span>{s.fullName}</span>
-              {s.personalNumber && <span className="text-[10px] text-slate-400 font-mono">{s.personalNumber}</span>}
-              {s.companyName && <span className="text-[10px] text-slate-400">({s.companyName})</span>}
-              {s.licenseNames.length > 0 && <span className="text-[10px] text-green-600">🪪</span>}
-              {blocked && <span className="text-[10px] text-rose-500">⚠️</span>}
-            </div>
-          );
-        })}
+      <div className="max-h-56 overflow-y-auto">
+        {matching.length > 0 && (
+          <>
+            <div className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-1 rounded mb-0.5 sticky top-0">⭐ תפקיד תואם</div>
+            <div className="space-y-0.5 mb-2">{matching.map(renderSoldier)}</div>
+          </>
+        )}
+        {matchingCompanyRoleId && !showAll ? (
+          <button
+            type="button"
+            onClick={() => setShowAll(true)}
+            className="text-xs text-blue-600 hover:underline w-full text-center py-1"
+          >
+            הצג את כל החיילים ({rest.length})
+          </button>
+        ) : (
+          <>
+            {matching.length > 0 && rest.length > 0 && (
+              <div className="text-[10px] font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded mb-0.5 sticky top-0">שאר החיילים</div>
+            )}
+            <div className="space-y-0.5">{rest.map(renderSoldier)}</div>
+          </>
+        )}
       </div>
     </div>
   );
