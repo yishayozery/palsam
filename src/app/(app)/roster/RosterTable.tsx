@@ -15,6 +15,7 @@ type Soldier = {
   squadId: string | null; squadName: string | null;
   status: string; attached: boolean; signedCount: number;
   enlistedAt: string | null; dischargedAt: string | null;
+  attachReqStatus: string | null; attachFromDate: string | null; attachToDate: string | null;
 };
 type AttachmentReq = {
   id: string; soldierName: string; soldierPN: string | null; soldierCompany: string | null;
@@ -32,6 +33,7 @@ function fmtDate(iso: string | null) {
 function AddForm({ companies, squads, onDone }: { companies: Company[]; squads: SquadOption[]; onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [selectedCompany, setSelectedCompany] = useState("");
+  const [isAttached, setIsAttached] = useState(false);
   const companySquads = squads.filter((s) => s.companyId === selectedCompany);
   async function submit(fd: FormData) {
     setError(null);
@@ -85,12 +87,32 @@ function AddForm({ companies, squads, onDone }: { companies: Company[]; squads: 
         </div>
       </div>
       <label className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer">
-        <input type="checkbox" name="attached" className="mt-0.5" />
+        <input type="checkbox" name="attached" className="mt-0.5"
+          checked={isAttached} onChange={(e) => setIsAttached(e.target.checked)} />
         <div>
-          <span className="font-medium text-sm text-blue-800">📌 מסופח</span>
-          <span className="text-xs text-blue-700 mr-2">מידע בלבד — לא משפיע על הרשאות</span>
+          <span className="font-medium text-sm text-blue-800">📌 חייל מסופח</span>
+          <span className="text-xs text-blue-700 mr-2">סיפוח מיחידה אחרת — נדרש אישור שלישות</span>
         </div>
       </label>
+      {isAttached && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-3">
+          <div className="text-xs text-blue-800 font-medium">טווח תאריכי סיפוח</div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-600 mb-1">מתאריך *</label>
+              <input name="attachFromDate" type="date" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-600 mb-1">עד תאריך *</label>
+              <input name="attachToDate" type="date" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-600 mb-1">הערות / סיבת סיפוח</label>
+            <input name="attachNotes" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="למשל: סיפוח מגדוד X לתקופת אימון..." />
+          </div>
+        </div>
+      )}
       <label className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg cursor-pointer">
         <input type="checkbox" name="enlistNow" defaultChecked className="mt-0.5" />
         <div>
@@ -492,7 +514,18 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
                   <div className="font-medium">{s.fullName}</div>
                   <div className="flex items-center gap-1 flex-wrap">
                     {s.squadName && <span className="text-xs text-slate-400">🪖 {s.squadName}</span>}
-                    {s.attached && <Badge className="bg-blue-100 text-blue-700 text-[10px]">📌 מסופח</Badge>}
+                    {s.attached && (
+                      <Badge className={`text-[10px] ${
+                        s.attachReqStatus === "PENDING" ? "bg-amber-100 text-amber-700" :
+                        s.attachReqStatus === "APPROVED" ? "bg-blue-100 text-blue-700" :
+                        s.attachReqStatus === "REJECTED" ? "bg-rose-100 text-rose-700" :
+                        "bg-blue-100 text-blue-700"
+                      }`}>
+                        📌 {s.attachReqStatus === "PENDING" ? "ממתין לאישור" :
+                            s.attachReqStatus === "APPROVED" ? `מסופח ${s.attachFromDate && s.attachToDate ? fmtDate(s.attachFromDate) + "—" + fmtDate(s.attachToDate) : ""}` :
+                            s.attachReqStatus === "REJECTED" ? "סיפוח נדחה" : "מסופח"}
+                      </Badge>
+                    )}
                   </div>
                 </Td>
                 <Td className="font-mono text-xs">{s.personalNumber ?? <span className="text-slate-300">—</span>}</Td>

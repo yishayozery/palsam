@@ -27,6 +27,7 @@ export default async function RosterPage({
         company: { select: { name: true } },
         squad: { select: { id: true, name: true } },
         _count: { select: { signedSerialUnits: true, signedKitInstances: true } },
+        attachmentRequests: { orderBy: { requestedAt: "desc" }, take: 1, select: { status: true, fromDate: true, toDate: true } },
       },
     }),
     prisma.squad.findMany({
@@ -84,6 +85,9 @@ export default async function RosterPage({
           signedCount: s._count.signedSerialUnits + s._count.signedKitInstances,
           enlistedAt: s.enlistedAt?.toISOString() ?? null,
           dischargedAt: s.dischargedAt?.toISOString() ?? null,
+          attachReqStatus: s.attachmentRequests[0]?.status ?? null,
+          attachFromDate: s.attachmentRequests[0]?.fromDate?.toISOString().slice(0, 10) ?? null,
+          attachToDate: s.attachmentRequests[0]?.toDate?.toISOString().slice(0, 10) ?? null,
         }))}
         companies={companies}
         squads={squads}
