@@ -1,8 +1,7 @@
 import { requireUser } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
-import { PageHeader, Card, EmptyState } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
 import TabNav from "@/components/TabNav";
-import Link from "next/link";
 import ScheduleListClient from "./ScheduleListClient";
 import type { ScheduleEventType } from "@/generated/prisma";
 
@@ -28,9 +27,21 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       forces: {
         select: { userId: true, forceName: true, user: { select: { fullName: true } } },
       },
+      approvers: {
+        select: { userId: true, user: { select: { fullName: true } } },
+      },
     },
     orderBy: { startDate: "desc" },
   });
+
+  // non-admin users see only events they created, are a force of, or are an approver of
+  const myEvents = user.isAdmin
+    ? events
+    : events.filter((e) =>
+        e.createdById === user.id ||
+        e.forces.some((f) => f.userId === user.id) ||
+        e.approvers.some((a) => a.userId === user.id)
+      );
 
   const allUsers = user.isAdmin
     ? await prisma.appUser.findMany({
@@ -41,7 +52,6 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     : [];
 
   const fmt = (d: Date) => d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
-  const typeLabel = type === "PLUGATI" ? "לוז פלוגתי" : "מקדים/מאסף";
 
   return (
     <div>
@@ -52,7 +62,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       <TabNav tabs={SCHEDULE_TABS} active={activeTab} />
 
       <ScheduleListClient
-        events={events.map((e) => ({
+        events={myEvents.map((e) => ({
           id: e.id,
           name: e.name,
           type: e.type,
@@ -63,10 +73,13 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           forcesCount: e._count.forces,
           dayEntriesCount: e._count.dayEntries,
           forces: e.forces.map((f) => ({ forceName: f.forceName, userName: f.user.fullName })),
+          approvers: e.approvers.map((a) => a.user.fullName),
+          isCreator: e.createdById === user.id,
         }))}
         type={type}
-        typeLabel={typeLabel}
+        typeLabel={type === "PLUGATI" ? "לוז פלוגתי" : "מקדים/מאסף"}
         isAdmin={user.isAdmin}
+        allUsers={allUsers}
       />
     </div>
   );

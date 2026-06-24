@@ -15,6 +15,10 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
   const event = await prisma.scheduleEvent.findUnique({
     where: { id: eventId },
     include: {
+      battalion: { select: { name: true, logoData: true } },
+      approvers: {
+        include: { user: { select: { id: true, fullName: true } } },
+      },
       forces: {
         include: {
           user: { select: { id: true, fullName: true, title: true } },
@@ -32,6 +36,13 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
   });
 
   if (!event || event.battalionId !== bId || !event.active) notFound();
+
+  // access check: admin, creator, force user, or approver
+  const hasAccess = user.isAdmin ||
+    event.createdById === user.id ||
+    event.forces.some((f) => f.userId === user.id) ||
+    event.approvers.some((a) => a.user.id === user.id);
+  if (!hasAccess) notFound();
 
   const allUsers = await prisma.appUser.findMany({
     where: { battalionId: bId, active: true },
@@ -60,7 +71,6 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
   const typeLabel = event.type === "PLUGATI" ? "לוז פלוגתי" : "מקדים/מאסף";
   const backHref = `/vacation/schedule?type=${event.type}`;
 
-  // build dates array
   const dates: string[] = [];
   const start = new Date(event.startDate);
   const end = new Date(event.endDate);
@@ -86,6 +96,11 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
         currentUserId={user.id}
         isAdmin={user.isAdmin}
         dates={dates}
+        battalionName={event.battalion.name}
+        battalionLogo={event.battalion.logoData}
+        approverIds={event.approvers.map((a) => a.user.id)}
+        approverNames={event.approvers.map((a) => a.user.fullName)}
+        isApprover={event.approvers.some((a) => a.user.id === user.id) || event.createdById === user.id || user.isAdmin}
         forces={event.forces.map((f) => ({
           id: f.id,
           userId: f.userId,
@@ -101,6 +116,9 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
                 actualTasks: de.actualTasks,
                 plannedNotes: de.plannedNotes,
                 actualNotes: de.actualNotes,
+                approved: de.approved,
+                approvedAt: de.approvedAt?.toISOString() ?? null,
+                approvedById: de.approvedById,
                 plannedSoldiers: de.soldiers
                   .filter((s) => s.phase === "planned")
                   .map((s) => ({ id: s.soldier.id, name: s.soldier.fullName, company: s.soldier.company?.name })),

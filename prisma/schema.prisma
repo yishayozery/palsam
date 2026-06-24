@@ -218,6 +218,7 @@ model AppUser {
   vacationAssignees VacationAssignee[]
   vacationEntries   VacationEntry[]
   scheduleForces    ScheduleForce[]  @relation("ScheduleForceUser")
+  scheduleApprovals ScheduleApprover[] @relation("ScheduleApproverUser")
 }
 
 // ===================== תפקידים =====================
@@ -1500,9 +1501,21 @@ model ScheduleEvent {
 
   forces      ScheduleForce[]
   dayEntries  ScheduleDayEntry[]
+  approvers   ScheduleApprover[]
 
   @@index([battalionId])
   @@index([battalionId, startDate])
+}
+
+model ScheduleApprover {
+  id      String        @id @default(cuid())
+  eventId String
+  event   ScheduleEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId  String
+  user    AppUser       @relation("ScheduleApproverUser", fields: [userId], references: [id])
+
+  @@unique([eventId, userId])
+  @@index([eventId])
 }
 
 model ScheduleForce {
@@ -1533,6 +1546,9 @@ model ScheduleDayEntry {
   actualTasks   String?
   plannedNotes  String?
   actualNotes   String?
+  approved      Boolean       @default(false)
+  approvedAt    DateTime?
+  approvedById  String?
   updatedAt     DateTime      @updatedAt
 
   soldiers    ScheduleDaySoldier[]

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
-import { addForce, removeForce, saveDayEntry } from "../actions";
+import { addForce, removeForce, saveDayEntry, approveDayEntry } from "../actions";
 
 type SoldierRef = { id: string; name: string; company?: string | null };
 type DayEntryData = {
@@ -12,6 +12,9 @@ type DayEntryData = {
   actualTasks: string | null;
   plannedNotes: string | null;
   actualNotes: string | null;
+  approved: boolean;
+  approvedAt: string | null;
+  approvedById: string | null;
   plannedSoldiers: SoldierRef[];
   actualSoldiers: SoldierRef[];
 };
@@ -34,7 +37,8 @@ type SoldierOption = {
 export default function EventClient({
   eventId, eventName, eventType, startDate, endDate, notes,
   createdById, currentUserId, isAdmin, dates, forces: initialForces,
-  allUsers, soldiers, companies,
+  allUsers, soldiers, companies, battalionName, battalionLogo,
+  approverIds, approverNames, isApprover,
 }: {
   eventId: string;
   eventName: string;
@@ -50,6 +54,11 @@ export default function EventClient({
   allUsers: { id: string; fullName: string; title: string | null }[];
   soldiers: SoldierOption[];
   companies: { id: string; name: string }[];
+  battalionName: string;
+  battalionLogo: string | null;
+  approverIds: string[];
+  approverNames: string[];
+  isApprover: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -67,10 +76,7 @@ export default function EventClient({
     fd.set("eventId", eventId);
     startTransition(async () => {
       const res = await addForce(fd);
-      if (res.ok) {
-        setShowAddForce(false);
-        router.refresh();
-      }
+      if (res.ok) { setShowAddForce(false); router.refresh(); }
     });
   }
 
@@ -78,18 +84,89 @@ export default function EventClient({
     if (!confirm("להסיר את הכח מהאירוע?")) return;
     const fd = new FormData();
     fd.set("forceId", forceId);
-    startTransition(async () => {
-      await removeForce(fd);
-      router.refresh();
-    });
+    startTransition(async () => { await removeForce(fd); router.refresh(); });
+  }
+
+  async function handleApprove(entryId: string, approve: boolean) {
+    const fd = new FormData();
+    fd.set("entryId", entryId);
+    fd.set("approve", String(approve));
+    startTransition(async () => { await approveDayEntry(fd); router.refresh(); });
   }
 
   const editingForce = editingCell ? initialForces.find((f) => f.id === editingCell.forceId) : null;
   const editingEntry = editingForce && editingCell ? editingForce.dayEntries[editingCell.date] : null;
   const canEditForce = (force: Force) => isAdmin || createdById === currentUserId || force.userId === currentUserId;
 
+  const generateShareText = useCallback(() => {
+    const typeLabel = eventType === "PLUGATI" ? "לוז פלוגתי" : "מקדים/מאסף";
+    const fmtD = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
+    let text = `🏛️ *${battalionName}*\n`;
+    text += `📋 *${eventName}* — ${typeLabel}\n`;
+    text += `📅 ${fmtD(startDate)} — ${fmtD(endDate)}\n\n`;
+
+    for (const force of initialForces) {
+      text += `👥 *${force.forceName}* (${force.userName})\n`;
+      for (const d of dates) {
+        const entry = force.dayEntries[d];
+        if (!entry) continue;
+        const { day, date } = fmtDay(d);
+        const pCount = entry.plannedSoldiers?.length ?? 0;
+        const aCount = entry.actualSoldiers?.length ?? 0;
+        if (pCount === 0 && aCount === 0 && !entry.plannedTasks && !entry.actualTasks) continue;
+
+        text += `  ${day} ${date}:`;
+        if (pCount > 0) text += ` תכנון(${pCount})`;
+        if (aCount > 0) text += ` ביצוע(${aCount})`;
+        if (entry.approved) text += ` ✅`;
+        text += "\n";
+        if (entry.plannedTasks) text += `    📋 ${entry.plannedTasks.split("\n").join(", ")}\n`;
+        if (entry.actualTasks) text += `    ✅ ${entry.actualTasks.split("\n").join(", ")}\n`;
+        if (pCount > 0) text += `    תכנון: ${entry.plannedSoldiers.map((s) => s.name).join(", ")}\n`;
+        if (aCount > 0) text += `    ביצוע: ${entry.actualSoldiers.map((s) => s.name).join(", ")}\n`;
+      }
+      text += "\n";
+    }
+    return text.trim();
+  }, [initialForces, dates, eventName, eventType, startDate, endDate, battalionName]);
+
+  const [copied, setCopied] = useState(false);
+
   return (
     <div className="space-y-4">
+      {/* Approvers & Share bar */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {approverNames.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-purple-600 font-bold">מאשרים:</span>
+            {approverNames.map((name, i) => (
+              <span key={i} className="text-xs bg-purple-50 text-purple-700 border border-purple-200 rounded-full px-2 py-0.5">{name}</span>
+            ))}
+          </div>
+        )}
+        <div className="mr-auto flex gap-2">
+          <button
+            onClick={() => {
+              const text = generateShareText();
+              navigator.clipboard?.writeText(text);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }}
+            className="text-xs bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-1.5"
+          >
+            {copied ? "✓ הועתק" : "📋 העתק"}
+          </button>
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent(generateShareText())}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-lg px-3 py-1.5"
+          >
+            📲 שלח בוואטסאפ
+          </a>
+        </div>
+      </div>
+
       {/* Forces management */}
       {canManage && (
         <Card className="p-4">
@@ -178,23 +255,26 @@ export default function EventClient({
                       return (
                         <td
                           key={d}
-                          onClick={() => editable && setEditingCell({ forceId: force.id, date: d })}
+                          onClick={() => editable ? setEditingCell({ forceId: force.id, date: d }) : undefined}
                           className={`py-1.5 px-2 border-l border-slate-200 text-center transition-colors ${
                             editable ? "cursor-pointer hover:bg-blue-50" : ""
                           } ${isToday ? "bg-blue-50/50" : ""} ${
-                            isEmpty ? "" : actualCount > 0 ? "bg-emerald-50" : "bg-amber-50"
+                            isEmpty ? "" : entry?.approved ? "bg-emerald-50 ring-1 ring-inset ring-emerald-300" : actualCount > 0 ? "bg-emerald-50" : "bg-amber-50"
                           }`}
                         >
                           {!isEmpty && (
                             <div className="space-y-0.5">
-                              {plannedCount > 0 && (
-                                <div className="text-[10px] text-amber-700">📋 {plannedCount}</div>
-                              )}
-                              {actualCount > 0 && (
-                                <div className="text-[10px] text-emerald-700">✅ {actualCount}</div>
-                              )}
-                              {hasTasks && (
-                                <div className="text-[10px] text-slate-500">📝</div>
+                              {plannedCount > 0 && <div className="text-[10px] text-amber-700">📋 {plannedCount}</div>}
+                              {actualCount > 0 && <div className="text-[10px] text-emerald-700">✅ {actualCount}</div>}
+                              {hasTasks && <div className="text-[10px] text-slate-500">📝</div>}
+                              {entry?.approved && <div className="text-[10px] text-emerald-600 font-bold">✔ מאושר</div>}
+                              {isApprover && entry && !entry.approved && (plannedCount > 0 || actualCount > 0) && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleApprove(entry.id, true); }}
+                                  className="text-[9px] bg-purple-100 text-purple-700 rounded px-1 hover:bg-purple-200"
+                                >
+                                  אשר
+                                </button>
                               )}
                             </div>
                           )}
@@ -211,10 +291,11 @@ export default function EventClient({
 
       {/* Legend */}
       {initialForces.length > 0 && (
-        <div className="flex gap-4 text-[10px] text-slate-500 px-1">
+        <div className="flex gap-4 text-[10px] text-slate-500 px-1 flex-wrap">
           <span>📋 = תכנון</span>
           <span>✅ = ביצוע</span>
           <span>📝 = משימות</span>
+          <span className="text-emerald-600">✔ מאושר = אושר ע&quot;י גורם מאשר</span>
           <span className="text-slate-400">לחץ על תא לעריכה</span>
         </div>
       )}
@@ -229,6 +310,8 @@ export default function EventClient({
           entry={editingEntry ?? null}
           soldiers={soldiers}
           companies={companies}
+          isApprover={isApprover}
+          onApprove={(entryId, approve) => handleApprove(entryId, approve)}
           onClose={() => setEditingCell(null)}
         />
       )}
@@ -238,7 +321,7 @@ export default function EventClient({
 
 // ========== Day Entry Editor ==========
 function DayEntryEditor({
-  eventId, forceId, forceName, date, entry, soldiers, companies, onClose,
+  eventId, forceId, forceName, date, entry, soldiers, companies, isApprover, onApprove, onClose,
 }: {
   eventId: string;
   forceId: string;
@@ -247,6 +330,8 @@ function DayEntryEditor({
   entry: DayEntryData | null;
   soldiers: SoldierOption[];
   companies: { id: string; name: string }[];
+  isApprover: boolean;
+  onApprove: (entryId: string, approve: boolean) => void;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -290,10 +375,7 @@ function DayEntryEditor({
 
     startTransition(async () => {
       const res = await saveDayEntry(fd);
-      if (res.ok) {
-        onClose();
-        router.refresh();
-      }
+      if (res.ok) { onClose(); router.refresh(); }
     });
   }
 
@@ -306,7 +388,12 @@ function DayEntryEditor({
             <h2 className="font-bold">{forceName}</h2>
             <div className="text-sm text-slate-300">{fmtDate}</div>
           </div>
-          <button onClick={onClose} className="text-slate-300 hover:text-white text-xl">✕</button>
+          <div className="flex items-center gap-2">
+            {entry?.approved && (
+              <span className="text-xs bg-emerald-600 text-white rounded-full px-2 py-0.5">✔ מאושר</span>
+            )}
+            <button onClick={onClose} className="text-slate-300 hover:text-white text-xl">✕</button>
+          </div>
         </div>
 
         {/* Plan/Actual tabs */}
@@ -353,23 +440,15 @@ function DayEntryEditor({
 
           {/* Soldiers */}
           <div>
-            <label className="block text-xs font-bold text-slate-600 mb-2">
-              חיילים ({currentIds.length} נבחרו)
-            </label>
+            <label className="block text-xs font-bold text-slate-600 mb-2">חיילים ({currentIds.length} נבחרו)</label>
             <div className="flex gap-2 mb-2 flex-wrap">
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="border rounded-lg px-3 py-1.5 text-sm flex-1 min-w-[150px]"
-                placeholder="🔍 חיפוש חייל..."
-              />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} className="border rounded-lg px-3 py-1.5 text-sm flex-1 min-w-[150px]" placeholder="🔍 חיפוש חייל..." />
               <select value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)} className="border rounded-lg px-3 py-1.5 text-sm">
                 <option value="">כל הפלוגות</option>
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
 
-            {/* Selected soldiers */}
             {currentIds.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-2">
                 {currentIds.map((id) => {
@@ -385,7 +464,6 @@ function DayEntryEditor({
               </div>
             )}
 
-            {/* Soldier list */}
             <div className="border rounded-lg max-h-48 overflow-y-auto divide-y divide-slate-100">
               {filteredSoldiers.map((s) => {
                 const checked = currentIds.includes(s.id);
@@ -398,21 +476,30 @@ function DayEntryEditor({
                   </label>
                 );
               })}
-              {filteredSoldiers.length === 0 && (
-                <div className="text-center text-xs text-slate-400 py-3">לא נמצאו חיילים</div>
-              )}
+              {filteredSoldiers.length === 0 && <div className="text-center text-xs text-slate-400 py-3">לא נמצאו חיילים</div>}
             </div>
           </div>
         </div>
 
         {/* Footer */}
         <div className="border-t border-slate-200 p-4 flex items-center justify-between bg-slate-50">
-          <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-800">ביטול</button>
-          <button
-            onClick={handleSave}
-            disabled={pending}
-            className="bg-blue-700 text-white rounded-lg px-6 py-2 text-sm font-bold hover:bg-blue-800 disabled:opacity-50"
-          >
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-800">ביטול</button>
+            {isApprover && entry && (
+              <button
+                onClick={() => { onApprove(entry.id, !entry.approved); onClose(); }}
+                disabled={pending}
+                className={`text-xs rounded-lg px-3 py-1.5 font-bold ${
+                  entry.approved
+                    ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                    : "bg-purple-100 text-purple-700 hover:bg-purple-200"
+                }`}
+              >
+                {entry.approved ? "↩ בטל אישור" : "✔ אשר תוכנית"}
+              </button>
+            )}
+          </div>
+          <button onClick={handleSave} disabled={pending} className="bg-blue-700 text-white rounded-lg px-6 py-2 text-sm font-bold hover:bg-blue-800 disabled:opacity-50">
             {pending ? "שומר..." : "💾 שמירה"}
           </button>
         </div>
