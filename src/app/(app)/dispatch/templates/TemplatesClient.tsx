@@ -383,8 +383,8 @@ export default function TemplatesClient({
           addLabel="תפקיד"
           fields={[
             { name: "name", label: 'שם (למשל: נהג, חובש, מט"ב)' },
-            { name: "icon", label: "אייקון (emoji)", defaultValue: "🎖️" },
-            { name: "sortOrder", label: "סדר", type: "number" as const, defaultValue: "0" },
+            { name: "icon", label: "אייקון (emoji)", default: "🎖️" },
+            { name: "sortOrder", label: "סדר", type: "number" as const, default: "0" },
             { name: "isDriver", label: "תפקיד נהג?", type: "checkbox" as const },
           ]}
           saveAction={saveDispatchRole}
