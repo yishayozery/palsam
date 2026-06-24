@@ -533,21 +533,14 @@ function SoldierPicker({
   companies: Company[];
 }) {
   const [open, setOpen] = useState(false);
-  const [showAll, setShowAll] = useState(false);
-
-  const matching = matchingCompanyRoleId
-    ? soldiers.filter((s) => s.companyRoleId === matchingCompanyRoleId)
-    : [];
-  const rest = matchingCompanyRoleId
-    ? soldiers.filter((s) => s.companyRoleId !== matchingCompanyRoleId)
-    : soldiers;
+  const [onlyMatching, setOnlyMatching] = useState(false);
 
   if (!open) {
     return (
       <div className="flex gap-1">
         <button
           type="button"
-          onClick={() => { setOpen(true); setShowAll(!matchingCompanyRoleId); }}
+          onClick={() => { setOpen(true); setOnlyMatching(false); }}
           className="text-xs bg-white border border-slate-300 rounded px-2 py-1 hover:bg-slate-50"
         >
           {hasSoldier ? "🔄" : "👤 שבץ"}
@@ -559,34 +552,21 @@ function SoldierPicker({
     );
   }
 
-  const renderSoldier = (s: Soldier) => {
-    const assigned = assignedIds.has(s.id);
-    const assignedTo = assignedMap.get(s.id);
-    const hasLicense = canDrive(s);
-    const blocked = isDriverRole && !hasLicense;
-    return (
-      <div
-        key={s.id}
-        className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer ${
-          assigned ? "opacity-40" : blocked ? "opacity-50" : "hover:bg-blue-50"
-        }`}
-        onClick={() => {
-          if (assigned) return;
-          if (blocked) { alert(`ל${s.fullName} אין הרשאת נהיגה מתאימה`); return; }
-          onSelect(s.id);
-          setOpen(false);
-        }}
-      >
-        <span className={assigned ? "line-through" : ""}>{s.fullName}</span>
-        {s.personalNumber && <span className="text-[10px] text-slate-400 font-mono">{s.personalNumber}</span>}
-        {s.companyName && <span className="text-[10px] text-slate-400">({s.companyName})</span>}
-        {s.roleName && <span className="text-[10px] text-purple-600">{s.roleName}</span>}
-        {s.licenseNames.length > 0 && <span className="text-[10px] text-green-600">🪪</span>}
-        {blocked && <span className="text-[10px] text-rose-500">⚠️</span>}
-        {assigned && assignedTo && <span className="text-[10px] text-blue-500 mr-auto">← {assignedTo}</span>}
-      </div>
-    );
-  };
+  const filtered = onlyMatching && matchingCompanyRoleId
+    ? soldiers.filter((s) => s.companyRoleId === matchingCompanyRoleId)
+    : soldiers;
+
+  const sorted = matchingCompanyRoleId
+    ? [...filtered].sort((a, b) => {
+        const aMatch = a.companyRoleId === matchingCompanyRoleId ? 0 : 1;
+        const bMatch = b.companyRoleId === matchingCompanyRoleId ? 0 : 1;
+        return aMatch - bMatch;
+      })
+    : filtered;
+
+  const matchCount = matchingCompanyRoleId
+    ? soldiers.filter((s) => s.companyRoleId === matchingCompanyRoleId).length
+    : 0;
 
   return (
     <div className="absolute left-0 top-full z-30 bg-white shadow-xl rounded-xl border border-slate-200 p-3 w-80 mt-1">
@@ -603,32 +583,55 @@ function SoldierPicker({
           autoFocus
         />
         <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} className="border rounded px-1 py-1 text-xs">
-          <option value="">הכל</option>
+          <option value="">כל הפלוגות</option>
           {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
-      <div className="max-h-56 overflow-y-auto">
-        {matching.length > 0 && (
-          <>
-            <div className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-1 rounded mb-0.5 sticky top-0">⭐ תפקיד תואם</div>
-            <div className="space-y-0.5 mb-2">{matching.map(renderSoldier)}</div>
-          </>
-        )}
-        {matchingCompanyRoleId && !showAll ? (
-          <button
-            type="button"
-            onClick={() => setShowAll(true)}
-            className="text-xs text-blue-600 hover:underline w-full text-center py-1"
-          >
-            הצג את כל החיילים ({rest.length})
-          </button>
-        ) : (
-          <>
-            {matching.length > 0 && rest.length > 0 && (
-              <div className="text-[10px] font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded mb-0.5 sticky top-0">שאר החיילים</div>
-            )}
-            <div className="space-y-0.5">{rest.map(renderSoldier)}</div>
-          </>
+      {matchingCompanyRoleId && (
+        <label className="flex items-center gap-1.5 mb-2 text-xs cursor-pointer">
+          <input
+            type="checkbox"
+            checked={onlyMatching}
+            onChange={(e) => setOnlyMatching(e.target.checked)}
+            className="w-3.5 h-3.5 accent-purple-600"
+          />
+          <span className="text-purple-700 font-medium">רק תפקיד תואם</span>
+          <span className="text-[10px] text-slate-400">({matchCount})</span>
+        </label>
+      )}
+      <div className="max-h-56 overflow-y-auto space-y-0.5">
+        {sorted.map((s) => {
+          const assigned = assignedIds.has(s.id);
+          const assignedTo = assignedMap.get(s.id);
+          const hasLicense = canDrive(s);
+          const blocked = isDriverRole && !hasLicense;
+          const isMatch = matchingCompanyRoleId && s.companyRoleId === matchingCompanyRoleId;
+          return (
+            <div
+              key={s.id}
+              className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer ${
+                assigned ? "opacity-40" : blocked ? "opacity-50" : "hover:bg-blue-50"
+              } ${isMatch ? "bg-purple-50" : ""}`}
+              onClick={() => {
+                if (assigned) return;
+                if (blocked) { alert(`ל${s.fullName} אין הרשאת נהיגה מתאימה`); return; }
+                onSelect(s.id);
+                setOpen(false);
+              }}
+            >
+              {isMatch && <span className="text-[10px]">⭐</span>}
+              <span className={assigned ? "line-through" : ""}>{s.fullName}</span>
+              {s.personalNumber && <span className="text-[10px] text-slate-400 font-mono">{s.personalNumber}</span>}
+              {s.companyName && <span className="text-[10px] text-slate-400">({s.companyName})</span>}
+              {s.roleName && <span className="text-[10px] text-purple-600">{s.roleName}</span>}
+              {s.licenseNames.length > 0 && <span className="text-[10px] text-green-600">🪪</span>}
+              {blocked && <span className="text-[10px] text-rose-500">⚠️</span>}
+              {assigned && assignedTo && <span className="text-[10px] text-blue-500 mr-auto">← {assignedTo}</span>}
+            </div>
+          );
+        })}
+        {sorted.length === 0 && (
+          <div className="text-center text-xs text-slate-400 py-3">לא נמצאו חיילים</div>
         )}
       </div>
     </div>
