@@ -369,10 +369,6 @@ export default function DispatchClient({
     <>
       {/* כפתור יצירה + טאבים */}
       <div className="mb-3 flex items-center gap-3 flex-wrap">
-        <a href="/dispatch/templates"
-          className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
-          📋 שבצ&quot;ק קבוע
-        </a>
         <button onClick={openNew}
           className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-4 py-2 text-sm font-medium">
           + שבצ&quot;ק חדש
@@ -403,6 +399,10 @@ export default function DispatchClient({
             ✓ הושלמו ({counts.completed})
           </button>
         </div>
+        <a href="/dispatch/templates"
+          className="mr-auto bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
+          📋 שבצ&quot;ק קבוע
+        </a>
       </div>
 
       {/* 🔍 פילטרים */}
