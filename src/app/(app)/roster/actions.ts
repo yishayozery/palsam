@@ -17,8 +17,6 @@ export async function createSoldier(formData: FormData) {
   const squadId = String(formData.get("squadId") || "") || null;
   const platoon = String(formData.get("platoon") || "").trim() || null;
   const enlistNow = formData.get("enlistNow") === "on";
-  const attached = formData.get("attached") === "on";
-
   if (!firstName || !lastName) throw new Error("שם פרטי + שם משפחה חובה");
   if (!companyId) throw new Error("חובה לשייך לפלוגה");
 
@@ -29,15 +27,8 @@ export async function createSoldier(formData: FormData) {
     if (existing) throw new Error(`חייל עם מ.א. ${personalNumber} כבר קיים (${existing.fullName})`);
   }
 
-  const attachFromDate = String(formData.get("attachFromDate") || "");
-  const attachToDate = String(formData.get("attachToDate") || "");
-  const attachNotes = String(formData.get("attachNotes") || "").trim() || null;
-
-  if (attached && (!attachFromDate || !attachToDate)) throw new Error("חייל מסופח — חובה לציין טווח תאריכים");
-  if (attached && new Date(attachToDate) < new Date(attachFromDate)) throw new Error("תאריך סיום חייב להיות אחרי תאריך התחלה");
-
   const fullName = `${firstName} ${lastName}`;
-  const soldier = await prisma.soldier.create({
+  await prisma.soldier.create({
     data: {
       battalionId: bId, fullName, firstName, lastName,
       personalNumber: personalNumber || null,
@@ -45,24 +36,10 @@ export async function createSoldier(formData: FormData) {
       status: enlistNow ? "ENLISTED" : "REGISTERED",
       enlistedAt: enlistNow ? new Date() : null,
       enlistedById: enlistNow ? user.id : null,
-      attached,
     },
   });
 
-  if (attached) {
-    await prisma.attachmentRequest.create({
-      data: {
-        battalionId: bId,
-        soldierId: soldier.id,
-        fromDate: new Date(attachFromDate),
-        toDate: new Date(attachToDate),
-        requestedById: user.id,
-        notes: attachNotes,
-      },
-    });
-  }
-
-  await audit(user.id, "CREATE_SOLDIER", "Soldier", personalNumber || fullName, { companyId, status: enlistNow ? "ENLISTED" : "REGISTERED", attached });
+  await audit(user.id, "CREATE_SOLDIER", "Soldier", personalNumber || fullName, { companyId, status: enlistNow ? "ENLISTED" : "REGISTERED" });
   revalidatePath("/roster");
   revalidatePath("/soldiers");
 }

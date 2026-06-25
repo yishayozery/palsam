@@ -220,8 +220,8 @@ model AppUser {
   vacationEntries   VacationEntry[]
   scheduleForces    ScheduleForce[]  @relation("ScheduleForceUser")
   scheduleApprovals ScheduleApprover[] @relation("ScheduleApproverUser")
-  attachmentRequested AttachmentRequest[] @relation("AttachmentRequestedBy")
-  attachmentResponded AttachmentRequest[] @relation("AttachmentRespondedBy")
+  attachmentRequested   AttachmentRequest[]    @relation("AttachmentRequestedBy")
+  attachmentStatusLogs  AttachmentStatusLog[]  @relation("AttachmentStatusChanged")
 }
 
 // ===================== תפקידים =====================
@@ -369,6 +369,7 @@ model Holder {
   ownedDonations   ItemType[]         @relation("ItemOwnerHolder")
   signableKits     SignableKit[]      @relation("SignableKitHolder")
   employmentAllocations EmploymentAllocation[] @relation("CompanyEmploymentAllocations")
+  attachmentRequests    AttachmentRequest[]    @relation("AttachmentTargetCompany")
 
   @@index([battalionId])
   @@index([kind])
@@ -465,30 +466,58 @@ enum SoldierStatus {
 }
 
 enum AttachmentRequestStatus {
-  PENDING    // ממתין לאישור
-  APPROVED   // אושר
-  REJECTED   // נדחה
+  REQUESTED  // בקשה לסיפוח — מפ"מ הגיש
+  SUBMITTED  // הוגשה בקשה — שלישות מטפלת
+  REMINDED   // הוגשה תזכורת
+  APPROVED   // אושר — חייל הוקם
+  REJECTED   // לא אושר
 }
 
 model AttachmentRequest {
   id            String                  @id @default(cuid())
   battalionId   String
   battalion     Battalion               @relation(fields: [battalionId], references: [id], onDelete: Cascade)
-  soldierId     String
-  soldier       Soldier                 @relation(fields: [soldierId], references: [id], onDelete: Cascade)
+
+  // פרטי חייל (החייל נוצר רק באישור)
+  soldierName       String
+  personalNumber    String?
+  phone             String?
+  sourceUnit        String?             // יחידת מקור
+  targetCompanyId   String?
+  targetCompany     Holder?             @relation("AttachmentTargetCompany", fields: [targetCompanyId], references: [id])
+
   fromDate      DateTime                @db.Date
   toDate        DateTime                @db.Date
-  status        AttachmentRequestStatus @default(PENDING)
+  notes         String?
+
+  status        AttachmentRequestStatus  @default(REQUESTED)
+
+  // חייל שנוצר (רק אחרי אישור)
+  soldierId     String?
+  soldier       Soldier?                @relation(fields: [soldierId], references: [id], onDelete: SetNull)
+
   requestedById String
   requestedBy   AppUser                 @relation("AttachmentRequestedBy", fields: [requestedById], references: [id])
   requestedAt   DateTime                @default(now())
-  respondedById String?
-  respondedBy   AppUser?                @relation("AttachmentRespondedBy", fields: [respondedById], references: [id])
-  respondedAt   DateTime?
-  notes         String?
+
+  // לוג שינויי סטטוס
+  statusLog     AttachmentStatusLog[]
+
   @@index([battalionId])
   @@index([soldierId])
   @@index([status])
+}
+
+model AttachmentStatusLog {
+  id          String                  @id @default(cuid())
+  requestId   String
+  request     AttachmentRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  status      AttachmentRequestStatus
+  note        String?
+  changedById String
+  changedBy   AppUser                 @relation("AttachmentStatusChanged", fields: [changedById], references: [id])
+  changedAt   DateTime                @default(now())
+  @@index([requestId])
 }
 
 // ===================== חיילים =====================

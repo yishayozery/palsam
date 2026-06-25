@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { Card, Table, Th, Td, Badge } from "@/components/ui";
 import { createSoldier, updateSoldier, enlistSoldier, dischargeSoldier, deactivateSoldier, deleteSoldier } from "./actions";
 import { importSoldiersRoster } from "./import-actions";
-import { createAttachmentRequest, approveAttachmentRequest, rejectAttachmentRequest } from "./attachment-actions";
+import { updateAttachmentRequestStatus } from "./attachment-actions";
 
 type Company = { id: string; name: string };
 type SquadOption = { id: string; name: string; companyId: string };
@@ -17,12 +17,15 @@ type Soldier = {
   enlistedAt: string | null; dischargedAt: string | null;
   attachReqStatus: string | null; attachFromDate: string | null; attachToDate: string | null;
 };
+type StatusLogEntry = {
+  status: string; note: string | null; changedBy: string; changedAt: string;
+};
 type AttachmentReq = {
-  id: string; soldierName: string; soldierPN: string | null; soldierCompany: string | null;
-  fromDate: string; toDate: string; status: string;
+  id: string; soldierName: string; personalNumber: string | null;
+  sourceUnit: string | null; targetCompany: string | null;
+  fromDate: string; toDate: string; fullEmployment: boolean; status: string;
   requestedBy: string; requestedAt: string;
-  respondedBy: string | null; respondedAt: string | null;
-  notes: string | null;
+  notes: string | null; statusLog: StatusLogEntry[];
 };
 
 function fmtDate(iso: string | null) {
@@ -33,7 +36,6 @@ function fmtDate(iso: string | null) {
 function AddForm({ companies, squads, onDone }: { companies: Company[]; squads: SquadOption[]; onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [selectedCompany, setSelectedCompany] = useState("");
-  const [isAttached, setIsAttached] = useState(false);
   const companySquads = squads.filter((s) => s.companyId === selectedCompany);
   async function submit(fd: FormData) {
     setError(null);
@@ -86,33 +88,6 @@ function AddForm({ companies, squads, onDone }: { companies: Company[]; squads: 
           <input name="phone" placeholder="05X-XXXXXXX" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
       </div>
-      <label className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer">
-        <input type="checkbox" name="attached" className="mt-0.5"
-          checked={isAttached} onChange={(e) => setIsAttached(e.target.checked)} />
-        <div>
-          <span className="font-medium text-sm text-blue-800">📌 חייל מסופח</span>
-          <span className="text-xs text-blue-700 mr-2">סיפוח מיחידה אחרת — נדרש אישור שלישות</span>
-        </div>
-      </label>
-      {isAttached && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-3">
-          <div className="text-xs text-blue-800 font-medium">טווח תאריכי סיפוח</div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-600 mb-1">מתאריך *</label>
-              <input name="attachFromDate" type="date" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-600 mb-1">עד תאריך *</label>
-              <input name="attachToDate" type="date" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-600 mb-1">הערות / סיבת סיפוח</label>
-            <input name="attachNotes" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="למשל: סיפוח מגדוד X לתקופת אימון..." />
-          </div>
-        </div>
-      )}
       <label className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg cursor-pointer">
         <input type="checkbox" name="enlistNow" defaultChecked className="mt-0.5" />
         <div>
@@ -210,155 +185,150 @@ function EditForm({ soldier, companies, squads, onDone }: { soldier: Soldier; co
   );
 }
 
-function AttachmentRequestForm({ soldiers, onDone }: { soldiers: Soldier[]; onDone: () => void }) {
-  const [error, setError] = useState<string | null>(null);
-  const [q, setQ] = useState("");
-  const [selectedSoldier, setSelectedSoldier] = useState<string>("");
-  const activeSoldiers = soldiers.filter((s) => s.status !== "DISCHARGED" && s.status !== "INACTIVE");
-  const filtered = q.trim()
-    ? activeSoldiers.filter((s) => s.fullName.includes(q) || (s.personalNumber ?? "").includes(q)).slice(0, 10)
-    : [];
+const STATUS_LABELS: Record<string, string> = {
+  REQUESTED: "בקשה לסיפוח",
+  SUBMITTED: "הוגשה בקשה",
+  REMINDED: "הוגשה תזכורת",
+  APPROVED: "אושר",
+  REJECTED: "לא אושר",
+};
+const STATUS_COLORS: Record<string, string> = {
+  REQUESTED: "bg-amber-100 text-amber-700",
+  SUBMITTED: "bg-blue-100 text-blue-700",
+  REMINDED: "bg-orange-100 text-orange-700",
+  APPROVED: "bg-emerald-100 text-emerald-700",
+  REJECTED: "bg-rose-100 text-rose-700",
+};
 
-  async function submit(fd: FormData) {
-    setError(null);
-    try { await createAttachmentRequest(fd); onDone(); }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-  }
-
-  const selected = soldiers.find((s) => s.id === selectedSoldier);
-
+function StatusTimeline({ log }: { log: StatusLogEntry[] }) {
+  if (log.length === 0) return null;
   return (
-    <form action={submit} className="p-5 space-y-3">
-      {error && <div className="bg-rose-50 border border-rose-300 rounded-lg p-2.5 text-sm text-rose-800">{error}</div>}
-      <input type="hidden" name="soldierId" value={selectedSoldier} />
-      <div>
-        <label className="block text-xs text-slate-600 mb-1">בחר חייל</label>
-        {selected ? (
-          <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <span className="font-medium text-sm">{selected.fullName}</span>
-            {selected.personalNumber && <span className="text-xs text-slate-500 font-mono">({selected.personalNumber})</span>}
-            {selected.companyName && <span className="text-xs text-slate-400">{selected.companyName}</span>}
-            <button type="button" onClick={() => { setSelectedSoldier(""); setQ(""); }}
-              className="mr-auto text-xs text-rose-500 hover:text-rose-700">✕ שנה</button>
-          </div>
-        ) : (
+    <div className="mt-2 border-r-2 border-slate-200 pr-3 space-y-1.5">
+      {log.map((entry, i) => (
+        <div key={i} className="flex items-start gap-2 text-[11px]">
+          <div className="w-2 h-2 rounded-full mt-1 shrink-0" style={{
+            backgroundColor: entry.status === "APPROVED" ? "#059669" : entry.status === "REJECTED" ? "#e11d48" : "#f59e0b",
+          }} />
           <div>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="חפש לפי שם או מ.א..."
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            {filtered.length > 0 && (
-              <div className="mt-1 border border-slate-200 rounded-lg max-h-40 overflow-y-auto">
-                {filtered.map((s) => (
-                  <button key={s.id} type="button"
-                    onClick={() => { setSelectedSoldier(s.id); setQ(""); }}
-                    className="w-full text-right px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 border-b border-slate-100 last:border-0">
-                    <span className="font-medium">{s.fullName}</span>
-                    {s.personalNumber && <span className="text-xs text-slate-400 font-mono">{s.personalNumber}</span>}
-                    {s.companyName && <span className="text-xs text-slate-400">{s.companyName}</span>}
-                  </button>
-                ))}
-              </div>
-            )}
+            <span className="font-medium">{STATUS_LABELS[entry.status] ?? entry.status}</span>
+            <span className="text-slate-400 mx-1">·</span>
+            <span className="text-slate-400">{new Date(entry.changedAt).toLocaleDateString("he-IL")} {new Date(entry.changedAt).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}</span>
+            <span className="text-slate-400 mx-1">·</span>
+            <span className="text-slate-500">{entry.changedBy}</span>
+            {entry.note && <span className="text-slate-400 mr-1">— {entry.note}</span>}
           </div>
-        )}
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs text-slate-600 mb-1">מתאריך *</label>
-          <input name="fromDate" type="date" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
-        <div>
-          <label className="block text-xs text-slate-600 mb-1">עד תאריך *</label>
-          <input name="toDate" type="date" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </div>
-      </div>
-      <div>
-        <label className="block text-xs text-slate-600 mb-1">הערות</label>
-        <input name="notes" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="סיבת הסיפוח..." />
-      </div>
-      <div className="flex justify-end gap-2 pt-2">
-        <button type="button" onClick={onDone} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
-        <button disabled={!selectedSoldier} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-5 py-2 text-sm font-medium disabled:opacity-50">שלח בקשת סיפוח</button>
-      </div>
-    </form>
+      ))}
+    </div>
   );
 }
 
 function AttachmentRequestsPanel({ requests }: { requests: AttachmentReq[] }) {
   const [busy, setBusy] = useState<string | null>(null);
-  const pending = requests.filter((r) => r.status === "PENDING");
-  const handled = requests.filter((r) => r.status !== "PENDING");
+  const [noteText, setNoteText] = useState<Record<string, string>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  async function handleApprove(id: string) {
+  const active = requests.filter((r) => r.status !== "APPROVED" && r.status !== "REJECTED");
+  const done = requests.filter((r) => r.status === "APPROVED" || r.status === "REJECTED");
+
+  async function handleStatusUpdate(id: string, status: string) {
+    if (status === "REJECTED" && !confirm("לדחות את בקשת הסיפוח?")) return;
+    if (status === "APPROVED" && !confirm("לאשר סיפוח? יוקם חייל חדש עם דגל מסופח.")) return;
     setBusy(id);
     const fd = new FormData();
     fd.set("id", id);
-    await approveAttachmentRequest(fd);
+    fd.set("status", status);
+    if (noteText[id]) fd.set("note", noteText[id]);
+    try { await updateAttachmentRequestStatus(fd); } catch {}
     setBusy(null);
   }
 
-  async function handleReject(id: string) {
-    if (!confirm("לדחות את בקשת הסיפוח?")) return;
-    setBusy(id);
-    const fd = new FormData();
-    fd.set("id", id);
-    await rejectAttachmentRequest(fd);
-    setBusy(null);
-  }
-
-  if (requests.length === 0) return null;
+  const nextStatus: Record<string, string[]> = {
+    REQUESTED: ["SUBMITTED", "APPROVED", "REJECTED"],
+    SUBMITTED: ["REMINDED", "APPROVED", "REJECTED"],
+    REMINDED: ["APPROVED", "REJECTED"],
+  };
 
   return (
     <Card className="p-4 mb-4">
       <h3 className="font-bold text-sm text-slate-700 mb-3 flex items-center gap-2">
         📌 בקשות סיפוח
-        {pending.length > 0 && (
-          <Badge className="bg-amber-100 text-amber-700">{pending.length} ממתינות</Badge>
-        )}
+        {active.length > 0 && <Badge className="bg-amber-100 text-amber-700">{active.length} פתוחות</Badge>}
       </h3>
 
-      {pending.length > 0 && (
+      {active.length === 0 && done.length === 0 && (
+        <p className="text-xs text-slate-400">אין בקשות סיפוח. בקשות מוגשות ממסך חיילי הפלוגה.</p>
+      )}
+
+      {active.length > 0 && (
         <div className="space-y-2 mb-3">
-          {pending.map((r) => (
-            <div key={r.id} className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <div className="flex-1">
-                <div className="font-medium text-sm">{r.soldierName}</div>
-                <div className="text-xs text-slate-500 flex gap-3 mt-0.5">
-                  {r.soldierPN && <span className="font-mono">{r.soldierPN}</span>}
-                  {r.soldierCompany && <span>{r.soldierCompany}</span>}
-                  <span>📅 {new Date(r.fromDate).toLocaleDateString("he-IL")} — {new Date(r.toDate).toLocaleDateString("he-IL")}</span>
+          {active.map((r) => (
+            <div key={r.id} className="border border-slate-200 rounded-lg p-3">
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-sm">{r.soldierName}</span>
+                    {r.personalNumber && <span className="text-xs text-slate-400 font-mono">{r.personalNumber}</span>}
+                    <Badge className={STATUS_COLORS[r.status] ?? "bg-slate-100"}>{STATUS_LABELS[r.status] ?? r.status}</Badge>
+                  </div>
+                  <div className="text-xs text-slate-500 flex gap-3 mt-1 flex-wrap">
+                    {r.sourceUnit && <span>מ: {r.sourceUnit}</span>}
+                    {r.targetCompany && <span>אל: {r.targetCompany}</span>}
+                    <span>{r.fullEmployment ? "כל התעסוקה" : `${new Date(r.fromDate).toLocaleDateString("he-IL")} — ${new Date(r.toDate).toLocaleDateString("he-IL")}`}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    ביקש: {r.requestedBy} · {new Date(r.requestedAt).toLocaleDateString("he-IL")}
+                    {r.notes && <span> · {r.notes}</span>}
+                  </div>
                 </div>
-                <div className="text-[10px] text-slate-400 mt-0.5">
-                  ביקש: {r.requestedBy} · {new Date(r.requestedAt).toLocaleDateString("he-IL")}
-                  {r.notes && <span> · {r.notes}</span>}
+                <div className="flex flex-col gap-1 shrink-0">
+                  {(nextStatus[r.status] ?? []).map((ns) => (
+                    <button key={ns} onClick={() => handleStatusUpdate(r.id, ns)} disabled={busy === r.id}
+                      className={`text-xs rounded-md px-3 py-1 disabled:opacity-50 ${
+                        ns === "APPROVED" ? "bg-emerald-600 text-white hover:bg-emerald-700" :
+                        ns === "REJECTED" ? "bg-rose-100 text-rose-700 hover:bg-rose-200" :
+                        "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      }`}>
+                      {STATUS_LABELS[ns]}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="flex gap-1.5 shrink-0">
-                <button onClick={() => handleApprove(r.id)} disabled={busy === r.id}
-                  className="text-xs bg-emerald-600 text-white rounded-md px-3 py-1.5 hover:bg-emerald-700 disabled:opacity-50">
-                  ✓ אשר
-                </button>
-                <button onClick={() => handleReject(r.id)} disabled={busy === r.id}
-                  className="text-xs bg-rose-100 text-rose-700 rounded-md px-3 py-1.5 hover:bg-rose-200 disabled:opacity-50">
-                  ✕ דחה
-                </button>
+              <div className="mt-2">
+                <input
+                  value={noteText[r.id] ?? ""}
+                  onChange={(e) => setNoteText({ ...noteText, [r.id]: e.target.value })}
+                  placeholder="הערה לעדכון סטטוס..."
+                  className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+                />
               </div>
+              <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                className="text-[10px] text-blue-600 hover:underline mt-1">
+                {expandedId === r.id ? "הסתר היסטוריה" : "הצג היסטוריית טיפול"}
+              </button>
+              {expandedId === r.id && <StatusTimeline log={r.statusLog} />}
             </div>
           ))}
         </div>
       )}
 
-      {handled.length > 0 && (
+      {done.length > 0 && (
         <details className="text-xs">
-          <summary className="cursor-pointer text-slate-500 hover:text-slate-700">היסטוריה ({handled.length})</summary>
-          <div className="mt-2 space-y-1">
-            {handled.map((r) => (
-              <div key={r.id} className={`flex items-center gap-3 rounded-lg p-2 ${r.status === "APPROVED" ? "bg-emerald-50" : "bg-rose-50"}`}>
-                <Badge className={r.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>
-                  {r.status === "APPROVED" ? "✓ מאושר" : "✕ נדחה"}
-                </Badge>
-                <span className="font-medium">{r.soldierName}</span>
-                <span className="text-slate-400">{new Date(r.fromDate).toLocaleDateString("he-IL")} — {new Date(r.toDate).toLocaleDateString("he-IL")}</span>
-                {r.respondedBy && <span className="text-slate-400">ע״י {r.respondedBy}</span>}
+          <summary className="cursor-pointer text-slate-500 hover:text-slate-700">בקשות שטופלו ({done.length})</summary>
+          <div className="mt-2 space-y-2">
+            {done.map((r) => (
+              <div key={r.id} className={`rounded-lg p-3 ${r.status === "APPROVED" ? "bg-emerald-50 border border-emerald-200" : "bg-rose-50 border border-rose-200"}`}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge className={STATUS_COLORS[r.status]}>{STATUS_LABELS[r.status]}</Badge>
+                  <span className="font-medium text-sm">{r.soldierName}</span>
+                  {r.personalNumber && <span className="text-xs text-slate-400 font-mono">{r.personalNumber}</span>}
+                  <span className="text-xs text-slate-400">{r.fullEmployment ? "כל התעסוקה" : `${new Date(r.fromDate).toLocaleDateString("he-IL")} — ${new Date(r.toDate).toLocaleDateString("he-IL")}`}</span>
+                </div>
+                <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                  className="text-[10px] text-blue-600 hover:underline mt-1">
+                  {expandedId === r.id ? "הסתר" : "היסטוריית טיפול"}
+                </button>
+                {expandedId === r.id && <StatusTimeline log={r.statusLog} />}
               </div>
             ))}
           </div>
@@ -376,7 +346,6 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
   const [company, setCompany] = useState(initialCompany);
   const [status, setStatus] = useState(initialStatus);
   const [addOpen, setAddOpen] = useState(false);
-  const [attachOpen, setAttachOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const editSoldier = soldiers.find((s) => s.id === editId) ?? null;
 
@@ -469,9 +438,6 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
               {importBusy ? "מייבא..." : "⬆ ייבוא Excel"}
               <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importBusy} onChange={handleImport} />
             </label>
-            <button onClick={() => setAttachOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
-              📌 בקשת סיפוח
-            </button>
             <button onClick={() => setAddOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
               + הוסף חייל
             </button>
@@ -515,15 +481,8 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
                   <div className="flex items-center gap-1 flex-wrap">
                     {s.squadName && <span className="text-xs text-slate-400">🪖 {s.squadName}</span>}
                     {s.attached && (
-                      <Badge className={`text-[10px] ${
-                        s.attachReqStatus === "PENDING" ? "bg-amber-100 text-amber-700" :
-                        s.attachReqStatus === "APPROVED" ? "bg-blue-100 text-blue-700" :
-                        s.attachReqStatus === "REJECTED" ? "bg-rose-100 text-rose-700" :
-                        "bg-blue-100 text-blue-700"
-                      }`}>
-                        📌 {s.attachReqStatus === "PENDING" ? "ממתין לאישור" :
-                            s.attachReqStatus === "APPROVED" ? `מסופח ${s.attachFromDate && s.attachToDate ? fmtDate(s.attachFromDate) + "—" + fmtDate(s.attachToDate) : ""}` :
-                            s.attachReqStatus === "REJECTED" ? "סיפוח נדחה" : "מסופח"}
+                      <Badge className="text-[10px] bg-blue-100 text-blue-700">
+                        📌 מסופח {s.attachFromDate && s.attachToDate ? fmtDate(s.attachFromDate) + "—" + fmtDate(s.attachToDate) : ""}
                       </Badge>
                     )}
                   </div>
@@ -607,17 +566,6 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
         </div>
       )}
 
-      {attachOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-4 border-b border-slate-200">
-              <h3 className="font-bold text-slate-800">📌 בקשת סיפוח</h3>
-              <button onClick={() => setAttachOpen(false)} className="text-slate-400 hover:text-slate-700 text-xl">✕</button>
-            </div>
-            <AttachmentRequestForm soldiers={soldiers} onDone={() => setAttachOpen(false)} />
-          </div>
-        </div>
-      )}
     </>
   );
 }

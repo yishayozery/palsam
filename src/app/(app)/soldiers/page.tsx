@@ -7,6 +7,7 @@ import { saveSoldier, toggleSoldier, saveCompanyRole, toggleCompanyRole, saveSqu
 import { importSoldiers } from "./import-actions";
 import SoldierEquipmentButton from "./SoldierEquipmentButton";
 import CompanyFilter from "./CompanyFilter";
+import AttachmentRequestSection from "./AttachmentRequestSection";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ export default async function SoldiersPage({
   });
   const drivingRefreshDays = battalion?.drivingRefreshDays ?? 180;
 
-  const [soldiers, squads, companyRoles] = await Promise.all([
+  const [soldiers, squads, companyRoles, attachmentRequests] = await Promise.all([
     prisma.soldier.findMany({
       where,
       orderBy: [{ squad: { sortOrder: "asc" } }, { fullName: "asc" }],
@@ -75,6 +76,18 @@ export default async function SoldiersPage({
       },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       include: { company: { select: { name: true } } },
+    }),
+    prisma.attachmentRequest.findMany({
+      where: { battalionId: bId },
+      orderBy: { requestedAt: "desc" },
+      include: {
+        targetCompany: { select: { name: true } },
+        requestedBy: { select: { fullName: true } },
+        statusLog: {
+          orderBy: { changedAt: "asc" },
+          include: { changedBy: { select: { fullName: true } } },
+        },
+      },
     }),
   ]);
 
@@ -215,6 +228,30 @@ export default async function SoldiersPage({
       {!isCompanyHolder && user.squadIds.length === 0 && companies.length > 0 && effectiveCompanyId && (
         <CompanyFilter companies={companies} selectedId={effectiveCompanyId} />
       )}
+
+      <AttachmentRequestSection
+        companies={companies.map((c) => ({ id: c.id, name: c.name }))}
+        requests={attachmentRequests.map((r) => ({
+          id: r.id,
+          soldierName: r.soldierName,
+          personalNumber: r.personalNumber,
+          sourceUnit: r.sourceUnit,
+          targetCompany: r.targetCompany?.name ?? null,
+          fromDate: r.fromDate.toISOString().slice(0, 10),
+          toDate: r.toDate.toISOString().slice(0, 10),
+          fullEmployment: r.fromDate.getFullYear() <= 2020 && r.toDate.getFullYear() >= 2099,
+          status: r.status,
+          requestedAt: r.requestedAt.toISOString(),
+          notes: r.notes,
+          statusLog: r.statusLog.map((l) => ({
+            status: l.status,
+            note: l.note,
+            changedBy: l.changedBy.fullName,
+            changedAt: l.changedAt.toISOString(),
+          })),
+        }))}
+      />
+
       <CrudSection
         title="רשימת חיילים"
         addLabel="חייל"

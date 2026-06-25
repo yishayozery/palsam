@@ -39,9 +39,12 @@ export default async function RosterPage({
       where: { battalionId: bId },
       orderBy: { requestedAt: "desc" },
       include: {
-        soldier: { select: { id: true, fullName: true, personalNumber: true, company: { select: { name: true } } } },
+        targetCompany: { select: { name: true } },
         requestedBy: { select: { fullName: true } },
-        respondedBy: { select: { fullName: true } },
+        statusLog: {
+          orderBy: { changedAt: "asc" },
+          include: { changedBy: { select: { fullName: true } } },
+        },
       },
     }),
   ]);
@@ -96,17 +99,23 @@ export default async function RosterPage({
         initialStatus={status}
         attachmentRequests={attachmentRequests.map((r) => ({
           id: r.id,
-          soldierName: r.soldier.fullName,
-          soldierPN: r.soldier.personalNumber,
-          soldierCompany: r.soldier.company?.name ?? null,
+          soldierName: r.soldierName,
+          personalNumber: r.personalNumber,
+          sourceUnit: r.sourceUnit,
+          targetCompany: r.targetCompany?.name ?? null,
           fromDate: r.fromDate.toISOString().slice(0, 10),
           toDate: r.toDate.toISOString().slice(0, 10),
+          fullEmployment: r.fromDate.getFullYear() <= 2020 && r.toDate.getFullYear() >= 2099,
           status: r.status,
           requestedBy: r.requestedBy.fullName,
           requestedAt: r.requestedAt.toISOString(),
-          respondedBy: r.respondedBy?.fullName ?? null,
-          respondedAt: r.respondedAt?.toISOString() ?? null,
           notes: r.notes,
+          statusLog: r.statusLog.map((l) => ({
+            status: l.status,
+            note: l.note,
+            changedBy: l.changedBy.fullName,
+            changedAt: l.changedAt.toISOString(),
+          })),
         }))}
       />
       {soldiers.length === 0 && (
