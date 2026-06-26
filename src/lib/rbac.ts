@@ -4,7 +4,8 @@ import type { Role, PermissionLevel, WarehouseType } from "@/generated/prisma";
 
 export const SCREENS = {
   dashboard: "דשבורד",
-  soldiers: "חיילים",
+  soldiers: "חיילי הפלוגה",
+  roster: "שלישות (ניהול חיילים)",
   attendance: "נוכחות",
   employment: "תעסוקה (ימי מילואים)",
   dispatch: "שבצ\"ק",
@@ -46,7 +47,7 @@ export const SCREEN_CATEGORIES: Record<ScreenCategory, { label: string; icon: st
     label: "פלוגה",
     icon: "👤",
     color: "blue",
-    screens: ["soldiers", "attendance", "employment", "allocations", "armory_allocations"],
+    screens: ["soldiers", "roster", "attendance", "employment", "allocations", "armory_allocations"],
   },
   general: {
     label: "כללי",
@@ -105,7 +106,7 @@ const CAP_TO_SCREEN: Record<Capability, { screen: Screen; needsEdit: boolean }> 
   "locations.manage": { screen: "stock", needsEdit: true },
   "reps.manage": { screen: "stock", needsEdit: true },
   "company.manage": { screen: "soldiers", needsEdit: true },
-  "soldiers.roster": { screen: "soldiers", needsEdit: true },
+  "soldiers.roster": { screen: "roster", needsEdit: true },
   "donations.manage": { screen: "donations", needsEdit: true },
   "transfer.approve": { screen: "transfers", needsEdit: true },
   "signatures.manage": { screen: "signatures", needsEdit: true },
@@ -254,7 +255,7 @@ export const PRESET_ROLES: {
   },
   {
     name: 'מג"ד', isAdmin: false, isCommander: false, sortOrder: 1,
-    permissions: buildPerms("EDIT", {}, ["settings"]),
+    permissions: buildPerms("EDIT", {}, ["settings"]),  // includes roster
   },
   {
     name: 'סמג"ד', isAdmin: false, isCommander: false, sortOrder: 2,
@@ -315,6 +316,7 @@ export const PRESET_ROLES: {
     name: "שליש", isAdmin: false, isCommander: false, sortOrder: 8,
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
+      { screen: "roster", level: "EDIT" },
       { screen: "dispatch", level: "EDIT" }, { screen: "certifications", level: "EDIT" }, { screen: "reports", level: "VIEW" },
       { screen: "armory_reports", level: "VIEW" },
     ],

@@ -193,8 +193,8 @@ export default async function MyInventoryPage() {
   return (
     <div>
       <PageHeader
-        title="מלאי הפלוגה"
-        subtitle={`${company?.name ?? ""} — כל הציוד שהפלוגה חתומה עליו מול הגדוד והמחסנים`}
+        title={`המלאי שלי — ${company?.name ?? ""}`}
+        subtitle="כל הציוד שאתה חתום עליו מול הגדוד והמחסנים"
         action={
           <div className="flex gap-2">
             {await (async () => {

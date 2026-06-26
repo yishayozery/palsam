@@ -19,8 +19,8 @@ export const NAV: NavItem[] = [
 
   // ===== מבצעי =====
   { href: "/dashboard", label: "דשבורד", icon: "📊", group: "מבצעי", screen: "dashboard" },
-  { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "מבצעי", screen: "soldiers" },
-  { href: "/roster?tab=attachments", label: "בקשות סיפוח", icon: "📌", group: "מבצעי", screen: "soldiers" },
+  { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "מבצעי", screen: "roster" },
+  { href: "/roster?tab=attachments", label: "בקשות סיפוח", icon: "📌", group: "מבצעי", screen: "roster" },
   { href: "/soldiers", label: "חיילי הפלוגה", icon: "👤", group: "מבצעי", screen: "soldiers" },
   { href: "/attendance", label: "נוכחות בתעסוקה", icon: "📋", group: "מבצעי", screen: "attendance" },
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "מבצעי", screen: "dispatch" },
@@ -44,7 +44,7 @@ export const NAV: NavItem[] = [
   { href: "/transfers", label: "קבלות ממתינות", icon: "📥", group: "לוגיסטי", screen: "transfers" },
   { href: "/kits", label: "ערכות החתמה", icon: "📦", group: "לוגיסטי", screen: "kits" },
   { href: "/donations", label: "תרומות", icon: "🎁", group: "לוגיסטי", screen: "donations" },
-  { href: "/my-inventory", label: "מלאי הפלוגה", icon: "📦", group: "לוגיסטי", screen: "soldiers" },
+  { href: "/my-inventory", label: "המלאי שלי", icon: "📦", group: "לוגיסטי", screen: "soldiers" },
 
   // ===== דוחות =====
   { href: "/reports", label: "דוחות", icon: "📈", group: "דוחות", screen: "reports" },

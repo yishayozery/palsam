@@ -93,7 +93,7 @@ export default async function DashboardPage({
     quantityStock,
     expiringSoon,
     overdueTasks,
-    attachmentRequests,
+    , // attachment requests — removed, handled in roster
     soldierTotal,
     soldierEnlisted,
     soldierRegistered,
@@ -234,7 +234,7 @@ export default async function DashboardPage({
   const weaponsReadyPct = weaponsTotal > 0 ? Math.round((weaponsFullyReady / weaponsTotal) * 100) : 0;
 
   // === ספירת התראות ===
-  const alertCount = (pendingTransfers > 0 ? 1 : 0) + (openGaps > 0 ? 1 : 0) + (expiryUrgent > 0 ? 1 : 0) + (overdueTasks.length > 0 ? 1 : 0) + (attachmentRequests > 0 ? 1 : 0) + (soldierRegistered > 0 ? 1 : 0);
+  const alertCount = (pendingTransfers > 0 ? 1 : 0) + (openGaps > 0 ? 1 : 0) + (expiryUrgent > 0 ? 1 : 0) + (overdueTasks.length > 0 ? 1 : 0) + (soldierRegistered > 0 ? 1 : 0);
 
   const fmt = (d: Date) => d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" });
 
@@ -268,11 +268,6 @@ export default async function DashboardPage({
             <span className="bg-rose-100 text-rose-700 rounded-full px-2 py-0.5 text-[10px] font-bold">{alertCount}</span>
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {attachmentRequests > 0 && (
-              <AlertCard icon="📌" title="בקשות סיפוח פתוחות" count={attachmentRequests} tone="amber" href="/roster?tab=attachments">
-                <p className="text-xs text-amber-700 mt-1">חיילים ממתינים לאישור סיפוח לגדוד</p>
-              </AlertCard>
-            )}
             {soldierRegistered > 0 && (
               <AlertCard icon="🪖" title="חיילים ממתינים לאישור גיוס" count={soldierRegistered} tone="amber" href="/roster?status=pending">
                 <p className="text-xs text-amber-700 mt-1">רשומים במערכת אך טרם אושרו — לא יכולים לחתום על ציוד</p>
