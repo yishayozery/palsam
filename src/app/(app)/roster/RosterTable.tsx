@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Card, Table, Th, Td, Badge } from "@/components/ui";
 import { createSoldier, updateSoldier, enlistSoldier, dischargeSoldier, deactivateSoldier, deleteSoldier } from "./actions";
 import { importSoldiersRoster } from "./import-actions";
@@ -13,6 +13,7 @@ type Soldier = {
   personalNumber: string | null; phone: string | null;
   companyId: string | null; companyName: string | null; platoon: string | null;
   squadId: string | null; squadName: string | null;
+  roleName: string | null; roleIsCommander: boolean;
   status: string; attached: boolean; signedCount: number;
   enlistedAt: string | null; dischargedAt: string | null;
   attachReqStatus: string | null; attachFromDate: string | null; attachToDate: string | null;
@@ -223,13 +224,32 @@ function StatusTimeline({ log }: { log: StatusLogEntry[] }) {
   );
 }
 
-function AttachmentRequestsPanel({ requests }: { requests: AttachmentReq[] }) {
+function daysSince(isoDate: string) {
+  return Math.floor((Date.now() - new Date(isoDate).getTime()) / 86_400_000);
+}
+
+function AttachmentRequestsPanel({ requests, companies, open, onToggle }: { requests: AttachmentReq[]; companies: { id: string; name: string }[]; open: boolean; onToggle: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [noteText, setNoteText] = useState<Record<string, string>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [tab, setTab] = useState<"active" | "history">("active");
+  const [filterCompany, setFilterCompany] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterQ, setFilterQ] = useState("");
 
   const active = requests.filter((r) => r.status !== "APPROVED" && r.status !== "REJECTED");
   const done = requests.filter((r) => r.status === "APPROVED" || r.status === "REJECTED");
+
+  const currentList = tab === "active" ? active : done;
+  const filtered = currentList.filter((r) => {
+    if (filterCompany && r.targetCompany !== filterCompany) return false;
+    if (filterStatus && r.status !== filterStatus) return false;
+    if (filterQ) {
+      const qq = filterQ.toLowerCase();
+      return r.soldierName.toLowerCase().includes(qq) || (r.personalNumber ?? "").includes(qq) || (r.sourceUnit ?? "").toLowerCase().includes(qq);
+    }
+    return true;
+  });
 
   async function handleStatusUpdate(id: string, status: string) {
     if (status === "REJECTED" && !confirm("לדחות את בקשת הסיפוח?")) return;
@@ -249,97 +269,136 @@ function AttachmentRequestsPanel({ requests }: { requests: AttachmentReq[] }) {
     REMINDED: ["APPROVED", "REJECTED"],
   };
 
+  const allStatuses = [...new Set(currentList.map((r) => r.status))];
+  const allCompanies = [...new Set(currentList.map((r) => r.targetCompany).filter(Boolean))] as string[];
+
+  if (!open) return null;
+
   return (
     <Card className="p-4 mb-4">
-      <h3 className="font-bold text-sm text-slate-700 mb-3 flex items-center gap-2">
-        📌 בקשות סיפוח
-        {active.length > 0 && <Badge className="bg-amber-100 text-amber-700">{active.length} פתוחות</Badge>}
-      </h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold text-sm text-slate-700 flex items-center gap-2">
+          📌 בקשות סיפוח
+          {active.length > 0 && <Badge className="bg-amber-100 text-amber-700">{active.length} פתוחות</Badge>}
+        </h3>
+        <button onClick={onToggle} className="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+      </div>
 
-      {active.length === 0 && done.length === 0 && (
+      {/* Tabs */}
+      <div className="flex gap-1 mb-3 border-b border-slate-200">
+        <button onClick={() => { setTab("active"); setFilterStatus(""); }} className={`px-3 py-1.5 text-xs font-medium rounded-t-lg -mb-px ${tab === "active" ? "bg-white border border-b-white border-slate-200 text-slate-800" : "text-slate-500 hover:text-slate-700"}`}>
+          פתוחות ({active.length})
+        </button>
+        <button onClick={() => { setTab("history"); setFilterStatus(""); }} className={`px-3 py-1.5 text-xs font-medium rounded-t-lg -mb-px ${tab === "history" ? "bg-white border border-b-white border-slate-200 text-slate-800" : "text-slate-500 hover:text-slate-700"}`}>
+          היסטוריה ({done.length})
+        </button>
+      </div>
+
+      {/* Filters — always visible */}
+      <div className="flex gap-2 flex-wrap items-center mb-3 bg-slate-50 rounded-lg p-2">
+        <input value={filterQ} onChange={(e) => setFilterQ(e.target.value)} placeholder="חיפוש שם / מ.א. / יחידה..."
+          className="flex-1 min-w-[120px] rounded border border-slate-200 px-2 py-1 text-xs" />
+        <select value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)}
+          className="rounded border border-slate-200 px-2 py-1 text-xs">
+          <option value="">כל הפלוגות</option>
+          {allCompanies.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+          className="rounded border border-slate-200 px-2 py-1 text-xs">
+          <option value="">כל הסטטוסים</option>
+          {allStatuses.map((s) => <option key={s} value={s}>{STATUS_LABELS[s] ?? s}</option>)}
+        </select>
+        <span className="text-[10px] text-slate-400">{filtered.length} תוצאות</span>
+      </div>
+
+      {requests.length === 0 && (
         <p className="text-xs text-slate-400">אין בקשות סיפוח. בקשות מוגשות ממסך חיילי הפלוגה.</p>
       )}
 
-      {active.length > 0 && (
-        <div className="space-y-2 mb-3">
-          {active.map((r) => (
-            <div key={r.id} className="border border-slate-200 rounded-lg p-3">
-              <div className="flex items-start gap-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm">{r.soldierName}</span>
-                    {r.personalNumber && <span className="text-xs text-slate-400 font-mono">{r.personalNumber}</span>}
-                    <Badge className={STATUS_COLORS[r.status] ?? "bg-slate-100"}>{STATUS_LABELS[r.status] ?? r.status}</Badge>
-                  </div>
-                  <div className="text-xs text-slate-500 flex gap-3 mt-1 flex-wrap">
-                    {r.sourceUnit && <span>מ: {r.sourceUnit}</span>}
-                    {r.targetCompany && <span>אל: {r.targetCompany}</span>}
-                    <span>{r.fullEmployment ? "כל התעסוקה" : `${new Date(r.fromDate).toLocaleDateString("he-IL")} — ${new Date(r.toDate).toLocaleDateString("he-IL")}`}</span>
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">
-                    ביקש: {r.requestedBy} · {new Date(r.requestedAt).toLocaleDateString("he-IL")}
-                    {r.notes && <span> · {r.notes}</span>}
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1 shrink-0">
-                  {(nextStatus[r.status] ?? []).map((ns) => (
-                    <button key={ns} onClick={() => handleStatusUpdate(r.id, ns)} disabled={busy === r.id}
-                      className={`text-xs rounded-md px-3 py-1 disabled:opacity-50 ${
-                        ns === "APPROVED" ? "bg-emerald-600 text-white hover:bg-emerald-700" :
-                        ns === "REJECTED" ? "bg-rose-100 text-rose-700 hover:bg-rose-200" :
-                        "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                      }`}>
-                      {STATUS_LABELS[ns]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-2">
-                <input
-                  value={noteText[r.id] ?? ""}
-                  onChange={(e) => setNoteText({ ...noteText, [r.id]: e.target.value })}
-                  placeholder="הערה לעדכון סטטוס..."
-                  className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
-                />
-              </div>
-              <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
-                className="text-[10px] text-blue-600 hover:underline mt-1">
-                {expandedId === r.id ? "הסתר היסטוריה" : "הצג היסטוריית טיפול"}
-              </button>
-              {expandedId === r.id && <StatusTimeline log={r.statusLog} />}
-            </div>
-          ))}
-        </div>
+      {filtered.length === 0 && currentList.length > 0 && (
+        <p className="text-xs text-slate-400">אין בקשות התואמות לסינון.</p>
       )}
 
-      {done.length > 0 && (
-        <details className="text-xs">
-          <summary className="cursor-pointer text-slate-500 hover:text-slate-700">בקשות שטופלו ({done.length})</summary>
-          <div className="mt-2 space-y-2">
-            {done.map((r) => (
-              <div key={r.id} className={`rounded-lg p-3 ${r.status === "APPROVED" ? "bg-emerald-50 border border-emerald-200" : "bg-rose-50 border border-rose-200"}`}>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge className={STATUS_COLORS[r.status]}>{STATUS_LABELS[r.status]}</Badge>
-                  <span className="font-medium text-sm">{r.soldierName}</span>
-                  {r.personalNumber && <span className="text-xs text-slate-400 font-mono">{r.personalNumber}</span>}
-                  <span className="text-xs text-slate-400">{r.fullEmployment ? "כל התעסוקה" : `${new Date(r.fromDate).toLocaleDateString("he-IL")} — ${new Date(r.toDate).toLocaleDateString("he-IL")}`}</span>
-                </div>
-                <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
-                  className="text-[10px] text-blue-600 hover:underline mt-1">
-                  {expandedId === r.id ? "הסתר" : "היסטוריית טיפול"}
-                </button>
-                {expandedId === r.id && <StatusTimeline log={r.statusLog} />}
-              </div>
-            ))}
-          </div>
-        </details>
+      {/* Table */}
+      {filtered.length > 0 && (
+        <div className="overflow-x-auto">
+          <Table>
+            <thead>
+              <tr>
+                <Th>חייל</Th>
+                <Th>מ.א.</Th>
+                <Th>מיחידה</Th>
+                <Th>אל פלוגה</Th>
+                <Th>תקופה</Th>
+                <Th>סטטוס</Th>
+                <Th>ימים</Th>
+                {tab === "active" && <Th>הערה</Th>}
+                <Th>פעולות</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((r) => {
+                const days = daysSince(r.requestedAt);
+                return (
+                  <tr key={r.id} className={tab === "active" && days >= 7 ? "bg-rose-50/50" : tab === "active" && days >= 3 ? "bg-amber-50/30" : ""}>
+                    <Td>
+                      <span className="font-medium text-sm">{r.soldierName}</span>
+                      <div className="text-[10px] text-slate-400">ביקש: {r.requestedBy}</div>
+                    </Td>
+                    <Td className="font-mono text-xs">{r.personalNumber ?? "—"}</Td>
+                    <Td className="text-xs">{r.sourceUnit ?? "—"}</Td>
+                    <Td className="text-xs">{r.targetCompany ?? "—"}</Td>
+                    <Td className="text-xs whitespace-nowrap">
+                      {r.fullEmployment ? "מלאה" : `${new Date(r.fromDate).toLocaleDateString("he-IL")} — ${new Date(r.toDate).toLocaleDateString("he-IL")}`}
+                    </Td>
+                    <Td>
+                      <Badge className={STATUS_COLORS[r.status] ?? "bg-slate-100"}>{STATUS_LABELS[r.status] ?? r.status}</Badge>
+                    </Td>
+                    <Td>
+                      <span className={`text-[10px] rounded-full px-2 py-0.5 font-bold ${days >= 7 ? "bg-rose-100 text-rose-700" : days >= 3 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>
+                        {days === 0 ? "היום" : days === 1 ? "אתמול" : `${days} ימים`}
+                      </span>
+                    </Td>
+                    {tab === "active" && (
+                      <Td>
+                        <input value={noteText[r.id] ?? ""} onChange={(e) => setNoteText({ ...noteText, [r.id]: e.target.value })}
+                          placeholder="הערה..." className="rounded border border-slate-200 px-1.5 py-0.5 text-[11px] w-24" />
+                      </Td>
+                    )}
+                    <Td>
+                      <div className="flex items-center gap-1">
+                        {tab === "active" && (nextStatus[r.status] ?? []).map((ns) => (
+                          <button key={ns} onClick={() => handleStatusUpdate(r.id, ns)} disabled={busy === r.id}
+                            className={`text-[11px] rounded px-2 py-0.5 disabled:opacity-50 whitespace-nowrap ${
+                              ns === "APPROVED" ? "bg-emerald-600 text-white hover:bg-emerald-700" :
+                              ns === "REJECTED" ? "bg-rose-100 text-rose-700 hover:bg-rose-200" :
+                              "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                            }`}>
+                            {STATUS_LABELS[ns]}
+                          </button>
+                        ))}
+                        <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                          className="text-[10px] text-blue-600 hover:underline whitespace-nowrap">
+                          {expandedId === r.id ? "הסתר" : "📜"}
+                        </button>
+                      </div>
+                      {expandedId === r.id && <StatusTimeline log={r.statusLog} />}
+                      {r.notes && expandedId !== r.id && <div className="text-[10px] text-slate-400 mt-0.5 truncate max-w-[120px]" title={r.notes}>{r.notes}</div>}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </Table>
+        </div>
       )}
     </Card>
   );
 }
 
-export default function RosterTable({ soldiers, companies, squads, initialQ, initialCompany, initialStatus, attachmentRequests = [] }: {
+export default function RosterTable({ soldiers, companies, squads, initialQ, initialCompany, initialStatus, initialTab, attachmentRequests = [] }: {
   soldiers: Soldier[]; companies: Company[]; squads: SquadOption[]; initialQ: string; initialCompany: string; initialStatus: string;
+  initialTab?: string;
   attachmentRequests?: AttachmentReq[];
 }) {
   const [q, setQ] = useState(initialQ);
@@ -347,6 +406,13 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
   const [status, setStatus] = useState(initialStatus);
   const [addOpen, setAddOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [attachOpen, setAttachOpen] = useState(initialTab === "attachments");
+  const attachRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (initialTab === "attachments" && attachRef.current) {
+      attachRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [initialTab]);
   const editSoldier = soldiers.find((s) => s.id === editId) ?? null;
 
   const [importBusy, setImportBusy] = useState(false);
@@ -438,6 +504,14 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
               {importBusy ? "מייבא..." : "⬆ ייבוא Excel"}
               <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importBusy} onChange={handleImport} />
             </label>
+            <button onClick={() => { setAttachOpen(!attachOpen); setTimeout(() => attachRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100); }}
+              className={`rounded-lg px-4 py-2 text-sm font-medium border ${attachOpen ? "bg-blue-600 text-white border-blue-600" : "bg-white text-blue-700 border-blue-300 hover:bg-blue-50"}`}>
+              📌 מסופחים {attachmentRequests.filter((r) => r.status !== "APPROVED" && r.status !== "REJECTED").length > 0 && (
+                <span className="bg-amber-400 text-white text-[10px] rounded-full px-1.5 py-0.5 mr-1 font-bold">
+                  {attachmentRequests.filter((r) => r.status !== "APPROVED" && r.status !== "REJECTED").length}
+                </span>
+              )}
+            </button>
             <button onClick={() => setAddOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
               + הוסף חייל
             </button>
@@ -457,7 +531,9 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
         )}
       </Card>
 
-      <AttachmentRequestsPanel requests={attachmentRequests} />
+      <div ref={attachRef}>
+        <AttachmentRequestsPanel requests={attachmentRequests} companies={companies} open={attachOpen} onToggle={() => setAttachOpen(false)} />
+      </div>
 
       {actionError && (
         <div className="mb-3 bg-rose-50 border border-rose-300 rounded-lg p-3 text-sm text-rose-800 flex items-center justify-between">
@@ -470,7 +546,7 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
         <Table>
           <thead>
             <tr>
-              <Th>חייל</Th><Th>מ.א.</Th><Th>פלוגה</Th><Th>סטטוס</Th><Th>תאריך גיוס</Th><Th>חתום על</Th><Th></Th>
+              <Th>חייל</Th><Th>מ.א.</Th><Th>פלוגה</Th><Th>תפקיד</Th><Th>סטטוס</Th><Th>תאריך גיוס</Th><Th>חתום על</Th><Th></Th>
             </tr>
           </thead>
           <tbody>
@@ -489,6 +565,13 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
                 </Td>
                 <Td className="font-mono text-xs">{s.personalNumber ?? <span className="text-slate-300">—</span>}</Td>
                 <Td>{s.companyName ?? <span className="text-slate-300">—</span>}</Td>
+                <Td>
+                  {s.roleName ? (
+                    <Badge className={s.roleIsCommander ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}>
+                      {s.roleName}{s.roleIsCommander ? " ⭐" : ""}
+                    </Badge>
+                  ) : <span className="text-slate-300">—</span>}
+                </Td>
                 <Td>
                   {s.status === "DISCHARGED" || s.status === "INACTIVE"
                     ? <Badge className="bg-slate-100 text-slate-500">{s.status === "DISCHARGED" ? "משוחרר" : "לא פעיל"}</Badge>

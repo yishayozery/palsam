@@ -34,6 +34,34 @@ export const SCREENS = {
 export type Screen = keyof typeof SCREENS;
 export const SCREEN_KEYS = Object.keys(SCREENS) as Screen[];
 
+export type ScreenCategory = "warehouse" | "company" | "general" | "admin";
+export const SCREEN_CATEGORIES: Record<ScreenCategory, { label: string; icon: string; color: string; screens: Screen[] }> = {
+  warehouse: {
+    label: "מחסן",
+    icon: "🏪",
+    color: "amber",
+    screens: ["stock", "catalog", "signatures", "counts", "gaps", "transfers", "kits", "warehouses", "donations", "driving_licenses", "maintenance"],
+  },
+  company: {
+    label: "פלוגה",
+    icon: "👤",
+    color: "blue",
+    screens: ["soldiers", "attendance", "employment", "allocations", "armory_allocations"],
+  },
+  general: {
+    label: "כללי",
+    icon: "📋",
+    color: "slate",
+    screens: ["dashboard", "dispatch", "vacation", "armory", "armory_reports", "reports", "history", "audit", "certifications"],
+  },
+  admin: {
+    label: "ניהול",
+    icon: "⚙️",
+    color: "purple",
+    screens: ["settings"],
+  },
+};
+
 // ===================== Capability → Screen מיפוי תאימות =====================
 
 export type Capability =

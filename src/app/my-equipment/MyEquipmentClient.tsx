@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { lookupSoldierEquipment, uploadArmoryTestProof, signWeaponsAgreement, getArmoryTestImage, type SoldierEquipmentResult } from "./actions";
+import { lookupSoldierEquipment, uploadArmoryTestProof, signWeaponsAgreement, getArmoryTestImage, getSoldierTransferDocument, type SoldierEquipmentResult, type TransferDocumentResult } from "./actions";
 import { WEAPONS_AGREEMENT_TITLE, WEAPONS_AGREEMENT_CLAUSES, WEAPONS_AGREEMENT_FOOTER } from "@/lib/weapons-agreement-text";
 
-type Tab = "equipment" | "weapons";
+type Tab = "equipment" | "weapons" | "documents";
 
 export default function MyEquipmentClient() {
   const [pn, setPn] = useState("");
@@ -86,6 +86,13 @@ export default function MyEquipmentClient() {
             }`}>
               {checklistDone ? "✓" : "⚠️"}
             </span>
+          </button>
+          <button onClick={() => setTab("documents")}
+            className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
+              tab === "documents" ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-100"
+            }`}>
+            📄 תעודות
+            <span className="mr-1 text-xs opacity-75">({result.documents.length})</span>
           </button>
         </div>
 
@@ -210,6 +217,15 @@ export default function MyEquipmentClient() {
               </p>
             )}
           </div>
+        )}
+
+        {/* Tab: Documents */}
+        {tab === "documents" && (
+          <DocumentsTab
+            documents={result.documents}
+            soldierId={result.soldierId}
+            personalNumber={result.soldier.personalNumber ?? ""}
+          />
         )}
 
         <p className="text-[11px] text-slate-400 text-center mt-4">
@@ -472,6 +488,152 @@ function WeaponsAgreementSign({ soldierId, personalNumber, soldierName, customAg
           {busy ? "שולח..." : "✓ חתימה ואישור"}
         </button>
       </div>
+    </div>
+  );
+}
+
+function DocumentsTab({ documents, soldierId, personalNumber }: {
+  documents: { id: string; type: string; date: string; fromHolder: string; itemCount: number; itemSummary: string; hasSigned: boolean }[];
+  soldierId: string;
+  personalNumber: string;
+}) {
+  const [viewingDoc, setViewingDoc] = useState<NonNullable<Extract<TransferDocumentResult, { ok: true }>["doc"]> | null>(null);
+  const [loading, setLoading] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function viewDocument(transferId: string) {
+    setLoading(transferId);
+    setErr(null);
+    try {
+      const fd = new FormData();
+      fd.append("soldierId", soldierId);
+      fd.append("personalNumber", personalNumber);
+      fd.append("transferId", transferId);
+      const res = await getSoldierTransferDocument(fd);
+      if (res.ok) setViewingDoc(res.doc);
+      else setErr(res.error);
+    } catch {
+      setErr("שגיאה בטעינת התעודה");
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  if (viewingDoc) {
+    return (
+      <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div className="bg-slate-800 text-white p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {viewingDoc.unitLogo && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={viewingDoc.unitLogo} alt="" className="w-10 h-10 object-contain bg-white/10 rounded p-0.5" />
+            )}
+            <div>
+              <div className="text-lg font-bold">תעודת {viewingDoc.type}</div>
+              <div className="text-xs text-slate-300">{viewingDoc.unitName} · מס׳ {viewingDoc.docNumber}</div>
+            </div>
+          </div>
+          <button onClick={() => setViewingDoc(null)}
+            className="text-sm bg-white/20 hover:bg-white/30 rounded-lg px-3 py-1.5">
+            ← חזרה
+          </button>
+        </div>
+
+        <div className="p-5 text-sm space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div><span className="text-slate-500">תאריך:</span> <span className="font-medium">{new Date(viewingDoc.date).toLocaleDateString("he-IL")} {new Date(viewingDoc.date).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}</span></div>
+            <div><span className="text-slate-500">מ:</span> <span className="font-medium">{viewingDoc.fromHolder}</span></div>
+            <div><span className="text-slate-500">אל:</span> <span className="font-medium">{viewingDoc.toName}</span></div>
+            <div><span className="text-slate-500">יוצר:</span> <span className="font-medium">{viewingDoc.createdBy}</span></div>
+            {viewingDoc.reason && <div className="col-span-2"><span className="text-slate-500">הערה:</span> {viewingDoc.reason}</div>}
+          </div>
+
+          <table className="w-full text-sm text-right border border-slate-300">
+            <thead>
+              <tr className="bg-slate-100">
+                <th className="border border-slate-300 px-3 py-2">#</th>
+                <th className="border border-slate-300 px-3 py-2">פריט</th>
+                <th className="border border-slate-300 px-3 py-2">סריאלי</th>
+                <th className="border border-slate-300 px-3 py-2">כמות</th>
+                <th className="border border-slate-300 px-3 py-2">סטטוס</th>
+              </tr>
+            </thead>
+            <tbody>
+              {viewingDoc.lines.map((l, i) => (
+                <tr key={i}>
+                  <td className="border border-slate-300 px-3 py-2 text-center">{i + 1}</td>
+                  <td className="border border-slate-300 px-3 py-2">{l.itemName}</td>
+                  <td className="border border-slate-300 px-3 py-2 font-mono text-xs">{l.serial ?? "—"}</td>
+                  <td className="border border-slate-300 px-3 py-2 text-center">{l.quantity}</td>
+                  <td className="border border-slate-300 px-3 py-2">{l.statusName ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {viewingDoc.signatureClause && (
+            <div className="border-2 border-slate-300 rounded-lg p-3 bg-slate-50">
+              <div className="text-xs font-bold text-slate-700 mb-1">📝 הצהרת חייל</div>
+              <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans">{viewingDoc.signatureClause}</pre>
+            </div>
+          )}
+
+          {viewingDoc.signature && (
+            <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+              <div className="text-xs text-slate-500 mb-1">חתימה דיגיטלית:</div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={viewingDoc.signature.data} alt="חתימה" className="max-h-20 object-contain" />
+              <div className="text-[10px] text-slate-400 mt-1">
+                {viewingDoc.signature.signerName}
+                {viewingDoc.signature.signerPN && ` · מ.א. ${viewingDoc.signature.signerPN}`}
+                {viewingDoc.signature.signedAt && ` · ${new Date(viewingDoc.signature.signedAt).toLocaleString("he-IL")}`}
+              </div>
+            </div>
+          )}
+
+          <div className="text-[10px] text-slate-400 text-center pt-2 border-t border-slate-100">
+            מסמך הופק ממערכת PALSAM · {viewingDoc.docNumber}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-lg p-5">
+      <h2 className="font-bold text-slate-800 mb-3">📄 תעודות העברה ({documents.length})</h2>
+      {documents.length === 0 ? (
+        <div className="text-center py-6 text-slate-400">
+          <div className="text-3xl mb-2">📭</div>
+          <div className="text-sm">אין תעודות</div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {documents.map((d) => (
+            <button key={d.id} onClick={() => viewDocument(d.id)} disabled={loading === d.id}
+              className="w-full text-right border border-slate-200 hover:border-slate-400 rounded-lg p-3 transition disabled:opacity-60">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                    d.type === "החתמה" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"
+                  }`}>
+                    {d.type}
+                  </span>
+                  <span className="text-xs text-slate-500 mr-2">{d.fromHolder}</span>
+                </div>
+                <span className="text-xs text-slate-400">{new Date(d.date).toLocaleDateString("he-IL")}</span>
+              </div>
+              <div className="text-sm text-slate-700 mt-1">
+                {d.itemSummary}
+                <span className="text-xs text-slate-400 mr-1">({d.itemCount} פריטים)</span>
+              </div>
+              {d.hasSigned && <span className="text-[10px] text-emerald-600">✓ נחתם דיגיטלית</span>}
+              {loading === d.id && <span className="text-xs text-blue-600 mr-2">טוען...</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {err && <div className="text-xs text-rose-700 bg-rose-50 rounded p-2 mt-2">⚠️ {err}</div>}
     </div>
   );
 }

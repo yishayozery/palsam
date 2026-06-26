@@ -13,13 +13,36 @@ export type WeaponsEligibility = {
   customAgreementText: string | null;
 };
 
+export type SoldierTransferDoc = {
+  id: string;
+  type: string;
+  date: string;
+  fromHolder: string;
+  itemCount: number;
+  itemSummary: string;
+  hasSigned: boolean;
+};
+
 export type SoldierEquipmentResult =
   | { ok: true;
       soldierId: string;
       soldier: { fullName: string; personalNumber: string | null; companyName: string | null; battalionName: string; battalionLogo: string | null };
       serials: { itemName: string; sku: string | null; serial: string; lotQuantity: number | null; statusName: string; isWear: boolean; isLoss: boolean; signedAt: string | null; signedBy: string | null }[];
       qty: { itemName: string; sku: string | null; unit: string; statusName: string; quantity: number; lastSignedAt: string | null; lastSignedBy: string | null }[];
-      weaponsEligibility: WeaponsEligibility; }
+      weaponsEligibility: WeaponsEligibility;
+      documents: SoldierTransferDoc[]; }
+  | { ok: false; error: string };
+
+export type TransferDocumentResult =
+  | { ok: true; doc: {
+      id: string; type: string; status: string; date: string; docNumber: string;
+      unitName: string; unitLogo: string | null; unitMotto: string | null;
+      fromHolder: string; toName: string; reason: string | null;
+      createdBy: string;
+      lines: { itemName: string; serial: string | null; quantity: number; statusName: string | null }[];
+      signatureClause: string | null;
+      signature: { data: string; signedAt: string; signerName: string; signerPN: string | null } | null;
+    } }
   | { ok: false; error: string };
 
 /** 🔫 חתימה על נוהל שמירת נשק ע"י החייל (דגל #4). */
@@ -232,9 +255,34 @@ export async function lookupSoldierEquipment(formData: FormData): Promise<Soldie
     });
     const customAgreementText = armoryHolder?.weaponsAgreementText ?? null;
 
+    // === תעודות חתומות ===
+    const transfers = await prisma.transfer.findMany({
+      where: { toSoldierId: soldier.id, status: "COMPLETED", type: { in: ["SIGNOUT", "CHECKIN"] } },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true, type: true, createdAt: true,
+        fromHolder: { select: { name: true } },
+        lines: { select: { itemType: { select: { name: true } }, quantity: true } },
+        signatures: { where: { status: "SIGNED" }, select: { id: true }, take: 1 },
+      },
+      take: 50,
+    });
+    const documents: SoldierTransferDoc[] = transfers.map((tr) => {
+      const uniqueItems = [...new Set(tr.lines.map((l) => l.itemType.name))];
+      return {
+        id: tr.id,
+        type: tr.type === "SIGNOUT" ? "החתמה" : "זיכוי",
+        date: tr.createdAt.toISOString(),
+        fromHolder: tr.fromHolder?.name ?? "",
+        itemCount: tr.lines.length,
+        itemSummary: uniqueItems.slice(0, 3).join(", ") + (uniqueItems.length > 3 ? ` (+${uniqueItems.length - 3})` : ""),
+        hasSigned: tr.signatures.length > 0,
+      };
+    });
+
     return {
       ok: true,
-      soldierId: soldier.id, // לאקציות נוספות
+      soldierId: soldier.id,
       weaponsEligibility: {
         enlisted: soldier.status === "ENLISTED",
         enlistedAt: soldier.enlistedAt?.toISOString() ?? null,
@@ -267,11 +315,88 @@ export async function lookupSoldierEquipment(formData: FormData): Promise<Soldie
         };
       }),
       qty,
+      documents,
     };
   } catch (e) {
     if (e instanceof RateLimitError) {
       const min = Math.ceil(e.retryAfterSec / 60);
       return { ok: false, error: `🛡️ יותר מדי בדיקות. נסה שוב בעוד ${min} דקות.` };
+    }
+    return { ok: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** צפייה בתעודת העברה ציבורית — מאומתת ע"י soldierId + personalNumber. */
+export async function getSoldierTransferDocument(
+  formData: FormData,
+): Promise<TransferDocumentResult> {
+  try {
+    const ip = await getClientIp();
+    await checkRateLimit("my-equipment-doc", ip, { max: 20, windowSec: 300 });
+
+    const soldierId = String(formData.get("soldierId") || "");
+    const personalNumber = String(formData.get("personalNumber") || "").replace(/\D/g, "");
+    const transferId = String(formData.get("transferId") || "");
+    if (!soldierId || !personalNumber || !transferId) return { ok: false, error: "פרמטרים חסרים" };
+
+    const soldier = await prisma.soldier.findUnique({
+      where: { id: soldierId },
+      select: { personalNumber: true },
+    });
+    if (!soldier || soldier.personalNumber !== personalNumber) {
+      return { ok: false, error: "אימות נכשל" };
+    }
+
+    const t = await prisma.transfer.findUnique({
+      where: { id: transferId },
+      include: {
+        battalion: { select: { name: true, logoData: true, motto: true } },
+        fromHolder: { select: { name: true, signatureClause: true } },
+        toHolder: { select: { name: true } },
+        toSoldier: { select: { fullName: true } },
+        createdBy: { select: { fullName: true } },
+        lines: { include: { itemType: { select: { name: true } }, serialUnit: { select: { serialNumber: true } }, status: { select: { name: true } } } },
+        signatures: { where: { status: "SIGNED" }, select: { signatureData: true, signedAt: true, soldier: { select: { fullName: true, personalNumber: true } }, signerUser: { select: { fullName: true } } }, take: 1 },
+      },
+    });
+    if (!t) return { ok: false, error: "תעודה לא נמצאה" };
+    if (t.toSoldierId !== soldierId) return { ok: false, error: "התעודה אינה שייכת לחייל זה" };
+
+    const sig = t.signatures[0];
+    return {
+      ok: true,
+      doc: {
+        id: t.id,
+        type: t.type === "SIGNOUT" ? "החתמת חייל" : t.type === "CHECKIN" ? "זיכוי חייל" : t.type,
+        status: t.status,
+        date: t.createdAt.toISOString(),
+        docNumber: t.id.slice(-8).toUpperCase(),
+        unitName: t.battalion?.name ?? "גדוד",
+        unitLogo: t.battalion?.logoData ?? null,
+        unitMotto: t.battalion?.motto ?? null,
+        fromHolder: t.fromHolder?.name ?? "",
+        toName: t.toSoldier?.fullName ?? t.toHolder?.name ?? "",
+        reason: t.reason,
+        createdBy: t.createdBy.fullName,
+        lines: t.lines.map((l) => ({
+          itemName: l.itemType.name,
+          serial: l.serialUnit?.serialNumber ?? null,
+          quantity: l.quantity,
+          statusName: l.status?.name ?? null,
+        })),
+        signatureClause: t.fromHolder?.signatureClause ?? null,
+        signature: sig ? {
+          data: sig.signatureData ?? "",
+          signedAt: sig.signedAt?.toISOString() ?? "",
+          signerName: sig.soldier?.fullName ?? sig.signerUser?.fullName ?? "",
+          signerPN: sig.soldier?.personalNumber ?? null,
+        } : null,
+      },
+    };
+  } catch (e) {
+    if (e instanceof RateLimitError) {
+      const min = Math.ceil(e.retryAfterSec / 60);
+      return { ok: false, error: `🛡️ יותר מדי בקשות. נסה שוב בעוד ${min} דקות.` };
     }
     return { ok: false, error: e instanceof Error ? e.message : "שגיאה" };
   }

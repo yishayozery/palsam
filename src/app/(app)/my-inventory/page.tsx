@@ -23,6 +23,28 @@ export default async function MyInventoryPage() {
     );
   }
 
+  // 🆕 ציוד אישי של הרס"פ (אם מקושר לחייל)
+  const appUser = await prisma.appUser.findUnique({ where: { id: user.id }, select: { soldierId: true } });
+  const soldierId = appUser?.soldierId ?? null;
+  let personalEquipment: { itemName: string; sku: string | null; serial: string; lotQuantity: number | null; statusName: string; isWear: boolean; isLoss: boolean }[] = [];
+  let personalSoldierName: string | null = null;
+  if (soldierId) {
+    const [serials, soldierRec] = await Promise.all([
+      prisma.serialUnit.findMany({
+        where: { battalionId: bId, signedSoldierId: soldierId },
+        include: { itemType: true, status: true },
+        orderBy: { itemType: { name: "asc" } },
+      }),
+      prisma.soldier.findUnique({ where: { id: soldierId }, select: { fullName: true } }),
+    ]);
+    personalSoldierName = soldierRec?.fullName ?? null;
+    personalEquipment = serials.map((u) => ({
+      itemName: u.itemType.name, sku: u.itemType.sku, serial: u.serialNumber,
+      lotQuantity: u.lotQuantity, statusName: u.status.name,
+      isWear: u.status.isWear, isLoss: u.status.isLoss,
+    }));
+  }
+
   const company = await prisma.holder.findUnique({ where: { id: companyId }, select: { name: true } });
 
   // מחסני הגדוד למסירה + דרישת מ.א.
@@ -221,6 +243,40 @@ export default async function MyInventoryPage() {
           </div>
         }
       />
+
+      {/* 🆕 ציוד אישי של הרס"פ */}
+      {soldierId && personalEquipment.length > 0 && (
+        <Card className="p-4 mb-4 bg-blue-50/50 border-blue-200">
+          <h3 className="font-bold text-sm text-blue-800 mb-3">
+            🪖 הציוד האישי שלי {personalSoldierName ? `(${personalSoldierName})` : ""}
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-blue-100/60 text-xs text-blue-900">
+                  <th className="text-right px-3 py-2">פריט</th>
+                  <th className="text-right px-3 py-2">מק״ט</th>
+                  <th className="text-right px-3 py-2">סריאלי / כמות</th>
+                  <th className="text-right px-3 py-2">מצב</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-blue-100">
+                {personalEquipment.map((item, i) => (
+                  <tr key={`s-${i}`} className={item.isWear || item.isLoss ? "bg-amber-50/50" : ""}>
+                    <td className="px-3 py-1.5 font-medium">{item.itemName}</td>
+                    <td className="px-3 py-1.5 text-xs text-slate-500">{item.sku ?? "—"}</td>
+                    <td className="px-3 py-1.5 text-xs font-mono">{item.serial}{item.lotQuantity && item.lotQuantity > 1 ? ` (×${item.lotQuantity})` : ""}</td>
+                    <td className="px-3 py-1.5 text-xs">{item.statusName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-2 text-xs text-blue-600">
+            סה&quot;כ {personalEquipment.length} פריטים חתומים עליך אישית
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
         <Card className="p-3">

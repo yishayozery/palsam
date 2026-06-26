@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, Badge } from "@/components/ui";
 import { saveSystemRole, deleteSystemRole } from "./actions";
 import type { Screen } from "@/lib/rbac";
+import { SCREEN_CATEGORIES, type ScreenCategory } from "@/lib/rbac";
 import type { PermissionLevel } from "@/generated/prisma";
 
 type RoleRow = {
@@ -154,19 +155,24 @@ export default function RolesClient({
                   {role.isAdmin && <Badge className="bg-purple-100 text-purple-700 text-[10px]">מנהל</Badge>}
                   {role.isCommander && <Badge className="bg-amber-100 text-amber-700 text-[10px]">פיקודי</Badge>}
                 </div>
-                {/* Mini permission dots */}
+                {/* Mini permission dots grouped by category */}
                 {!role.isAdmin && (
-                  <div className="flex items-center gap-1 mt-1">
-                    {screenKeys.map((screen) => {
-                      const level = role.permissions[screen];
-                      return (
-                        <div
-                          key={screen}
-                          title={`${screens[screen]}: ${level ? PERM_LABELS[level] : "אין גישה"}`}
-                          className={`w-2 h-2 rounded-full ${level ? PERM_DOT[level] : "bg-slate-200"}`}
-                        />
-                      );
-                    })}
+                  <div className="flex items-center gap-0.5 mt-1">
+                    {(Object.keys(SCREEN_CATEGORIES) as ScreenCategory[]).map((cat, ci) => (
+                      <div key={cat} className="flex items-center gap-0.5">
+                        {ci > 0 && <div className="w-px h-2 bg-slate-300 mx-0.5" />}
+                        {SCREEN_CATEGORIES[cat].screens.filter((s) => screenKeys.includes(s)).map((screen) => {
+                          const level = role.permissions[screen];
+                          return (
+                            <div
+                              key={screen}
+                              title={`${screens[screen]}: ${level ? PERM_LABELS[level] : "אין גישה"}`}
+                              className={`w-2 h-2 rounded-full ${level ? PERM_DOT[level] : "bg-slate-200"}`}
+                            />
+                          );
+                        })}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -235,30 +241,7 @@ export default function RolesClient({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
-                    {screenKeys.map((screen) => {
-                      const level = perms[screen] || "";
-                      return (
-                        <button
-                          key={screen}
-                          onClick={() => cyclePerm(screen)}
-                          className={`px-2.5 py-2 rounded-lg text-xs text-right border transition ${
-                            level === "EDIT"
-                              ? "bg-green-50 border-green-300 text-green-800"
-                              : level === "VIEW"
-                                ? "bg-blue-50 border-blue-300 text-blue-800"
-                                : "bg-white border-slate-200 text-slate-400"
-                          }`}
-                        >
-                          <div className="font-medium">{screens[screen]}</div>
-                          <div className="text-[10px] mt-0.5">
-                            {level ? PERM_LABELS[level] : "—"}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-1">לחיצה: ללא → צפייה → עריכה → ללא</p>
+                  <ScreenGrid screens={screens} perms={perms} cyclePerm={cyclePerm} />
                 </div>
 
                 <div className="flex justify-between items-center pt-2 border-t border-slate-200">
@@ -348,26 +331,7 @@ export default function RolesClient({
                   <button onClick={() => setAllPerms("")} className="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200">נקה הכל</button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
-                {screenKeys.map((screen) => {
-                  const level = perms[screen] || "";
-                  return (
-                    <button
-                      key={screen}
-                      onClick={() => cyclePerm(screen)}
-                      className={`px-2.5 py-2 rounded-lg text-xs text-right border transition ${
-                        level === "EDIT" ? "bg-green-50 border-green-300 text-green-800"
-                        : level === "VIEW" ? "bg-blue-50 border-blue-300 text-blue-800"
-                        : "bg-white border-slate-200 text-slate-400"
-                      }`}
-                    >
-                      <div className="font-medium">{screens[screen]}</div>
-                      <div className="text-[10px] mt-0.5">{level ? PERM_LABELS[level] : "—"}</div>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-[10px] text-slate-400 mt-1">לחיצה: ללא → צפייה → עריכה → ללא</p>
+              <ScreenGrid screens={screens} perms={perms} cyclePerm={cyclePerm} />
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
@@ -391,11 +355,73 @@ export default function RolesClient({
       )}
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-[11px] text-slate-400 pt-2">
+      <div className="flex items-center gap-4 text-[11px] text-slate-400 pt-2 flex-wrap">
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> עריכה</span>
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" /> צפייה</span>
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-200 inline-block" /> אין גישה</span>
+        <span className="text-slate-300">|</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded border border-amber-400 bg-amber-50 inline-block" /> מחסן</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded border border-blue-400 bg-blue-50 inline-block" /> פלוגה</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded border border-slate-400 bg-slate-50 inline-block" /> כללי</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded border border-purple-400 bg-purple-50 inline-block" /> ניהול</span>
       </div>
+    </div>
+  );
+}
+
+const CAT_STYLES: Record<string, { border: string; bg: string; text: string; headerBg: string }> = {
+  warehouse: { border: "border-amber-300", bg: "bg-amber-50/40", text: "text-amber-800", headerBg: "bg-amber-100" },
+  company: { border: "border-blue-300", bg: "bg-blue-50/40", text: "text-blue-800", headerBg: "bg-blue-100" },
+  general: { border: "border-slate-300", bg: "bg-slate-50/40", text: "text-slate-700", headerBg: "bg-slate-100" },
+  admin: { border: "border-purple-300", bg: "bg-purple-50/40", text: "text-purple-800", headerBg: "bg-purple-100" },
+};
+
+function ScreenGrid({ screens, perms, cyclePerm }: {
+  screens: Record<Screen, string>;
+  perms: Record<string, string>;
+  cyclePerm: (screen: string) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      {(Object.keys(SCREEN_CATEGORIES) as ScreenCategory[]).map((cat) => {
+        const catDef = SCREEN_CATEGORIES[cat];
+        const catScreens = catDef.screens.filter((s) => s in screens);
+        if (catScreens.length === 0) return null;
+        const style = CAT_STYLES[cat];
+        return (
+          <div key={cat} className={`rounded-xl border-2 ${style.border} overflow-hidden`}>
+            <div className={`px-3 py-1.5 ${style.headerBg} flex items-center gap-1.5`}>
+              <span className="text-sm">{catDef.icon}</span>
+              <span className={`text-xs font-bold ${style.text}`}>{catDef.label}</span>
+              <span className="text-[10px] text-slate-400 mr-auto">
+                {catScreens.filter((s) => perms[s]).length}/{catScreens.length}
+              </span>
+            </div>
+            <div className={`p-2 ${style.bg}`}>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
+                {catScreens.map((screen) => {
+                  const level = perms[screen] || "";
+                  return (
+                    <button
+                      key={screen}
+                      onClick={() => cyclePerm(screen)}
+                      className={`px-2.5 py-2 rounded-lg text-xs text-right border transition ${
+                        level === "EDIT" ? "bg-green-50 border-green-300 text-green-800"
+                        : level === "VIEW" ? "bg-blue-50 border-blue-300 text-blue-800"
+                        : "bg-white border-slate-200 text-slate-400"
+                      }`}
+                    >
+                      <div className="font-medium">{screens[screen]}</div>
+                      <div className="text-[10px] mt-0.5">{level ? PERM_LABELS[level] : "—"}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      <p className="text-[10px] text-slate-400">לחיצה: ללא → צפייה → עריכה → ללא</p>
     </div>
   );
 }

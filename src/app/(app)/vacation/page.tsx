@@ -10,9 +10,10 @@ import TabNav from "@/components/TabNav";
 export const dynamic = "force-dynamic";
 
 const SCHEDULE_TABS = [
+  { key: "my", label: "📋 הלוז שלי", href: "/vacation/schedule?type=MY" },
   { key: "availability", label: "📅 זמינות", href: "/vacation" },
   { key: "mukdam", label: "🏕️ מקדים/מאסף", href: "/vacation/schedule?type=MUKDAM_MEASEF" },
-  { key: "plugati", label: "📋 לוז פלוגתי", href: "/vacation/schedule?type=PLUGATI" },
+  { key: "plugati", label: "📋 לוז מפורט יומי", href: "/vacation/schedule?type=PLUGATI" },
 ];
 
 export default async function VacationPage() {
@@ -48,7 +49,7 @@ export default async function VacationPage() {
     <div>
       <PageHeader
         title="📅 ניהול לוז"
-        subtitle="זמינות, אירועי מקדים/מאסף ולוז פלוגתי"
+        subtitle="זמינות, אירועי מקדים/מאסף ולוז מפורט יומי"
       />
       <TabNav tabs={SCHEDULE_TABS} active="availability" />
 

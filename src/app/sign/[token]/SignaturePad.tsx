@@ -33,6 +33,7 @@ export default function SignaturePad({
   const [error, setError] = useState("");
   const [countdown, setCountdown] = useState(10);
   const [whatsappText, setWhatsappText] = useState<string | null>(null);
+  const [soldierPhone, setSoldierPhone] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const needsAck = !!(weaponsAgreement || signatureClause);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -114,7 +115,10 @@ export default function SignaturePad({
       if (!isCompanySign) {
         try {
           const share = await getPostSignatureShareData(token);
-          if (share.ok) setWhatsappText(share.whatsappText);
+          if (share.ok) {
+            setWhatsappText(share.whatsappText);
+            setSoldierPhone(share.soldierPhone);
+          }
         } catch {}
       }
     }
@@ -140,7 +144,10 @@ export default function SignaturePad({
   }, [done, router, whatsappText]);
 
   if (done) {
-    const waUrl = whatsappText ? `https://wa.me/?text=${encodeURIComponent(whatsappText)}` : null;
+    const normalizedPhone = soldierPhone?.replace(/\D/g, "").replace(/^0/, "972") ?? "";
+    const waUrl = whatsappText
+      ? `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(whatsappText)}`
+      : null;
     return (
       <div className="text-center py-6">
         <div className="text-6xl mb-3">✅</div>
@@ -154,7 +161,7 @@ export default function SignaturePad({
             <div className="flex gap-2 mt-2">
               <a href={waUrl!} target="_blank" rel="noopener noreferrer"
                 className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg py-2 text-sm font-bold text-center">
-                📲 שתף ב-WhatsApp
+                📲 {normalizedPhone ? `שלח לחייל ב-WhatsApp` : `שתף ב-WhatsApp`}
               </a>
               <button onClick={() => navigator.clipboard.writeText(whatsappText)}
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm">

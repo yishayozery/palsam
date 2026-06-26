@@ -8,11 +8,11 @@ export const dynamic = "force-dynamic";
 export default async function RosterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; company?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; company?: string; status?: string; tab?: string }>;
 }) {
   const user = await requireCapability("soldiers.roster");
   const bId = user.battalionId!;
-  const { q = "", company = "", status = "" } = await searchParams;
+  const { q = "", company = "", status = "", tab = "" } = await searchParams;
 
   const [companies, soldiers, squads, attachmentRequests] = await Promise.all([
     prisma.holder.findMany({
@@ -26,6 +26,7 @@ export default async function RosterPage({
       include: {
         company: { select: { name: true } },
         squad: { select: { id: true, name: true } },
+        companyRole: { select: { name: true, isCommander: true } },
         _count: { select: { signedSerialUnits: true, signedKitInstances: true } },
         attachmentRequests: { orderBy: { requestedAt: "desc" }, take: 1, select: { status: true, fromDate: true, toDate: true } },
       },
@@ -84,6 +85,7 @@ export default async function RosterPage({
           personalNumber: s.personalNumber, phone: s.phone,
           companyId: s.companyId, companyName: s.company?.name ?? null,
           platoon: s.platoon, squadId: s.squadId, squadName: s.squad?.name ?? null,
+          roleName: s.companyRole?.name ?? null, roleIsCommander: s.companyRole?.isCommander ?? false,
           status: s.status, attached: s.attached,
           signedCount: s._count.signedSerialUnits + s._count.signedKitInstances,
           enlistedAt: s.enlistedAt?.toISOString() ?? null,
@@ -97,6 +99,7 @@ export default async function RosterPage({
         initialQ={q}
         initialCompany={company}
         initialStatus={status}
+        initialTab={tab}
         attachmentRequests={attachmentRequests.map((r) => ({
           id: r.id,
           soldierName: r.soldierName,

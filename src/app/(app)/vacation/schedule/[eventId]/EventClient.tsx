@@ -113,7 +113,7 @@ export default function EventClient({
   const canEditForce = (force: Force) => isAdmin || createdById === currentUserId || force.userId === currentUserId;
 
   const generateShareText = useCallback(() => {
-    const typeLabel = eventType === "PLUGATI" ? "לוז פלוגתי" : "מקדים/מאסף";
+    const typeLabel = eventType === "PLUGATI" ? "לוז מפורט יומי" : "מקדים/מאסף";
     const fmtD = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
     let text = `🏛️ *${battalionName}*\n📋 *${eventName}* — ${typeLabel}\n📅 ${fmtD(startDate)} — ${fmtD(endDate)}\n\n`;
     for (const d of dates) {

@@ -112,5 +112,8 @@ export function formatSoldierSummaryForWhatsApp(s: SoldierEquipmentSummary, opts
       lines.push(`חסר: ${missing.join(", ")}`);
     }
   }
+  lines.push("");
+  lines.push("🔗 צפה בציוד שחתום עליך:");
+  lines.push(`${process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il"}/my-equipment`);
   return lines.join("\n");
 }

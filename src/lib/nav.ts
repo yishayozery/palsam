@@ -20,6 +20,7 @@ export const NAV: NavItem[] = [
   // ===== מבצעי =====
   { href: "/dashboard", label: "דשבורד", icon: "📊", group: "מבצעי", screen: "dashboard" },
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "מבצעי", screen: "soldiers" },
+  { href: "/roster?tab=attachments", label: "בקשות סיפוח", icon: "📌", group: "מבצעי", screen: "soldiers" },
   { href: "/soldiers", label: "חיילי הפלוגה", icon: "👤", group: "מבצעי", screen: "soldiers" },
   { href: "/attendance", label: "נוכחות בתעסוקה", icon: "📋", group: "מבצעי", screen: "attendance" },
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "מבצעי", screen: "dispatch" },

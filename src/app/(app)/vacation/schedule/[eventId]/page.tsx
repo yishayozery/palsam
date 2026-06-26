@@ -69,7 +69,7 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
     orderBy: { name: "asc" },
   });
 
-  const typeLabel = event.type === "PLUGATI" ? "לוז פלוגתי" : "מקדים/מאסף";
+  const typeLabel = event.type === "PLUGATI" ? "לוז מפורט יומי" : "מקדים/מאסף";
   const backHref = `/vacation/schedule?type=${event.type}`;
 
   const dates: string[] = [];

@@ -14,7 +14,7 @@ import type { SignatureMethod } from "@/generated/prisma";
 /** מחזיר את ה-summary של חייל אחרי חתימה - לשליחה ב-WhatsApp. ציבורי דרך token. */
 export async function getPostSignatureShareData(
   token: string,
-): Promise<{ ok: true; summary: SoldierEquipmentSummary; whatsappText: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; summary: SoldierEquipmentSummary; whatsappText: string; soldierPhone: string | null } | { ok: false; error: string }> {
   try {
     const sig = await prisma.signature.findUnique({
       where: { token },
@@ -28,7 +28,7 @@ export async function getPostSignatureShareData(
     const whatsappText = formatSoldierSummaryForWhatsApp(summary, {
       headerTitle: "📋 סיכום ציוד חתום על החייל (לאחר חתימה)",
     });
-    return { ok: true, summary, whatsappText };
+    return { ok: true, summary, whatsappText, soldierPhone: summary.soldier.phone };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "שגיאה" };
   }
