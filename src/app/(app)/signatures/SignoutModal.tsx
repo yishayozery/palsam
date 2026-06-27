@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef } from "react";
 import { createSignout } from "./actions";
+import { signKit } from "../ymach/actions";
 import { useEscClose } from "@/lib/useEscClose";
 
 type Soldier = { id: string; name: string; pn: string | null; companyId?: string | null; companyName?: string | null; enlisted?: boolean; armoryEligible?: boolean };
@@ -17,9 +18,10 @@ type EquipLocation = { id: string; name: string; isVehicle: boolean; companyId: 
 type CartSerial = { type: "serial"; unitId: string; itemName: string; serial: string; status: string; lotQty?: number; lotTotal?: number };
 type CartQty = { type: "qty"; itemTypeId: string; itemName: string; unit: string; quantity: number; statusId: string; statusName: string; fromKit?: string };
 type CartItem = CartSerial | CartQty;
+type OpKitProp = { id: string; name: string; status: string; soldierId: string; soldierName: string; shelfLabel: string | null; items: { itemTypeId: string; itemName: string; sku: string | null; quantity: number }[] };
 
 export default function SignoutModal({
-  soldiers, companies = [], balances = [], units, kits, vehicles, equipmentLocations = [], lockCompanyId, isArmory = false, reopenForSoldierId,
+  soldiers, companies = [], balances = [], units, kits, vehicles, equipmentLocations = [], lockCompanyId, isArmory = false, reopenForSoldierId, operationalKits = [],
 }: {
   soldiers: Soldier[]; companies?: Company[]; balances?: Balance[];
   units: Unit[]; kits: Kit[]; vehicles: Vehicle[];
@@ -27,6 +29,7 @@ export default function SignoutModal({
   lockCompanyId?: string | null;
   isArmory?: boolean;
   reopenForSoldierId?: string | null;
+  operationalKits?: OpKitProp[];
 }) {
   const [open, setOpen] = useState(!!reopenForSoldierId);
   const [soldierId, setSoldierId] = useState(reopenForSoldierId ?? "");
@@ -48,6 +51,10 @@ export default function SignoutModal({
   const [kitPickerSearch, setKitPickerSearch] = useState("");
   // התראת חוסר ערכה — לפני שמרחיבים: מפרטת מה חסר, מאפשרת המשך עם מה שיש
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+
+  // מארזים מבצעיים — STORED, משויכים לחייל הנבחר
+  const soldierOpKits = operationalKits.filter((k) => k.soldierId === soldierId && k.status === "STORED");
+  const [opKitRemovedItems, setOpKitRemovedItems] = useState<Record<string, Record<string, number>>>({});
 
   const [kitShortageDialog, setKitShortageDialog] = useState<{
     kitId: string;
@@ -246,13 +253,28 @@ export default function SignoutModal({
   };
 
   async function submit() {
-    // הגנת כפילות: ref מונע double-click מהיר; busy מונע submit נוסף אחרי click
     if (submittingRef.current || busy) return;
     setError(null);
     if (!soldierId) { setError("בחר חייל"); return; }
-    if (cart.length === 0 && !kitId) { setError("הוסף לפחות פריט אחד או בחר ערכה"); return; }
+    if (cart.length === 0 && !kitId && soldierOpKits.length === 0) { setError("הוסף לפחות פריט אחד או בחר ערכה"); return; }
     submittingRef.current = true;
     setBusy(true);
+
+    // שלב 1: החתמת מארזים מבצעיים (STORED → ISSUED)
+    for (const opKit of soldierOpKits) {
+      const removed = opKitRemovedItems[opKit.id];
+      const removedList = removed
+        ? Object.entries(removed).filter(([, q]) => q > 0).map(([itemTypeId, quantity]) => ({ itemTypeId, quantity }))
+        : undefined;
+      const res = await signKit(opKit.id, removedList?.length ? removedList : undefined);
+      if (res.error) { setError(`שגיאה במארז ${opKit.name}: ${res.error}`); submittingRef.current = false; setBusy(false); return; }
+    }
+
+    // אם אין פריטים בעגלה ואין ערכה — סיימנו (רק מארזים)
+    if (cart.length === 0 && !kitId) {
+      reset(); setOpen(false); return;
+    }
+
     const fd = new FormData();
     fd.append("soldierId", soldierId);
     fd.append("method", method);
@@ -363,11 +385,59 @@ export default function SignoutModal({
               )}
             </div>
             <div className="flex-1 md:overflow-y-auto p-2 space-y-1.5">
-              {cart.length === 0 ? (
+              {/* מארזים מבצעיים */}
+              {soldierOpKits.length > 0 && (
+                <div className="mb-2">
+                  <div className="text-xs font-bold text-emerald-700 mb-1">📦 מארזים מבצעיים ({soldierOpKits.length})</div>
+                  {soldierOpKits.map((kit) => (
+                    <div key={kit.id} className="bg-emerald-50 border border-emerald-200 rounded-lg p-2 mb-1.5">
+                      <div className="font-medium text-sm text-emerald-800">{kit.name}</div>
+                      {kit.shelfLabel && <div className="text-[10px] text-emerald-600">📍 {kit.shelfLabel}</div>}
+                      <div className="mt-1 space-y-0.5">
+                        {kit.items.map((item) => {
+                          const removedQty = opKitRemovedItems[kit.id]?.[item.itemTypeId] ?? 0;
+                          const effectiveQty = item.quantity - removedQty;
+                          return (
+                            <div key={item.itemTypeId} className="flex items-center justify-between text-xs">
+                              <span className={effectiveQty <= 0 ? "line-through text-slate-400" : "text-slate-700"}>
+                                {item.itemName} {item.sku ? `(${item.sku})` : ""}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <span className={effectiveQty <= 0 ? "text-slate-400" : "text-emerald-700 font-medium"}>{effectiveQty}</span>
+                                {effectiveQty > 0 && (
+                                  <button
+                                    onClick={() => setOpKitRemovedItems((prev) => ({
+                                      ...prev,
+                                      [kit.id]: { ...prev[kit.id], [item.itemTypeId]: removedQty + 1 },
+                                    }))}
+                                    className="text-rose-400 hover:text-rose-600 text-[10px]"
+                                    title="הורד פריט"
+                                  >✕</button>
+                                )}
+                                {removedQty > 0 && (
+                                  <button
+                                    onClick={() => setOpKitRemovedItems((prev) => ({
+                                      ...prev,
+                                      [kit.id]: { ...prev[kit.id], [item.itemTypeId]: removedQty - 1 },
+                                    }))}
+                                    className="text-emerald-400 hover:text-emerald-600 text-[10px]"
+                                    title="החזר פריט"
+                                  >↩</button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {cart.length === 0 && soldierOpKits.length === 0 ? (
                 <div className="text-center text-slate-400 py-6 md:py-10 text-sm">
                   עגלה ריקה.<br />לחץ על פריט במלאי כדי להוסיף.
                 </div>
-              ) : cart.map((c, i) => (
+              ) : cart.length === 0 ? null : cart.map((c, i) => (
                 <div key={i} className="bg-white border border-slate-200 rounded-lg p-2 flex items-center gap-2">
                   {c.type === "serial" ? (
                     <>
@@ -783,7 +853,7 @@ export default function SignoutModal({
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => { reset(); setOpen(false); }} disabled={busy}
               className="flex-1 sm:flex-none rounded-lg border border-slate-300 px-4 py-2.5 text-sm disabled:opacity-50">ביטול</button>
-            <button onClick={submit} disabled={busy || !soldierId || (cart.length === 0 && !kitId)}
+            <button onClick={submit} disabled={busy || !soldierId || (cart.length === 0 && !kitId && soldierOpKits.length === 0)}
               className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-5 py-2.5 text-sm font-bold flex items-center justify-center gap-2">
               {busy ? (
                 <>
@@ -791,7 +861,7 @@ export default function SignoutModal({
                   שולח...
                 </>
               ) : (
-                <>{method === "ONSITE" ? "✍️ עבור לחתימה" : "🚀 הפעל החתמה"} ({cart.length}{kitId ? " + ערכה" : ""})</>
+                <>{method === "ONSITE" ? "✍️ עבור לחתימה" : "🚀 הפעל החתמה"} ({cart.length}{kitId ? " + ערכה" : ""}{soldierOpKits.length > 0 ? ` + ${soldierOpKits.length} מארזים` : ""})</>
               )}
             </button>
           </div>

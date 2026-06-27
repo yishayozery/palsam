@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { checkinSerial, checkinQuantity } from "./actions";
+import { returnKitWithCheck, type KitReturnItem } from "../ymach/actions";
 import { useEscClose } from "@/lib/useEscClose";
 
 type Unit = {
@@ -18,12 +19,14 @@ type QtyHolding = {
   quantity: number;
 };
 type Status = { id: string; name: string; isWear: boolean; isLoss: boolean; isDefault: boolean };
+type OpKitCheckin = { id: string; name: string; status: string; soldierId: string; soldierName: string; items: { itemTypeId: string; itemName: string; sku: string | null; quantity: number }[] };
 
-export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToHolderId, statuses }: {
+export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToHolderId, statuses, operationalKits = [] }: {
   signedUnits: Unit[];
   qtyHoldings?: QtyHolding[];
   defaultToHolderId?: string | null;
   statuses: Status[];
+  operationalKits?: OpKitCheckin[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -38,6 +41,10 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lotPicker, setLotPicker] = useState<{ unit: Unit; qty: number } | null>(null);
+  // מארזים מבצעיים — כמות שהוחזרה (kitId → itemTypeId → qty)
+  const [opKitReturned, setOpKitReturned] = useState<Record<string, Record<string, number>>>({});
+  // סיבת חוסר (kitId → itemTypeId → reason)
+  const [opKitReason, setOpKitReason] = useState<Record<string, Record<string, string>>>({});
 
   useEscClose(open && !lotPicker, () => { reset(); setOpen(false); });
 
@@ -56,6 +63,12 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
       }
       map.get(q.soldierId)!.count++;
     }
+    for (const k of operationalKits.filter((ok) => ok.status === "ISSUED")) {
+      if (!map.has(k.soldierId)) {
+        map.set(k.soldierId, { id: k.soldierId, name: k.soldierName, pn: null, companyName: null, count: 0 });
+      }
+      map.get(k.soldierId)!.count++;
+    }
     let list = Array.from(map.values());
     if (soldierSearch.trim()) {
       const q = soldierSearch.toLowerCase();
@@ -68,9 +81,12 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
   const soldierUnits = useMemo(() => signedUnits.filter((u) => u.soldierId === soldierId), [signedUnits, soldierId]);
   const soldierQty = useMemo(() => qtyHoldings.filter((q) => q.soldierId === soldierId), [qtyHoldings, soldierId]);
 
+  const soldierOpKits = operationalKits.filter((k) => k.soldierId === soldierId && k.status === "ISSUED");
+
   const reset = () => {
     setSoldierId(""); setSoldierSearch(""); setSelectedUnits(new Set());
     setPartialLotQty(new Map()); setQtyReturn(new Map()); setNewStatusId(""); setError(null);
+    setOpKitReturned({}); setOpKitReason({});
   };
 
   // לחיצה על יחידה — אם זו אצווה, פתח דיאלוג; אחרת סמן/בטל
@@ -102,9 +118,22 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
 
   async function submit() {
     const qtyTotal = Array.from(qtyReturn.values()).reduce((s, n) => s + n, 0);
-    if (selectedUnits.size === 0 && qtyTotal === 0) { setError("בחר לפחות פריט אחד לזיכוי"); return; }
+    if (selectedUnits.size === 0 && qtyTotal === 0 && soldierOpKits.length === 0) { setError("בחר לפחות פריט אחד לזיכוי"); return; }
     setBusy(true); setError(null);
     try {
+      // שלב 1: זיכוי מארזים מבצעיים
+      for (const kit of soldierOpKits) {
+        const items: KitReturnItem[] = kit.items.map((item) => {
+          const returned = opKitReturned[kit.id]?.[item.itemTypeId] ?? item.quantity;
+          const missing = item.quantity - returned;
+          const reason = opKitReason[kit.id]?.[item.itemTypeId] as KitReturnItem["reason"] ?? "OTHER";
+          return { itemTypeId: item.itemTypeId, returnedQty: returned, missingQty: missing, reason: missing > 0 ? reason : undefined };
+        });
+        const res = await returnKitWithCheck(kit.id, items);
+        if (res.error) { setError(`שגיאה במארז ${kit.name}: ${res.error}`); setBusy(false); return; }
+      }
+
+      // שלב 2: זיכוי סריאלי
       for (const unitId of selectedUnits) {
         const fd = new FormData();
         fd.append("serialUnitId", unitId);
@@ -184,10 +213,58 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {!soldierId ? (
             <p className="text-center text-slate-400 py-10 text-sm">בחר חייל מהרשימה</p>
-          ) : soldierUnits.length === 0 && soldierQty.length === 0 ? (
+          ) : soldierUnits.length === 0 && soldierQty.length === 0 && soldierOpKits.length === 0 ? (
             <p className="text-center text-slate-400 py-10 text-sm">אין ציוד חתום על {selectedSoldier?.name}</p>
           ) : (
             <>
+              {/* מארזים מבצעיים */}
+              {soldierOpKits.length > 0 && (
+                <>
+                  <div className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wide px-1 pb-1">📦 מארזים מבצעיים ({soldierOpKits.length})</div>
+                  {soldierOpKits.map((kit) => (
+                    <div key={kit.id} className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-2">
+                      <div className="font-medium text-sm text-emerald-800 mb-2">{kit.name}</div>
+                      <div className="space-y-1.5">
+                        {kit.items.map((item) => {
+                          const returned = opKitReturned[kit.id]?.[item.itemTypeId] ?? item.quantity;
+                          const missing = item.quantity - returned;
+                          const reason = opKitReason[kit.id]?.[item.itemTypeId] ?? "";
+                          return (
+                            <div key={item.itemTypeId} className="flex flex-wrap items-center gap-2 text-xs bg-white rounded p-2 border border-slate-100">
+                              <div className="flex-1 min-w-0">
+                                <span className="font-medium">{item.itemName}</span>
+                                {item.sku && <span className="text-slate-400 mr-1 font-mono text-[10px]">{item.sku}</span>}
+                                <span className="text-slate-500 mr-1">×{item.quantity}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <label className="text-[10px] text-slate-500">הוחזר:</label>
+                                <button type="button" onClick={() => setOpKitReturned((p) => ({ ...p, [kit.id]: { ...p[kit.id], [item.itemTypeId]: Math.max(0, returned - 1) } }))}
+                                  className="w-6 h-6 rounded border border-slate-300 text-sm font-bold">−</button>
+                                <span className={`w-8 text-center font-bold ${returned === item.quantity ? "text-emerald-700" : "text-amber-600"}`}>{returned}</span>
+                                <button type="button" onClick={() => setOpKitReturned((p) => ({ ...p, [kit.id]: { ...p[kit.id], [item.itemTypeId]: Math.min(item.quantity, returned + 1) } }))}
+                                  className="w-6 h-6 rounded border border-slate-300 text-sm font-bold">+</button>
+                              </div>
+                              {missing > 0 && (
+                                <div className="w-full flex items-center gap-1 mt-1">
+                                  <span className="text-rose-600 text-[10px] font-bold">חסר {missing}!</span>
+                                  <select value={reason} onChange={(e) => setOpKitReason((p) => ({ ...p, [kit.id]: { ...p[kit.id], [item.itemTypeId]: e.target.value } }))}
+                                    className="text-[10px] rounded border border-rose-300 px-1 py-0.5">
+                                    <option value="">סיבה</option>
+                                    <option value="LOST">אבד</option>
+                                    <option value="BROKEN">שבור</option>
+                                    <option value="IN_USE">בשימוש</option>
+                                    <option value="OTHER">אחר</option>
+                                  </select>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
               {soldierQty.length > 0 && (
                 <>
                   <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide px-1 pb-1">📦 כמותי</div>
@@ -342,14 +419,14 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => { reset(); setOpen(false); }} disabled={busy}
               className="flex-1 sm:flex-none rounded-lg border border-slate-300 px-4 py-2.5 text-sm disabled:opacity-50">ביטול</button>
-            <button onClick={submit} disabled={busy || (selectedUnits.size === 0 && Array.from(qtyReturn.values()).every((n) => n < 1))}
+            <button onClick={submit} disabled={busy || (selectedUnits.size === 0 && Array.from(qtyReturn.values()).every((n) => n < 1) && soldierOpKits.length === 0)}
               className="flex-1 sm:flex-none bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg px-5 py-2.5 text-sm font-bold flex items-center justify-center gap-2">
               {busy ? (
                 <>
                   <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                   מזכה...
                 </>
-              ) : `✓ זכה ${selectedUnits.size + Array.from(qtyReturn.values()).filter((n) => n > 0).length} פריטים`}
+              ) : `✓ זכה ${selectedUnits.size + Array.from(qtyReturn.values()).filter((n) => n > 0).length} פריטים${soldierOpKits.length > 0 ? ` + ${soldierOpKits.length} מארזים` : ""}`}
             </button>
           </div>
         </div>

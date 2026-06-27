@@ -167,6 +167,9 @@ model Battalion {
   certificationTypes CertificationType[] @relation("BattalionCertificationTypes")
   scheduleEvents         ScheduleEvent[]
   attachmentRequests     AttachmentRequest[]
+  companyWarehouses      CompanyWarehouse[]  @relation("BattalionCompanyWarehouses")
+  operationalKits        OperationalKit[]    @relation("BattalionOpKits")
+  ymachGaps              YmachGap[]          @relation("BattalionYmachGaps")
 }
 
 // ===================== משתמשים =====================
@@ -370,6 +373,9 @@ model Holder {
   signableKits     SignableKit[]      @relation("SignableKitHolder")
   employmentAllocations EmploymentAllocation[] @relation("CompanyEmploymentAllocations")
   attachmentRequests    AttachmentRequest[]    @relation("AttachmentTargetCompany")
+  companyWarehouses     CompanyWarehouse[]     @relation("HolderCompanyWarehouses")
+  operationalKits       OperationalKit[]       @relation("HolderOpKits")
+  ymachGaps             YmachGap[]             @relation("HolderYmachGaps")
 
   @@index([battalionId])
   @@index([kind])
@@ -430,6 +436,7 @@ model EquipmentLocation {
   serialUnits SerialUnit[] @relation("SerialUnitEquipmentLocation")
   stockBalances StockBalance[] @relation("EquipmentLocationStock")
   soldierItemLocations SoldierItemLocation[] @relation("EquipmentLocationSoldierItems")
+  operationalKits OperationalKit[] @relation("OpKitEquipmentLocation")
 
   @@unique([holderId, name])
   @@index([battalionId])
@@ -576,6 +583,8 @@ model Soldier {
   callupPeriods      CallupPeriod[]
   scheduleDaySoldiers ScheduleDaySoldier[] @relation("SoldierScheduleDay")
   attachmentRequests  AttachmentRequest[]
+  operationalKits     OperationalKit[] @relation("SoldierOpKits")
+  ymachGaps           YmachGap[]       @relation("SoldierYmachGaps")
   // מקושר למשתמש מערכת (קצין/רס"פ)
   appUser            AppUser?      @relation("SoldierAsUser")
 
@@ -777,6 +786,9 @@ model ItemType {
   inSignableKits SignableKitLine[] @relation("KitLineItem")
   requiredLicenses VehicleTypeLicense[] @relation("ItemTypeRequiredLicense")
   dispatchTemplates DispatchTemplate[] @relation("DispatchTemplateVehicleType")
+  companyShelfItems CompanyShelfItem[] @relation("ItemTypeOnShelf")
+  operationalKitItems OperationalKitItem[] @relation("ItemTypeInOpKit")
+  ymachGaps         YmachGap[]           @relation("YmachGapItemType")
 
   @@unique([battalionId, sku])
   @@index([categoryId])
@@ -883,6 +895,13 @@ model SerialUnit {
   kitInstanceId String?
   kitInstance   KitInstance? @relation(fields: [kitInstanceId], references: [id])
 
+  // ימ"ח — אפסון: פריט נשאר חתום על החייל אבל מאוחסן פיזית במדף
+  storageStatus   String   @default("ACTIVE") // "ACTIVE" | "STORED"
+  storedShelfId   String?
+  storedShelf     CompanyShelf? @relation("StoredOnShelf", fields: [storedShelfId], references: [id], onDelete: SetNull)
+  storedAt        DateTime?
+  storedByUserId  String?
+
   // תאריך תפוגה — רלוונטי בעיקר ל-LOT (תרופות, אצוות) ולפריטים סריאליים בודדים שיש להם תפוגה
   expiryDate DateTime?
 
@@ -893,12 +912,14 @@ model SerialUnit {
 
   transferLines TransferLine[]
   countLines    CountLine[]
+  ymachGaps     YmachGap[]    @relation("YmachGapSerialUnit")
 
   @@unique([itemTypeId, serialNumber])
   @@index([battalionId])
   @@index([currentHolderId])
   @@index([signedSoldierId])
   @@index([battalionId, expiryDate])
+  @@index([storageStatus])
 }
 
 model KitInstance {
@@ -1630,4 +1651,133 @@ model ScheduleDaySoldier {
   @@unique([dayEntryId, soldierId, phase])
   @@index([dayEntryId])
   @@index([soldierId])
+}
+
+// ===================== ימ"ח — מחסן פלוגתי =====================
+
+// מחסן ימ"ח — פלוגה יכולה להחזיק 1+ מחסנים עם מידוף עצמאי
+model CompanyWarehouse {
+  id          String    @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation("BattalionCompanyWarehouses", fields: [battalionId], references: [id], onDelete: Cascade)
+  holderId    String
+  holder      Holder    @relation("HolderCompanyWarehouses", fields: [holderId], references: [id], onDelete: Cascade)
+  name        String
+  notes       String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  shelves CompanyShelf[]
+
+  @@unique([holderId, name])
+  @@index([battalionId])
+  @@index([holderId])
+}
+
+// מדף בתוך מחסן ימ"ח — עמודה × שורה + תווית
+model CompanyShelf {
+  id          String           @id @default(cuid())
+  warehouseId String
+  warehouse   CompanyWarehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  column      String
+  row         String
+  label       String?
+
+  items            CompanyShelfItem[]
+  operationalKits  OperationalKit[]   @relation("OpKitShelf")
+  storedSerialUnits SerialUnit[]      @relation("StoredOnShelf")
+
+  @@unique([warehouseId, column, row])
+  @@index([warehouseId])
+}
+
+// שיוך פריט למדף (פריט יכול להיות על 2+ מדפים)
+model CompanyShelfItem {
+  id         String       @id @default(cuid())
+  shelfId    String
+  shelf      CompanyShelf @relation(fields: [shelfId], references: [id], onDelete: Cascade)
+  itemTypeId String
+  itemType   ItemType     @relation("ItemTypeOnShelf", fields: [itemTypeId], references: [id], onDelete: Cascade)
+  quantity   Int          @default(1)
+  notes      String?
+
+  @@unique([shelfId, itemTypeId])
+  @@index([shelfId])
+  @@index([itemTypeId])
+}
+
+// ארגז מבצעי — ערכה פלוגתית שחוזרת כיחידה (≠ ערכת החתמה)
+model OperationalKit {
+  id          String    @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation("BattalionOpKits", fields: [battalionId], references: [id], onDelete: Cascade)
+  holderId    String
+  holder      Holder    @relation("HolderOpKits", fields: [holderId], references: [id], onDelete: Cascade)
+  kitNumber   String?
+  name        String
+  shelfId     String?
+  shelf       CompanyShelf? @relation("OpKitShelf", fields: [shelfId], references: [id], onDelete: SetNull)
+  equipmentLocationId String?
+  equipmentLocation   EquipmentLocation? @relation("OpKitEquipmentLocation", fields: [equipmentLocationId], references: [id], onDelete: SetNull)
+  assignedSoldierId String?
+  assignedSoldier   Soldier? @relation("SoldierOpKits", fields: [assignedSoldierId], references: [id], onDelete: SetNull)
+  // סטטוס: STORED=על המדף, ISSUED=אצל החייל
+  status      String    @default("STORED") // "STORED" | "ISSUED"
+  notes       String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items OperationalKitItem[]
+  ymachGaps YmachGap[] @relation("OpKitYmachGaps")
+
+  @@unique([holderId, name])
+  @@index([battalionId])
+  @@index([holderId])
+  @@index([assignedSoldierId])
+  @@index([equipmentLocationId])
+}
+
+// פער ימ"ח — פריט שלא הוחזר באפסון
+model YmachGap {
+  id            String    @id @default(cuid())
+  battalionId   String
+  battalion     Battalion @relation("BattalionYmachGaps", fields: [battalionId], references: [id], onDelete: Cascade)
+  holderId      String
+  holder        Holder    @relation("HolderYmachGaps", fields: [holderId], references: [id], onDelete: Cascade)
+  soldierId     String
+  soldier       Soldier   @relation("SoldierYmachGaps", fields: [soldierId], references: [id], onDelete: Cascade)
+  serialUnitId  String?
+  serialUnit    SerialUnit? @relation("YmachGapSerialUnit", fields: [serialUnitId], references: [id], onDelete: SetNull)
+  itemTypeId    String
+  itemType      ItemType  @relation("YmachGapItemType", fields: [itemTypeId], references: [id], onDelete: Cascade)
+  operationalKitId String?
+  operationalKit   OperationalKit? @relation("OpKitYmachGaps", fields: [operationalKitId], references: [id], onDelete: SetNull)
+  quantity      Int       @default(1)
+  reason        String    // "LOST" | "BROKEN" | "IN_USE" | "OTHER"
+  reasonText    String?
+  status        String    @default("OPEN") // "OPEN" | "RESOLVED"
+  resolvedAt    DateTime?
+  resolvedById  String?
+  createdAt     DateTime  @default(now())
+  createdById   String?
+
+  @@index([battalionId])
+  @@index([holderId])
+  @@index([soldierId])
+  @@index([status])
+}
+
+// פריט בתוך ארגז מבצעי
+model OperationalKitItem {
+  id         String         @id @default(cuid())
+  kitId      String
+  kit        OperationalKit @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  itemTypeId String
+  itemType   ItemType       @relation("ItemTypeInOpKit", fields: [itemTypeId], references: [id], onDelete: Cascade)
+  quantity   Int            @default(1)
+
+  @@unique([kitId, itemTypeId])
+  @@index([kitId])
+  @@index([itemTypeId])
 }

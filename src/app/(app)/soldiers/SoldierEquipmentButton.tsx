@@ -17,17 +17,22 @@ type SignedQty = {
   lastSignedAt: string | null;
   lastSignedBy: string | null;
 };
+type IssuedKit = {
+  kitName: string; kitNumber: string | null;
+  items: { name: string; sku: string | null; qty: number }[];
+};
 
 export default function SoldierEquipmentButton({
-  soldierId, soldierName, signedSerials, signedQty,
+  soldierId, soldierName, signedSerials, signedQty, issuedKits,
 }: {
   soldierId: string;
   soldierName: string;
   signedSerials: SignedSerial[];
   signedQty: SignedQty[];
+  issuedKits: IssuedKit[];
 }) {
   const [open, setOpen] = useState(false);
-  const total = signedSerials.length + signedQty.length;
+  const total = signedSerials.length + signedQty.length + issuedKits.length;
   if (total === 0) {
     return <span className="text-[10px] text-slate-400">לא חתום על ציוד</span>;
   }
@@ -50,6 +55,32 @@ export default function SoldierEquipmentButton({
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {issuedKits.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-sm text-slate-700 mb-2">🎒 ארגזים מבצעיים ({issuedKits.length})</h4>
+                  <div className="space-y-2">
+                    {issuedKits.map((kit, idx) => (
+                      <div key={idx} className="border border-emerald-300 bg-emerald-50 rounded-lg p-2.5">
+                        <div className="font-medium text-sm">
+                          🎒 {kit.kitName}
+                          {kit.kitNumber && <span className="text-xs text-emerald-600 font-mono mr-2">#{kit.kitNumber}</span>}
+                        </div>
+                        {kit.items.length > 0 && (
+                          <div className="mt-1.5 mr-3 space-y-0.5">
+                            {kit.items.map((item, j) => (
+                              <div key={j} className="text-[11px] text-slate-600 flex gap-2">
+                                <span className="flex-1">{item.name}{item.sku && <span className="font-mono text-slate-400 mr-1">({item.sku})</span>}</span>
+                                <span className="text-emerald-700 font-medium">×{item.qty}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {signedSerials.length > 0 && (
                 <div>
                   <h4 className="font-bold text-sm text-slate-700 mb-2">🔫 סריאלי / אצוות ({signedSerials.length})</h4>

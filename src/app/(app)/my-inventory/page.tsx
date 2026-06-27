@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireCapability } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
@@ -196,7 +197,11 @@ export default async function MyInventoryPage() {
         title={`המלאי שלי — ${company?.name ?? ""}`}
         subtitle="כל הציוד שאתה חתום עליו מול הגדוד והמחסנים"
         action={
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Link href="/my-inventory/locations"
+              className="bg-white border border-slate-300 text-slate-700 rounded-lg px-3 py-2 text-xs md:text-sm font-medium hover:bg-slate-50">
+              📍 מיקומי ציוד
+            </Link>
             {await (async () => {
               const tana = await findTanaHolder(bId);
               if (!tana || companyId === tana.id) return null;

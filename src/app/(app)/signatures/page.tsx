@@ -240,6 +240,18 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
     orderBy: { name: "asc" },
   });
 
+  // 🆕 מארזים מבצעיים — כדי שהחתמה/זיכוי יזהו מארזים על שם החייל
+  const operationalKits = (isCompanyRep && user.holderId)
+    ? await prisma.operationalKit.findMany({
+        where: { holderId: user.holderId, active: true, assignedSoldierId: { not: null } },
+        include: {
+          items: { include: { itemType: { select: { id: true, name: true, sku: true } } } },
+          assignedSoldier: { select: { id: true, fullName: true, personalNumber: true } },
+          shelf: { select: { column: true, row: true, warehouse: { select: { name: true } } } },
+        },
+      })
+    : [];
+
   // 🆕 דגל מ.א. - לתעודות חתום-בק
   const battalionConfig = await prisma.battalion.findUnique({
     where: { id: bId }, select: { requirePersonalIdOnHandover: true },
@@ -334,6 +346,12 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                 qtyHoldings={soldierQtyHoldings}
                 defaultToHolderId={user.holderId ?? null}
                 statuses={statuses.map((s) => ({ id: s.id, name: s.name, isWear: s.isWear, isLoss: s.isLoss, isDefault: s.isDefault }))}
+                operationalKits={operationalKits.map((k) => ({
+                  id: k.id, name: k.name, status: k.status,
+                  soldierId: k.assignedSoldierId!,
+                  soldierName: k.assignedSoldier!.fullName,
+                  items: k.items.map((i) => ({ itemTypeId: i.itemTypeId, itemName: i.itemType.name, sku: i.itemType.sku, quantity: i.quantity })),
+                }))}
               />
               <SignoutModal
                 reopenForSoldierId={reopenFor}
@@ -367,6 +385,13 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                 vehicles={vehicles.map((v) => ({ id: v.id, name: v.itemType.name, plate: v.serialNumber }))}
                 equipmentLocations={allCompanyLocations.map((l) => ({
                   id: l.id, name: l.name, companyId: l.holderId, isVehicle: !!l.vehicleSerialUnitId,
+                }))}
+                operationalKits={operationalKits.map((k) => ({
+                  id: k.id, name: k.name, status: k.status,
+                  soldierId: k.assignedSoldierId!,
+                  soldierName: k.assignedSoldier!.fullName,
+                  shelfLabel: k.shelf ? `${k.shelf.warehouse.name} ${k.shelf.column}-${k.shelf.row}` : null,
+                  items: k.items.map((i) => ({ itemTypeId: i.itemTypeId, itemName: i.itemType.name, sku: i.itemType.sku, quantity: i.quantity })),
                 }))}
               />
             </div>

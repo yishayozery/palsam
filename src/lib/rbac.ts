@@ -29,6 +29,7 @@ export const SCREENS = {
   catalog: "הגדרות פריטים",
   warehouses: "מחסנים",
   allocations: "הקצאות/ציוד קבוע",
+  ymach: "מחסן ימ\"ח",
   settings: "הגדרות גדוד",
 } as const;
 
@@ -47,7 +48,7 @@ export const SCREEN_CATEGORIES: Record<ScreenCategory, { label: string; icon: st
     label: "פלוגה",
     icon: "👤",
     color: "blue",
-    screens: ["soldiers", "roster", "attendance", "employment", "allocations", "armory_allocations"],
+    screens: ["soldiers", "roster", "attendance", "employment", "allocations", "armory_allocations", "ymach"],
   },
   general: {
     label: "כללי",
@@ -92,7 +93,8 @@ export type Capability =
   | "weapons.view"
   | "attendance.manage"
   | "attendance.view"
-  | "weapons.view_report";
+  | "weapons.view_report"
+  | "ymach.manage";
 
 const CAP_TO_SCREEN: Record<Capability, { screen: Screen; needsEdit: boolean }> = {
   "battalions.manage": { screen: "settings", needsEdit: true },
@@ -122,6 +124,7 @@ const CAP_TO_SCREEN: Record<Capability, { screen: Screen; needsEdit: boolean }> 
   "attendance.manage": { screen: "attendance", needsEdit: true },
   "attendance.view": { screen: "attendance", needsEdit: false },
   "weapons.view_report": { screen: "armory_reports", needsEdit: false },
+  "ymach.manage": { screen: "ymach", needsEdit: true },
 };
 
 // ===================== SessionUser permissions =====================
@@ -184,7 +187,7 @@ const LEGACY_MATRIX: Record<Role, Capability[]> = {
     "counts.manage", "counts.execute", "soldiers.roster", "company.manage",
     "signatures.manage", "transfer.approve", "gaps.resolve", "maintenance.manage",
     "reports.view", "audit.view", "dispatch.manage", "weapons.approve",
-    "weapons.view", "attendance.manage", "attendance.view",
+    "weapons.view", "attendance.manage", "attendance.view", "ymach.manage",
   ],
   WAREHOUSE_MANAGER: [
     "warehouse.operate", "catalog.manage", "kits.manage", "dictionaries.manage",
@@ -196,7 +199,7 @@ const LEGACY_MATRIX: Record<Role, Capability[]> = {
   COMPANY_REP: [
     "company.manage", "locations.manage", "donations.manage", "transfer.approve",
     "signatures.manage", "counts.manage", "counts.execute", "reports.view",
-    "dispatch.manage", "attendance.manage", "attendance.view",
+    "dispatch.manage", "attendance.manage", "attendance.view", "ymach.manage",
   ],
   VIEWER: ["reports.view", "dispatch.manage"],
   SHALISH: ["soldiers.roster", "reports.view", "dispatch.manage", "weapons.view"],
@@ -278,7 +281,7 @@ export const PRESET_ROLES: {
       { screen: "vacation", level: "EDIT" },
       { screen: "stock", level: "VIEW" }, { screen: "gaps", level: "VIEW" },
       { screen: "reports", level: "VIEW" }, { screen: "armory_allocations", level: "VIEW" },
-      { screen: "maintenance", level: "VIEW" },
+      { screen: "maintenance", level: "VIEW" }, { screen: "ymach", level: "EDIT" },
     ],
   },
   {

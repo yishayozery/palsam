@@ -37,14 +37,14 @@ export const NAV: NavItem[] = [
   { href: "/warehouses", label: "מחסנים", icon: "🏪", group: "לוגיסטי", screen: "warehouses" },
   { href: "/items", label: "הגדרות פריטים", icon: "🏷️", group: "לוגיסטי", screen: "catalog" },
   { href: "/stock", label: "מלאי", icon: "📋", group: "לוגיסטי", screen: "stock" },
+  { href: "/locations", label: "מידוף מחסן", icon: "🗄️", group: "לוגיסטי", screen: "stock" },
   { href: "/stock/brigade", label: "החתמות חטיבה", icon: "🤝", group: "לוגיסטי", screen: "stock" },
   { href: "/signatures", label: "החתמות", icon: "✍️", group: "לוגיסטי", screen: "signatures" },
   { href: "/counts", label: "ספירות מלאי", icon: "🔢", group: "לוגיסטי", screen: "counts" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "לוגיסטי", screen: "gaps" },
-  { href: "/transfers", label: "קבלות ממתינות", icon: "📥", group: "לוגיסטי", screen: "transfers" },
-  { href: "/kits", label: "ערכות החתמה", icon: "📦", group: "לוגיסטי", screen: "kits" },
-  { href: "/donations", label: "תרומות", icon: "🎁", group: "לוגיסטי", screen: "donations" },
   { href: "/my-inventory", label: "המלאי שלי", icon: "📦", group: "לוגיסטי", screen: "soldiers" },
+  { href: "/my-inventory/locations", label: "מיקומי ציוד", icon: "📍", group: "לוגיסטי", screen: "soldiers" },
+  { href: "/ymach", label: "מחסן ימ\"ח", icon: "🏗️", group: "לוגיסטי", screen: "ymach" },
 
   // ===== דוחות =====
   { href: "/reports", label: "דוחות", icon: "📈", group: "דוחות", screen: "reports" },

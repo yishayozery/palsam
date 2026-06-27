@@ -182,6 +182,25 @@ export default async function SoldiersPage({
     qtyBySoldier.set(sId, map); // 🐛 fix: ה-map לא נשמר חזרה במפה הראשית — לכן ציוד כמותי לא הוצג
   }
 
+  // 🆕 ארגזים מבצעיים ISSUED לכל חייל
+  const issuedKits = soldierIds.length === 0 ? [] : await prisma.operationalKit.findMany({
+    where: { assignedSoldierId: { in: soldierIds }, status: "ISSUED", active: true },
+    include: {
+      items: { include: { itemType: { select: { name: true, sku: true } } } },
+    },
+  });
+  const kitsBySoldier = new Map<string, Array<{ kitName: string; kitNumber: string | null; items: { name: string; sku: string | null; qty: number }[] }>>();
+  for (const k of issuedKits) {
+    if (!k.assignedSoldierId) continue;
+    const arr = kitsBySoldier.get(k.assignedSoldierId) ?? [];
+    arr.push({
+      kitName: k.name,
+      kitNumber: k.kitNumber,
+      items: k.items.map((i) => ({ name: i.itemType.name, sku: i.itemType.sku, qty: i.quantity })),
+    });
+    kitsBySoldier.set(k.assignedSoldierId, arr);
+  }
+
   const fields = [
     { name: "fullName", label: "שם מלא" },
     { name: "personalNumber", label: "מספר אישי" },
@@ -295,6 +314,7 @@ export default async function SoldiersPage({
                 <SoldierEquipmentButton
                   soldierId={s.id} soldierName={s.fullName}
                   signedSerials={serials} signedQty={qty}
+                  issuedKits={kitsBySoldier.get(s.id) ?? []}
                 />
                 {(s.status === "DISCHARGED" || s.status === "INACTIVE") && <Badge className="bg-rose-100 text-rose-700">לא פעיל</Badge>}
               </span>
