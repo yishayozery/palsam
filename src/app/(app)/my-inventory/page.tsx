@@ -8,18 +8,34 @@ import { findTanaHolder } from "@/lib/tana";
 import { requiresPersonalId } from "@/lib/handover";
 import { getCompanyItemTotals } from "@/lib/company-stock-snapshot";
 import InventoryTable from "./InventoryTable";
+import CompanyPicker from "@/components/CompanyPicker";
 
 export const dynamic = "force-dynamic";
 
-export default async function MyInventoryPage() {
+export default async function MyInventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ companyId?: string }>;
+}) {
   const user = await requireCapability("company.manage");
   const bId = user.battalionId!;
-  const companyId = user.holderId;
+  const sp = await searchParams;
+
+  const companies = await prisma.holder.findMany({
+    where: { battalionId: bId, kind: "COMPANY", active: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+  const isCompanyHolder = user.holderId ? companies.some((c) => c.id === user.holderId) : false;
+  const companyId = isCompanyHolder
+    ? user.holderId
+    : (sp.companyId && companies.some((c) => c.id === sp.companyId) ? sp.companyId : companies[0]?.id) ?? null;
+
   if (!companyId) {
     return (
       <div>
         <PageHeader title="מלאי הפלוגה" />
-        <Card className="p-6"><p className="text-sm text-slate-400">לא משויך לפלוגה — פנה למפ״ם.</p></Card>
+        <Card className="p-6"><p className="text-sm text-slate-400">אין פלוגות בגדוד.</p></Card>
       </div>
     );
   }
@@ -193,6 +209,10 @@ export default async function MyInventoryPage() {
 
   return (
     <div>
+      {!isCompanyHolder && companies.length > 1 && (
+        <CompanyPicker companies={companies} selectedId={companyId} basePath="/my-inventory" />
+      )}
+
       <PageHeader
         title={`המלאי שלי — ${company?.name ?? ""}`}
         subtitle="כל הציוד שאתה חתום עליו מול הגדוד והמחסנים"

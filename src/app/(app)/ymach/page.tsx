@@ -3,24 +3,35 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, Badge, EmptyState } from "@/components/ui";
 import TabNav from "@/components/TabNav";
 import YmachClient from "./YmachClient";
+import CompanyPicker from "@/components/CompanyPicker";
 
 export const dynamic = "force-dynamic";
 
 export default async function YmachPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; wh?: string }>;
+  searchParams: Promise<{ tab?: string; wh?: string; companyId?: string }>;
 }) {
   const user = await requireCapability("ymach.manage");
   const bId = user.battalionId!;
-  const holderId = user.holderId;
+
+  const sp = await searchParams;
+  const companies = await prisma.holder.findMany({
+    where: { battalionId: bId, kind: "COMPANY", active: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+  const isCompanyHolder = user.holderId ? companies.some((c) => c.id === user.holderId) : false;
+  const holderId = isCompanyHolder
+    ? user.holderId
+    : (sp.companyId && companies.some((c) => c.id === sp.companyId) ? sp.companyId : companies[0]?.id) ?? null;
 
   if (!holderId) {
     return (
       <div>
         <PageHeader title='מחסן ימ"ח' subtitle="ניהול מחסן פלוגתי — מדפים, ארגזים מבצעיים, ספירות" />
         <Card className="p-6">
-          <p className="text-sm text-slate-400">אינך משויך לפלוגה — פנה למפ״ם.</p>
+          <p className="text-sm text-slate-400">אין פלוגות בגדוד.</p>
         </Card>
       </div>
     );
@@ -117,6 +128,10 @@ export default async function YmachPage({
         title={`מחסן ימ"ח — ${company?.name ?? ""}`}
         subtitle="ניהול מידוף, ארגזים מבצעיים, ספירות ודוחות"
       />
+
+      {!isCompanyHolder && companies.length > 1 && (
+        <CompanyPicker companies={companies} selectedId={holderId} basePath="/ymach" extraParams={`tab=${sp.tab || "warehouses"}`} />
+      )}
 
       {/* דשבורד קטן */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">

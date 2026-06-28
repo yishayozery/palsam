@@ -3,26 +3,37 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import CompanyLocationsClient from "./CompanyLocationsClient";
 import ManageLocationsModal from "./ManageLocationsModal";
+import CompanyPicker from "@/components/CompanyPicker";
 
 export const dynamic = "force-dynamic";
 
 export default async function CompanyLocationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; loc?: string; signed?: string }>;
+  searchParams: Promise<{ q?: string; loc?: string; signed?: string; companyId?: string }>;
 }) {
   const user = await requireCapability("company.manage");
   const bId = user.battalionId!;
-  const companyId = user.holderId;
+  const sp = await searchParams;
+
+  const companies = await prisma.holder.findMany({
+    where: { battalionId: bId, kind: "COMPANY", active: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+  const isCompanyHolder = user.holderId ? companies.some((c) => c.id === user.holderId) : false;
+  const companyId = isCompanyHolder
+    ? user.holderId
+    : (sp.companyId && companies.some((c) => c.id === sp.companyId) ? sp.companyId : companies[0]?.id) ?? null;
+
   if (!companyId) {
     return (
       <div>
         <PageHeader title="📍 מיקומי ציוד" />
-        <Card className="p-6"><p className="text-sm text-slate-400">לא משויך לפלוגה — פנה למפ״ם.</p></Card>
+        <Card className="p-6"><p className="text-sm text-slate-400">אין פלוגות בגדוד.</p></Card>
       </div>
     );
   }
-  const sp = await searchParams;
   const { q = "", loc = "", signed = "" } = sp;
 
   const company = await prisma.holder.findUnique({ where: { id: companyId }, select: { name: true } });
@@ -160,6 +171,10 @@ export default async function CompanyLocationsPage({
 
   return (
     <div>
+      {!isCompanyHolder && companies.length > 1 && (
+        <CompanyPicker companies={companies} selectedId={companyId} basePath="/my-inventory/locations" />
+      )}
+
       <PageHeader
         title="📍 מיקומי ציוד הפלוגה"
         subtitle={`${company?.name ?? ""} — לכל פריט (סריאלי או כמותי) מיקום פיזי: רכב, אוהל, ערמה.`}
