@@ -37,7 +37,6 @@ export default async function YmachPage({
     );
   }
 
-  const sp = await searchParams;
   const tab = sp.tab || "warehouses";
 
   const company = await prisma.holder.findUnique({
