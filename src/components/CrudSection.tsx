@@ -34,12 +34,13 @@ export default function CrudSection({
   title: string;
   fields: Field[];
   rows: Row[];
-  saveAction: (fd: FormData) => Promise<void>;
+  saveAction: (fd: FormData) => Promise<string | undefined | void>;
   deleteAction?: (fd: FormData) => Promise<void>;
   addLabel?: string;
 }) {
   const [editId, setEditId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const editingRow = rows.find((r) => r.id === editId);
 
@@ -61,7 +62,9 @@ export default function CrudSection({
       {(adding || editingRow) && (
         <form
           action={async (fd) => {
-            await saveAction(fd);
+            setError(null);
+            const result = await saveAction(fd);
+            if (typeof result === "string") { setError(result); return; }
             setAdding(false);
             setEditId(null);
           }}
@@ -119,6 +122,11 @@ export default function CrudSection({
           <button className="bg-emerald-600 text-white rounded-lg px-4 py-1.5 text-sm hover:bg-emerald-700">
             שמירה
           </button>
+          {error && (
+            <p className="w-full text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 mt-1">
+              {error}
+            </p>
+          )}
         </form>
       )}
 

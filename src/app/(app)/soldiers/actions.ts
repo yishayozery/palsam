@@ -66,7 +66,7 @@ export async function toggleSquad(formData: FormData) {
   revalidatePath("/attendance-settings");
 }
 
-export async function saveSoldier(formData: FormData) {
+export async function saveSoldier(formData: FormData): Promise<string | undefined> {
   const user = await requireCapability("company.manage");
   const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
@@ -78,9 +78,21 @@ export async function saveSoldier(formData: FormData) {
   const companyRoleId = String(formData.get("companyRoleId") || "").trim() || null;
   let companyId = String(formData.get("companyId") || "") || null;
   if (user.holderId && !companyId) companyId = user.holderId;
-  if (!fullName || !personalNumber) return;
+  if (!fullName || !personalNumber) return "שם ומספר אישי הם שדות חובה";
 
-  const data = { fullName, personalNumber, phone, platoon, companyId, squadId, companyRoleId };
+  if (!/^\d{7}$/.test(personalNumber)) return "מספר אישי חייב להיות 7 ספרות";
+
+  const duplicate = await prisma.soldier.findFirst({
+    where: { battalionId: bId, personalNumber, ...(id ? { id: { not: id } } : {}) },
+  });
+  if (duplicate) return `מספר אישי ${personalNumber} כבר קיים בגדוד (${duplicate.fullName})`;
+
+  if (phone && !/^05\d{8}$/.test(phone.replace(/-/g, "")))
+    return "מספר נייד לא תקין — נדרש פורמט 05X-XXXXXXX";
+
+  const cleanPhone = phone ? phone.replace(/-/g, "") : null;
+
+  const data = { fullName, personalNumber, phone: cleanPhone, platoon, companyId, squadId, companyRoleId };
   if (id) {
     await prisma.soldier.update({ where: { id }, data });
   } else {
