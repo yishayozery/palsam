@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useMemo, useRef } from "react";
-import { createSignout } from "./actions";
+import { createSignout, updateSoldierPhone } from "./actions";
 import { signKit } from "../ymach/actions";
 import { useEscClose } from "@/lib/useEscClose";
 
-type Soldier = { id: string; name: string; pn: string | null; companyId?: string | null; companyName?: string | null; enlisted?: boolean; armoryEligible?: boolean };
+type Soldier = { id: string; name: string; pn: string | null; phone?: string | null; companyId?: string | null; companyName?: string | null; enlisted?: boolean; armoryEligible?: boolean };
 type Company = { id: string; name: string };
 type Unit = { id: string; itemTypeId: string; itemName: string; serial: string; status: string; statusId: string; lotQuantity: number | null; trackLocation?: boolean };
 type Balance = { itemTypeId: string; itemName: string; unit: string; status: string; statusId: string; quantity: number; trackLocation?: boolean };
@@ -51,6 +51,9 @@ export default function SignoutModal({
   const [kitPickerSearch, setKitPickerSearch] = useState("");
   // התראת חוסר ערכה — לפני שמרחיבים: מפרטת מה חסר, מאפשרת המשך עם מה שיש
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [phoneSaving, setPhoneSaving] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
 
   // מארזים מבצעיים — STORED, משויכים לחייל הנבחר
   const soldierOpKits = operationalKits.filter((k) => k.soldierId === soldierId && k.status === "STORED");
@@ -148,7 +151,7 @@ export default function SignoutModal({
   const reset = () => {
     setSoldierId(""); setCompanyFilter(lockCompanyId ?? ""); setSoldierSearch("");
     setItemSearch(""); setCart([]); setKitId(""); setVehicleId(""); setMethod("ONSITE"); setError(null);
-    setBusy(false); submittingRef.current = false;
+    setBusy(false); submittingRef.current = false; setPhoneInput(""); setPhoneError("");
   };
 
   // ⚠️ בחירת ערכה — מפצלת לפריטים בעגלה:
@@ -371,7 +374,29 @@ export default function SignoutModal({
               )}
             </div>
           </div>
-          {/* שם החייל כבר מוצג ב-select — לא צריך שורה נוספת */}
+          {selectedSoldier && !selectedSoldier.phone && (
+            <div className="mt-2 bg-amber-50 border-2 border-amber-300 rounded-lg p-2.5">
+              <div className="text-xs font-bold text-amber-900 mb-1.5">📱 חסר מספר נייד ל{selectedSoldier.name}</div>
+              <div className="flex gap-2 items-end">
+                <input value={phoneInput} onChange={(e) => { setPhoneInput(e.target.value); setPhoneError(""); }}
+                  placeholder="05XXXXXXXX" dir="ltr"
+                  className="flex-1 rounded-lg border border-amber-400 px-2.5 py-1.5 text-sm font-mono bg-white" />
+                <button disabled={phoneSaving || !phoneInput.trim()} onClick={async () => {
+                  setPhoneSaving(true); setPhoneError("");
+                  const res = await updateSoldierPhone(selectedSoldier.id, phoneInput);
+                  setPhoneSaving(false);
+                  if (!res.ok) { setPhoneError(res.error ?? "שגיאה"); return; }
+                  selectedSoldier.phone = phoneInput.replace(/[-\s]/g, "");
+                  setPhoneInput("");
+                }}
+                  className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg px-3 py-1.5 text-sm font-bold">
+                  {phoneSaving ? "..." : "שמור"}
+                </button>
+              </div>
+              {phoneError && <p className="text-xs text-rose-600 mt-1">{phoneError}</p>}
+              <p className="text-[10px] text-amber-700 mt-1">נדרש לשליחת תעודת החתמה לחייל</p>
+            </div>
+          )}
         </div>
 
         {/* גוף: דסקטופ 2 עמודות; מובייל 1 עמודה - מלאי קודם (גלילה משלו), עגלה בהמשך */}

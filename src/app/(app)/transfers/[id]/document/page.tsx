@@ -21,7 +21,7 @@ export default async function TransferDocumentPage({
       battalion: true,
       fromHolder: true, // כולל signatureClause
       toHolder: true,
-      toSoldier: true,
+      toSoldier: { select: { fullName: true, personalNumber: true, phone: true } },
       createdBy: true,
       approvedBy: true,
       lines: { include: { itemType: true, serialUnit: true, status: true } },
@@ -33,11 +33,26 @@ export default async function TransferDocumentPage({
   const unitName = t.battalion?.name || "גדוד";
   const docNumber = t.id.slice(-8).toUpperCase();
 
+  const base = process.env.NEXT_PUBLIC_APP_URL || "";
+  const docUrl = `${base}/transfers/${id}/document`;
+  const recipientName = t.toSoldier?.fullName ?? t.toHolder?.name ?? "";
+  const recipientPhone = t.toSoldier?.phone ?? null;
+  const certWaText = encodeURIComponent(`שלום ${recipientName}, מצורף אישור העברת ציוד:\n${docUrl}`);
+  const certWaUrl = recipientPhone
+    ? `https://wa.me/${recipientPhone.replace(/\D/g, "").replace(/^0/, "972")}?text=${certWaText}`
+    : `https://wa.me/?text=${certWaText}`;
+
   return (
     <div>
       <div className="flex justify-between items-center mb-4 print:hidden">
         <Link href="/transfers" className="text-sm text-slate-500 hover:text-slate-800">→ חזרה להעברות</Link>
-        <PrintButton />
+        <div className="flex gap-2">
+          <a href={certWaUrl} target="_blank" rel="noreferrer"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 text-xs font-medium">
+            📲 שלח תעודה
+          </a>
+          <PrintButton />
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 max-w-3xl mx-auto print:shadow-none print:border-0">

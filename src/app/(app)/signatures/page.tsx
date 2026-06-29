@@ -361,7 +361,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                 soldiers={soldiers.map((s) => {
                   const c = companiesForFilter.find((x) => x.id === s.companyId);
                   const armoryEligible = s.status === "ENLISTED" && !!s.weaponsApprovedAt && !!s.armoryTestProofAt && !!s.weaponsAgreementSignedAt;
-                  return { id: s.id, name: s.fullName, pn: s.personalNumber, companyId: s.companyId, companyName: c?.name ?? null, enlisted: s.status === "ENLISTED", armoryEligible };
+                  return { id: s.id, name: s.fullName, pn: s.personalNumber, phone: s.phone, companyId: s.companyId, companyName: c?.name ?? null, enlisted: s.status === "ENLISTED", armoryEligible };
                 })}
                 units={availableUnits.map((u) => ({
                   id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber,

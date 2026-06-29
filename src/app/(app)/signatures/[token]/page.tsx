@@ -40,6 +40,19 @@ export default async function SignatureTokenPage({
 
   const signed = sig.status === "SIGNED";
 
+  const docUrl = sig.transferId ? `${base}/transfers/${sig.transferId}/document` : null;
+  const soldierPhone = sig.soldier?.phone ?? sig.signerUser?.phone ?? null;
+  const certWaText = docUrl
+    ? encodeURIComponent(
+      `שלום ${sig.soldier?.fullName ?? sig.signerUser?.fullName ?? ""}, מצורף אישור החתמת ציוד:\n${docUrl}`,
+    )
+    : null;
+  const certWaUrl = certWaText && soldierPhone
+    ? `https://wa.me/${soldierPhone.replace(/\D/g, "").replace(/^0/, "972")}?text=${certWaText}`
+    : certWaText
+      ? `https://wa.me/?text=${certWaText}`
+      : null;
+
   return (
     <div>
       <PageHeader
@@ -57,6 +70,20 @@ export default async function SignatureTokenPage({
               <p className="text-sm text-slate-500 mt-1">
                 נחתם בתאריך {sig.signedAt?.toLocaleString("he-IL")}
               </p>
+              <div className="mt-4 space-y-2">
+                {docUrl && (
+                  <a href={docUrl} target="_blank" rel="noreferrer"
+                    className="block w-full bg-slate-800 text-white rounded-lg py-2 text-sm hover:bg-slate-900">
+                    📄 צפייה בתעודה
+                  </a>
+                )}
+                {certWaUrl && (
+                  <a href={certWaUrl} target="_blank" rel="noreferrer"
+                    className="block w-full bg-emerald-600 text-white rounded-lg py-2 text-sm hover:bg-emerald-700">
+                    📲 שלח תעודה לחייל
+                  </a>
+                )}
+              </div>
             </div>
           ) : (
             <>
@@ -74,6 +101,12 @@ export default async function SignatureTokenPage({
                   <a href={waUrl} target="_blank" rel="noreferrer"
                     className="block w-full bg-emerald-600 text-white rounded-lg py-2 text-sm hover:bg-emerald-700">
                     שליחה בוואטסאפ
+                  </a>
+                )}
+                {docUrl && (
+                  <a href={docUrl} target="_blank" rel="noreferrer"
+                    className="block w-full bg-slate-600 text-white rounded-lg py-2 text-sm hover:bg-slate-700">
+                    📄 תעודת ציוד
                   </a>
                 )}
                 <div className="text-xs text-slate-400 break-all bg-slate-50 rounded p-2">{signUrl}</div>

@@ -34,6 +34,7 @@ export default function SignaturePad({
   const [countdown, setCountdown] = useState(10);
   const [whatsappText, setWhatsappText] = useState<string | null>(null);
   const [soldierPhone, setSoldierPhone] = useState<string | null>(null);
+  const [transferId, setTransferId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const needsAck = !!(weaponsAgreement || signatureClause);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -118,6 +119,7 @@ export default function SignaturePad({
           if (share.ok) {
             setWhatsappText(share.whatsappText);
             setSoldierPhone(share.soldierPhone);
+            setTransferId(share.transferId);
           }
         } catch {}
       }
@@ -169,6 +171,13 @@ export default function SignaturePad({
               </button>
             </div>
           </div>
+        )}
+
+        {transferId && (
+          <a href={`/transfers/${transferId}/document`} target="_blank" rel="noreferrer"
+            className="block mt-3 bg-slate-700 hover:bg-slate-800 text-white rounded-lg px-6 py-2 text-sm font-medium text-center">
+            📄 צפייה בתעודת ציוד
+          </a>
         )}
 
         {!whatsappText && (

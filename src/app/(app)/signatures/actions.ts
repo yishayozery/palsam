@@ -11,14 +11,27 @@ import { requiresPersonalId } from "@/lib/handover";
 import { getSoldierEquipmentSummary, formatSoldierSummaryForWhatsApp, type SoldierEquipmentSummary } from "@/lib/soldier-summary";
 import type { SignatureMethod } from "@/generated/prisma";
 
+/** עדכון נייד חייל — משמש את SignoutModal כשאין טלפון */
+export async function updateSoldierPhone(soldierId: string, phone: string): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  if (!can(user, "signatures")) return { ok: false, error: "אין הרשאה" };
+  const clean = phone.replace(/[-\s]/g, "");
+  if (!/^05\d{8}$/.test(clean)) return { ok: false, error: "מספר לא תקין (05XXXXXXXX)" };
+  const soldier = await prisma.soldier.findUnique({ where: { id: soldierId } });
+  if (!soldier || soldier.battalionId !== user.battalionId) return { ok: false, error: "חייל לא נמצא" };
+  await prisma.soldier.update({ where: { id: soldierId }, data: { phone: clean } });
+  revalidatePath("/signatures");
+  return { ok: true };
+}
+
 /** מחזיר את ה-summary של חייל אחרי חתימה - לשליחה ב-WhatsApp. ציבורי דרך token. */
 export async function getPostSignatureShareData(
   token: string,
-): Promise<{ ok: true; summary: SoldierEquipmentSummary; whatsappText: string; soldierPhone: string | null } | { ok: false; error: string }> {
+): Promise<{ ok: true; summary: SoldierEquipmentSummary; whatsappText: string; soldierPhone: string | null; transferId: string | null } | { ok: false; error: string }> {
   try {
     const sig = await prisma.signature.findUnique({
       where: { token },
-      select: { soldierId: true, status: true },
+      select: { soldierId: true, status: true, transferId: true },
     });
     if (!sig) return { ok: false, error: "החתימה לא נמצאה" };
     if (!sig.soldierId) return { ok: false, error: "סוג חתימה לא נתמך לסיכום" };
@@ -28,7 +41,7 @@ export async function getPostSignatureShareData(
     const whatsappText = formatSoldierSummaryForWhatsApp(summary, {
       headerTitle: "📋 סיכום ציוד חתום על החייל (לאחר חתימה)",
     });
-    return { ok: true, summary, whatsappText, soldierPhone: summary.soldier.phone };
+    return { ok: true, summary, whatsappText, soldierPhone: summary.soldier.phone, transferId: sig.transferId };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "שגיאה" };
   }
