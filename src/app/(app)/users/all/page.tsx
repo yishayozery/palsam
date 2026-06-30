@@ -16,7 +16,7 @@ export default async function AllUsersPage({
   const bId = admin.battalionId!;
   const { q = "", role = "", status = "active" } = await searchParams;
 
-  const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { name: true, brigade: true, code: true } });
+  const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { name: true, brigade: true, code: true, notificationEmail: true } });
 
   const [users, holders, squads, customRoles, systemRoles, soldiers] = await Promise.all([
     prisma.appUser.findMany({
@@ -73,6 +73,7 @@ export default async function AllUsersPage({
         soldiers={soldiers.map((s) => ({ id: s.id, fullName: s.fullName, personalNumber: s.personalNumber, phone: s.phone, companyName: s.company?.name ?? null }))}
         brigade={battalion?.brigade ?? ""}
         battalionCode={battalion?.code ?? ""}
+        battalionName={battalion?.name ?? ""}
         users={users.map((u) => ({
           id: u.id,
           fullName: u.fullName,

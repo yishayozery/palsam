@@ -67,12 +67,129 @@ const BUILTIN_LABELS: Record<string, string> = {
   VIEWER: "צופה (קריאה בלבד)",
 };
 
-function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
+const ROLE_SCREENS: Record<string, string> = {
+  'מנהל מערכת': `🏪 מחסנים — ניהול מחסני הגדוד, מלאי, מידוף
+📋 מלאי — כל הפריטים (סריאליים וכמותיים)
+✍️ החתמות ומסירות — החתמת ציוד, זיכוי, מעברים
+🔢 ספירות — תכנון וביצוע ספירות מלאי
+⚠️ פערים — מעקב חוסרים
+👤 חיילים — כל הפלוגות, הסמכות, בקשות סיפוח
+🚗 שבצ"ק — שיבוץ רכבים, לוז פלוגתי
+📈 דוחות — מצב ציוד, כשירות רכבים, היסטוריה
+⚙️ הגדרות — משתמשים, פלוגות, הרשאות`,
+  'מפ"מ': `🏪 מחסנים — ניהול מחסני הגדוד, מלאי, מידוף
+📋 מלאי — כל הפריטים (סריאליים וכמותיים)
+✍️ החתמות ומסירות — החתמת ציוד, זיכוי, מעברים
+🔢 ספירות — תכנון וביצוע ספירות מלאי
+⚠️ פערים — מעקב חוסרים
+👤 חיילים — כל הפלוגות, הסמכות, בקשות סיפוח
+🚗 שבצ"ק — שיבוץ רכבים, לוז פלוגתי
+📈 דוחות — מצב ציוד, כשירות רכבים, היסטוריה
+⚙️ הגדרות — משתמשים, פלוגות, הרשאות`,
+  'קשר"ג': `🏪 מחסנים — ניהול המחסן, מידוף, סריקה
+📋 מלאי — כל הפריטים במחסן
+✍️ החתמות ומסירות — החתמה, זיכוי, מעברים
+🔢 ספירות — תכנון ספירות, ביצוע, השוואה
+⚠️ פערים — מעקב חוסרים
+🏷️ קטלוג — הגדרת פריטים וקטגוריות
+📦 ערכות — ערכות ציוד מוכנות
+👤 חיילים — צפייה בחיילי הפלוגות
+🚗 שבצ"ק — שיבוץ רכבים
+📈 דוחות — מלאי ומצב ציוד`,
+  'ק.רכב': `🚗 שבצ"ק — שיבוץ רכבים יומי, תבניות קבועות
+🪪 רישיונות — הרשאות נהיגה ותוקף רישיונות
+🔧 תחזוקה — מעקב טסטים, קילומטראז', טיפולים
+📋 מלאי — ציוד רכב
+✍️ החתמות ומסירות — החתמת ציוד רכב
+🔢 ספירות — ספירת ציוד רכב
+📈 דוחות — כשירות רכבים, זכאות`,
+  'ק.אג"ם': `📋 מלאי — ניהול ציוד כללי (אג"ם)
+🏷️ קטלוג — הגדרת פריטים וקטגוריות
+✍️ החתמות ומסירות — החתמה וזיכוי ציוד
+🔢 ספירות — ספירות מלאי
+⚠️ פערים — מעקב חוסרים
+📦 ערכות — ניהול ערכות ציוד
+📈 דוחות — מצב ציוד`,
+  'מג"ד': `📊 דשבורד — מצב הגדוד במבט אחד
+👤 חיילים — כל חיילי הגדוד
+🔫 אישור נשק — אישור/דחיית חיילים
+🚗 שבצ"ק — שיבוץ רכבים
+📈 דוחות — מצב ציוד, כשירות רכבים, היסטוריה`,
+  'סמג"ד': `📊 דשבורד — מצב הגדוד במבט אחד
+👤 חיילים — כל חיילי הגדוד
+🔫 אישור נשק — אישור/דחיית חיילים
+🚗 שבצ"ק — שיבוץ רכבים
+📈 דוחות — מצב ציוד, כשירות רכבים, היסטוריה`,
+  'מפ': `📊 דשבורד — מצב הפלוגה
+👤 חיילים — ניהול חיילי הפלוגה, הסמכות, בקשות סיפוח
+📋 נוכחות — דיווח נוכחות יומי
+🚗 שבצ"ק — שיבוץ רכבים, לוז פלוגתי
+✍️ החתמות ומסירות — החתמה, זיכוי, מעברים
+📦 המלאי שלי — כל הציוד החתום על הפלוגה
+📍 מיקומי ציוד — מיקום פיזי של פריטים
+🏗️ ימ"ח — מחסן פלוגתי, ארגזים מבצעיים
+📈 דוחות — מצב ציוד, כשירות רכבים`,
+  'שליש': `📊 דשבורד — מצב הגדוד
+🪖 שלישות — ניהול חיילים, שיבוצים, תפקידים
+👤 חיילים — ניהול חיילי הגדוד
+🚗 שבצ"ק — שיבוץ רכבים
+📋 הסמכות — ניהול הסמכות חיילים
+📈 דוחות — זכאות נשק`,
+  'מפקד מחלקה': `📊 דשבורד — מצב הפלוגה
+👤 חיילים — צפייה בחיילי הפלוגה
+📋 נוכחות — דיווח נוכחות המחלקה
+🚗 שבצ"ק — צפייה בשיבוץ רכבים`,
+  'מפלג': `📊 דשבורד — מצב הפלוגה
+👤 חיילים — צפייה בחיילי הפלוגה
+📋 נוכחות — צפייה בנוכחות
+🚗 שבצ"ק — צפייה בשיבוץ רכבים`,
+  'רב': `📊 דשבורד — מצב הגדוד
+👤 חיילים — צפייה בחיילי הגדוד
+📈 דוחות — דוחות מצב ציוד`,
+  'מנהל מחסן': `📋 מלאי — ניהול ציוד המחסן
+✍️ החתמות ומסירות — החתמה וזיכוי ציוד
+🔢 ספירות — ספירות מלאי
+⚠️ פערים — מעקב חוסרים
+📈 דוחות — מצב ציוד`,
+};
+
+function buildOnboardingMsg(user: User, battalionName: string, battalionCode: string, baseUrl: string): string {
+  const screens = ROLE_SCREENS[user.roleLabel] ?? ROLE_SCREENS['רב'] ?? '';
+  const link = user.inviteToken ? `${baseUrl}/invite/${user.inviteToken}` : `${baseUrl}/login`;
+  const loginInfo = user.inviteToken
+    ? `🔗 קישור להגדרת סיסמה: ${link}\n⚠️ הקישור חד-פעמי — פעיל עד הגדרת סיסמה.`
+    : `🔗 כניסה: ${baseUrl}/login`;
+  return `שלום ${user.fullName},
+
+${battalionName} עבר לניהול לוגיסטיקה דרך מערכת PALSAM — מערכת דיגיטלית לניהול ציוד, חיילים ומחסנים.
+
+אתה מוגדר כ${user.roleLabel}. מה יש לך במערכת:
+${screens}
+
+${loginInfo}
+👤 שם משתמש: ${user.username}
+📋 קוד גדוד: ${battalionCode}
+
+📌 סיסמה: 12+ תווים, אות גדולה+קטנה, ספרה, תו מיוחד.`;
+}
+
+function waLink(phone: string | null, text: string): string {
+  const encoded = encodeURIComponent(text);
+  return phone
+    ? `https://wa.me/${phone.replace(/\D/g, "").replace(/^0/, "972")}?text=${encoded}`
+    : `https://wa.me/?text=${encoded}`;
+}
+
+function InviteCell({ user, baseUrl, battalionName, battalionCode }: { user: User; baseUrl: string; battalionName: string; battalionCode: string }) {
   const [copied, setCopied] = useState(false);
+  const onboardingMsg = buildOnboardingMsg(user, battalionName, battalionCode, baseUrl);
+  const onboardingWa = waLink(user.phone, onboardingMsg);
+
   if (user.passwordSet) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 flex-wrap">
         <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">✓ פעיל</Badge>
+        <a href={onboardingWa} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">📩 שלח הסבר</a>
         <form action={regenerateInvite}>
           <input type="hidden" name="id" value={user.id} />
           <button className="text-xs text-slate-500 hover:text-slate-800 underline">שלח קישור חדש</button>
@@ -81,9 +198,7 @@ function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
     );
   }
   const link = `${baseUrl}/invite/${user.inviteToken}`;
-  const wa = user.phone
-    ? `https://wa.me/${user.phone.replace(/\D/g, "").replace(/^0/, "972")}?text=${encodeURIComponent(`הוזמנת למערכת. הקישור להגדרת סיסמה: ${link}`)}`
-    : `https://wa.me/?text=${encodeURIComponent(`הוזמנת למערכת. הקישור להגדרת סיסמה: ${link}`)}`;
+  const inviteWa = waLink(user.phone, `הוזמנת למערכת ${battalionName}.\n\nהקישור להגדרת סיסמה:\n${link}\n\n👤 שם משתמש: ${user.username}\n📋 קוד גדוד: ${battalionCode}\n\n⚠️ קישור חד-פעמי. סיסמה: 12+ תווים, אות גדולה+קטנה, ספרה, תו מיוחד.`);
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       <Badge className="bg-amber-100 text-amber-800 text-[10px]">⏳ ממתין</Badge>
@@ -91,7 +206,8 @@ function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
         className="text-xs text-slate-500 hover:text-slate-800">
         {copied ? "✓ הועתק" : "📋 העתק"}
       </button>
-      <a href={wa} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 hover:underline">📱 WhatsApp</a>
+      <a href={inviteWa} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 hover:underline">🔑 סיסמה</a>
+      <a href={onboardingWa} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">📩 הסבר</a>
       <form action={regenerateInvite}>
         <input type="hidden" name="id" value={user.id} />
         <button className="text-xs text-blue-600 hover:underline">🔄 חדש</button>
@@ -469,9 +585,9 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, soldi
   );
 }
 
-export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, initialStatus, holders, squads, customRoles, systemRoles, soldiers, brigade, battalionCode }: {
+export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, initialStatus, holders, squads, customRoles, systemRoles, soldiers, brigade, battalionCode, battalionName }: {
   users: User[]; baseUrl: string; initialQ: string; initialRole: string; initialStatus: string;
-  holders: Holder[]; squads: Squad[]; customRoles: CustomRole[]; systemRoles: SystemRoleOpt[]; soldiers: SoldierOpt[]; brigade: string; battalionCode: string;
+  holders: Holder[]; squads: Squad[]; customRoles: CustomRole[]; systemRoles: SystemRoleOpt[]; soldiers: SoldierOpt[]; brigade: string; battalionCode: string; battalionName: string;
 }) {
   const [q, setQ] = useState(initialQ);
   const [role, setRole] = useState(initialRole);
@@ -577,7 +693,7 @@ export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, i
                       ? <span className="text-blue-600">{u.squadIds.length} מחלקות</span>
                       : <span className="text-slate-300">—</span>}
                   </Td>
-                  <Td><InviteCell user={u} baseUrl={baseUrl} /></Td>
+                  <Td><InviteCell user={u} baseUrl={baseUrl} battalionName={battalionName} battalionCode={battalionCode} /></Td>
                   <Td>
                     <div className="flex items-center gap-2">
                       <button onClick={() => setEditingUser(u)} className="text-xs text-blue-600 hover:text-blue-800">✏️ עריכה</button>
