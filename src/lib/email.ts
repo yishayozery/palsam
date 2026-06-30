@@ -12,10 +12,12 @@ export async function sendEmail(opts: {
   subject: string;
   text: string;
   html?: string;
+  from?: string;
+  replyTo?: string;
   attachments?: { filename: string; content: string }[];
 }): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? "PALSAM <onboarding@resend.dev>";
+  const from = opts.from || process.env.EMAIL_FROM || "PALSAM <office@palmy.co.il>";
   if (!apiKey) return { ok: false, error: "missing RESEND_API_KEY" };
 
   const recipients = Array.isArray(opts.to) ? opts.to : [opts.to];
@@ -28,6 +30,7 @@ export async function sendEmail(opts: {
       body: JSON.stringify({
         from, to: recipients, subject: opts.subject,
         text: opts.text,
+        ...(opts.replyTo ? { reply_to: opts.replyTo } : {}),
         ...(opts.html ? { html: opts.html } : {}),
         ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
       }),
@@ -81,7 +84,7 @@ export async function notifyTransactionEmail(params: {
   try {
     const battalion = await prisma.battalion.findUnique({
       where: { id: params.battalionId },
-      select: { name: true, code: true, notificationEmail: true, emailToBattalion: true },
+      select: { name: true, code: true, senderEmail: true, notificationEmail: true, emailToBattalion: true },
     });
     if (!battalion) return;
 
@@ -141,13 +144,16 @@ export async function notifyTransactionEmail(params: {
 
     if (allRecipients.size === 0) return;
 
+    const replyTo = battalion.notificationEmail || undefined;
+    const senderFrom = battalion.senderEmail ? `${battalion.name} <${battalion.senderEmail}>` : undefined;
+
     const transferId = await resolveTransferId(params.entity, params.entityId);
     if (transferId) {
       const rich = await buildTransferAttachments(transferId).catch(() => null);
       if (rich) {
         void sendEmail({
           to: [...allRecipients], subject: rich.subject,
-          text,
+          text, from: senderFrom, replyTo,
           html: rich.html,
           attachments: rich.attachments,
         });
@@ -155,7 +161,7 @@ export async function notifyTransactionEmail(params: {
       }
     }
 
-    void sendEmail({ to: [...allRecipients], subject, text });
+    void sendEmail({ to: [...allRecipients], subject, text, from: senderFrom, replyTo });
   } catch {
     // לא מפיל שום פעולה אם המייל נכשל
   }

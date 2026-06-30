@@ -124,6 +124,7 @@ model Battalion {
   active    Boolean  @default(true)
   // הגדרות גדוד
   requirePersonalIdOnHandover Boolean @default(false) // לחייב מספר אישי בכל מסירה
+  senderEmail                 String? // כתובת שליחה לגדוד (למשל gadsam@palmy.co.il). ברירת מחדל: EMAIL_FROM מ-env
   notificationEmail           String? // אם מוגדר → מייל אוטומטי על כל פעולה מבצעית (חתימה/זיכוי/מסירה/שיבוץ)
   emailToBattalion            Boolean @default(true) // האם לשלוח התראות גם למייל הגדוד (בנוסף למחסן/פלוגה)
   armoryTestUrl               String? // קישור למבחן נוהל ארמון חיצוני (אם יש)

@@ -9,6 +9,7 @@ const initial: ProfileState = {};
 type B = {
   name: string; code: string; brigade: string | null; commander: string | null; motto: string | null; notes: string | null; logoData: string | null;
   requirePersonalIdOnHandover: boolean;
+  senderEmail: string | null;
   notificationEmail: string | null;
   emailToBattalion: boolean;
 };
@@ -104,6 +105,24 @@ export default function ProfileForm({ battalion }: { battalion: B }) {
           <div className="text-xs text-slate-500 mt-1.5">
             כל פעולה מבצעית (חתימה, זיכוי, החתמה, מסירה, שיבוץ, שליחה לטנא) תישלח אוטומטית
             לכתובת זו עם קבצי אקסל לגיבוי. שירות המייל מתפעל ע&quot;י Resend.
+          </div>
+        </div>
+
+        {/* 📤 כתובת שליחה */}
+        <div className="mt-3 p-3 rounded-lg border border-slate-200">
+          <label className="block text-sm font-medium text-slate-800 mb-1">
+            📤 כתובת שליחה (From)
+          </label>
+          <input
+            type="email"
+            name="senderEmail"
+            defaultValue={battalion.senderEmail ?? ""}
+            placeholder="gadsam@palmy.co.il"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          />
+          <div className="text-xs text-slate-500 mt-1.5">
+            כתובת המייל שתופיע כשולח בהתראות מהמערכת. חייבת להיות תחת דומיין מאומת.
+            אם ריק — ישתמש בכתובת ברירת המחדל של המערכת.
           </div>
         </div>
 

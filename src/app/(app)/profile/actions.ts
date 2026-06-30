@@ -20,6 +20,7 @@ export async function updateProfile(
   const motto = String(formData.get("motto") || "").trim() || null;
   const notes = String(formData.get("notes") || "").trim() || null;
   const requirePersonalIdOnHandover = formData.get("requirePersonalIdOnHandover") === "on";
+  const senderEmail = String(formData.get("senderEmail") || "").trim() || null;
   const notificationEmail = String(formData.get("notificationEmail") || "").trim() || null;
   const emailToBattalion = notificationEmail ? true : formData.get("emailToBattalion") === "on";
   const rawLogo = String(formData.get("logoData") || "");
@@ -37,7 +38,7 @@ export async function updateProfile(
     if (dup) return { error: `קוד "${code}" כבר בשימוש בגדוד אחר` };
   }
 
-  const data: Record<string, unknown> = { name, code, brigade, commander, motto, notes, requirePersonalIdOnHandover, notificationEmail, emailToBattalion };
+  const data: Record<string, unknown> = { name, code, brigade, commander, motto, notes, requirePersonalIdOnHandover, senderEmail, notificationEmail, emailToBattalion };
   if (logoData !== undefined) data.logoData = logoData;
 
   try {
