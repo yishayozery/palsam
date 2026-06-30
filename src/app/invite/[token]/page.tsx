@@ -28,8 +28,14 @@ export default async function InvitePage({
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-950 p-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-8">
-        <div className="text-center mb-6">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-8 relative">
+        {user.battalion?.logoData && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden rounded-2xl">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={user.battalion.logoData} alt="" className="object-contain" style={{ width: 420, height: 420, opacity: 0.08 }} />
+          </div>
+        )}
+        <div className="text-center mb-6 relative z-10">
           {user.battalion?.logoData ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={user.battalion.logoData} alt="סמל" className="mx-auto w-14 h-14 object-contain mb-3" />
@@ -43,7 +49,9 @@ export default async function InvitePage({
           </p>
           <p className="text-xs text-slate-400 mt-2">הגדר סיסמה לכניסה הראשונה למערכת</p>
         </div>
-        <SetPasswordForm token={token} username={user.username} />
+        <div className="relative z-10">
+          <SetPasswordForm token={token} username={user.username} />
+        </div>
       </div>
     </div>
   );
