@@ -90,7 +90,7 @@ function AddForm({ companies, squads, onDone }: { companies: Company[]; squads: 
         </div>
       </div>
       <label className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg cursor-pointer">
-        <input type="checkbox" name="enlistNow" defaultChecked className="mt-0.5" />
+        <input type="checkbox" name="enlistNow" className="mt-0.5" />
         <div>
           <div className="font-medium text-sm text-emerald-800">✓ אשר גיוס מיידי</div>
           <div className="text-xs text-emerald-700 mt-0.5">החייל יוכל לקבל ציוד מיד עם ההקמה. ניתן לבטל אישור בכל עת.</div>
