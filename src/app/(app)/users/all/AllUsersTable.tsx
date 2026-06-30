@@ -159,15 +159,18 @@ function buildOnboardingMsg(user: User, battalionName: string, battalionCode: st
   const loginInfo = user.inviteToken
     ? `🔗 קישור להגדרת סיסמה: ${link}\n⚠️ הקישור חד-פעמי — פעיל עד הגדרת סיסמה.`
     : `🔗 כניסה: ${baseUrl}/login?b=${battalionCode}`;
+  const allHolders = [user.holderName, ...user.extraHolders].filter(Boolean);
+  const holderLine = allHolders.length ? ` (${allHolders.join(", ")})` : "";
   return `שלום ${user.fullName},
 
 ${battalionName} עבר לניהול לוגיסטיקה דרך מערכת PALSAM — מערכת דיגיטלית לניהול ציוד, חיילים ומחסנים.
 
-אתה מוגדר כ${user.roleLabel}. מה יש לך במערכת:
+אתה מוגדר כ${user.roleLabel}${holderLine}. מה יש לך במערכת:
 ${screens}
 
 ${loginInfo}
 👤 שם משתמש: ${user.username}
+📋 קוד גדוד: ${battalionCode}
 
 📌 סיסמה: 12+ תווים, אות גדולה+קטנה, ספרה, תו מיוחד.`;
 }
