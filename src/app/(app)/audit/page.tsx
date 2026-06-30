@@ -49,7 +49,7 @@ export default async function AuditPage() {
               {logs.map((l) => (
                 <tr key={l.id}>
                   <Td className="text-xs text-slate-500 whitespace-nowrap">
-                    {l.createdAt.toLocaleString("he-IL")}
+                    {l.createdAt.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}
                   </Td>
                   <Td>{l.user?.fullName ?? <span className="text-slate-400">מערכת/חייל</span>}</Td>
                   <Td><Badge>{ACTION_LABELS[l.action] ?? l.action}</Badge></Td>

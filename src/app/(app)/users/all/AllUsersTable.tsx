@@ -652,12 +652,16 @@ export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, i
               <option value="inactive">מושבתים</option>
             </select>
           </div>
-          <form action={clearRateLimits} className="inline">
-            <button className="rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-3 py-2 text-sm hover:bg-amber-100 whitespace-nowrap"
-              title="מנקה את כל חסימות הכניסה (rate limit) כדי לאפשר למשתמשים חסומים להתחבר מחדש">
-              🔓 פתח חסימות
-            </button>
-          </form>
+          <button type="button" onClick={async () => {
+              if (!confirm("לפתוח את כל חסימות הכניסה?\nפעולה זו תאפשר לכל המשתמשים החסומים (מכל כתובת IP) להתחבר מחדש.")) return;
+              const fd = new FormData();
+              await clearRateLimits(fd);
+              alert("✅ כל חסימות הכניסה נמחקו בהצלחה");
+            }}
+            className="rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-3 py-2 text-sm hover:bg-amber-100 whitespace-nowrap"
+            title="מנקה את כל חסימות הכניסה (rate limit) כדי לאפשר למשתמשים חסומים להתחבר מחדש">
+            🔓 פתח חסימות
+          </button>
           <button onClick={() => setShowCreate(true)}
             className="bg-slate-800 text-white rounded-lg px-4 py-2 text-sm hover:bg-slate-900 whitespace-nowrap">
             + הוסף משתמש
