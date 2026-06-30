@@ -528,7 +528,7 @@ export default async function DashboardPage({
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-400">{t.createdAt.toLocaleDateString("he-IL")}</span>
+                    <span className="text-[10px] text-slate-400">{t.createdAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</span>
                     <Badge className={t.status === "PENDING" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}>
                       {t.status === "PENDING" ? "ממתין" : "הושלם"}
                     </Badge>

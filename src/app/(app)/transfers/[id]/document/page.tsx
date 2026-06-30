@@ -73,7 +73,7 @@ export default async function TransferDocumentPage({
               <div className="font-bold">{unitName}</div>
               {t.battalion?.motto && <div className="text-xs text-slate-500 italic">״{t.battalion.motto}״</div>}
               <div className="text-slate-500">מס׳ תעודה: {docNumber}</div>
-              <div className="text-slate-500">{t.createdAt.toLocaleDateString("he-IL")} {t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}</div>
+              <div className="text-slate-500">{t.createdAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })} {t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" })}</div>
             </div>
             <div className="text-3xl">🛡️</div>
           </div>
@@ -143,7 +143,7 @@ export default async function TransferDocumentPage({
             <div className="font-medium mt-1">
               {t.approvedBy?.fullName ?? t.signatures[0]?.soldier?.fullName ?? t.signatures[0]?.signerUser?.fullName ?? "________________"}
               {t.approvedAt && (
-                <span className="text-slate-400"> · {t.approvedAt.toLocaleDateString("he-IL")}</span>
+                <span className="text-slate-400"> · {t.approvedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</span>
               )}
             </div>
             {/* חתימה דיגיטלית — אם קיימת */}
@@ -154,7 +154,7 @@ export default async function TransferDocumentPage({
                 <img src={t.signatures[0].signatureData} alt="חתימה" className="max-h-24 object-contain" />
                 {t.signatures[0].signedAt && (
                   <div className="text-[10px] text-slate-400 mt-1">
-                    נחתם: {t.signatures[0].signedAt.toLocaleString("he-IL")}
+                    נחתם: {t.signatures[0].signedAt.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}
                     {t.signatures[0].soldier?.personalNumber && ` · מ.א. ${t.signatures[0].soldier.personalNumber}`}
                   </div>
                 )}

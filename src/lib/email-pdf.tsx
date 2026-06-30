@@ -74,8 +74,8 @@ type TransferData = {
 function TransferPDF({ t }: { t: TransferData }) {
   const docNumber = t.id.slice(-8).toUpperCase();
   const unitName = t.battalion?.name || "גדוד";
-  const dateStr = t.createdAt.toLocaleDateString("he-IL");
-  const timeStr = t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+  const dateStr = t.createdAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" });
+  const timeStr = t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" });
   const fromName = t.fromHolder?.name ?? "חטיבה (גורם חיצוני)";
   const toName = t.toSoldier?.fullName ?? t.toHolder?.name ?? "חטיבה (גורם חיצוני)";
   const sig = t.signatures?.[0];
@@ -165,8 +165,8 @@ function TransferPDF({ t }: { t: TransferData }) {
           <View style={s.signatureBox}>
             <Text style={s.sigLabel}>מקבל / מאשר</Text>
             <Text style={s.sigName}>{approverName}</Text>
-            {t.approvedAt && <Text style={s.sigLabel}>{t.approvedAt.toLocaleDateString("he-IL")}</Text>}
-            {sig?.signedAt && <Text style={s.sigLabel}>נחתם: {sig.signedAt.toLocaleString("he-IL")}</Text>}
+            {t.approvedAt && <Text style={s.sigLabel}>{t.approvedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</Text>}
+            {sig?.signedAt && <Text style={s.sigLabel}>נחתם: {sig.signedAt.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}</Text>}
           </View>
         </View>
 

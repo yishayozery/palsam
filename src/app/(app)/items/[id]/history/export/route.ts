@@ -67,8 +67,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   for (const l of lines) {
     const t = l.transfer;
     ws.addRow({
-      date: t.createdAt.toLocaleDateString("he-IL"),
-      time: t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" }),
+      date: t.createdAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" }),
+      time: t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" }),
       type: TRANSFER_TYPE[t.type],
       from: t.fromHolder?.name ?? "חטיבה",
       to: t.toHolder?.name ?? t.toSoldier?.fullName ?? t.toUser?.fullName ?? "חטיבה",
@@ -102,7 +102,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     for (const c of countLines) {
       ws2.addRow({
-        date: c.session.startedAt.toLocaleDateString("he-IL"),
+        date: c.session.startedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" }),
         type: c.session.type,
         holder: c.holder?.name ?? "—",
         sn: c.serialUnit?.serialNumber ?? "—",
@@ -122,7 +122,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   ws3.addRow({ k: "שיטת ניהול", v: item.trackingMethod });
   ws3.addRow({ k: "יחידה", v: item.unit });
   ws3.addRow({ k: "שייכות", v: item.association });
-  ws3.addRow({ k: "תאריך הקמה", v: item.createdAt.toLocaleString("he-IL") });
+  ws3.addRow({ k: "תאריך הקמה", v: item.createdAt.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" }) });
 
   const buf = await wb.xlsx.writeBuffer();
   return new Response(buf, {

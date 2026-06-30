@@ -104,7 +104,7 @@ export default async function TransfersPage() {
               {transfers.map((t) => (
                 <tr key={t.id}>
                   <Td className="text-xs text-slate-500">
-                    {t.createdAt.toLocaleDateString("he-IL")}
+                    {t.createdAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}
                   </Td>
                   <Td className="font-medium">{TRANSFER_TYPE[t.type]}</Td>
                   <Td>{t.fromHolder?.name ?? "חטיבה"}</Td>

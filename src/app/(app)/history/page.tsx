@@ -233,8 +233,8 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
                   return (
                     <tr key={t.id}>
                       <Td className="text-xs text-slate-500 whitespace-nowrap">
-                        {t.createdAt.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" })}
-                        <br />{t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}
+                        {t.createdAt.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "Asia/Jerusalem" })}
+                        <br />{t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" })}
                       </Td>
                       <Td>
                         <Badge className={

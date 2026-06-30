@@ -90,7 +90,7 @@ export default async function ReturnPage() {
             <tbody>
               {recent.map((t) => (
                 <tr key={t.id}>
-                  <Td className="text-xs text-slate-500">{t.createdAt.toLocaleDateString("he-IL")}</Td>
+                  <Td className="text-xs text-slate-500">{t.createdAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</Td>
                   <Td>
                     {t.lines.map((l, i) => (
                       <span key={l.id} className="text-xs">

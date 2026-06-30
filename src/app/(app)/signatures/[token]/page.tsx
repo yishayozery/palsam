@@ -68,7 +68,7 @@ export default async function SignatureTokenPage({
               <div className="text-5xl mb-3">✅</div>
               <p className="font-bold text-emerald-700">החתימה הושלמה</p>
               <p className="text-sm text-slate-500 mt-1">
-                נחתם בתאריך {sig.signedAt?.toLocaleString("he-IL")}
+                נחתם בתאריך {sig.signedAt?.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}
               </p>
               <div className="mt-4 space-y-2">
                 {docUrl && (

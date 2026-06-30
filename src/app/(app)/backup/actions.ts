@@ -138,7 +138,7 @@ export async function verifyBackupExcel(
     const dbTo = match.toSoldier?.fullName ?? match.toHolder?.name ?? "—";
     const dbLineCount = match.lines.length;
     const dbTotalQty = match.lines.reduce((s, l) => s + l.quantity, 0);
-    const dbDate = match.createdAt.toLocaleDateString("he-IL") + " " + match.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+    const dbDate = match.createdAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" }) + " " + match.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" });
 
     const dbInfo = {
       type: TRANSFER_TYPE[match.type] ?? match.type,

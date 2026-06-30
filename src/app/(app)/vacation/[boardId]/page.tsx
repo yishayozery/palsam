@@ -72,7 +72,7 @@ export default async function BoardPage({ params }: { params: Promise<{ boardId:
     <div>
       <PageHeader
         title={board.name}
-        subtitle={`${board.startDate.toLocaleDateString("he-IL")} — ${board.endDate.toLocaleDateString("he-IL")} · ${board.assignees.length} משתמשים`}
+        subtitle={`${board.startDate.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })} — ${board.endDate.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })} · ${board.assignees.length} משתמשים`}
         action={<Link href="/vacation" className="text-sm text-blue-600 hover:underline">← חזרה</Link>}
       />
 

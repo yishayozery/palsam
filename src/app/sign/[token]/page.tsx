@@ -53,7 +53,7 @@ export default async function PublicSignPage({
     });
     commanderApproval = {
       name: approver?.fullName ?? "מפקד",
-      date: sig.soldier.weaponsApprovedAt?.toLocaleDateString("he-IL") ?? "",
+      date: sig.soldier.weaponsApprovedAt?.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" }) ?? "",
       signature: sig.soldier.weaponsApprovalSignature ?? null,
     };
   }

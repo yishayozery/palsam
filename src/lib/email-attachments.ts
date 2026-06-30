@@ -64,8 +64,8 @@ function sanitizeFilename(s: string): string {
 function buildEmailHtml(t: TransferWithDetails): string {
   const docNumber = t.id.slice(-8).toUpperCase();
   const unitName = t.battalion?.name || "גדוד";
-  const dateStr = t.createdAt.toLocaleDateString("he-IL");
-  const timeStr = t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+  const dateStr = t.createdAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" });
+  const timeStr = t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" });
   const fromName = senderName(t);
   const toName = recipientName(t);
   const totalQty = t.lines.reduce((s, l) => s + (l.quantity || (l.serialUnit?.lotQuantity ?? 1)), 0);
@@ -135,8 +135,8 @@ function buildEmailHtml(t: TransferWithDetails): string {
 function buildPrintableHtml(t: TransferWithDetails): string {
   const docNumber = t.id.slice(-8).toUpperCase();
   const unitName = t.battalion?.name || "גדוד";
-  const dateStr = t.createdAt.toLocaleDateString("he-IL");
-  const timeStr = t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+  const dateStr = t.createdAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" });
+  const timeStr = t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" });
 
   const logoHtml = t.battalion?.logoData
     ? `<img src="${t.battalion.logoData}" alt="סמל הגדוד" style="width:56px;height:56px;object-fit:contain" />`
@@ -151,7 +151,7 @@ function buildPrintableHtml(t: TransferWithDetails): string {
     ? `<div style="margin-top:12px;border:1px solid #e2e8f0;border-radius:8px;padding:8px;background:#f8fafc">
         <div style="font-size:10px;color:#64748b;margin-bottom:4px">חתימה דיגיטלית:</div>
         <img src="${sig.signatureData}" alt="חתימה" style="max-height:96px;object-fit:contain" />
-        ${sig.signedAt ? `<div style="font-size:10px;color:#94a3b8;margin-top:4px">נחתם: ${sig.signedAt.toLocaleString("he-IL")}${sig.soldier?.personalNumber ? ` · מ.א. ${sig.soldier.personalNumber}` : ""}</div>` : ""}
+        ${sig.signedAt ? `<div style="font-size:10px;color:#94a3b8;margin-top:4px">נחתם: ${sig.signedAt.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}${sig.soldier?.personalNumber ? ` · מ.א. ${sig.soldier.personalNumber}` : ""}</div>` : ""}
       </div>`
     : "";
 
@@ -176,7 +176,7 @@ function buildPrintableHtml(t: TransferWithDetails): string {
     ?? sig?.signerUser?.fullName
     ?? "________________";
   const approvedDateHtml = t.approvedAt
-    ? `<span style="color:#94a3b8"> · ${t.approvedAt.toLocaleDateString("he-IL")}</span>`
+    ? `<span style="color:#94a3b8"> · ${t.approvedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</span>`
     : "";
 
   return `<!DOCTYPE html>
@@ -268,7 +268,7 @@ async function buildExcelBuffer(t: TransferWithDetails): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "PALSAM";
   const docNumber = t.id.slice(-8).toUpperCase();
-  const dateStr = t.createdAt.toLocaleDateString("he-IL") + " " + t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+  const dateStr = t.createdAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" }) + " " + t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" });
   const fromName = senderName(t);
   const toName = recipientName(t);
   const typeName = TRANSFER_TYPE[t.type] ?? t.type;

@@ -140,7 +140,7 @@ export default async function ItemHistoryPage({
             <tbody>
               {lines.map((l) => (
                 <tr key={l.id}>
-                  <Td className="text-xs text-slate-500">{l.transfer.createdAt.toLocaleDateString("he-IL")}</Td>
+                  <Td className="text-xs text-slate-500">{l.transfer.createdAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</Td>
                   <Td><Badge>{TRANSFER_TYPE[l.transfer.type]}</Badge></Td>
                   <Td>{l.transfer.fromHolder?.name ?? <span className="text-slate-400">חטיבה</span>}</Td>
                   <Td>
@@ -172,7 +172,7 @@ export default async function ItemHistoryPage({
             <tbody>
               {counts.map((c) => (
                 <tr key={c.id}>
-                  <Td className="text-xs text-slate-500">{c.session.startedAt.toLocaleDateString("he-IL")}</Td>
+                  <Td className="text-xs text-slate-500">{c.session.startedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</Td>
                   <Td><Badge>{c.session.type}</Badge></Td>
                   <Td>{c.holder?.name ?? "—"}</Td>
                   <Td className="font-mono text-xs">{c.serialUnit?.serialNumber ?? "—"}</Td>

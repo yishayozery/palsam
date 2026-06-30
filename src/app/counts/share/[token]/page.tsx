@@ -49,8 +49,8 @@ export default async function SharedCountPage({ params }: { params: Promise<{ to
             <div className="font-bold text-slate-800">📍 {task.holder.name}</div>
           </div>
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm">
-            <div className="text-slate-500">מתוזמן: {task.scheduledAt.toLocaleString("he-IL")}</div>
-            <div className="text-slate-500">עד: {task.dueAt.toLocaleString("he-IL")}</div>
+            <div className="text-slate-500">מתוזמן: {task.scheduledAt.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}</div>
+            <div className="text-slate-500">עד: {task.dueAt.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}</div>
           </div>
         </div>
 

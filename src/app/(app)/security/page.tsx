@@ -36,7 +36,7 @@ export default async function SecurityPage() {
             <div className="mt-3">
               {enabled ? (
                 <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 text-sm text-emerald-800">
-                  ✓ פעיל מאז {me!.totpEnabledAt?.toLocaleDateString("he-IL")}
+                  ✓ פעיל מאז {me!.totpEnabledAt?.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}
                 </div>
               ) : (
                 <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 text-sm text-amber-800">

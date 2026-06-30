@@ -162,7 +162,7 @@ export default async function CountsPage() {
             <tbody>
               {sessions.map((s) => (
                 <tr key={s.id}>
-                  <Td className="text-xs text-slate-500">{s.startedAt.toLocaleDateString("he-IL")}</Td>
+                  <Td className="text-xs text-slate-500">{s.startedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</Td>
                   <Td><Badge>{COUNT_TYPE[s.type]}</Badge></Td>
                   <Td>
                     <Badge className={s.status === "COMPLETED" ? "bg-slate-200 text-slate-700" : "bg-amber-100 text-amber-800"}>
@@ -190,7 +190,7 @@ export default async function CountsPage() {
                       {canManage && (
                         <ConfirmForm action={deleteCountSessionForm}
                           hiddenFields={{ id: s.id }}
-                          message={`למחוק לצמיתות את ספירה זו (${s.startedAt.toLocaleDateString("he-IL")})? כולל ${s._count.lines} שורות ו-${s._count.discrepancies} פערים.`}>
+                          message={`למחוק לצמיתות את ספירה זו (${s.startedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })})? כולל ${s._count.lines} שורות ו-${s._count.discrepancies} פערים.`}>
                           <button className="text-xs text-rose-500 hover:text-rose-700" title="מחיקה לצמיתות">🗑️ מחק</button>
                         </ConfirmForm>
                       )}

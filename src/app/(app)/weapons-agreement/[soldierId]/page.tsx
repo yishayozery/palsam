@@ -52,7 +52,7 @@ export default async function WeaponsAgreementPage({
           </div>
           <div className="text-left">
             <div className="text-xs text-slate-500">תאריך חתימה</div>
-            <div className="font-mono text-sm">{soldier.weaponsAgreementSignedAt.toLocaleDateString("he-IL")}</div>
+            <div className="font-mono text-sm">{soldier.weaponsAgreementSignedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</div>
           </div>
         </div>
 
@@ -98,7 +98,7 @@ export default async function WeaponsAgreementPage({
             </div>
             <div>
               <span className="text-slate-500">תאריך: </span>
-              <span className="font-mono">{soldier.weaponsAgreementSignedAt.toLocaleDateString("he-IL")}</span>
+              <span className="font-mono">{soldier.weaponsAgreementSignedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</span>
             </div>
           </div>
 
@@ -127,7 +127,7 @@ export default async function WeaponsAgreementPage({
               </div>
               <div>
                 <span className="text-slate-500">תאריך אישור: </span>
-                <span className="font-mono">{soldier.weaponsApprovedAt?.toLocaleDateString("he-IL") ?? "—"}</span>
+                <span className="font-mono">{soldier.weaponsApprovedAt?.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" }) ?? "—"}</span>
               </div>
             </div>
             {soldier.weaponsApprovalSignature && (
@@ -141,7 +141,7 @@ export default async function WeaponsAgreementPage({
         )}
 
         <div className="text-[10px] text-slate-400 text-center mt-8 pt-4 border-t border-slate-200 print:mt-12">
-          מסמך זה הופק אוטומטית ע&quot;י מערכת PALSAM · {unitName} · {new Date().toLocaleDateString("he-IL")}
+          מסמך זה הופק אוטומטית ע&quot;י מערכת PALSAM · {unitName} · {new Date().toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}
         </div>
       </div>
     </div>

@@ -47,7 +47,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     ws.addRow({
       holder: t.holder.name,
       assignee: t.assignedUser?.fullName ?? "",
-      scheduled: t.scheduledAt.toLocaleString("he-IL"),
+      scheduled: t.scheduledAt.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" }),
       status: t.status,
       items: t.session?.lines.length ?? 0,
       gaps: t.session?.discrepancies.length ?? 0,

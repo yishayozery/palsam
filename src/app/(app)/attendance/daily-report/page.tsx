@@ -111,7 +111,7 @@ export default async function DailyReportPage({
     <div>
       <PageHeader
         title={`📊 דוח הצלבה יומי — ${employment.name}`}
-        subtitle={`${start.toLocaleDateString("he-IL")} — ${end.toLocaleDateString("he-IL")} | ${employment.totalDays} ימי מילואים`}
+        subtitle={`${start.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })} — ${end.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })} | ${employment.totalDays} ימי מילואים`}
         action={
           <LinkButton href={`/attendance?employmentId=${employment.id}`} variant="secondary">
             ← חזרה לנוכחות
