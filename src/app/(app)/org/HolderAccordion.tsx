@@ -205,7 +205,7 @@ function SoldierQuickAdd({ companyId, onDone }: { companyId: string; onDone: () 
   const [lastName, setLastName] = useState("");
   const [personalNumber, setPersonalNumber] = useState("");
   const [phone, setPhone] = useState("");
-  const [enlistNow, setEnlistNow] = useState(true);
+  const [enlistNow, setEnlistNow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 

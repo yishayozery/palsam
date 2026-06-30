@@ -38,6 +38,7 @@ function SoldierQuickAdd({ companyId, onDone }: { companyId: string; onDone: () 
   const [lastName, setLastName] = useState("");
   const [personalNumber, setPersonalNumber] = useState("");
   const [phone, setPhone] = useState("");
+  const [enlistNow, setEnlistNow] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(fd: FormData) {
@@ -51,7 +52,7 @@ function SoldierQuickAdd({ companyId, onDone }: { companyId: string; onDone: () 
   return (
     <form action={submit} className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2">
       <input type="hidden" name="companyId" value={companyId} />
-      <input type="hidden" name="enlistNow" value="on" />
+      <input type="hidden" name="enlistNow" value={enlistNow ? "on" : ""} />
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold text-emerald-900">+ הוספת חייל לפלוגה</span>
         <a href="/roster" target="_blank" className="text-[11px] text-emerald-700 hover:underline">לרוסטר ←</a>
@@ -71,6 +72,10 @@ function SoldierQuickAdd({ companyId, onDone }: { companyId: string; onDone: () 
         <input value={phone} onChange={(e) => setPhone(e.target.value)} name="phone" placeholder="נייד (אופציונלי)"
           className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm" />
       </div>
+      <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+        <input type="checkbox" checked={enlistNow} onChange={(e) => setEnlistNow(e.target.checked)} />
+        ✓ אשר גיוס מיידי — יוכל לחתום על ציוד
+      </label>
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onDone} className="text-xs text-slate-500">סגור</button>
         <button disabled={!firstName || !lastName}
