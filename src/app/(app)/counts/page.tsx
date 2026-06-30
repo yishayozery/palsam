@@ -44,6 +44,29 @@ export default async function CountsPage() {
     include: { holder: true, plan: true, assignedUser: { select: { fullName: true } } },
   });
 
+  // בדיקת אחסון תמונות אימות
+  const verificationPhotos = await prisma.verificationItem.findMany({
+    where: { request: { battalionId: bId }, photoData: { not: null } },
+    select: {
+      photoData: true,
+      request: { select: { sessionId: true, session: { select: { completedAt: true, startedAt: true } } } },
+    },
+  });
+
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  let storageMB = 0;
+  let oldPhotos = 0;
+  for (const item of verificationPhotos) {
+    const size = item.photoData ? item.photoData.length : 0;
+    storageMB += size;
+    if (item.request.session.completedAt && item.request.session.completedAt < thirtyDaysAgo) {
+      oldPhotos++;
+    }
+  }
+  storageMB = Math.round(storageMB / 1024 / 1024 * 10) / 10;
+
   const [definitions, sessions, frequencies, holders] = await Promise.all([
     prisma.countDefinition.findMany({
       where: { battalionId: bId, active: true },
@@ -89,6 +112,19 @@ export default async function CountsPage() {
           </div>
         }
       />
+
+      {/* התראת אחסון תמונות אימות */}
+      {canManage && (storageMB > 50 || oldPhotos > 0) && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between text-sm">
+          <div>
+            <span className="font-medium text-amber-800">📦 אחסון תמונות אימות: {storageMB} MB</span>
+            {oldPhotos > 0 && (
+              <span className="text-amber-600 mr-2"> · {oldPhotos} תמונות מספירות ישנות (מעל 30 יום)</span>
+            )}
+          </div>
+          <span className="text-xs text-amber-500">ניתן למחוק נתוני אימות ממסך הספירה</span>
+        </div>
+      )}
 
       {/* המשימות שלי */}
       {myTasks.length > 0 && (

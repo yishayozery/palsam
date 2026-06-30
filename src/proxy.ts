@@ -1,21 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PREFIXES = ["/login", "/about", "/sign", "/invite", "/_next", "/favicon", "/api/sign", "/my-equipment", "/offline"];
+const PUBLIC_PREFIXES = ["/login", "/about", "/sign", "/invite", "/_next", "/favicon", "/api/sign", "/api/telegram", "/api/cron", "/my-equipment", "/offline", "/verify"];
+const GEO_EXEMPT_PREFIXES = ["/api/telegram", "/api/cron"];
 const ALLOWED_COUNTRIES = new Set(["IL"]);
 
 export function proxy(req: NextRequest) {
-  // 🌍 Geo-restriction: Israel only (Vercel provides x-vercel-ip-country)
+  const { pathname } = req.nextUrl;
+
+  // 🌍 Geo-restriction: Israel only (exempt webhook/cron endpoints)
   const country = req.headers.get("x-vercel-ip-country");
-  if (country && !ALLOWED_COUNTRIES.has(country)) {
+  if (country && !ALLOWED_COUNTRIES.has(country) && !GEO_EXEMPT_PREFIXES.some((p) => pathname.startsWith(p))) {
     return new NextResponse("🚫 Access restricted to Israel only.\nגישה מוגבלת לישראל בלבד.", {
       status: 403,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   }
 
-  const { pathname } = req.nextUrl;
-
-  // נתיבים ציבוריים (התחברות + דפי החתמה לחיילים)
+  // נתיבים ציבוריים (התחברות + דפי החתמה לחיילים + webhooks)
   if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
     const res = NextResponse.next();
     applySecurityHeaders(res);

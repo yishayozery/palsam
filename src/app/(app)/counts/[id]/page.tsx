@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge } from "@/components/ui";
 import { COUNT_TYPE } from "@/lib/labels";
 import CountExecutor from "./CountExecutor";
+import VerificationPanel from "./VerificationPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,11 @@ export default async function CountSessionPage({
   if (!session) notFound();
   if (session.status === "COMPLETED") redirect("/counts");
 
+  const serialItemTypes = new Map<string, string>();
+  for (const l of session.lines) {
+    if (l.serialUnit) serialItemTypes.set(l.itemType.id, l.itemType.name);
+  }
+
   return (
     <div>
       <PageHeader
@@ -37,6 +43,16 @@ export default async function CountSessionPage({
         subtitle={`${COUNT_TYPE[session.type]} · ${session.lines.length} פריטים`}
         action={session.frozen ? <Badge className="bg-amber-100 text-amber-800">מצב מוקפא ❄️</Badge> : undefined}
       />
+
+      {serialItemTypes.size > 0 && (
+        <div className="mb-4">
+          <VerificationPanel
+            sessionId={session.id}
+            itemTypes={Array.from(serialItemTypes, ([id, name]) => ({ id, name }))}
+          />
+        </div>
+      )}
+
       <CountExecutor
         sessionId={session.id}
         lines={session.lines.map((l) => ({

@@ -203,3 +203,224 @@ export async function submitCount(formData: FormData) {
   revalidatePath("/counts");
   redirect("/gaps");
 }
+
+export async function createVerificationRequests(sessionId: string, itemTypeIds: string[]) {
+  const user = await requireCapability("counts.execute");
+  const bId = user.battalionId!;
+
+  const session = await prisma.countSession.findUnique({ where: { id: sessionId } });
+  if (!session || session.battalionId !== bId) return { error: "ספירה לא נמצאה" };
+
+  const serialUnits = await prisma.serialUnit.findMany({
+    where: {
+      battalionId: bId,
+      itemTypeId: { in: itemTypeIds },
+      signedSoldierId: { not: null },
+      dischargedAt: null,
+    },
+    include: {
+      signedSoldier: { select: { id: true, fullName: true, phone: true, telegramChatId: true } },
+      itemType: { select: { name: true } },
+    },
+  });
+
+  const bySoldier = new Map<string, typeof serialUnits>();
+  for (const su of serialUnits) {
+    if (!su.signedSoldierId) continue;
+    const arr = bySoldier.get(su.signedSoldierId) || [];
+    arr.push(su);
+    bySoldier.set(su.signedSoldierId, arr);
+  }
+
+  const created: { id: string; token: string; soldierName: string; phone: string | null; telegramChatId: string | null; itemCount: number }[] = [];
+
+  for (const [soldierId, units] of bySoldier) {
+    const soldier = units[0].signedSoldier!;
+    const existing = await prisma.verificationRequest.findFirst({
+      where: { sessionId, soldierId },
+    });
+    if (existing) continue;
+
+    const req = await prisma.verificationRequest.create({
+      data: {
+        battalionId: bId,
+        sessionId,
+        soldierId,
+        items: {
+          create: units.map((u) => ({
+            serialUnitId: u.id,
+            itemTypeName: u.itemType.name,
+            serialNumber: u.serialNumber,
+          })),
+        },
+      },
+    });
+
+    created.push({
+      id: req.id,
+      token: req.token,
+      soldierName: soldier.fullName,
+      phone: soldier.phone,
+      telegramChatId: soldier.telegramChatId,
+      itemCount: units.length,
+    });
+  }
+
+  return { ok: true, requests: created, total: created.length };
+}
+
+export async function getVerificationStatus(sessionId: string) {
+  const user = await requireUser();
+  const bId = user.battalionId!;
+
+  const requests = await prisma.verificationRequest.findMany({
+    where: { sessionId, battalionId: bId },
+    include: {
+      soldier: { select: { fullName: true, phone: true } },
+      items: { select: { id: true, itemTypeName: true, serialNumber: true, status: true, photoData: true, note: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return requests.map((r) => ({
+    id: r.id,
+    token: r.token,
+    soldierName: r.soldier.fullName,
+    phone: r.soldier.phone,
+    sentAt: r.sentAt?.toISOString() ?? null,
+    sentVia: r.sentVia,
+    respondedAt: r.respondedAt?.toISOString() ?? null,
+    items: r.items,
+  }));
+}
+
+export async function markVerificationSent(requestId: string, via: "WHATSAPP" | "TELEGRAM") {
+  const user = await requireUser();
+  await prisma.verificationRequest.update({
+    where: { id: requestId },
+    data: { sentAt: new Date(), sentVia: via },
+  });
+  return { ok: true };
+}
+
+export async function sendTelegramVerification(requestId: string) {
+  const user = await requireUser();
+  const bId = user.battalionId!;
+
+  const req = await prisma.verificationRequest.findUnique({
+    where: { id: requestId },
+    include: {
+      soldier: { select: { fullName: true, telegramChatId: true } },
+      battalion: { select: { telegramBotToken: true, name: true } },
+      items: { select: { itemTypeName: true, serialNumber: true } },
+    },
+  });
+  if (!req || !req.soldier.telegramChatId || !req.battalion.telegramBotToken) {
+    return { error: "חייל או בוט טלגרם לא מוגדרים" };
+  }
+
+  const { sendTelegramMessage } = await import("@/lib/telegram");
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://palmy.co.il";
+
+  const itemsList = req.items.map((i) => `• ${i.itemTypeName} (${i.serialNumber})`).join("\n");
+  const text = `🔍 <b>אימות ציוד — ${req.battalion.name}</b>\n\nשלום ${req.soldier.fullName},\nנדרש אימות שהציוד הבא נמצא ברשותך:\n\n${itemsList}\n\n👉 <a href="${baseUrl}/verify/${req.token}">לחץ כאן לאימות</a>`;
+
+  await sendTelegramMessage(req.battalion.telegramBotToken, req.soldier.telegramChatId, text);
+  await prisma.verificationRequest.update({
+    where: { id: requestId },
+    data: { sentAt: new Date(), sentVia: "TELEGRAM" },
+  });
+
+  return { ok: true };
+}
+
+export async function deleteVerificationData(sessionId: string) {
+  const user = await requireCapability("counts.manage");
+  const bId = user.battalionId!;
+
+  const session = await prisma.countSession.findUnique({ where: { id: sessionId } });
+  if (!session || session.battalionId !== bId) return { error: "ספירה לא נמצאה" };
+
+  const requests = await prisma.verificationRequest.findMany({
+    where: { sessionId },
+    select: { id: true },
+  });
+  if (requests.length === 0) return { error: "אין נתוני אימות לספירה זו" };
+
+  await prisma.verificationItem.deleteMany({
+    where: { requestId: { in: requests.map((r) => r.id) } },
+  });
+  await prisma.verificationRequest.deleteMany({ where: { sessionId } });
+
+  await audit(user.id, "DELETE_VERIFICATION", "CountSession", sessionId);
+  return { ok: true, deleted: requests.length };
+}
+
+export async function getVerificationStorageStats() {
+  const user = await requireUser();
+  const bId = user.battalionId!;
+
+  const items = await prisma.verificationItem.findMany({
+    where: { request: { battalionId: bId }, photoData: { not: null } },
+    select: {
+      photoData: true,
+      request: { select: { sessionId: true, session: { select: { completedAt: true } } } },
+    },
+  });
+
+  let totalBytes = 0;
+  const bySessions = new Map<string, { bytes: number; completedAt: Date | null }>();
+  for (const item of items) {
+    const size = item.photoData ? item.photoData.length : 0;
+    totalBytes += size;
+    const sid = item.request.sessionId;
+    const existing = bySessions.get(sid) || { bytes: 0, completedAt: item.request.session.completedAt };
+    existing.bytes += size;
+    bySessions.set(sid, existing);
+  }
+
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const oldSessions: { sessionId: string; bytes: number; completedAt: string }[] = [];
+  for (const [sid, data] of bySessions) {
+    if (data.completedAt && data.completedAt < thirtyDaysAgo) {
+      oldSessions.push({ sessionId: sid, bytes: data.bytes, completedAt: data.completedAt.toISOString() });
+    }
+  }
+
+  return {
+    totalBytes,
+    totalMB: Math.round(totalBytes / 1024 / 1024 * 10) / 10,
+    photoCount: items.length,
+    sessionCount: bySessions.size,
+    oldSessions,
+  };
+}
+
+export async function registerTelegramWebhook() {
+  const user = await requireCapability("battalion.profile");
+  const bId = user.battalionId!;
+
+  const battalion = await prisma.battalion.findUnique({
+    where: { id: bId },
+    select: { telegramBotToken: true },
+  });
+  if (!battalion?.telegramBotToken) return { error: "טוקן בוט טלגרם לא מוגדר" };
+
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://palmy.co.il";
+  const webhookUrl = `${baseUrl}/api/telegram/${bId}`;
+
+  const res = await fetch(
+    `https://api.telegram.org/bot${battalion.telegramBotToken}/setWebhook`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: webhookUrl }),
+    },
+  );
+  const data = await res.json();
+  if (!data.ok) return { error: `Telegram error: ${data.description}` };
+
+  return { ok: true, webhookUrl };
+}

@@ -129,6 +129,7 @@ model Battalion {
   emailToBattalion            Boolean @default(true) // האם לשלוח התראות גם למייל הגדוד (בנוסף למחסן/פלוגה)
   armoryTestUrl               String? // קישור למבחן נוהל ארמון חיצוני (אם יש)
   drivingRefreshDays          Int     @default(180) // ימי תוקף ריענון נהיגה
+  telegramBotToken            String? // טוקן בוט טלגרם לשליחת הודעות אוטומטיות
   createdAt DateTime @default(now())
 
   users         AppUser[]
@@ -171,6 +172,7 @@ model Battalion {
   companyWarehouses      CompanyWarehouse[]  @relation("BattalionCompanyWarehouses")
   operationalKits        OperationalKit[]    @relation("BattalionOpKits")
   ymachGaps              YmachGap[]          @relation("BattalionYmachGaps")
+  verificationRequests   VerificationRequest[] @relation("BattalionVerifications")
 }
 
 // ===================== משתמשים =====================
@@ -566,6 +568,7 @@ model Soldier {
   weaponsAgreementSignedAt   DateTime?
   weaponsAgreementSignature  String? // data URL של החתימה
   // גיוס
+  telegramChatId String? // Telegram chat ID לשליחת הודעות מבוט
   drivingRefresherDate DateTime? @db.Date // ריענון נהיגה כללי
   callupClosedAt DateTime? // תאריך סגירת גיוס
   createdAt      DateTime  @default(now())
@@ -586,6 +589,7 @@ model Soldier {
   attachmentRequests  AttachmentRequest[]
   operationalKits     OperationalKit[] @relation("SoldierOpKits")
   ymachGaps           YmachGap[]       @relation("SoldierYmachGaps")
+  verificationRequests VerificationRequest[] @relation("SoldierVerifications")
   // מקושר למשתמש מערכת (קצין/רס"פ)
   appUser            AppUser?      @relation("SoldierAsUser")
 
@@ -914,6 +918,7 @@ model SerialUnit {
   transferLines TransferLine[]
   countLines    CountLine[]
   ymachGaps     YmachGap[]    @relation("YmachGapSerialUnit")
+  verificationItems VerificationItem[] @relation("SerialUnitVerifications")
 
   @@unique([itemTypeId, serialNumber])
   @@index([battalionId])
@@ -1152,6 +1157,7 @@ model CountSession {
   lines         CountLine[]
   discrepancies Discrepancy[]
   task          CountTask?
+  verificationRequests VerificationRequest[] @relation("SessionVerifications")
 
   @@index([battalionId])
 }
@@ -1781,4 +1787,53 @@ model OperationalKitItem {
   @@unique([kitId, itemTypeId])
   @@index([kitId])
   @@index([itemTypeId])
+}
+
+// ===================== אימות ציוד (Verification) =====================
+
+enum VerificationStatus {
+  PENDING
+  SENT
+  CONFIRMED
+  DENIED
+  NO_RESPONSE
+}
+
+// בקשת אימות — אחת לכל חייל בספירה
+model VerificationRequest {
+  id            String   @id @default(cuid())
+  battalionId   String
+  battalion     Battalion @relation("BattalionVerifications", fields: [battalionId], references: [id], onDelete: Cascade)
+  sessionId     String
+  session       CountSession @relation("SessionVerifications", fields: [sessionId], references: [id], onDelete: Cascade)
+  soldierId     String
+  soldier       Soldier  @relation("SoldierVerifications", fields: [soldierId], references: [id], onDelete: Cascade)
+  token         String   @unique @default(cuid())
+  sentAt        DateTime?
+  sentVia       String?  // "WHATSAPP" | "TELEGRAM"
+  respondedAt   DateTime?
+  createdAt     DateTime @default(now())
+
+  items VerificationItem[]
+
+  @@index([sessionId])
+  @@index([soldierId])
+  @@index([battalionId])
+}
+
+// פריט באימות — אחד לכל יחידה סריאלית בבקשה
+model VerificationItem {
+  id              String   @id @default(cuid())
+  requestId       String
+  request         VerificationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  serialUnitId    String
+  serialUnit      SerialUnit @relation("SerialUnitVerifications", fields: [serialUnitId], references: [id], onDelete: Cascade)
+  itemTypeName    String
+  serialNumber    String
+  status          VerificationStatus @default(PENDING)
+  photoData       String?
+  respondedAt     DateTime?
+  note            String?
+
+  @@index([requestId])
 }

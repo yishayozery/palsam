@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import ImageUpload from "@/components/ImageUpload";
 import { updateProfile, type ProfileState } from "./actions";
+import { registerTelegramWebhook } from "../counts/actions";
 
 const initial: ProfileState = {};
 
@@ -12,10 +13,13 @@ type B = {
   senderEmail: string | null;
   notificationEmail: string | null;
   emailToBattalion: boolean;
+  telegramBotToken: string | null;
 };
 
 export default function ProfileForm({ battalion }: { battalion: B }) {
   const [state, formAction, pending] = useActionState(updateProfile, initial);
+  const [webhookMsg, setWebhookMsg] = useState<string | null>(null);
+  const [whPending, startWhTransition] = useTransition();
 
   return (
     <form action={formAction} className="space-y-4">
@@ -166,6 +170,53 @@ export default function ProfileForm({ battalion }: { battalion: B }) {
             </div>
           </div>
         </label>
+
+        {/* 🤖 טלגרם בוט */}
+        <div className="mt-3 p-3 rounded-lg border border-slate-200">
+          <label className="block text-sm font-medium text-slate-800 mb-1">
+            🤖 טוקן בוט טלגרם
+          </label>
+          <input
+            type="text"
+            name="telegramBotToken"
+            defaultValue={battalion.telegramBotToken ?? ""}
+            placeholder="123456789:ABCdefGhIJKlmNOP..."
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"
+          />
+          <div className="text-xs text-slate-500 mt-1.5 space-y-1">
+            <p className="font-medium text-slate-600">הגדרת בוט טלגרם לאימות ציוד אוטומטי:</p>
+            <ol className="list-decimal list-inside space-y-0.5 mr-1">
+              <li>פתח טלגרם → חפש <b>@BotFather</b> → שלח <code className="bg-slate-100 px-1 rounded">/newbot</code></li>
+              <li>בחר שם (למשל: גדסם כרמלי) ו-username ייחודי (למשל: gadsam_carmeli_bot)</li>
+              <li>BotFather ישלח טוקן — העתק והדבק למעלה → <b>שמור</b></li>
+              <li>לחץ &quot;חבר Webhook&quot; למטה (פעם אחת)</li>
+              <li>שלח לחיילים את הלינק לבוט → הם לוחצים Start ושולחים מספר אישי</li>
+            </ol>
+          </div>
+          {battalion.telegramBotToken && (
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                disabled={whPending}
+                onClick={() => {
+                  setWebhookMsg(null);
+                  startWhTransition(async () => {
+                    const r = await registerTelegramWebhook();
+                    setWebhookMsg(r.error || `Webhook רשום ✅`);
+                  });
+                }}
+                className="text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg px-3 py-1.5 font-medium"
+              >
+                {whPending ? "מחבר..." : "🔗 חבר Webhook"}
+              </button>
+              {webhookMsg && (
+                <span className={`text-xs ${webhookMsg.includes("✅") ? "text-emerald-600" : "text-rose-600"}`}>
+                  {webhookMsg}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       <div className="flex items-center justify-end gap-3">
         {state.ok && <span className="text-sm text-emerald-600">נשמר ✓</span>}

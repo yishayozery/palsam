@@ -38,7 +38,9 @@ export async function updateProfile(
     if (dup) return { error: `קוד "${code}" כבר בשימוש בגדוד אחר` };
   }
 
-  const data: Record<string, unknown> = { name, code, brigade, commander, motto, notes, requirePersonalIdOnHandover, senderEmail, notificationEmail, emailToBattalion };
+  const telegramBotToken = String(formData.get("telegramBotToken") || "").trim() || null;
+
+  const data: Record<string, unknown> = { name, code, brigade, commander, motto, notes, requirePersonalIdOnHandover, senderEmail, notificationEmail, emailToBattalion, telegramBotToken };
   if (logoData !== undefined) data.logoData = logoData;
 
   try {
