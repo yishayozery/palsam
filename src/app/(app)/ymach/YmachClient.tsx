@@ -8,9 +8,6 @@ import {
   assignItemToShelf, removeItemFromShelf,
   saveOperationalKit, deleteOperationalKit, updateKitItems,
   issueKit, returnKit, duplicateKit,
-  getSoldierSignedItems, processStorage, releaseFromStorage,
-  resolveYmachGap, getOpenGaps,
-  type StorageCheckItem,
 } from "./actions";
 
 type Shelf = {
@@ -29,6 +26,7 @@ type OpKit = {
   items: { itemTypeId: string; itemName: string; sku: string | null; quantity: number }[];
 };
 type Baseline = { itemTypeId: string; itemName: string; sku: string | null; permanentQuantity: number };
+type StockItem = { itemTypeId: string; itemName: string; sku: string | null; stockQuantity: number };
 type ItemOption = { id: string; name: string; sku: string | null; trackingMethod: string };
 type SoldierOption = { id: string; fullName: string; personalNumber: string | null };
 
@@ -41,6 +39,7 @@ type Props = {
   warehouses: Warehouse[];
   operationalKits: OpKit[];
   baselines: Baseline[];
+  stockItems: StockItem[];
   allItems: ItemOption[];
   soldiers: SoldierOption[];
   equipmentLocations: EquipLocOption[];
@@ -48,7 +47,7 @@ type Props = {
 
 export default function YmachClient({
   tab, companyName, companyLogo, battalionName, battalionLogo,
-  warehouses, operationalKits, baselines, allItems, soldiers, equipmentLocations,
+  warehouses, operationalKits, baselines, stockItems, allItems, soldiers, equipmentLocations,
 }: Props) {
   return (
     <div className="mt-4">
@@ -56,7 +55,7 @@ export default function YmachClient({
         <WarehousesTab warehouses={warehouses} />
       )}
       {tab === "items" && (
-        <ItemsTab warehouses={warehouses} baselines={baselines} allItems={allItems} />
+        <ItemsTab warehouses={warehouses} stockItems={stockItems} allItems={allItems} />
       )}
       {tab === "kits" && (
         <KitsTab
@@ -66,9 +65,6 @@ export default function YmachClient({
           soldiers={soldiers}
           equipmentLocations={equipmentLocations}
         />
-      )}
-      {tab === "storage" && (
-        <StorageTab warehouses={warehouses} soldiers={soldiers} />
       )}
       {tab === "count" && (
         <CountTab warehouses={warehouses} baselines={baselines} />
@@ -81,6 +77,75 @@ export default function YmachClient({
           baselines={baselines}
         />
       )}
+    </div>
+  );
+}
+
+// ===================== בחירת חייל עם חיפוש =====================
+function SoldierSearch({
+  name, soldiers, defaultValue, className,
+}: {
+  name: string;
+  soldiers: SoldierOption[];
+  defaultValue?: string;
+  className?: string;
+}) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState(defaultValue ?? "");
+  const selectedSoldier = soldiers.find((s) => s.id === selected);
+
+  const filtered = q
+    ? soldiers.filter((s) =>
+        s.fullName.includes(q) || s.personalNumber?.includes(q)
+      )
+    : soldiers;
+
+  return (
+    <div className={`relative ${className ?? ""}`}>
+      <input type="hidden" name={name} value={selected} />
+      <input
+        type="text"
+        value={open ? q : selectedSoldier ? `${selectedSoldier.fullName}${selectedSoldier.personalNumber ? ` (${selectedSoldier.personalNumber})` : ""}` : ""}
+        placeholder="חפש חייל..."
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        onFocus={() => { setOpen(true); setQ(""); }}
+        className="border rounded px-2 py-1.5 text-sm w-full"
+      />
+      {selected && !open && (
+        <button
+          type="button"
+          onClick={() => { setSelected(""); setQ(""); }}
+          className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 text-xs"
+        >
+          ✕
+        </button>
+      )}
+      {open && (
+        <div className="absolute z-50 top-full left-0 right-0 bg-white border rounded shadow-lg max-h-40 overflow-y-auto mt-0.5">
+          <button
+            type="button"
+            onClick={() => { setSelected(""); setOpen(false); setQ(""); }}
+            className="block w-full text-right px-2 py-1.5 text-xs text-slate-400 hover:bg-slate-50 border-b"
+          >
+            ללא שיוך
+          </button>
+          {filtered.slice(0, 20).map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => { setSelected(s.id); setOpen(false); setQ(""); }}
+              className="block w-full text-right px-2 py-1.5 text-xs hover:bg-blue-50 border-b last:border-0"
+            >
+              {s.fullName} {s.personalNumber ? <span className="text-slate-400">({s.personalNumber})</span> : ""}
+            </button>
+          ))}
+          {filtered.length === 0 && (
+            <div className="px-2 py-2 text-xs text-slate-400 text-center">אין תוצאות</div>
+          )}
+        </div>
+      )}
+      {open && <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />}
     </div>
   );
 }
@@ -231,10 +296,10 @@ function WarehousesTab({ warehouses }: { warehouses: Warehouse[] }) {
 
 // ===================== טאב פריטים על מדפים =====================
 function ItemsTab({
-  warehouses, baselines, allItems,
+  warehouses, stockItems, allItems,
 }: {
   warehouses: Warehouse[];
-  baselines: Baseline[];
+  stockItems: StockItem[];
   allItems: ItemOption[];
 }) {
   const [pending, startTransition] = useTransition();
@@ -255,11 +320,11 @@ function ItemsTab({
     }
   }
 
-  // השוואה לתקן
-  const comparison = baselines.map((b) => ({
-    ...b,
-    onShelf: onShelfMap.get(b.itemTypeId) ?? 0,
-    gap: b.permanentQuantity - (onShelfMap.get(b.itemTypeId) ?? 0),
+  // השוואה למלאי (StockBalance)
+  const comparison = stockItems.map((s) => ({
+    ...s,
+    onShelf: onShelfMap.get(s.itemTypeId) ?? 0,
+    gap: s.stockQuantity - (onShelfMap.get(s.itemTypeId) ?? 0),
   }));
 
   const filtered = q
@@ -269,7 +334,7 @@ function ItemsTab({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="font-bold text-slate-800">פריטים על מדפים (מול תקן)</h2>
+        <h2 className="font-bold text-slate-800">פריטים על מדפים (מול מלאי)</h2>
         <input
           value={q} onChange={(e) => setQ(e.target.value)}
           placeholder="חיפוש פריט..."
@@ -283,7 +348,7 @@ function ItemsTab({
             <tr>
               <th className="text-right p-2">פריט</th>
               <th className="text-right p-2">מק״ט</th>
-              <th className="text-center p-2">תקן</th>
+              <th className="text-center p-2">מלאי</th>
               <th className="text-center p-2">על מדפים</th>
               <th className="text-center p-2">פער</th>
               <th className="text-center p-2">מיקום</th>
@@ -295,7 +360,7 @@ function ItemsTab({
               <tr key={row.itemTypeId} className="border-b hover:bg-slate-50">
                 <td className="p-2 font-medium">{row.itemName}</td>
                 <td className="p-2 text-slate-500 font-mono text-xs">{row.sku ?? "—"}</td>
-                <td className="p-2 text-center">{row.permanentQuantity}</td>
+                <td className="p-2 text-center">{row.stockQuantity}</td>
                 <td className="p-2 text-center font-bold">{row.onShelf}</td>
                 <td className="p-2 text-center">
                   {row.gap > 0 ? (
@@ -325,7 +390,7 @@ function ItemsTab({
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={7} className="p-6 text-center text-slate-400">
-                  {baselines.length === 0 ? "אין תקן מוגדר. הגדר ציוד קבוע לפלוגה." : "אין תוצאות."}
+                  {stockItems.length === 0 ? "אין מלאי בפלוגה." : "אין תוצאות."}
                 </td>
               </tr>
             )}
@@ -336,7 +401,7 @@ function ItemsTab({
       {addFor && (
         <Card className="p-4 bg-blue-50 border-blue-200">
           <h3 className="text-sm font-bold mb-2">
-            שייך "{baselines.find((b) => b.itemTypeId === addFor)?.itemName}" למדף
+            שייך "{stockItems.find((s) => s.itemTypeId === addFor)?.itemName}" למדף
           </h3>
           <div className="flex gap-2 items-end flex-wrap">
             <div>
@@ -465,12 +530,7 @@ ${kit.notes ? `<p class="meta"><b>הערה:</b> ${kit.notes}</p>` : ""}
               </div>
               <div>
                 <label className="text-xs block mb-1">חייל</label>
-                <select name="assignedSoldierId" className="border rounded px-2 py-1.5 text-sm w-full">
-                  <option value="">ללא שיוך</option>
-                  {soldiers.map((s) => (
-                    <option key={s.id} value={s.id}>{s.fullName} {s.personalNumber ? `(${s.personalNumber})` : ""}</option>
-                  ))}
-                </select>
+                <SoldierSearch name="assignedSoldierId" soldiers={soldiers} />
               </div>
               <div className="col-span-2 md:col-span-1">
                 <label className="text-xs block mb-1">תיאור</label>
@@ -602,12 +662,7 @@ ${kit.notes ? `<p class="meta"><b>הערה:</b> ${kit.notes}</p>` : ""}
                     </div>
                     <div>
                       <label className="text-[10px] block mb-0.5">חייל {kit.status === "ISSUED" && <span className="text-amber-600">(מארז אצל חייל — העברה תחזיר למדף)</span>}</label>
-                      <select name="assignedSoldierId" defaultValue={kit.assignedSoldierId ?? ""} className="border rounded px-2 py-1 text-xs w-full">
-                        <option value="">ללא שיוך</option>
-                        {soldiers.map((s) => (
-                          <option key={s.id} value={s.id}>{s.fullName} {s.personalNumber ? `(${s.personalNumber})` : ""}</option>
-                        ))}
-                      </select>
+                      <SoldierSearch name="assignedSoldierId" soldiers={soldiers} defaultValue={kit.assignedSoldierId ?? ""} className="text-xs" />
                     </div>
                     <div className="col-span-2 md:col-span-1">
                       <label className="text-[10px] block mb-0.5">תיאור</label>
@@ -753,317 +808,7 @@ function KitItemsEditor({
   );
 }
 
-// ===================== טאב אפסון =====================
-type SignedItem = {
-  id: string; serialNumber: string; storageStatus: string;
-  storedShelfId: string | null;
-  itemType: { id: string; name: string; sku: string | null };
-  storedShelf: { id: string; column: string; row: string; warehouse: { name: string } } | null;
-};
 
-function StorageTab({
-  warehouses, soldiers,
-}: {
-  warehouses: Warehouse[];
-  soldiers: SoldierOption[];
-}) {
-  const [selectedSoldier, setSelectedSoldier] = useState("");
-  const [signedItems, setSignedItems] = useState<SignedItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [pending, startTransition] = useTransition();
-  const [checks, setChecks] = useState<Map<string, StorageCheckItem>>(new Map());
-  const [result, setResult] = useState<{ stored: number; gaps: number } | null>(null);
-  const [gaps, setGaps] = useState<Array<{
-    id: string; reason: string; reasonText: string | null; createdAt: string; status: string;
-    soldier: { fullName: string; personalNumber: string | null };
-    itemType: { name: string; sku: string | null };
-    serialUnit: { serialNumber: string } | null;
-  }>>([]);
-  const [showGaps, setShowGaps] = useState(false);
-
-  const allShelves = warehouses.flatMap((wh) =>
-    wh.shelves.map((sh) => ({ id: sh.id, label: `${wh.name} — ${sh.column}-${sh.row}` }))
-  );
-
-  const REASONS: { value: string; label: string; icon: string }[] = [
-    { value: "LOST", label: "אבד", icon: "❌" },
-    { value: "BROKEN", label: "נשבר", icon: "💔" },
-    { value: "IN_USE", label: "בשימוש", icon: "🔄" },
-    { value: "OTHER", label: "אחר", icon: "❓" },
-  ];
-
-  async function loadSoldierItems(soldierId: string) {
-    setSelectedSoldier(soldierId);
-    setResult(null);
-    if (!soldierId) { setSignedItems([]); return; }
-    setLoading(true);
-    const res = await getSoldierSignedItems(soldierId);
-    if ("items" in res) {
-      setSignedItems(res.items as SignedItem[]);
-      const m = new Map<string, StorageCheckItem>();
-      for (const it of res.items as SignedItem[]) {
-        m.set(it.id, {
-          serialUnitId: it.id,
-          returned: true,
-          shelfId: it.storedShelfId ?? (allShelves[0]?.id ?? null),
-        });
-      }
-      setChecks(m);
-    }
-    setLoading(false);
-  }
-
-  async function loadGaps() {
-    const res = await getOpenGaps();
-    if ("gaps" in res) {
-      setGaps(res.gaps.map((g: any) => ({ ...g, createdAt: String(g.createdAt) })));
-    }
-    setShowGaps(true);
-  }
-
-  function updateCheck(id: string, patch: Partial<StorageCheckItem>) {
-    setChecks((prev) => {
-      const m = new Map(prev);
-      const existing = m.get(id)!;
-      m.set(id, { ...existing, ...patch });
-      return m;
-    });
-  }
-
-  async function submitStorage() {
-    if (!selectedSoldier) return;
-    const res = await processStorage(selectedSoldier, Array.from(checks.values()));
-    if (res && "ok" in res) {
-      setResult({ stored: res.stored ?? 0, gaps: res.gaps ?? 0 });
-      setSignedItems([]);
-      setSelectedSoldier("");
-    }
-  }
-
-  // פריטים פעילים (לא מאופסנים) לאפסון
-  const activeItems = signedItems.filter((i) => i.storageStatus === "ACTIVE");
-  // פריטים כבר מאופסנים — להוצאה
-  const storedItems = signedItems.filter((i) => i.storageStatus === "STORED");
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="font-bold text-slate-800">אפסון — החזרת ציוד לימ״ח</h2>
-        <button
-          onClick={loadGaps}
-          className="text-xs bg-rose-100 text-rose-700 px-3 py-1.5 rounded hover:bg-rose-200"
-        >
-          ⚠️ פערים פתוחים
-        </button>
-      </div>
-
-      {/* בחירת חייל */}
-      <Card className="p-4">
-        <label className="text-sm font-bold block mb-2">בחר חייל לאפסון:</label>
-        <select
-          value={selectedSoldier}
-          onChange={(e) => loadSoldierItems(e.target.value)}
-          className="border rounded px-3 py-2 text-sm w-full max-w-md"
-        >
-          <option value="">— בחר חייל —</option>
-          {soldiers.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.fullName} {s.personalNumber ? `(${s.personalNumber})` : ""}
-            </option>
-          ))}
-        </select>
-      </Card>
-
-      {loading && <p className="text-sm text-slate-400">טוען פריטים...</p>}
-
-      {result && (
-        <Card className="p-4 bg-emerald-50 border-emerald-200">
-          <p className="text-sm font-bold text-emerald-800">
-            ✅ אפסון הושלם — {result.stored} פריטים אופסנו
-            {result.gaps > 0 && <span className="text-rose-600">, {result.gaps} פערים נוצרו</span>}
-          </p>
-        </Card>
-      )}
-
-      {/* פריטים פעילים — לאפסון */}
-      {activeItems.length > 0 && (
-        <Card className="p-4">
-          <h3 className="font-bold text-sm mb-3">📦 ציוד פעיל — סמן מה חזר ({activeItems.length})</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-xs text-slate-600">
-                <tr>
-                  <th className="p-2 text-right">פריט</th>
-                  <th className="p-2 text-right">SN</th>
-                  <th className="p-2 text-center">חזר ✓</th>
-                  <th className="p-2 text-center">מדף יעד</th>
-                  <th className="p-2 text-center">סיבת חוסר</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activeItems.map((item) => {
-                  const check = checks.get(item.id);
-                  const returned = check?.returned ?? true;
-                  return (
-                    <tr key={item.id} className={`border-b ${!returned ? "bg-rose-50" : ""}`}>
-                      <td className="p-2 font-medium">{item.itemType.name}</td>
-                      <td className="p-2 text-xs text-slate-500 font-mono">{item.serialNumber}</td>
-                      <td className="p-2 text-center">
-                        <input
-                          type="checkbox"
-                          checked={returned}
-                          onChange={(e) => updateCheck(item.id, { returned: e.target.checked })}
-                          className="w-5 h-5 accent-emerald-600"
-                        />
-                      </td>
-                      <td className="p-2 text-center">
-                        {returned ? (
-                          <select
-                            value={check?.shelfId ?? ""}
-                            onChange={(e) => updateCheck(item.id, { shelfId: e.target.value || null })}
-                            className="border rounded px-1 py-1 text-xs"
-                          >
-                            <option value="">ללא מדף</option>
-                            {allShelves.map((s) => (
-                              <option key={s.id} value={s.id}>{s.label}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </td>
-                      <td className="p-2 text-center">
-                        {!returned ? (
-                          <select
-                            value={check?.gapReason ?? "LOST"}
-                            onChange={(e) => updateCheck(item.id, { gapReason: e.target.value as StorageCheckItem["gapReason"] })}
-                            className="border rounded px-1 py-1 text-xs border-rose-300"
-                          >
-                            {REASONS.map((r) => (
-                              <option key={r.value} value={r.value}>{r.icon} {r.label}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex justify-end mt-3">
-            <button
-              onClick={() => startTransition(async () => { await submitStorage(); })}
-              disabled={pending}
-              className="bg-blue-700 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-800"
-            >
-              {pending ? "מעבד..." : "✓ בצע אפסון"}
-            </button>
-          </div>
-        </Card>
-      )}
-
-      {/* פריטים מאופסנים — הוצאה */}
-      {storedItems.length > 0 && (
-        <Card className="p-4 bg-blue-50 border-blue-200">
-          <h3 className="font-bold text-sm mb-3">🗄️ ציוד מאופסן ({storedItems.length})</h3>
-          <div className="space-y-1">
-            {storedItems.map((item) => (
-              <div key={item.id} className="flex items-center justify-between text-xs bg-white rounded px-3 py-2 border">
-                <div>
-                  <span className="font-medium">{item.itemType.name}</span>
-                  <span className="text-slate-400 mr-2 font-mono">{item.serialNumber}</span>
-                  {item.storedShelf && (
-                    <Badge className="bg-slate-100 text-slate-600">
-                      📍 {item.storedShelf.warehouse.name} {item.storedShelf.column}-{item.storedShelf.row}
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={() => startTransition(async () => {
-              await releaseFromStorage(storedItems.map((i) => i.id));
-              loadSoldierItems(selectedSoldier);
-            })}
-            disabled={pending}
-            className="mt-2 bg-amber-600 text-white px-3 py-1.5 rounded text-xs hover:bg-amber-700"
-          >
-            📤 הוצא הכל מאפסון
-          </button>
-        </Card>
-      )}
-
-      {selectedSoldier && !loading && activeItems.length === 0 && storedItems.length === 0 && (
-        <Card className="p-6 text-center text-slate-400 text-sm">
-          אין ציוד חתום על חייל זה בפלוגה.
-        </Card>
-      )}
-
-      {/* פערים פתוחים */}
-      {showGaps && (
-        <Card className="p-4 bg-rose-50 border-rose-200">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold text-sm text-rose-800">⚠️ פערי ימ״ח פתוחים ({gaps.length})</h3>
-            <button onClick={() => setShowGaps(false)} className="text-xs text-slate-500">✕ סגור</button>
-          </div>
-          {gaps.length === 0 ? (
-            <p className="text-xs text-slate-500">אין פערים פתוחים 🎉</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-rose-100 text-rose-700">
-                  <tr>
-                    <th className="p-2 text-right">חייל</th>
-                    <th className="p-2 text-right">פריט</th>
-                    <th className="p-2 text-right">SN</th>
-                    <th className="p-2 text-center">סיבה</th>
-                    <th className="p-2 text-center">תאריך</th>
-                    <th className="p-2 text-center">פעולות</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {gaps.map((g) => (
-                    <tr key={g.id} className="border-b">
-                      <td className="p-2">{g.soldier.fullName}</td>
-                      <td className="p-2">{g.itemType.name}</td>
-                      <td className="p-2 font-mono">{g.serialUnit?.serialNumber ?? "—"}</td>
-                      <td className="p-2 text-center">
-                        <Badge className={
-                          g.reason === "LOST" ? "bg-red-100 text-red-700" :
-                          g.reason === "BROKEN" ? "bg-amber-100 text-amber-700" :
-                          g.reason === "IN_USE" ? "bg-blue-100 text-blue-700" :
-                          "bg-slate-100 text-slate-600"
-                        }>
-                          {g.reason === "LOST" ? "אבד" : g.reason === "BROKEN" ? "נשבר" : g.reason === "IN_USE" ? "בשימוש" : "אחר"}
-                        </Badge>
-                      </td>
-                      <td className="p-2 text-center text-slate-500">
-                        {new Date(g.createdAt).toLocaleDateString("he-IL")}
-                      </td>
-                      <td className="p-2 text-center">
-                        <button
-                          onClick={() => startTransition(async () => { await resolveYmachGap(g.id); await loadGaps(); })}
-                          className="text-emerald-600 hover:text-emerald-800"
-                          disabled={pending}
-                        >
-                          ✓ סגור
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-      )}
-    </div>
-  );
-}
 
 // ===================== טאב ספירת ימ"ח =====================
 function CountTab({

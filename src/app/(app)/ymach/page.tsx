@@ -88,12 +88,28 @@ export default async function YmachPage({
     orderBy: { itemType: { name: "asc" } },
   });
 
-  // כל הפריטים בגדוד (לבחירה)
-  const allItems = await prisma.itemType.findMany({
-    where: { battalionId: bId, active: true },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, sku: true, trackingMethod: true },
+  // מלאי בפלוגה (StockBalance) — לטאב פריטים + לבחירה בארגזים
+  const stockRows = await prisma.stockBalance.findMany({
+    where: { holderId, quantity: { gt: 0 } },
+    select: { itemTypeId: true, quantity: true, itemType: { select: { id: true, name: true, sku: true, trackingMethod: true } } },
   });
+  const stockMap = new Map<string, { itemTypeId: string; itemName: string; sku: string | null; stockQuantity: number; trackingMethod: string }>();
+  for (const sb of stockRows) {
+    const existing = stockMap.get(sb.itemTypeId);
+    if (existing) {
+      existing.stockQuantity += sb.quantity;
+    } else {
+      stockMap.set(sb.itemTypeId, {
+        itemTypeId: sb.itemTypeId,
+        itemName: sb.itemType.name,
+        sku: sb.itemType.sku,
+        stockQuantity: sb.quantity,
+        trackingMethod: sb.itemType.trackingMethod,
+      });
+    }
+  }
+  const stockItems = [...stockMap.values()].sort((a, b) => a.itemName.localeCompare(b.itemName));
+  const allItems = stockItems.map((s) => ({ id: s.itemTypeId, name: s.itemName, sku: s.sku, trackingMethod: s.trackingMethod }));
 
   // מיקומי ציוד (לשיוך ארגזים)
   const equipmentLocations = await prisma.equipmentLocation.findMany({
@@ -113,8 +129,8 @@ export default async function YmachPage({
   const totalOnShelves = warehouses.reduce(
     (sum, wh) => sum + wh.shelves.reduce(
       (s2, sh) => s2 + sh.items.reduce((s3, it) => s3 + it.quantity, 0), 0), 0);
-  const totalBaseline = baselines.reduce((s, b) => s + b.permanentQuantity, 0);
-  const placedPct = totalBaseline === 0 ? 100 : Math.round((totalOnShelves / totalBaseline) * 100);
+  const totalStock = stockItems.reduce((s, si) => s + si.stockQuantity, 0);
+  const placedPct = totalStock === 0 ? 100 : Math.round((totalOnShelves / totalStock) * 100);
 
   const battalion = await prisma.battalion.findUnique({
     where: { id: bId },
@@ -152,7 +168,7 @@ export default async function YmachPage({
           <div className={`text-2xl font-bold ${placedPct >= 90 ? "text-emerald-700" : placedPct >= 50 ? "text-amber-700" : "text-rose-700"}`}>
             {placedPct}%
           </div>
-          <div className="text-xs text-slate-500">ממוקם מול תקן</div>
+          <div className="text-xs text-slate-500">ממוקם מול מלאי</div>
         </Card>
       </div>
 
@@ -162,7 +178,6 @@ export default async function YmachPage({
           { key: "warehouses", label: "🗄️ מחסנים ומדפים", href: "/ymach?tab=warehouses" },
           { key: "items", label: "📦 פריטים על מדפים", href: "/ymach?tab=items" },
           { key: "kits", label: "🎒 ארגזים מבצעיים", href: "/ymach?tab=kits" },
-          { key: "storage", label: "📥 אפסון", href: "/ymach?tab=storage" },
           { key: "count", label: "🔢 ספירת ימ\"ח", href: "/ymach?tab=count" },
           { key: "reports", label: "📊 דוחות", href: "/ymach?tab=reports" },
         ]}
@@ -219,6 +234,12 @@ export default async function YmachPage({
           itemName: b.itemType.name,
           sku: b.itemType.sku,
           permanentQuantity: b.permanentQuantity,
+        }))}
+        stockItems={stockItems.map((s) => ({
+          itemTypeId: s.itemTypeId,
+          itemName: s.itemName,
+          sku: s.sku,
+          stockQuantity: s.stockQuantity,
         }))}
         allItems={allItems}
         soldiers={soldiers}
