@@ -37,6 +37,31 @@ export default function ProfileForm({ battalion }: { battalion: B }) {
           className="w-full max-w-xs bg-white border-2 border-blue-400 rounded-lg px-4 py-3 text-2xl font-mono font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <p className="text-[10px] text-blue-600 mt-1">⚠️ שינוי הקוד ידרוש מכל המשתמשים בגדוד להזין את הקוד החדש בכניסה הבאה.</p>
+
+        {/* 🔗 לינק כניסה ייחודי לגדוד */}
+        <div className="mt-3 pt-3 border-t border-blue-200">
+          <label className="block text-xs font-medium text-blue-800 mb-1">🔗 לינק כניסה ייחודי לגדוד</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              readOnly
+              value={`${typeof window !== "undefined" ? window.location.origin : ""}/login?b=${battalion.code}`}
+              className="flex-1 bg-white border border-blue-300 rounded-lg px-3 py-2 text-sm font-mono text-blue-900 select-all"
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const url = `${window.location.origin}/login?b=${battalion.code}`;
+                navigator.clipboard.writeText(url);
+              }}
+              className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-sm"
+            >
+              📋 העתק
+            </button>
+          </div>
+          <p className="text-[10px] text-blue-600 mt-1">שלח לינק זה לחיילי הגדוד — הם יכנסו ישירות בלי להזין קוד גדוד, עם סמל הגדוד ברקע.</p>
+        </div>
       </div>
 
       <div>

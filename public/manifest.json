@@ -1,6 +1,6 @@
 {
-  "name": "Inventory",
-  "short_name": "Inventory",
+  "name": "PALSAM — מערכת גדודית לתעסוקה",
+  "short_name": "PALSAM",
   "description": "",
   "start_url": "/",
   "display": "standalone",

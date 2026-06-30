@@ -158,7 +158,7 @@ function buildOnboardingMsg(user: User, battalionName: string, battalionCode: st
   const link = user.inviteToken ? `${baseUrl}/invite/${user.inviteToken}` : `${baseUrl}/login`;
   const loginInfo = user.inviteToken
     ? `🔗 קישור להגדרת סיסמה: ${link}\n⚠️ הקישור חד-פעמי — פעיל עד הגדרת סיסמה.`
-    : `🔗 כניסה: ${baseUrl}/login`;
+    : `🔗 כניסה: ${baseUrl}/login?b=${battalionCode}`;
   return `שלום ${user.fullName},
 
 ${battalionName} עבר לניהול לוגיסטיקה דרך מערכת PALSAM — מערכת דיגיטלית לניהול ציוד, חיילים ומחסנים.
@@ -168,7 +168,6 @@ ${screens}
 
 ${loginInfo}
 👤 שם משתמש: ${user.username}
-📋 קוד גדוד: ${battalionCode}
 
 📌 סיסמה: 12+ תווים, אות גדולה+קטנה, ספרה, תו מיוחד.`;
 }
