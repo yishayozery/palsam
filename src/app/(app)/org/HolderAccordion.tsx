@@ -14,6 +14,7 @@ type User = {
   username: string;
   role: "SUPER_ADMIN" | "BATTALION_ADMIN" | "WAREHOUSE_MANAGER" | "COMPANY_REP" | "VIEWER";
   phone: string | null;
+  systemRole?: { name: string } | null;
   passwordSet: boolean;
   active: boolean;
 };
@@ -334,7 +335,7 @@ function HolderItem({ row, kind, defaultOpen }: { row: HolderRow; kind: "WAREHOU
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm text-slate-800">{u.fullName}</span>
-                      <Badge className="bg-white border border-slate-200 text-slate-600 text-[10px]">{ROLE_LABELS[u.role]}</Badge>
+                      <Badge className="bg-white border border-slate-200 text-slate-600 text-[10px]">{u.systemRole?.name || ROLE_LABELS[u.role]}</Badge>
                       {!u.passwordSet && <Badge className="bg-amber-100 text-amber-800 text-[10px]">⏳ ממתין להזמנה</Badge>}
                       {!u.active && <Badge className="bg-rose-100 text-rose-700 text-[10px]">מושבת</Badge>}
                     </div>

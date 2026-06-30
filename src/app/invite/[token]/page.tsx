@@ -12,7 +12,7 @@ export default async function InvitePage({
   const { token } = await params;
   const user = await prisma.appUser.findUnique({
     where: { inviteToken: token },
-    include: { battalion: true, holder: true },
+    include: { battalion: true, holder: true, systemRole: true },
   });
 
   if (!user || !user.active) {
@@ -38,7 +38,7 @@ export default async function InvitePage({
           )}
           <h1 className="text-lg font-bold text-slate-800">ברוך הבא, {user.fullName}</h1>
           <p className="text-sm text-slate-500 mt-1">
-            {user.battalion?.name} · {ROLE_LABELS[user.role]}
+            {user.battalion?.name} · {user.systemRole?.name || ROLE_LABELS[user.role]}
             {user.holder ? ` · ${user.holder.name}` : ""}
           </p>
           <p className="text-xs text-slate-400 mt-2">הגדר סיסמה לכניסה הראשונה למערכת</p>

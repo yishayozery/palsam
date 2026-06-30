@@ -16,6 +16,7 @@ type User = {
   role: "SUPER_ADMIN" | "BATTALION_ADMIN" | "WAREHOUSE_MANAGER" | "COMPANY_REP" | "VIEWER" | "SHALISH" | "MAGAD" | "SAMAGAD";
   phone: string | null;
   title?: string | null;
+  systemRole?: { name: string } | null;
   passwordSet: boolean;
   active: boolean;
 };
@@ -197,7 +198,7 @@ export default function HolderDetailsModal({ row, kind, onClose }: { row: Holder
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm">{u.fullName}</span>
                         {u.title && <Badge className="bg-blue-100 text-blue-700 text-[10px]">{u.title}</Badge>}
-                        <Badge className="bg-slate-100 text-slate-600 text-[10px]">🔑 {ROLE_LABELS[u.role]}</Badge>
+                        <Badge className="bg-slate-100 text-slate-600 text-[10px]">🔑 {u.systemRole?.name || ROLE_LABELS[u.role]}</Badge>
                         {!u.passwordSet && <Badge className="bg-amber-100 text-amber-800 text-[10px]">⏳ ממתין</Badge>}
                         {!u.active && <Badge className="bg-rose-100 text-rose-700 text-[10px]">מושבת</Badge>}
                       </div>

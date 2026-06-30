@@ -20,7 +20,7 @@ export default async function OrgPage({ searchParams }: { searchParams: Promise<
       orderBy: [{ active: "desc" }, { name: "asc" }],
       include: {
         users: {
-          select: { id: true, fullName: true, username: true, role: true, phone: true, title: true, passwordSet: true, active: true },
+          select: { id: true, fullName: true, username: true, role: true, phone: true, title: true, passwordSet: true, active: true, systemRole: { select: { name: true } } },
           orderBy: { fullName: "asc" },
         },
         // חיילים שמוצבים במחזיק כשיוך משני (למשל ארמון)
@@ -36,7 +36,7 @@ export default async function OrgPage({ searchParams }: { searchParams: Promise<
       orderBy: [{ active: "desc" }, { name: "asc" }],
       include: {
         users: {
-          select: { id: true, fullName: true, username: true, role: true, phone: true, title: true, passwordSet: true, active: true },
+          select: { id: true, fullName: true, username: true, role: true, phone: true, title: true, passwordSet: true, active: true, systemRole: { select: { name: true } } },
           orderBy: { fullName: "asc" },
         },
         soldiers: {
