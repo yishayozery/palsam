@@ -130,6 +130,7 @@ model Battalion {
   armoryTestUrl               String? // קישור למבחן נוהל ארמון חיצוני (אם יש)
   drivingRefreshDays          Int     @default(180) // ימי תוקף ריענון נהיגה
   telegramBotToken            String? // טוקן בוט טלגרם לשליחת הודעות אוטומטיות
+  telegramBotInfo             String? // מידע כללי שהבוט ישלח (ארוחות, תפילות, טלפונים)
   createdAt DateTime @default(now())
 
   users         AppUser[]

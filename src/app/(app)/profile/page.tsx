@@ -25,6 +25,7 @@ export default async function ProfilePage() {
             notificationEmail: battalion.notificationEmail,
             emailToBattalion: battalion.emailToBattalion,
             telegramBotToken: battalion.telegramBotToken,
+            telegramBotInfo: battalion.telegramBotInfo,
           }}
         />
       </Card>

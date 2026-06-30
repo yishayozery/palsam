@@ -411,16 +411,30 @@ export async function registerTelegramWebhook() {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://palmy.co.il";
   const webhookUrl = `${baseUrl}/api/telegram/${bId}`;
 
-  const res = await fetch(
-    `https://api.telegram.org/bot${battalion.telegramBotToken}/setWebhook`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: webhookUrl }),
-    },
-  );
+  const token = battalion.telegramBotToken;
+  const apiBase = `https://api.telegram.org/bot${token}`;
+
+  const res = await fetch(`${apiBase}/setWebhook`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: webhookUrl }),
+  });
   const data = await res.json();
   if (!data.ok) return { error: `Telegram error: ${data.description}` };
+
+  await fetch(`${apiBase}/setMyCommands`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      commands: [
+        { command: "start", description: "הרשמה למערכת" },
+        { command: "status", description: "סטטוס חתימה ומבחנים" },
+        { command: "equipment", description: "רשימת ציוד חתום" },
+        { command: "info", description: "מידע כללי (ארוחות, תפילות)" },
+        { command: "help", description: "עזרה" },
+      ],
+    }),
+  });
 
   return { ok: true, webhookUrl };
 }

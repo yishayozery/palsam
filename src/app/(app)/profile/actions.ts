@@ -39,8 +39,9 @@ export async function updateProfile(
   }
 
   const telegramBotToken = String(formData.get("telegramBotToken") || "").trim() || null;
+  const telegramBotInfo = String(formData.get("telegramBotInfo") || "").trim() || null;
 
-  const data: Record<string, unknown> = { name, code, brigade, commander, motto, notes, requirePersonalIdOnHandover, senderEmail, notificationEmail, emailToBattalion, telegramBotToken };
+  const data: Record<string, unknown> = { name, code, brigade, commander, motto, notes, requirePersonalIdOnHandover, senderEmail, notificationEmail, emailToBattalion, telegramBotToken, telegramBotInfo };
   if (logoData !== undefined) data.logoData = logoData;
 
   try {

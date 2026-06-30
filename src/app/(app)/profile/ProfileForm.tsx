@@ -14,6 +14,7 @@ type B = {
   notificationEmail: string | null;
   emailToBattalion: boolean;
   telegramBotToken: string | null;
+  telegramBotInfo: string | null;
 };
 
 export default function ProfileForm({ battalion }: { battalion: B }) {
@@ -217,6 +218,26 @@ export default function ProfileForm({ battalion }: { battalion: B }) {
             </div>
           )}
         </div>
+
+        {/* 📋 מידע כללי לבוט */}
+        {battalion.telegramBotToken && (
+          <div className="mt-3 p-3 rounded-lg border border-slate-200">
+            <label className="block text-sm font-medium text-slate-800 mb-1">
+              📋 מידע כללי לבוט טלגרם
+            </label>
+            <textarea
+              name="telegramBotInfo"
+              defaultValue={battalion.telegramBotInfo ?? ""}
+              rows={6}
+              placeholder={"🍽️ ארוחות:\nבוקר: 07:00-08:00\nצהריים: 12:30-13:30\nערב: 18:00-19:00\n\n🕐 תפילות:\nשחרית: 06:15\nמנחה: לפי שקיעה\nערבית: 20:00\n\n📞 טלפונים:\nמפקד: 050-...\nסמל: 050-..."}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+            <div className="text-xs text-slate-500 mt-1.5">
+              טקסט חופשי שיישלח כשחייל שולח <code className="bg-slate-100 px-1 rounded">/info</code> בבוט.
+              רווחי שורה נשמרים. ניתן להשתמש ב-HTML: &lt;b&gt;בולט&lt;/b&gt;
+            </div>
+          </div>
+        )}
       </div>
       <div className="flex items-center justify-end gap-3">
         {state.ok && <span className="text-sm text-emerald-600">נשמר ✓</span>}
