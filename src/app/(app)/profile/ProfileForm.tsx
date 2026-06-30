@@ -124,7 +124,7 @@ export default function ProfileForm({ battalion }: { battalion: B }) {
             name="notificationEmail"
             required
             defaultValue={battalion.notificationEmail ?? ""}
-            placeholder="palsam-backup@battalion.com"
+            placeholder="palmy-backup@battalion.com"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           />
           <div className="text-xs text-slate-500 mt-1.5">

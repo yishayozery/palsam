@@ -25,7 +25,7 @@ export default function UserActions({ userId, fullName, phone, baseUrl }: {
 
   const link = newToken ? `${baseUrl}/invite/${newToken}` : null;
   const wa = link && phone
-    ? `https://wa.me/${phone.replace(/\D/g, "").replace(/^0/, "972")}?text=${encodeURIComponent(`קישור לשחזור סיסמה במערכת PALSAM: ${link}`)}`
+    ? `https://wa.me/${phone.replace(/\D/g, "").replace(/^0/, "972")}?text=${encodeURIComponent(`קישור לשחזור סיסמה במערכת PALMY: ${link}`)}`
     : null;
 
   if (newToken && link) {

@@ -47,7 +47,7 @@ export default async function WeaponsAgreementPage({
             )}
             <div>
               <div className="text-lg font-bold">{unitName}</div>
-              <div className="text-xs text-slate-500">PALSAM</div>
+              <div className="text-xs text-slate-500">PALMY</div>
             </div>
           </div>
           <div className="text-left">
@@ -141,7 +141,7 @@ export default async function WeaponsAgreementPage({
         )}
 
         <div className="text-[10px] text-slate-400 text-center mt-8 pt-4 border-t border-slate-200 print:mt-12">
-          מסמך זה הופק אוטומטית ע&quot;י מערכת PALSAM · {unitName} · {new Date().toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}
+          מסמך זה הופק אוטומטית ע&quot;י מערכת PALMY · {unitName} · {new Date().toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}
         </div>
       </div>
     </div>

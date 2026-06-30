@@ -92,7 +92,7 @@ export default async function AppLayout({
                 {userHolder.kind === "COMPANY" ? "🪖" : "🏪"} {userHolder.name}
               </div>
             )}
-            <div className="text-xs text-slate-400 tracking-wide">PALSAM · ניהול מלאי</div>
+            <div className="text-xs text-slate-400 tracking-wide">PALMY · ניהול מלאי</div>
             {battalion?.motto && (
               <div className="text-[11px] text-amber-300/80 italic truncate mt-0.5">״{battalion.motto}״</div>
             )}

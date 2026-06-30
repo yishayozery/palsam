@@ -791,7 +791,7 @@ export default async function HelpPage() {
     <div>
       <PageHeader
         title="📖 מקראת השימוש במערכת"
-        subtitle="PALSAM — מערכת ניהול מלאי גדודי. מדריך הקמה, תהליכים, הרשאות ותפעול שוטף"
+        subtitle="PALMY — מערכת ניהול מלאי גדודי. מדריך הקמה, תהליכים, הרשאות ותפעול שוטף"
       />
 
       {/* ====== תקציר — מה המערכת מנהלת ====== */}
@@ -954,7 +954,7 @@ export default async function HelpPage() {
       </Card>
 
       <p className="text-center text-xs text-slate-400 mt-8 mb-4">
-        שאלות נוספות? פנה למפ״מ או לתמיכת PALSAM.
+        שאלות נוספות? פנה למפ״מ או לתמיכת PALMY.
       </p>
     </div>
   );

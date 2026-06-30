@@ -9,14 +9,14 @@ const heebo = Heebo({
 });
 
 export const metadata: Metadata = {
-  title: "PALSAM — מערכת גדודית לתעסוקה",
+  title: "PALMY — מערכת גדודית לתעסוקה",
   description: "",
   robots: { index: false, follow: false },
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "PALSAM — מערכת גדודית לתעסוקה",
+    title: "PALMY — מערכת גדודית לתעסוקה",
   },
 };
 

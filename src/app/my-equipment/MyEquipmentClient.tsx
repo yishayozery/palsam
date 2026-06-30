@@ -592,7 +592,7 @@ function DocumentsTab({ documents, soldierId, personalNumber }: {
           )}
 
           <div className="text-[10px] text-slate-400 text-center pt-2 border-t border-slate-100">
-            מסמך הופק ממערכת PALSAM · {viewingDoc.docNumber}
+            מסמך הופק ממערכת PALMY · {viewingDoc.docNumber}
           </div>
         </div>
       </div>

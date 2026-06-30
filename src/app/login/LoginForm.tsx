@@ -37,7 +37,7 @@ export default function LoginForm({ battalion }: { battalion?: BattalionInfo | n
             </div>
           )}
           <h1 className="text-2xl font-bold text-slate-800 tracking-wide">
-            {battalion?.name ?? "PALSAM"}
+            {battalion?.name ?? "PALMY"}
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             {isTotpStep
@@ -127,8 +127,8 @@ export default function LoginForm({ battalion }: { battalion?: BattalionInfo | n
 
         {!isTotpStep && (
           <p className="text-xs text-slate-400 text-center mt-6 relative z-10">
-            {battalion && <span className="text-slate-300">PALSAM · </span>}
-            <a href="/about" className="hover:text-slate-600 underline">מה זה PALSAM?</a>
+            {battalion && <span className="text-slate-300">PALMY · </span>}
+            <a href="/about" className="hover:text-slate-600 underline">מה זה PALMY?</a>
           </p>
         )}
       </div>

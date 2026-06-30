@@ -1,7 +1,7 @@
 import MyEquipmentClient from "./MyEquipmentClient";
 
 export const metadata = {
-  title: "📋 מה אני חתום עליו - PALSAM",
+  title: "📋 מה אני חתום עליו - PALMY",
 };
 
 export default function MyEquipmentPage() {

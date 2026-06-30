@@ -50,7 +50,7 @@ export default function AboutPage() {
         <div className="mx-auto w-16 h-16 rounded-xl bg-white/10 flex items-center justify-center text-3xl mb-4">
           🛡️
         </div>
-        <h1 className="text-3xl font-bold tracking-wide">PALSAM</h1>
+        <h1 className="text-3xl font-bold tracking-wide">PALMY</h1>
         <p className="text-slate-300 mt-2 text-lg">מערכת ניהול מלאי גדודי</p>
         <p className="text-slate-500 mt-1 text-sm">שרשרת אספקה, החתמות, נוכחות ובקרה — במקום אחד</p>
       </div>

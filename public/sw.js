@@ -1,4 +1,4 @@
-const CACHE_NAME = "palsam-v1";
+const CACHE_NAME = "palmy-v1";
 const PRECACHE = ["/offline"];
 
 self.addEventListener("install", (e) => {

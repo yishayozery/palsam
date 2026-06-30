@@ -122,7 +122,7 @@ function buildEmailHtml(t: TransferWithDetails): string {
     </table>
 
     <div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:24px">
-      מסמך זה הופק אוטומטית ממערכת PALSAM · ${docNumber}
+      מסמך זה הופק אוטומטית ממערכת PALMY · ${docNumber}
     </div>
   </div>
 </body>
@@ -266,7 +266,7 @@ function buildPrintableHtml(t: TransferWithDetails): string {
 // ============================
 async function buildExcelBuffer(t: TransferWithDetails): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "PALSAM";
+  wb.creator = "PALMY";
   const docNumber = t.id.slice(-8).toUpperCase();
   const dateStr = t.createdAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" }) + " " + t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" });
   const fromName = senderName(t);

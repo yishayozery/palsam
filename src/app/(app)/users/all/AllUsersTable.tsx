@@ -163,7 +163,7 @@ function buildOnboardingMsg(user: User, battalionName: string, battalionCode: st
   const holderLine = allHolders.length ? ` (${allHolders.join(", ")})` : "";
   return `שלום ${user.fullName},
 
-${battalionName} עבר לניהול לוגיסטיקה דרך מערכת PALSAM — מערכת דיגיטלית לניהול ציוד, חיילים ומחסנים.
+${battalionName} עבר לניהול התעסוקה הקרובה דרך מערכת PALMY — מערכת לניהול התעסוקה, ההכנות והתפעול השוטף של הגדוד.
 
 אתה מוגדר כ${user.roleLabel}${holderLine}. מה יש לך במערכת:
 ${screens}

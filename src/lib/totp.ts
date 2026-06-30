@@ -3,7 +3,7 @@ import { generateSecret, generateURI, verifySync } from "otplib";
 import QRCode from "qrcode";
 
 const STRATEGY = "totp" as const;
-const ISSUER = "PALSAM";
+const ISSUER = "PALMY";
 
 /** יצירת secret חדש (base32) ו-URL ל-QR code */
 export async function generateTotpSetup(username: string) {

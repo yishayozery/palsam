@@ -4,7 +4,7 @@ import { buildTransferAttachments } from "./email-attachments";
 
 /**
  * שליחת אימייל דרך Resend HTTP API.
- * דורש env var: RESEND_API_KEY + EMAIL_FROM (לדוגמה: "PALSAM <noreply@palsam.app>")
+ * דורש env var: RESEND_API_KEY + EMAIL_FROM (לדוגמה: "PALMY <noreply@palmy.co.il>")
  * עוקפת בשקט אם החסרים מוגדרים (לא שוברת פעולות עסקיות).
  */
 export async function sendEmail(opts: {
@@ -17,7 +17,7 @@ export async function sendEmail(opts: {
   attachments?: { filename: string; content: string }[];
 }): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = opts.from || process.env.EMAIL_FROM || "PALSAM <office@palmy.co.il>";
+  const from = opts.from || process.env.EMAIL_FROM || "PALMY <office@palmy.co.il>";
   if (!apiKey) return { ok: false, error: "missing RESEND_API_KEY" };
 
   const recipients = Array.isArray(opts.to) ? opts.to : [opts.to];
@@ -96,7 +96,7 @@ export async function notifyTransactionEmail(params: {
     const subject = `[${battalion.code}] ${params.action} ${params.entity} — ${dateStr}`;
     const detailsJson = JSON.stringify(params.details ?? {}, null, 2);
     const text = [
-      `📋 PALSAM - ${battalion.name} (${battalion.code})`,
+      `📋 PALMY - ${battalion.name} (${battalion.code})`,
       ``,
       `פעולה: ${params.action}`,
       `ישות: ${params.entity}${params.entityId ? ` (${params.entityId})` : ""}`,
