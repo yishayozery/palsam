@@ -23,12 +23,12 @@ export default function LoginForm({ battalion }: { battalion?: BattalionInfo | n
         : "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)" }}>
 
       {battalion && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
           {battalion.logoData ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={battalion.logoData} alt="" className="w-[500px] h-[500px] object-contain opacity-[0.06]" />
+            <img src={battalion.logoData} alt="" className="object-contain" style={{ width: 700, height: 700, opacity: 0.12 }} />
           ) : (
-            <span className="text-white/[0.07] text-[140px] font-black select-none leading-none text-center whitespace-nowrap">{battalion.name}</span>
+            <span className="font-black select-none leading-none text-center whitespace-nowrap" style={{ fontSize: 140, color: "rgba(255,255,255,0.07)" }}>{battalion.name}</span>
           )}
         </div>
       )}
