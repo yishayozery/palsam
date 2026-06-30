@@ -18,23 +18,16 @@ export default function LoginForm({ battalion }: { battalion?: BattalionInfo | n
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
-      style={{ background: battalion?.logoData
-        ? "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)"
-        : "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)" }}>
+      style={{ background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)" }}>
 
-      {battalion && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
-          {battalion.logoData ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={battalion.logoData} alt="" className="object-contain" style={{ width: 700, height: 700, opacity: 0.12 }} />
-          ) : (
-            <span className="font-black select-none leading-none text-center whitespace-nowrap" style={{ fontSize: 140, color: "rgba(255,255,255,0.07)" }}>{battalion.name}</span>
-          )}
-        </div>
-      )}
-
-      <div className="w-full max-w-sm bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-8 relative z-10">
-        <div className="text-center mb-6">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-8 relative">
+        {battalion?.logoData && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden rounded-2xl">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={battalion.logoData} alt="" className="object-contain" style={{ width: 420, height: 420, opacity: 0.08 }} />
+          </div>
+        )}
+        <div className="text-center mb-6 relative z-10">
           {battalion?.logoData ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={battalion.logoData} alt="סמל" className="mx-auto w-16 h-16 object-contain mb-3" />
@@ -55,7 +48,7 @@ export default function LoginForm({ battalion }: { battalion?: BattalionInfo | n
           </p>
         </div>
 
-        <form action={formAction} className="space-y-4">
+        <form action={formAction} className="space-y-4 relative z-10">
           {isTotpStep ? (
             <>
               <input type="hidden" name="pendingUserId" value={state.pendingUserId ?? ""} />
@@ -133,7 +126,7 @@ export default function LoginForm({ battalion }: { battalion?: BattalionInfo | n
         </form>
 
         {!isTotpStep && (
-          <p className="text-xs text-slate-400 text-center mt-6">
+          <p className="text-xs text-slate-400 text-center mt-6 relative z-10">
             {battalion && <span className="text-slate-300">PALSAM · </span>}
             <a href="/about" className="hover:text-slate-600 underline">מה זה PALSAM?</a>
           </p>
