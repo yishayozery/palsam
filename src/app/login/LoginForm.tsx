@@ -22,10 +22,14 @@ export default function LoginForm({ battalion }: { battalion?: BattalionInfo | n
         ? "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)"
         : "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)" }}>
 
-      {battalion?.logoData && (
+      {battalion && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={battalion.logoData} alt="" className="w-[500px] h-[500px] object-contain opacity-[0.06]" />
+          {battalion.logoData ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={battalion.logoData} alt="" className="w-[500px] h-[500px] object-contain opacity-[0.06]" />
+          ) : (
+            <span className="text-white/[0.07] text-[140px] font-black select-none leading-none text-center whitespace-nowrap">{battalion.name}</span>
+          )}
         </div>
       )}
 
@@ -92,20 +96,17 @@ export default function LoginForm({ battalion }: { battalion?: BattalionInfo | n
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-500"
                 />
               </div>
-              {battalion ? (
-                <input type="hidden" name="battalionCode" value={battalion.code} />
-              ) : (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">מספר גדוד / חטיבה</label>
-                  <input
-                    name="battalionCode"
-                    inputMode="numeric"
-                    placeholder="לדוגמה: 932"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-500"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">הקוד שקיבלת מהמפ״מ</p>
-                </div>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">מספר גדוד / חטיבה</label>
+                <input
+                  name="battalionCode"
+                  inputMode="numeric"
+                  defaultValue={battalion?.code ?? ""}
+                  placeholder="לדוגמה: 932"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">הקוד שקיבלת מהמפ״מ</p>
+              </div>
 
               {/* 🪤 Honeypot */}
               <div aria-hidden="true" style={{ position: "absolute", left: "-9999px", top: "-9999px" }}>
