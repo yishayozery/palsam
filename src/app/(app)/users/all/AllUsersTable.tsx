@@ -653,13 +653,16 @@ export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, i
             </select>
           </div>
           <button type="button" onClick={async () => {
-              if (!confirm("לפתוח את כל חסימות הכניסה?\nפעולה זו תאפשר לכל המשתמשים החסומים (מכל כתובת IP) להתחבר מחדש.")) return;
+              const names = users.filter(u => u.active).map(u => u.fullName + " (" + u.username + ")");
+              const choice = prompt("בחר משתמש לפתיחת חסימה:\n\nהכנס שם משתמש (username), או השאר ריק לפתיחת כל החסימות.\n\nמשתמשים פעילים:\n" + names.join("\n"));
+              if (choice === null) return;
               const fd = new FormData();
+              if (choice.trim()) fd.set("username", choice.trim());
               await clearRateLimits(fd);
-              alert("✅ כל חסימות הכניסה נמחקו בהצלחה");
+              alert(choice.trim() ? `✅ חסימות הכניסה של ${choice.trim()} נמחקו` : "✅ כל חסימות הכניסה נמחקו");
             }}
             className="rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-3 py-2 text-sm hover:bg-amber-100 whitespace-nowrap"
-            title="מנקה את כל חסימות הכניסה (rate limit) כדי לאפשר למשתמשים חסומים להתחבר מחדש">
+            title="פתיחת חסימת כניסה למשתמש ספציפי או לכולם">
             🔓 פתח חסימות
           </button>
           <button onClick={() => setShowCreate(true)}

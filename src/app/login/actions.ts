@@ -27,10 +27,11 @@ export async function loginAction(
     return { error: "שגיאה כללית" };
   }
 
-  // 🛡️ Rate limiting
+  // 🛡️ Rate limiting — per IP + per username
   const ip = await getClientIp();
   try {
     await checkRateLimit("login", ip, { max: 5, windowSec: 900 });
+    if (username) await checkRateLimit("login-user", username.toLowerCase(), { max: 5, windowSec: 900 });
   } catch (e) {
     if (e instanceof RateLimitError) {
       const min = Math.ceil(e.retryAfterSec / 60);
