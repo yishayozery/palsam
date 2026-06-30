@@ -32,6 +32,7 @@ type SoldierOption = { id: string; fullName: string; personalNumber: string | nu
 
 type Props = {
   tab: string;
+  holderId: string;
   companyName: string;
   companyLogo: string | null;
   battalionName: string;
@@ -46,7 +47,7 @@ type Props = {
 };
 
 export default function YmachClient({
-  tab, companyName, companyLogo, battalionName, battalionLogo,
+  tab, holderId, companyName, companyLogo, battalionName, battalionLogo,
   warehouses, operationalKits, baselines, stockItems, allItems, soldiers, equipmentLocations,
 }: Props) {
   return (
@@ -59,6 +60,7 @@ export default function YmachClient({
       )}
       {tab === "kits" && (
         <KitsTab
+          holderId={holderId}
           kits={operationalKits}
           warehouses={warehouses}
           allItems={allItems}
@@ -448,8 +450,9 @@ function ItemsTab({
 
 // ===================== טאב ארגזים מבצעיים =====================
 function KitsTab({
-  kits, warehouses, allItems, soldiers, equipmentLocations,
+  holderId, kits, warehouses, allItems, soldiers, equipmentLocations,
 }: {
+  holderId: string;
   kits: OpKit[];
   warehouses: Warehouse[];
   allItems: ItemOption[];
@@ -459,6 +462,7 @@ function KitsTab({
   const [showAdd, setShowAdd] = useState(false);
   const [editingKit, setEditingKit] = useState<string | null>(null);
   const [editingDetails, setEditingDetails] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const allShelves = warehouses.flatMap((wh) =>
@@ -504,7 +508,9 @@ ${kit.notes ? `<p class="meta"><b>הערה:</b> ${kit.notes}</p>` : ""}
 
       {showAdd && (
         <Card className="p-4 bg-amber-50 border-amber-200">
-          <form action={(fd) => { startTransition(async () => { await saveOperationalKit(null, fd); setShowAdd(false); }); }}>
+          <form action={(fd) => { setFormError(null); startTransition(async () => { const r = await saveOperationalKit(null, fd); if (r?.error) { setFormError(r.error); return; } setShowAdd(false); }); }}>
+            <input type="hidden" name="holderId" value={holderId} />
+            {formError && <p className="text-red-600 text-sm mb-2">{formError}</p>}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs block mb-1">מספר מארז</label>
@@ -635,8 +641,11 @@ ${kit.notes ? `<p class="meta"><b>הערה:</b> ${kit.notes}</p>` : ""}
                 <h4 className="text-xs font-bold text-blue-800 mb-2">עריכת פרטי מארז</h4>
                 <form action={(fd) => {
                   fd.append("id", kit.id);
-                  startTransition(async () => { await saveOperationalKit(null, fd); setEditingDetails(null); });
+                  setFormError(null);
+                  startTransition(async () => { const r = await saveOperationalKit(null, fd); if (r?.error) { setFormError(r.error); return; } setEditingDetails(null); });
                 }}>
+                  <input type="hidden" name="holderId" value={holderId} />
+                  {formError && <p className="text-red-600 text-sm mb-2">{formError}</p>}
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                     <div>
                       <label className="text-[10px] block mb-0.5">מספר</label>

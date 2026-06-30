@@ -38,6 +38,7 @@ export default async function YmachPage({
   }
 
   const tab = sp.tab || "warehouses";
+  const companyQ = !isCompanyHolder && holderId ? `&companyId=${holderId}` : "";
 
   const company = await prisma.holder.findUnique({
     where: { id: holderId },
@@ -175,16 +176,17 @@ export default async function YmachPage({
       <TabNav
         active={tab}
         tabs={[
-          { key: "warehouses", label: "🗄️ מחסנים ומדפים", href: "/ymach?tab=warehouses" },
-          { key: "items", label: "📦 פריטים על מדפים", href: "/ymach?tab=items" },
-          { key: "kits", label: "🎒 ארגזים מבצעיים", href: "/ymach?tab=kits" },
-          { key: "count", label: "🔢 ספירת ימ\"ח", href: "/ymach?tab=count" },
-          { key: "reports", label: "📊 דוחות", href: "/ymach?tab=reports" },
+          { key: "warehouses", label: "🗄️ מחסנים ומדפים", href: `/ymach?tab=warehouses${companyQ}` },
+          { key: "items", label: "📦 פריטים על מדפים", href: `/ymach?tab=items${companyQ}` },
+          { key: "kits", label: "🎒 ארגזים מבצעיים", href: `/ymach?tab=kits${companyQ}` },
+          { key: "count", label: "🔢 ספירת ימ\"ח", href: `/ymach?tab=count${companyQ}` },
+          { key: "reports", label: "📊 דוחות", href: `/ymach?tab=reports${companyQ}` },
         ]}
       />
 
       <YmachClient
         tab={tab}
+        holderId={holderId}
         companyName={company?.name ?? ""}
         companyLogo={company?.logoData ?? null}
         battalionName={battalion?.name ?? ""}

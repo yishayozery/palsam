@@ -40,7 +40,7 @@ export default async function SignatureTokenPage({
 
   const signed = sig.status === "SIGNED";
 
-  const docUrl = sig.transferId ? `${base}/transfers/${sig.transferId}/document` : null;
+  const docUrl = sig.transferId ? `${base}/transfer-doc/${sig.transferId}` : null;
   const soldierPhone = sig.soldier?.phone ?? sig.signerUser?.phone ?? null;
   const certWaText = docUrl
     ? encodeURIComponent(

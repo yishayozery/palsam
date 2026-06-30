@@ -582,3 +582,125 @@ export async function updatePhysicalLocation(formData: FormData) {
   await audit(user.id, "UPDATE_LOCATION", "SerialUnit", serialUnitId, { physicalLocation });
   revalidatePath("/signatures");
 }
+
+/** זיכוי batch: כל הפריטים (סריאלי+כמותי) בהעברה אחת → מחזיר transferId */
+export async function checkinBatch(payload: {
+  soldierId: string;
+  serialUnitIds: string[];
+  partialLotQtys: Record<string, number>;
+  statusId: string;
+  qtyItems: { itemTypeId: string; statusId: string; quantity: number }[];
+  toHolderId: string;
+}): Promise<{ ok: true; transferId: string; soldierName: string; soldierPhone: string | null } | { ok: false; error: string }> {
+  const user = await requireUser();
+  if (!can(user, "signatures.manage")) return { ok: false, error: "אין הרשאה" };
+  const bId = user.battalionId!;
+  const { soldierId, serialUnitIds, partialLotQtys, statusId, qtyItems, toHolderId } = payload;
+
+  if (!soldierId || (serialUnitIds.length === 0 && qtyItems.length === 0)) {
+    return { ok: false, error: "חסרים נתונים" };
+  }
+
+  const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { fullName: true, phone: true } });
+  if (!soldier) return { ok: false, error: "חייל לא נמצא" };
+
+  if (await requiresPersonalId(bId)) {
+    const s = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { personalNumber: true, fullName: true } });
+    if (!s?.personalNumber) return { ok: false, error: `🔒 הגדוד דורש מ.א. לחייל ${s?.fullName ?? ""}` };
+  }
+
+  try {
+    const transferId = await prisma.$transaction(async (tx) => {
+      type LineCreate = { itemTypeId: string; quantity: number; serialUnitId?: string; statusId: string };
+      const lines: LineCreate[] = [];
+
+      for (const unitId of serialUnitIds) {
+        const su = await tx.serialUnit.findUnique({ where: { id: unitId }, include: { signedSoldier: true } });
+        if (!su || !su.signedSoldierId) continue;
+
+        const partialQty = partialLotQtys[unitId] ?? 0;
+        const isLot = (su.lotQuantity ?? 1) > 1;
+        const isPartial = isLot && partialQty > 0 && partialQty < (su.lotQuantity ?? 1);
+        const lineQty = isPartial ? partialQty : (su.lotQuantity ?? 1);
+        const finalStatus = statusId || su.statusId;
+
+        if (isPartial) {
+          const parentSerial = (() => {
+            const lastSlash = su.serialNumber.lastIndexOf("/");
+            if (lastSlash < 0) return su.serialNumber;
+            const suffix = su.serialNumber.slice(lastSlash + 1);
+            return /^\d+$/.test(suffix) ? su.serialNumber.slice(0, lastSlash) : su.serialNumber;
+          })();
+          const mergeTarget = await tx.serialUnit.findFirst({
+            where: {
+              itemTypeId: su.itemTypeId, currentHolderId: su.currentHolderId,
+              signedSoldierId: null, statusId: finalStatus,
+              serialNumber: { in: [parentSerial, su.serialNumber] },
+              id: { not: su.id }, lotQuantity: { gt: 1 },
+            },
+          });
+          if (mergeTarget) {
+            await tx.serialUnit.update({ where: { id: mergeTarget.id }, data: { lotQuantity: (mergeTarget.lotQuantity ?? 1) + partialQty } });
+          } else {
+            let suffix = 1;
+            while (await tx.serialUnit.findFirst({ where: { itemTypeId: su.itemTypeId, serialNumber: `${su.serialNumber}/${suffix}` } })) suffix++;
+            await tx.serialUnit.create({
+              data: { battalionId: bId, itemTypeId: su.itemTypeId, serialNumber: `${su.serialNumber}/${suffix}`, lotQuantity: partialQty, statusId: finalStatus, currentHolderId: su.currentHolderId },
+            });
+          }
+          await tx.serialUnit.update({ where: { id: su.id }, data: { lotQuantity: (su.lotQuantity ?? 1) - partialQty } });
+        } else {
+          await tx.serialUnit.update({ where: { id: unitId }, data: { signedSoldierId: null, ...(statusId ? { statusId } : {}) } });
+        }
+
+        lines.push({ itemTypeId: su.itemTypeId, quantity: lineQty, serialUnitId: su.id, statusId: finalStatus });
+      }
+
+      for (const q of qtyItems) {
+        if (q.quantity < 1) continue;
+        const finalStatusId = statusId || q.statusId;
+        const existing = await tx.stockBalance.findFirst({ where: { itemTypeId: q.itemTypeId, holderId: toHolderId, statusId: finalStatusId, battalionId: bId } });
+        if (existing) {
+          await tx.stockBalance.update({ where: { id: existing.id }, data: { quantity: existing.quantity + q.quantity } });
+        } else {
+          await tx.stockBalance.create({ data: { battalionId: bId, itemTypeId: q.itemTypeId, holderId: toHolderId, statusId: finalStatusId, quantity: q.quantity } });
+        }
+        lines.push({ itemTypeId: q.itemTypeId, quantity: q.quantity, statusId: finalStatusId });
+      }
+
+      if (lines.length === 0) throw new Error("אין פריטים לזיכוי");
+
+      const transfer = await tx.transfer.create({
+        data: {
+          battalionId: bId, type: "CHECKIN", status: "COMPLETED",
+          toHolderId, toSoldierId: soldierId,
+          createdById: user.id, approvedById: user.id, approvedAt: new Date(),
+          reason: `זיכוי ${lines.length} פריטים`,
+          lines: { create: lines },
+        },
+      });
+      return transfer.id;
+    });
+
+    await audit(user.id, "CHECKIN_BATCH", "Soldier", soldierId, { items: serialUnitIds.length + qtyItems.length });
+
+    for (const unitId of serialUnitIds) {
+      const su = await prisma.serialUnit.findUnique({ where: { id: unitId }, select: { signedSoldierId: true, itemTypeId: true } });
+      if (su && !su.signedSoldierId) {
+        const { soldierHasAnyWeapons, resetSoldierWeaponsFlags } = await import("@/lib/weapons-eligibility");
+        const stillHas = await soldierHasAnyWeapons(soldierId);
+        if (!stillHas) {
+          await resetSoldierWeaponsFlags(soldierId);
+          await audit(user.id, "RESET_WEAPONS_FLAGS", "Soldier", soldierId, { reason: "החזיר נשק אחרון" });
+        }
+        break;
+      }
+    }
+
+    revalidatePath("/signatures");
+    revalidatePath("/my-equipment");
+    return { ok: true, transferId, soldierName: soldier.fullName, soldierPhone: soldier.phone };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "שגיאה בזיכוי" };
+  }
+}

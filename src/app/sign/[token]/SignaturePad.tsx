@@ -31,7 +31,6 @@ export default function SignaturePad({
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
-  const [countdown, setCountdown] = useState(10);
   const [whatsappText, setWhatsappText] = useState<string | null>(null);
   const [soldierPhone, setSoldierPhone] = useState<string | null>(null);
   const [transferId, setTransferId] = useState<string | null>(null);
@@ -127,23 +126,7 @@ export default function SignaturePad({
     else setError(res.error || "שגיאה");
   };
 
-  // אוטו-ניווט לדף הראשי - דיליי ארוך יותר אם יש WhatsApp share זמין
-  useEffect(() => {
-    if (!done) return;
-    // אם יש WhatsApp - לא לעשות auto-redirect, נותנים לחייל זמן
-    if (whatsappText) return;
-    const interval = setInterval(() => {
-      setCountdown((c) => {
-        if (c <= 1) {
-          clearInterval(interval);
-          router.push("/");
-          return 0;
-        }
-        return c - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [done, router, whatsappText]);
+  // אין אוטו-ניווט — המשתמש ילחץ "חזרה" בזמנו (כדי שיספיק לשלוח PDF)
 
   if (done) {
     const normalizedPhone = soldierPhone?.replace(/\D/g, "").replace(/^0/, "972") ?? "";
@@ -173,21 +156,29 @@ export default function SignaturePad({
           </div>
         )}
 
-        {transferId && (
-          <a href={`/transfers/${transferId}/document`} target="_blank" rel="noreferrer"
-            className="block mt-3 bg-slate-700 hover:bg-slate-800 text-white rounded-lg px-6 py-2 text-sm font-medium text-center">
-            📄 צפייה בתעודת ציוד
-          </a>
-        )}
+        {transferId && (() => {
+          const docUrl = `${window.location.origin}/transfer-doc/${transferId}`;
+          const pdfWaText = `שלום ${soldierName}, מצורף אישור ${whatsappText ? "החתמת" : ""} ציוד:\n${docUrl}`;
+          const pdfWaUrl = normalizedPhone
+            ? `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(pdfWaText)}`
+            : `https://wa.me/?text=${encodeURIComponent(pdfWaText)}`;
+          return (
+            <div className="mt-4 flex gap-2">
+              <a href={pdfWaUrl} target="_blank" rel="noopener noreferrer"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-lg py-2 text-sm font-bold text-center">
+                📤 שלח טופס לחייל
+              </a>
+              <a href={docUrl} target="_blank" rel="noreferrer"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-center hover:bg-slate-50">
+                📄 צפייה
+              </a>
+            </div>
+          );
+        })()}
 
-        {!whatsappText && (
-          <p className="text-xs text-slate-400 mt-4">
-            חוזר לדף הראשי בעוד <b className="text-emerald-700">{countdown}</b> שניות...
-          </p>
-        )}
         <button onClick={() => router.push("/")}
-          className="mt-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-6 py-2 text-sm font-medium">
-          → חזרה עכשיו
+          className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-6 py-2 text-sm font-medium">
+          → חזרה
         </button>
       </div>
     );

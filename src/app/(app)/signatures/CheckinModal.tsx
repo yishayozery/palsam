@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { checkinSerial, checkinQuantity } from "./actions";
+import { checkinBatch } from "./actions";
 import { returnKitWithCheck, type KitReturnItem } from "../ymach/actions";
 import { useEscClose } from "@/lib/useEscClose";
 
@@ -45,6 +45,8 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
   const [opKitReturned, setOpKitReturned] = useState<Record<string, Record<string, number>>>({});
   // סיבת חוסר (kitId → itemTypeId → reason)
   const [opKitReason, setOpKitReason] = useState<Record<string, Record<string, string>>>({});
+  // מסך הצלחה אחרי זיכוי
+  const [doneData, setDoneData] = useState<{ transferId: string; soldierName: string; soldierPhone: string | null } | null>(null);
 
   useEscClose(open && !lotPicker, () => { reset(); setOpen(false); });
 
@@ -86,7 +88,7 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
   const reset = () => {
     setSoldierId(""); setSoldierSearch(""); setSelectedUnits(new Set());
     setPartialLotQty(new Map()); setQtyReturn(new Map()); setNewStatusId(""); setError(null);
-    setOpKitReturned({}); setOpKitReason({});
+    setOpKitReturned({}); setOpKitReason({}); setDoneData(null);
   };
 
   // לחיצה על יחידה — אם זו אצווה, פתח דיאלוג; אחרת סמן/בטל
@@ -133,35 +135,39 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
         if (res.error) { setError(`שגיאה במארז ${kit.name}: ${res.error}`); setBusy(false); return; }
       }
 
-      // שלב 2: זיכוי סריאלי
-      for (const unitId of selectedUnits) {
-        const fd = new FormData();
-        fd.append("serialUnitId", unitId);
-        if (newStatusId) fd.append("statusId", newStatusId);
-        const partial = partialLotQty.get(unitId);
-        if (partial) fd.append("lotQty", String(partial));
-        await checkinSerial(fd);
-      }
-      // 🆕 זיכוי כמותי
+      // שלב 2: זיכוי סריאלי + כמותי — batch אחד → transfer אחד
+      const serialUnitIds = [...selectedUnits];
+      const partialLots: Record<string, number> = {};
+      for (const [uid, qty] of partialLotQty) partialLots[uid] = qty;
+      const qtyItems: { itemTypeId: string; statusId: string; quantity: number }[] = [];
       for (const q of soldierQty) {
         const key = `${q.itemTypeId}|${q.statusId}`;
         const ret = qtyReturn.get(key) ?? 0;
         if (ret < 1) continue;
-        const fd = new FormData();
-        fd.append("soldierId", q.soldierId);
-        fd.append("itemTypeId", q.itemTypeId);
-        fd.append("statusId", q.statusId);
-        if (newStatusId) fd.append("newStatusId", newStatusId);
-        fd.append("quantity", String(ret));
-        if (defaultToHolderId) fd.append("toHolderId", defaultToHolderId);
-        await checkinQuantity(fd);
+        qtyItems.push({ itemTypeId: q.itemTypeId, statusId: q.statusId, quantity: ret });
       }
-      reset();
-      setOpen(false);
+
+      if (serialUnitIds.length > 0 || qtyItems.length > 0) {
+        const res = await checkinBatch({
+          soldierId,
+          serialUnitIds,
+          partialLotQtys: partialLots,
+          statusId: newStatusId,
+          qtyItems,
+          toHolderId: defaultToHolderId ?? "",
+        });
+        if (!res.ok) { setError(res.error); setBusy(false); return; }
+        setDoneData(res);
+      } else if (soldierOpKits.length > 0) {
+        // רק מארזים, בלי פריטים נפרדים — סוגרים
+        reset(); setOpen(false); router.refresh();
+        return;
+      }
+
+      setBusy(false);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-    } finally {
       setBusy(false);
     }
   }
@@ -172,6 +178,38 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
         className="bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
         ↩️ זיכוי חייל
       </button>
+    );
+  }
+
+  if (doneData) {
+    const normalizedPhone = doneData.soldierPhone?.replace(/\D/g, "").replace(/^0/, "972") ?? "";
+    const docUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/transfer-doc/${doneData.transferId}`;
+    const waText = `שלום ${doneData.soldierName}, מצורף אישור זיכוי ציוד:\n${docUrl}`;
+    const waUrl = normalizedPhone
+      ? `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(waText)}`
+      : `https://wa.me/?text=${encodeURIComponent(waText)}`;
+    return (
+      <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-2 md:p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 text-center">
+          <div className="text-6xl mb-3">✅</div>
+          <p className="font-bold text-emerald-700 text-xl">הזיכוי בוצע בהצלחה!</p>
+          <p className="text-sm text-slate-500 mt-2">{doneData.soldierName} — הציוד הוחזר למחסן</p>
+          <div className="mt-4 flex gap-2">
+            <a href={waUrl} target="_blank" rel="noopener noreferrer"
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-lg py-2.5 text-sm font-bold text-center">
+              📤 שלח טופס לחייל
+            </a>
+            <a href={docUrl} target="_blank" rel="noreferrer"
+              className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-center hover:bg-slate-50">
+              📄 צפייה
+            </a>
+          </div>
+          <button onClick={() => { setDoneData(null); reset(); setOpen(false); }}
+            className="mt-4 bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-6 py-2 text-sm font-medium w-full">
+            → סגור
+          </button>
+        </div>
+      </div>
     );
   }
 

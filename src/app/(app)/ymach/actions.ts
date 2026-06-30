@@ -122,15 +122,18 @@ export async function removeItemFromShelf(shelfId: string, itemTypeId: string) {
 export async function saveOperationalKit(_prev: unknown, fd: FormData) {
   const user = await requireCapability("ymach.manage");
   const bId = user.battalionId!;
-  const holderId = user.holderId;
+  const holderId = (fd.get("holderId") as string) || user.holderId;
   if (!holderId) return { error: "לא משויך לפלוגה" };
+
+  const holder = await prisma.holder.findUnique({ where: { id: holderId }, select: { battalionId: true } });
+  if (!holder || holder.battalionId !== bId) return { error: "פלוגה לא תקינה" };
 
   const id = fd.get("id") as string | null;
   const name = (fd.get("name") as string)?.trim();
   let kitNumber = (fd.get("kitNumber") as string)?.trim() || null;
-  const shelfId = (fd.get("shelfId") as string) || null;
-  const equipmentLocationId = (fd.get("equipmentLocationId") as string) || null;
-  const assignedSoldierId = (fd.get("assignedSoldierId") as string) || null;
+  const shelfId = (fd.get("shelfId") as string)?.trim() || null;
+  const equipmentLocationId = (fd.get("equipmentLocationId") as string)?.trim() || null;
+  const assignedSoldierId = (fd.get("assignedSoldierId") as string)?.trim() || null;
   const notes = (fd.get("notes") as string)?.trim() || null;
 
   if (!name) return { error: "שם ארגז חובה" };
@@ -141,18 +144,23 @@ export async function saveOperationalKit(_prev: unknown, fd: FormData) {
     kitNumber = String(count + 1);
   }
 
-  if (id) {
-    const existing = await prisma.operationalKit.findUnique({ where: { id } });
-    // אם שינו חייל במארז ISSUED — מחזירים למדף
-    const shouldResetStatus = existing?.status === "ISSUED" && assignedSoldierId !== existing.assignedSoldierId;
-    await prisma.operationalKit.update({
-      where: { id },
-      data: { name, kitNumber, shelfId, equipmentLocationId, assignedSoldierId, notes, ...(shouldResetStatus ? { status: "STORED" } : {}) },
-    });
-  } else {
-    await prisma.operationalKit.create({
-      data: { battalionId: bId, holderId, name, kitNumber, shelfId, equipmentLocationId, assignedSoldierId, notes },
-    });
+  try {
+    if (id) {
+      const existing = await prisma.operationalKit.findUnique({ where: { id } });
+      // אם שינו חייל במארז ISSUED — מחזירים למדף
+      const shouldResetStatus = existing?.status === "ISSUED" && assignedSoldierId !== existing.assignedSoldierId;
+      await prisma.operationalKit.update({
+        where: { id },
+        data: { name, kitNumber, shelfId, equipmentLocationId, assignedSoldierId, notes, ...(shouldResetStatus ? { status: "STORED" } : {}) },
+      });
+    } else {
+      await prisma.operationalKit.create({
+        data: { battalionId: bId, holderId, name, kitNumber, shelfId, equipmentLocationId, assignedSoldierId, notes },
+      });
+    }
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message.includes("Unique constraint")) return { error: "ארגז בשם זה כבר קיים" };
+    throw e;
   }
   revalidatePath("/ymach");
   return { ok: true };
