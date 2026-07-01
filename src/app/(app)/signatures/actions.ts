@@ -514,6 +514,9 @@ export async function checkinQuantity(formData: FormData) {
   });
 
   await audit(user.id, "CHECKIN_QTY", "Soldier", soldierId, { itemTypeId, quantity });
+
+  void notifySoldierTelegram(soldierId, bId, null, "CHECKIN");
+
   revalidatePath("/signatures");
 }
 
