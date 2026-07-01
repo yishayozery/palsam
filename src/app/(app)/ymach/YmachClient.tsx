@@ -7,7 +7,7 @@ import {
   saveShelf, deleteShelf,
   assignItemToShelf, removeItemFromShelf,
   saveOperationalKit, deleteOperationalKit, updateKitItems,
-  issueKit, returnKit, duplicateKit,
+  returnKit, duplicateKit,
 } from "./actions";
 
 type Shelf = {
@@ -593,15 +593,6 @@ ${kit.notes ? `<p class="meta"><b>הערה:</b> ${kit.notes}</p>` : ""}
                 >
                   📦 תכולה
                 </button>
-                {kit.status === "STORED" && kit.assignedSoldierId && (
-                  <button
-                    onClick={() => startTransition(async () => { await issueKit(kit.id); })}
-                    className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded hover:bg-amber-200"
-                    disabled={pending}
-                  >
-                    📤 הוצא
-                  </button>
-                )}
                 {kit.status === "ISSUED" && (
                   <button
                     onClick={() => startTransition(async () => { await returnKit(kit.id); })}
@@ -611,15 +602,13 @@ ${kit.notes ? `<p class="meta"><b>הערה:</b> ${kit.notes}</p>` : ""}
                     📥 החזר
                   </button>
                 )}
-                {kit.status === "STORED" && (
-                  <button
-                    onClick={() => startTransition(async () => { await duplicateKit(kit.id); })}
-                    className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded hover:bg-slate-200"
-                    disabled={pending}
-                  >
-                    📋 שכפל
-                  </button>
-                )}
+                <button
+                  onClick={() => startTransition(async () => { const r = await duplicateKit(kit.id); if (r?.error) alert(r.error); })}
+                  className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded hover:bg-slate-200"
+                  disabled={pending}
+                >
+                  📋 שכפל
+                </button>
                 <button
                   onClick={() => printKit(kit)}
                   className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded hover:bg-slate-200"

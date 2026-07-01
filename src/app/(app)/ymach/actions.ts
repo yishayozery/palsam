@@ -178,10 +178,11 @@ export async function deleteOperationalKit(id: string) {
 
 export async function updateKitItems(kitId: string, items: { itemTypeId: string; quantity: number }[]) {
   const user = await requireCapability("ymach.manage");
-  if (!user.holderId) return { error: "לא משויך" };
+  const bId = user.battalionId!;
 
   const kit = await prisma.operationalKit.findUnique({ where: { id: kitId } });
-  if (!kit || kit.holderId !== user.holderId) return { error: "ארגז לא תקין" };
+  if (!kit || kit.battalionId !== bId) return { error: "ארגז לא תקין" };
+  if (user.holderId && kit.holderId !== user.holderId) return { error: "ארגז לא שייך לפלוגה שלך" };
 
   // delete all and recreate
   await prisma.operationalKitItem.deleteMany({ where: { kitId } });
@@ -197,14 +198,14 @@ export async function updateKitItems(kitId: string, items: { itemTypeId: string;
 export async function duplicateKit(kitId: string) {
   const user = await requireCapability("ymach.manage");
   const bId = user.battalionId!;
-  const holderId = user.holderId;
-  if (!holderId) return { error: "לא משויך" };
 
   const source = await prisma.operationalKit.findUnique({
     where: { id: kitId },
     include: { items: true },
   });
-  if (!source || source.holderId !== holderId) return { error: "ארגז לא תקין" };
+  if (!source || source.battalionId !== bId) return { error: "ארגז לא תקין" };
+  if (user.holderId && source.holderId !== user.holderId) return { error: "ארגז לא שייך לפלוגה שלך" };
+  const holderId = source.holderId;
 
   const existing = await prisma.operationalKit.count({ where: { holderId } });
   const newName = `${source.name} (עותק ${existing + 1})`;
