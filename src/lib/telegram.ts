@@ -76,8 +76,8 @@ export async function editMessageText(
 
 export const MAIN_KEYBOARD = {
   keyboard: [
-    [{ text: "📊 סטטוס" }, { text: "📦 ציוד חתום" }],
-    [{ text: "🚗 שבצ\"ק" }, { text: "ℹ️ מידע כללי" }],
+    [{ text: "📋 תהליך חתימת נשק" }, { text: "📦 הציוד שלי" }],
+    [{ text: "🚗 שיבוץ לרכב" }, { text: "🕐 ארוחות ותפילות" }],
     [{ text: "❓ עזרה" }],
   ],
   resize_keyboard: true,

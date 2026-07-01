@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { sendTelegramMessage, answerCallbackQuery, editMessageText, MAIN_KEYBOARD } from "@/lib/telegram";
 
@@ -52,11 +53,16 @@ export async function POST(
 
     // Map Hebrew keyboard buttons to commands
     const CMD_MAP: Record<string, string> = {
+      "📋 תהליך חתימת נשק": "/status",
+      "📦 הציוד שלי": "/equipment",
+      "🚗 שיבוץ לרכב": "/dispatch",
+      "🕐 ארוחות ותפילות": "/info",
+      "❓ עזרה": "/help",
+      // backward compat — old button labels
       "📊 סטטוס": "/status",
       "📦 ציוד חתום": "/equipment",
       "🚗 שבצ\"ק": "/dispatch",
       "ℹ️ מידע כללי": "/info",
-      "❓ עזרה": "/help",
     };
     const cmd = CMD_MAP[text] || text;
 
@@ -117,7 +123,23 @@ export async function POST(
       }
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
       const webAppUrl = `${baseUrl}/bot/dispatch/${battalionId}`;
-      await sendTelegramMessage(token, chatId, '🚗 <b>שבצ"ק חדש</b>\n\nלחץ על הכפתור למטה לפתיחת טופס שבצ"ק:', {
+
+      const dispatchToken = nanoid(32);
+      await prisma.dispatchToken.create({
+        data: {
+          token: dispatchToken,
+          battalionId,
+          expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+          maxUses: 10,
+        },
+      });
+      const openUrl = `${baseUrl}/dispatch-open/${dispatchToken}`;
+
+      await sendTelegramMessage(token, chatId,
+        `🚗 <b>שבצ"ק חדש</b>\n\n` +
+        `לחץ על הכפתור למטה לפתיחת הטופס בטלגרם,\n` +
+        `או <a href="${openUrl}">לחץ כאן לפתיחה בדפדפן</a> 🔗\n\n` +
+        `<i>🔒 הקישור תקף ל-24 שעות</i>`, {
         inline_keyboard: [[{ text: "📝 פתח טופס שבצ\"ק", web_app: { url: webAppUrl } }]],
       });
       return NextResponse.json({ ok: true });
@@ -313,12 +335,16 @@ async function handleCallback(
   await answerCallbackQuery(token, callback.id);
 }
 
-const HELP_TEXT = `📋 <b>פקודות זמינות:</b>
+const HELP_TEXT = `📋 <b>מה כל כפתור עושה:</b>
 
-📊 <b>סטטוס</b> — סטטוס חתימה ומבחנים
-📦 <b>ציוד חתום</b> — רשימת ציוד חתום עליך
-🚗 <b>שבצ"ק</b> — יצירת שבצ"ק חדש
-ℹ️ <b>מידע כללי</b> — ארוחות, תפילות ועוד
+📋 <b>תהליך חתימת נשק</b> — מה הסטטוס שלך? מראה אילו שלבים הושלמו (אישור מפקד, מבחן ארמון, חתימה על נוהל) ומה עוד צריך לעשות כדי לחתום על נשק
+
+📦 <b>הציוד שלי</b> — רשימת כל הציוד החתום עליך (נשק, אפודים, ציוד אישי וכו׳)
+
+🚗 <b>שיבוץ לרכב</b> — יצירת שבצ"ק חדש: בחירת רכב, תאריך, שעה וחיילים
+
+🕐 <b>ארוחות ותפילות</b> — זמני ארוחות, תפילות ומידע כללי שהמפקד הגדיר
+
 ❓ <b>עזרה</b> — הודעה זו
 
 השתמש/י בכפתורים למטה 👇`;

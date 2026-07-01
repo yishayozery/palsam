@@ -176,6 +176,7 @@ model Battalion {
   operationalKits        OperationalKit[]    @relation("BattalionOpKits")
   ymachGaps              YmachGap[]          @relation("BattalionYmachGaps")
   verificationRequests   VerificationRequest[] @relation("BattalionVerifications")
+  dispatchTokens         DispatchToken[]       @relation("BattalionDispatchTokens")
 }
 
 // ===================== משתמשים =====================
@@ -1859,4 +1860,19 @@ model VerificationItem {
   reportedLocation  String?
 
   @@index([requestId])
+}
+
+// טוקן חד-פעמי לשבצ"ק מלינק חיצוני (ללא צורך בהתחברות)
+model DispatchToken {
+  id          String   @id @default(cuid())
+  token       String   @unique
+  battalionId String
+  battalion   Battalion @relation("BattalionDispatchTokens", fields: [battalionId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  maxUses     Int      @default(10)
+  useCount    Int      @default(0)
+
+  @@index([token])
+  @@index([battalionId])
 }
