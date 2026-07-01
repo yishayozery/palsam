@@ -481,12 +481,13 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
           <Table>
             <thead>
               <tr>
-                <Th>תאריך</Th><Th>סוג</Th><Th>מאת</Th><Th>אל</Th><Th>פריטים</Th><Th>סטטוס</Th><Th>בוצע ע״י</Th><Th></Th>
+                <Th>מס׳</Th><Th>תאריך</Th><Th>סוג</Th><Th>מאת</Th><Th>אל</Th><Th>פריטים</Th><Th>סטטוס</Th><Th>בוצע ע״י</Th><Th></Th>
               </tr>
             </thead>
             <tbody>
               {companyTransfers.map((t) => (
                 <tr key={t.id}>
+                  <Td className="text-xs font-mono text-slate-400">{t.id.slice(-6).toUpperCase()}</Td>
                   <Td className="text-xs text-slate-500">{t.createdAt.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</Td>
                   <Td>
                     <Badge className={
