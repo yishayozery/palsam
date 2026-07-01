@@ -75,6 +75,7 @@ export default function VerificationClient({
     return init;
   });
   const [batchConfirmed, setBatchConfirmed] = useState<boolean | null>(null);
+  const [customLocation, setCustomLocation] = useState<Record<string, boolean>>({});
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -231,16 +232,38 @@ export default function VerificationClient({
 
                 {/* LOCATION mode */}
                 {mode === "LOCATION" && (
-                  <select
-                    value={r.reportedLocation}
-                    onChange={(e) => setResponses((p) => ({ ...p, [item.id]: { ...p[item.id], reportedLocation: e.target.value } }))}
-                    className="w-full border rounded-lg px-3 py-2 text-sm"
-                  >
-                    <option value="">בחר מיקום...</option>
-                    {locations.map((loc) => (
-                      <option key={loc.id} value={loc.name}>{loc.name}</option>
-                    ))}
-                  </select>
+                  <div className="space-y-2">
+                    <select
+                      value={customLocation[item.id] ? "__other__" : r.reportedLocation}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "__other__") {
+                          setCustomLocation((p) => ({ ...p, [item.id]: true }));
+                          setResponses((p) => ({ ...p, [item.id]: { ...p[item.id], reportedLocation: "" } }));
+                        } else {
+                          setCustomLocation((p) => ({ ...p, [item.id]: false }));
+                          setResponses((p) => ({ ...p, [item.id]: { ...p[item.id], reportedLocation: val } }));
+                        }
+                      }}
+                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                    >
+                      <option value="">בחר מיקום...</option>
+                      {locations.map((loc) => (
+                        <option key={loc.id} value={loc.name}>{loc.name}</option>
+                      ))}
+                      <option value="__other__">אחר — הקלדה ידנית</option>
+                    </select>
+                    {customLocation[item.id] && (
+                      <input
+                        type="text"
+                        placeholder="הקלד מיקום..."
+                        value={r.reportedLocation}
+                        onChange={(e) => setResponses((p) => ({ ...p, [item.id]: { ...p[item.id], reportedLocation: e.target.value } }))}
+                        className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm"
+                        autoFocus
+                      />
+                    )}
+                  </div>
                 )}
 
                 {/* QUANTITY modes */}

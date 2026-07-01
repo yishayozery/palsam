@@ -56,7 +56,7 @@ export default function VerificationPanel({
   itemTypes: ItemTypeOption[];
 }) {
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<"pick" | "send" | "status">("pick");
+  const [step, setStep] = useState<"pick" | "send" | "status" | "report">("pick");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState("CONFIRM");
   const [requests, setRequests] = useState<VerReq[]>([]);
@@ -64,6 +64,8 @@ export default function VerificationPanel({
   const [whatsappQueue, setWhatsappQueue] = useState<VerReq[]>([]);
   const [whatsappIdx, setWhatsappIdx] = useState(0);
   const [groupBy, setGroupBy] = useState<"all" | "company">("all");
+  const [reportFilter, setReportFilter] = useState<"all" | "pending" | "confirmed" | "denied" | "not_sent">("all");
+  const [reportCompany, setReportCompany] = useState<string>("all");
 
   const loadStatus = useCallback(() => {
     startTransition(async () => {
@@ -90,8 +92,8 @@ export default function VerificationPanel({
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
   const startWhatsapp = () => {
-    const unsent = requests.filter((r) => !r.sentAt && r.phone && r.soldierName);
-    if (unsent.length === 0) return alert("אין חיילים עם מספר טלפון שלא נשלח אליהם");
+    const unsent = requests.filter((r) => !r.respondedAt && r.phone && r.soldierName);
+    if (unsent.length === 0) return alert("אין חיילים עם מספר טלפון שטרם דיווחו");
     setWhatsappQueue(unsent);
     setWhatsappIdx(0);
     openWhatsapp(unsent[0]);
@@ -155,6 +157,61 @@ export default function VerificationPanel({
     confirmed: requests.flatMap((r) => r.items).filter((i) => i.status === "CONFIRMED").length,
     denied: requests.flatMap((r) => r.items).filter((i) => i.status === "DENIED").length,
     pending: requests.flatMap((r) => r.items).filter((i) => i.status === "PENDING").length,
+  };
+
+  const filteredRequests = requests.filter((r) => {
+    if (reportCompany !== "all") {
+      const company = r.companyName || r.holderName || "ללא שיוך";
+      if (company !== reportCompany) return false;
+    }
+    if (reportFilter === "pending") return !r.respondedAt;
+    if (reportFilter === "confirmed") return r.respondedAt && r.items.every((i) => i.status === "CONFIRMED");
+    if (reportFilter === "denied") return r.items.some((i) => i.status === "DENIED");
+    if (reportFilter === "not_sent") return !r.sentAt;
+    return true;
+  });
+
+  const filteredByCompany = new Map<string, VerReq[]>();
+  for (const req of filteredRequests) {
+    const key = req.companyName || req.holderName || "ללא שיוך";
+    const arr = filteredByCompany.get(key) || [];
+    arr.push(req);
+    filteredByCompany.set(key, arr);
+  }
+
+  const printReport = () => {
+    const now = new Date().toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" });
+    const filterLabel = { all: "הכל", pending: "טרם דיווחו", confirmed: "אושרו", denied: "חסרים", not_sent: "לא נשלחו" }[reportFilter];
+    const rows: string[] = [];
+    for (const [companyName, reqs] of filteredByCompany) {
+      const companyItems = reqs.flatMap((r) => r.items);
+      const cConfirmed = companyItems.filter((i) => i.status === "CONFIRMED").length;
+      const cDenied = companyItems.filter((i) => i.status === "DENIED").length;
+      const cPending = companyItems.filter((i) => i.status === "PENDING").length;
+      rows.push(`<tr style="background:#f1f5f9"><td colspan="5" style="padding:8px;font-weight:bold">📍 ${companyName} — ✅${cConfirmed} ❌${cDenied} ⏳${cPending}</td></tr>`);
+      for (const req of reqs) {
+        const name = req.soldierName || req.holderName || "—";
+        const statusLabel = req.respondedAt ? "דווח" : req.sentAt ? "נשלח" : "ממתין";
+        for (const item of req.items) {
+          const extra = [
+            item.reportedSerial && `סריאלי: ${item.reportedSerial}`,
+            item.reportedLocation && `מיקום: ${item.reportedLocation}`,
+            item.reportedQuantity != null && `כמות: ${item.reportedQuantity}`,
+            item.note,
+          ].filter(Boolean).join(", ");
+          rows.push(`<tr><td style="padding:4px 8px">${name}</td><td style="padding:4px 8px">${item.itemTypeName}${item.serialNumber ? ` (${item.serialNumber})` : ""}</td><td style="padding:4px 8px">${item.status === "CONFIRMED" ? "✅" : item.status === "DENIED" ? "❌" : "⏳"}</td><td style="padding:4px 8px">${statusLabel}</td><td style="padding:4px 8px;font-size:11px;color:#666">${extra}</td></tr>`);
+        }
+      }
+    }
+    const fStats = {
+      total: filteredRequests.length,
+      confirmed: filteredRequests.flatMap((r) => r.items).filter((i) => i.status === "CONFIRMED").length,
+      denied: filteredRequests.flatMap((r) => r.items).filter((i) => i.status === "DENIED").length,
+      pending: filteredRequests.flatMap((r) => r.items).filter((i) => i.status === "PENDING").length,
+    };
+    const html = `<html dir="rtl"><head><title>דוח אימות ציוד</title><style>body{font-family:system-ui;padding:20px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ddd;text-align:right}th{background:#334155;color:white;padding:8px}@media print{body{padding:0}}</style></head><body><h2>דוח אימות ציוד</h2><p>תאריך: ${now} | סינון: ${filterLabel}${reportCompany !== "all" ? ` | פלוגה: ${reportCompany}` : ""} | סה"כ: ${fStats.total} בקשות | ✅ ${fStats.confirmed} | ❌ ${fStats.denied} | ⏳ ${fStats.pending}</p><table><tr><th>שם</th><th>פריט</th><th>סטטוס</th><th>שליחה</th><th>פרטים</th></tr>${rows.join("")}</table></body></html>`;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); w.print(); }
   };
 
   if (!open) {
@@ -304,6 +361,23 @@ export default function VerificationPanel({
             <button onClick={sendAllTelegram} disabled={pending} className="text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg px-3 py-1.5 font-medium">
               🤖 שלח Telegram
             </button>
+            {requests.some((r) => r.sentAt && !r.respondedAt) && (
+              <button
+                onClick={() => {
+                  const unanswered = requests.filter((r) => r.sentAt && !r.respondedAt);
+                  startTransition(async () => {
+                    for (const req of unanswered) {
+                      if (req.hasTelegram) await sendTelegramVerification(req.id);
+                    }
+                    loadStatus();
+                  });
+                }}
+                disabled={pending}
+                className="text-xs bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg px-3 py-1.5 font-medium"
+              >
+                🔁 שלח שוב ({requests.filter((r) => r.sentAt && !r.respondedAt).length})
+              </button>
+            )}
             <button onClick={loadStatus} disabled={pending} className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg px-3 py-1.5">
               🔄 רענן
             </button>
@@ -312,6 +386,12 @@ export default function VerificationPanel({
               className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg px-3 py-1.5"
             >
               {groupBy === "all" ? "📊 קבץ לפי פלוגה" : "📋 הצג הכל"}
+            </button>
+            <button
+              onClick={() => { setReportFilter("all"); setReportCompany("all"); setStep("report"); }}
+              className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg px-3 py-1.5 font-medium"
+            >
+              📊 דוח ביצוע
             </button>
           </div>
 
@@ -386,6 +466,159 @@ export default function VerificationPanel({
           )}
         </div>
       )}
+      {step === "report" && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-bold text-sm text-slate-700">📊 דוח ביצוע אימות</h4>
+            <button onClick={() => setStep("status")} className="text-xs text-indigo-600 hover:underline">← חזרה</button>
+          </div>
+
+          {/* Filters */}
+          <div className="flex gap-2 mb-3 flex-wrap">
+            <select
+              value={reportFilter}
+              onChange={(e) => setReportFilter(e.target.value as typeof reportFilter)}
+              className="border rounded-lg px-2 py-1.5 text-xs"
+            >
+              <option value="all">כל הסטטוסים</option>
+              <option value="pending">טרם דיווחו</option>
+              <option value="not_sent">לא נשלחו</option>
+              <option value="confirmed">אושרו</option>
+              <option value="denied">חסרים / לא נמצאו</option>
+            </select>
+            <select
+              value={reportCompany}
+              onChange={(e) => setReportCompany(e.target.value)}
+              className="border rounded-lg px-2 py-1.5 text-xs"
+            >
+              <option value="all">כל הפלוגות</option>
+              {Array.from(byCompany.keys()).map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Summary bar */}
+          <div className="grid grid-cols-4 gap-1.5 mb-3 text-center">
+            <div className="bg-slate-50 rounded-lg p-1.5">
+              <div className="text-base font-bold text-slate-700">{filteredRequests.length}</div>
+              <div className="text-[10px] text-slate-500">בקשות</div>
+            </div>
+            <div className="bg-emerald-50 rounded-lg p-1.5">
+              <div className="text-base font-bold text-emerald-700">{filteredRequests.filter((r) => r.respondedAt && r.items.every((i) => i.status === "CONFIRMED")).length}</div>
+              <div className="text-[10px] text-emerald-500">הושלמו</div>
+            </div>
+            <div className="bg-amber-50 rounded-lg p-1.5">
+              <div className="text-base font-bold text-amber-700">{filteredRequests.filter((r) => !r.respondedAt).length}</div>
+              <div className="text-[10px] text-amber-500">ממתינים</div>
+            </div>
+            <div className="bg-rose-50 rounded-lg p-1.5">
+              <div className="text-base font-bold text-rose-700">{filteredRequests.filter((r) => r.items.some((i) => i.status === "DENIED")).length}</div>
+              <div className="text-[10px] text-rose-500">חסרים</div>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          {requests.length > 0 && (() => {
+            const responded = requests.filter((r) => r.respondedAt).length;
+            const pct = Math.round((responded / requests.length) * 100);
+            return (
+              <div className="mb-3">
+                <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                  <span>התקדמות כללית</span>
+                  <span>{responded}/{requests.length} ({pct}%)</span>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Filtered results by company */}
+          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            {filteredRequests.length === 0 ? (
+              <p className="text-center text-sm text-slate-400 py-4">אין תוצאות לסינון הנוכחי</p>
+            ) : (
+              Array.from(filteredByCompany.entries()).map(([companyName, reqs]) => {
+                const companyItems = reqs.flatMap((r) => r.items);
+                const cConfirmed = companyItems.filter((i) => i.status === "CONFIRMED").length;
+                const cDenied = companyItems.filter((i) => i.status === "DENIED").length;
+                const cPending = companyItems.filter((i) => i.status === "PENDING").length;
+                const cResponded = reqs.filter((r) => r.respondedAt).length;
+                return (
+                  <div key={companyName} className="border rounded-xl overflow-hidden">
+                    <div className="bg-slate-50 px-3 py-2 flex items-center justify-between">
+                      <span className="font-bold text-xs text-slate-700">📍 {companyName}</span>
+                      <div className="flex gap-2 text-[10px]">
+                        <span className="text-emerald-600">✅{cConfirmed}</span>
+                        <span className="text-rose-600">❌{cDenied}</span>
+                        <span className="text-amber-600">⏳{cPending}</span>
+                        <span className="text-blue-600">{cResponded}/{reqs.length}</span>
+                      </div>
+                    </div>
+                    <div className="divide-y text-xs">
+                      {reqs.map((req) => {
+                        const name = req.soldierName || req.holderName || "—";
+                        const icon = req.soldierName ? "👤" : req.holderKind === "WAREHOUSE" ? "🏭" : "🏢";
+                        return (
+                          <div key={req.id} className={`px-3 py-2 ${req.respondedAt ? "" : "bg-amber-50/30"}`}>
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">{icon} {name}</span>
+                              <span className={`text-[10px] font-bold ${
+                                req.respondedAt ? "text-emerald-600" : req.sentAt ? "text-blue-600" : "text-slate-400"
+                              }`}>
+                                {req.respondedAt ? "✅ דווח" : req.sentAt ? `📤 ${req.sentVia}` : "⏳ טרם נשלח"}
+                              </span>
+                            </div>
+                            {req.items.map((item) => (
+                              <div key={item.id} className="flex items-center justify-between text-[11px] text-slate-500 mt-0.5">
+                                <span>{item.itemTypeName}{item.serialNumber ? ` (${item.serialNumber})` : ""}{item.expectedQuantity != null ? ` ×${item.expectedQuantity}` : ""}</span>
+                                <div className="flex items-center gap-1.5">
+                                  {item.reportedSerial && <span className="text-blue-600 font-mono text-[10px]">{item.reportedSerial}</span>}
+                                  {item.reportedLocation && <span className="text-blue-600 text-[10px]">📍{item.reportedLocation}</span>}
+                                  {item.reportedQuantity != null && <span className="text-blue-600 text-[10px]">×{item.reportedQuantity}</span>}
+                                  {item.status === "CONFIRMED" && <span className="text-emerald-600">✅</span>}
+                                  {item.status === "DENIED" && <span className="text-rose-600" title={item.note || undefined}>❌</span>}
+                                  {item.note && <span className="text-rose-500 text-[10px]">{item.note}</span>}
+                                </div>
+                              </div>
+                            ))}
+                            {!req.respondedAt && (req.phone || req.hasTelegram) && (
+                              <div className="flex gap-1.5 mt-1">
+                                {req.phone && (
+                                  <button onClick={() => openWhatsapp(req)} className="text-[10px] bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded px-2 py-0.5">
+                                    📱 {req.sentAt ? "שלח שוב" : "WhatsApp"}
+                                  </button>
+                                )}
+                                {req.hasTelegram && (
+                                  <button onClick={() => handleTelegram(req)} disabled={pending} className="text-[10px] bg-blue-100 hover:bg-blue-200 text-blue-700 rounded px-2 py-0.5">
+                                    🤖 {req.sentAt ? "שלח שוב" : "Telegram"}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Print button */}
+          {filteredRequests.length > 0 && (
+            <button
+              onClick={printReport}
+              className="w-full mt-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg py-2.5 text-sm font-bold transition"
+            >
+              🖨️ הדפס דוח ({filteredRequests.length} בקשות)
+            </button>
+          )}
+        </div>
+      )}
     </Card>
   );
 }
@@ -434,16 +667,16 @@ function RequestCard({ req, pending, onTelegram, onWhatsapp }: {
           </div>
         ))}
       </div>
-      {!req.sentAt && (
+      {(!req.sentAt || (!req.respondedAt && req.sentAt)) && (
         <div className="flex gap-1.5 mt-1.5">
           {req.phone && (
             <button onClick={onWhatsapp} className="text-[10px] bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded px-2 py-0.5">
-              📱 WhatsApp
+              📱 {req.sentAt ? "שלח שוב" : "WhatsApp"}
             </button>
           )}
           {req.hasTelegram && (
             <button onClick={onTelegram} disabled={pending} className="text-[10px] bg-blue-100 hover:bg-blue-200 text-blue-700 rounded px-2 py-0.5">
-              🤖 Telegram
+              🤖 {req.sentAt ? "שלח שוב" : "Telegram"}
             </button>
           )}
           {!req.soldierName && (
