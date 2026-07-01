@@ -172,7 +172,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
   }>();
   for (const l of qtyLines) {
     const sId = l.transfer.toSoldierId;
-    if (!sId || !l.statusId || !l.status) continue;
+    if (!sId || !l.statusId || !l.status || !l.transfer.toSoldier) continue;
     const k = `${sId}|${l.itemTypeId}|${l.statusId}`;
     const sign = l.transfer.type === "SIGNOUT" ? 1 : -1;
     const cur = qtyBalance.get(k);
@@ -180,7 +180,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
       cur.quantity += sign * l.quantity;
     } else {
       qtyBalance.set(k, {
-        soldierId: sId, soldierName: l.transfer.toSoldier!.fullName, soldierPN: l.transfer.toSoldier!.personalNumber,
+        soldierId: sId, soldierName: l.transfer.toSoldier.fullName, soldierPN: l.transfer.toSoldier.personalNumber,
         itemTypeId: l.itemTypeId, itemName: l.itemType.name, sku: l.itemType.sku, unit: l.itemType.unit,
         statusId: l.statusId, statusName: l.status.name, isWear: l.status.isWear, isLoss: l.status.isLoss,
         quantity: sign * l.quantity,
@@ -335,7 +335,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                 />
               )}
               <CheckinModal
-                signedUnits={signedUnits.map((u) => ({
+                signedUnits={signedUnits.filter((u) => u.signedSoldier).map((u) => ({
                   id: u.id, serial: u.serialNumber, itemName: u.itemType.name,
                   soldierId: u.signedSoldierId!, soldierName: u.signedSoldier!.fullName,
                   soldierPN: u.signedSoldier!.personalNumber, companyName: null,
@@ -346,7 +346,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                 qtyHoldings={soldierQtyHoldings}
                 defaultToHolderId={user.holderId ?? null}
                 statuses={statuses.map((s) => ({ id: s.id, name: s.name, isWear: s.isWear, isLoss: s.isLoss, isDefault: s.isDefault }))}
-                operationalKits={operationalKits.map((k) => ({
+                operationalKits={operationalKits.filter((k) => k.assignedSoldier).map((k) => ({
                   id: k.id, name: k.name, status: k.status,
                   soldierId: k.assignedSoldierId!,
                   soldierName: k.assignedSoldier!.fullName,
@@ -386,7 +386,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                 equipmentLocations={allCompanyLocations.map((l) => ({
                   id: l.id, name: l.name, companyId: l.holderId, isVehicle: !!l.vehicleSerialUnitId,
                 }))}
-                operationalKits={operationalKits.map((k) => ({
+                operationalKits={operationalKits.filter((k) => k.assignedSoldier).map((k) => ({
                   id: k.id, name: k.name, status: k.status,
                   soldierId: k.assignedSoldierId!,
                   soldierName: k.assignedSoldier!.fullName,

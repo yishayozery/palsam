@@ -49,7 +49,13 @@ export async function getPostSignatureShareData(
 
 /** יצירת החתמה (SIGNOUT): מחזיק ◄ חייל. */
 export async function createSignout(formData: FormData) {
-  const user = await requireUser();
+  let user;
+  try {
+    user = await requireUser();
+  } catch (e) {
+    console.error("[createSignout] requireUser failed:", e);
+    throw e;
+  }
   if (!can(user, "signatures.manage")) redirect("/signatures");
   const bId = user.battalionId!;
   const soldierId = String(formData.get("soldierId") || "");
@@ -223,8 +229,12 @@ export async function createSignout(formData: FormData) {
   });
 
   await audit(user.id, "CREATE_SIGNOUT", "Transfer", transferId, { soldierId, method });
-  revalidatePath("/signatures");
-  // ⚠️ שרבוט → ישר למסך החתימה; QR/WhatsApp → מסך השיתוף עם QR
+  try {
+    revalidatePath("/signatures");
+  } catch (e) {
+    console.error("[createSignout] revalidatePath failed:", e);
+    throw e;
+  }
   if (method === "ONSITE") redirect(`/sign/${token}`);
   redirect(`/signatures/${token}`);
 }
