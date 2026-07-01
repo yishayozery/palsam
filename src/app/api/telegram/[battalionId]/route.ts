@@ -44,11 +44,22 @@ export async function POST(
     }
 
     const message = body?.message;
-    if (!message?.chat?.id || !message?.text) {
+    if (!message?.chat?.id) {
       return NextResponse.json({ ok: true });
     }
 
     const chatId = String(message.chat.id);
+
+    // --- Photo handling: armory test proof upload ---
+    if (message.photo?.length > 0) {
+      await handlePhotoUpload(token, chatId, message.photo, battalionId);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (!message.text) {
+      return NextResponse.json({ ok: true });
+    }
+
     const text = message.text.trim();
 
     // Map Hebrew keyboard buttons to commands
@@ -382,12 +393,19 @@ async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, 
 
   const step2 = soldier.armoryTestProofAt;
   lines.push(`${step2 ? "✅" : "⬜"} מבחן נוהל ארמון${step2 ? ` (${fmtDate(step2)})` : ""}`);
-  if (!step2 && battalion.armoryTestUrl) {
-    lines.push(`   👉 <a href="${battalion.armoryTestUrl}">לחץ כאן למבחן</a>`);
+  if (!step2) {
+    if (battalion.armoryTestUrl) {
+      lines.push(`   👉 <a href="${battalion.armoryTestUrl}">לחץ כאן למבחן</a>`);
+    }
+    lines.push(`   📸 שלח צילום מסך של תוצאת המבחן כדי לאשר`);
   }
 
   const step3 = soldier.weaponsAgreementSignedAt;
   lines.push(`${step3 ? "✅" : "⬜"} חתימה על נוהל שמירת נשק${step3 ? ` (${fmtDate(step3)})` : ""}`);
+  if (!step3) {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+    lines.push(`   👉 <a href="${baseUrl}/my-equipment">לחץ כאן לקריאה וחתימה</a>`);
+  }
 
   const allDone = step1 && step2 && step3;
   lines.push("");
@@ -483,6 +501,60 @@ async function handleEquipment(token: string, chatId: string, soldier: SoldierCt
   lines.push(`סה״כ: <b>${serialItems.length + qtyItems.length}</b> פריטים`);
 
   await sendTelegramMessage(token, chatId, lines.join("\n"));
+}
+
+async function handlePhotoUpload(
+  botToken: string,
+  chatId: string,
+  photos: { file_id: string; file_size?: number; width: number; height: number }[],
+  battalionId: string,
+) {
+  const soldier = await prisma.soldier.findFirst({
+    where: { battalionId, telegramChatId: chatId },
+    select: { id: true, fullName: true, armoryTestProofAt: true },
+  });
+  if (!soldier) {
+    await sendTelegramMessage(botToken, chatId, NOT_REGISTERED);
+    return;
+  }
+
+  if (soldier.armoryTestProofAt) {
+    await sendTelegramMessage(botToken, chatId,
+      `✅ כבר הועלה צילום מסך מבחן ארמון (${fmtDate(soldier.armoryTestProofAt)}).\nאם צריך לעדכן — פנה למפקד.`);
+    return;
+  }
+
+  const largest = photos[photos.length - 1];
+  try {
+    const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_id: largest.file_id }),
+    });
+    const fileData = await fileRes.json();
+    if (!fileData.ok || !fileData.result?.file_path) {
+      await sendTelegramMessage(botToken, chatId, "❌ שגיאה בטעינת התמונה. נסה שוב.");
+      return;
+    }
+
+    const imgRes = await fetch(`https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`);
+    const imgBuf = Buffer.from(await imgRes.arrayBuffer());
+
+    const ext = fileData.result.file_path.split(".").pop()?.toLowerCase() ?? "jpg";
+    const mime = ext === "png" ? "image/png" : "image/jpeg";
+    const dataUrl = `data:${mime};base64,${imgBuf.toString("base64")}`;
+
+    await prisma.soldier.update({
+      where: { id: soldier.id },
+      data: { armoryTestProofImage: dataUrl, armoryTestProofAt: new Date() },
+    });
+
+    await sendTelegramMessage(botToken, chatId,
+      `✅ <b>צילום מסך מבחן ארמון נשמר!</b>\n\n${soldier.fullName} — שלב מבחן נוהל ארמון הושלם.\nלחץ <b>📋 תהליך חתימת נשק</b> לצפייה בסטטוס.`, MAIN_KEYBOARD);
+  } catch (e) {
+    console.error("[Telegram photo upload]", e);
+    await sendTelegramMessage(botToken, chatId, "❌ שגיאה בשמירת התמונה. נסה שוב.");
+  }
 }
 
 function fmtDate(d: Date): string {

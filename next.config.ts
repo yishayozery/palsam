@@ -53,8 +53,12 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/(.*)",
+        source: "/((?!bot|dispatch-open|api/dispatch-open).*)",
         headers: securityHeaders,
+      },
+      {
+        source: "/(bot|dispatch-open|api/dispatch-open)/:path*",
+        headers: securityHeaders.filter((h) => h.key !== "X-Frame-Options"),
       },
     ];
   },
