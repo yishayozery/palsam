@@ -15,8 +15,11 @@ import { ROLE_LABELS } from "@/lib/rbac";
 export const dynamic = "force-dynamic";
 
 export default async function SignaturesPage({ searchParams }: { searchParams: Promise<{ reopenFor?: string; preselect?: string }> }) {
+  let _step = "init";
+  try {
   const { reopenFor, preselect } = await searchParams;
   const user = await requireUser();
+  _step = "user-ok";
   const bId = user.battalionId!;
   const canSign = can(user, "signatures.manage");
 
@@ -201,6 +204,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
     select: { serialUnitId: true },
   })).map((l) => l.serialUnitId!)) : null;
 
+  _step = "pre-main-queries";
   const [pending, signedUnits, soldiers, availableUnits, statuses] = await Promise.all([
     prisma.signature.findMany({
       where: { battalionId: bId, status: "PENDING" },
@@ -233,6 +237,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
     prisma.itemStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" } }),
   ]);
 
+  _step = "post-main-queries";
   // 🆕 מיקומי ציוד פלוגתיים (לכל הפלוגות שמקבלות כעת ציוד)
   const allCompanyLocations = await prisma.equipmentLocation.findMany({
     where: { battalionId: bId, active: true, holder: { kind: "COMPANY" } },
@@ -282,6 +287,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
     take: 100,
   });
 
+  _step = "render-start";
   return (
     <div>
       <PageHeader
@@ -530,4 +536,8 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
       </Card>
     </div>
   );
+  } catch (e) {
+    console.error("[SignaturesPage RENDER ERROR at step:", _step, "]", e);
+    throw e;
+  }
 }

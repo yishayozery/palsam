@@ -61,6 +61,7 @@ export async function createSignout(formData: FormData) {
   const soldierId = String(formData.get("soldierId") || "");
   const method = String(formData.get("method") || "QR") as SignatureMethod;
   const serialIds = formData.getAll("serial").map(String).filter(Boolean);
+  console.log("[createSignout] START", { soldierId, method, serialIds, holderId: user.holderId, role: user.role });
   const vehicleId = String(formData.get("vehicleId") || "") || null;
   const kitId = String(formData.get("kitId") || "") || null;
   const physicalLocation = String(formData.get("physicalLocation") || "").trim() || null;
@@ -160,8 +161,10 @@ export async function createSignout(formData: FormData) {
     }
   }
 
+  console.log("[createSignout] validations passed, creating transaction...");
   const token = nanoid(24);
   let transferId = "";
+  try {
   await prisma.$transaction(async (tx) => {
     const transfer = await tx.transfer.create({
       data: { battalionId: bId, type: "SIGNOUT", status: "PENDING", toSoldierId: soldierId, fromHolderId: user.holderId, createdById: user.id, notes: kitId ? "החתמה על ערכה" : null },
@@ -227,22 +230,26 @@ export async function createSignout(formData: FormData) {
       data: { battalionId: bId, soldierId, transferId: transfer.id, method, status: "PENDING", token, tokenExpires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7) },
     });
   });
+  console.log("[createSignout] transaction OK, transferId:", transferId);
+  } catch (txErr) {
+    console.error("[createSignout] TRANSACTION FAILED:", txErr);
+    throw txErr;
+  }
 
   await audit(user.id, "CREATE_SIGNOUT", "Transfer", transferId, { soldierId, method });
-  try {
-    revalidatePath("/signatures");
-  } catch (e) {
-    console.error("[createSignout] revalidatePath failed:", e);
-    throw e;
-  }
+  console.log("[createSignout] audit done, revalidating...");
+  revalidatePath("/signatures");
+  console.log("[createSignout] revalidate done, redirecting method=", method);
   if (method === "ONSITE") redirect(`/sign/${token}`);
   redirect(`/signatures/${token}`);
 }
 
 /** השלמת חתימה (ציבורי) */
 export async function completeSignature(token: string, signatureData: string) {
+  console.log("[completeSignature] START token:", token?.slice(0, 8));
   const sig = await prisma.signature.findUnique({ where: { token }, include: { transfer: { include: { lines: true } } } });
   if (!sig || sig.status !== "PENDING" || !sig.transfer) return { ok: false, error: "החתימה אינה זמינה או כבר בוצעה" };
+  console.log("[completeSignature] sig found, lines:", sig.transfer.lines.length, "serial lines:", sig.transfer.lines.filter(l => l.serialUnitId).length);
   if (sig.tokenExpires && sig.tokenExpires < new Date()) {
     await prisma.signature.update({ where: { token }, data: { status: "EXPIRED" } });
     return { ok: false, error: "פג תוקף הקישור" };
@@ -253,6 +260,7 @@ export async function completeSignature(token: string, signatureData: string) {
   const fromHolderId = sig.transfer!.fromHolderId;
   const bId = sig.battalionId;
   const { adjustQuantity, defaultStatusId } = await import("@/lib/inventory");
+  try {
   await prisma.$transaction(async (tx) => {
     for (const line of sig.transfer!.lines) {
       if (line.serialUnitId) {
@@ -291,6 +299,11 @@ export async function completeSignature(token: string, signatureData: string) {
     await tx.signature.update({ where: { token }, data: { status: "SIGNED", signatureData, signedAt: new Date() } });
     await tx.transfer.update({ where: { id: sig.transferId! }, data: { status: "COMPLETED", approvedAt: new Date() } });
   });
+  console.log("[completeSignature] transaction OK");
+  } catch (txErr) {
+    console.error("[completeSignature] TRANSACTION FAILED:", txErr);
+    throw txErr;
+  }
 
   await audit(null, "SIGN", "Signature", sig.id, { soldierId });
 
