@@ -265,7 +265,7 @@ export async function completeSignature(token: string, signatureData: string) {
     for (const line of sig.transfer!.lines) {
       if (line.serialUnitId) {
         const unit = await tx.serialUnit.findUnique({ where: { id: line.serialUnitId } });
-        if (!unit) continue;
+        if (!unit) { console.warn("[completeSignature] serial unit not found:", line.serialUnitId); continue; }
         const isLot = (unit.lotQuantity ?? 1) > 1;
         const lineQty = line.quantity ?? 1;
         if (isLot && lineQty < (unit.lotQuantity ?? 1)) {
@@ -302,25 +302,29 @@ export async function completeSignature(token: string, signatureData: string) {
   console.log("[completeSignature] transaction OK");
   } catch (txErr) {
     console.error("[completeSignature] TRANSACTION FAILED:", txErr);
-    throw txErr;
+    return { ok: false, error: txErr instanceof Error ? txErr.message : "שגיאה בביצוע החתימה" };
   }
 
   await audit(null, "SIGN", "Signature", sig.id, { soldierId });
 
   // 🔫 חתימה על נוהל שמירת נשק — נחתם אוטומטית כשהחייל חותם על נשק בארמון
-  if (soldierId) {
-    const { areAnyItemsArmory } = await import("@/lib/weapons-eligibility");
-    const itemTypeIds = sig.transfer!.lines.map((l) => l.itemTypeId);
-    if (await areAnyItemsArmory(itemTypeIds)) {
-      const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { weaponsAgreementSignedAt: true } });
-      if (soldier && !soldier.weaponsAgreementSignedAt) {
-        await prisma.soldier.update({
-          where: { id: soldierId },
-          data: { weaponsAgreementSignedAt: new Date() },
-        });
-        await audit(null, "WEAPONS_AGREEMENT_SIGNED", "Soldier", soldierId, { reason: "חתימה אוטומטית עם קבלת נשק" });
+  try {
+    if (soldierId) {
+      const { areAnyItemsArmory } = await import("@/lib/weapons-eligibility");
+      const itemTypeIds = sig.transfer!.lines.map((l) => l.itemTypeId);
+      if (await areAnyItemsArmory(itemTypeIds)) {
+        const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { weaponsAgreementSignedAt: true } });
+        if (soldier && !soldier.weaponsAgreementSignedAt) {
+          await prisma.soldier.update({
+            where: { id: soldierId },
+            data: { weaponsAgreementSignedAt: new Date() },
+          });
+          await audit(null, "WEAPONS_AGREEMENT_SIGNED", "Soldier", soldierId, { reason: "חתימה אוטומטית עם קבלת נשק" });
+        }
       }
     }
+  } catch (weaponsErr) {
+    console.error("[completeSignature] weapons agreement auto-sign failed (non-fatal):", weaponsErr);
   }
 
   revalidatePath("/signatures");

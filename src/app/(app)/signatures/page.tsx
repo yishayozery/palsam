@@ -11,6 +11,7 @@ import CheckinModal from "./CheckinModal";
 
 import CompanyCheckinModal from "./CompanyCheckinModal";
 import { ROLE_LABELS } from "@/lib/rbac";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 
 export const dynamic = "force-dynamic";
 
@@ -287,6 +288,8 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
     take: 100,
   });
 
+  const isArmory = !!(user.holderId && await prisma.holder.findFirst({ where: { id: user.holderId, warehouseType: "ARMORY" } }));
+
   _step = "render-start";
   return (
     <div>
@@ -372,7 +375,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                 preselectSerialIds={preselect?.split(",").filter(Boolean)}
                 companies={companiesForFilter}
                 lockCompanyId={isCompanyRep ? user.holderId : null}
-                isArmory={!!(await prisma.holder.findFirst({ where: { id: user.holderId ?? "__", warehouseType: "ARMORY" } }))}
+                isArmory={isArmory}
                 soldiers={soldiers.map((s) => {
                   const c = companiesForFilter.find((x) => x.id === s.companyId);
                   const armoryEligible = s.status === "ENLISTED" && !!s.weaponsApprovedAt && !!s.armoryTestProofAt && !!s.weaponsAgreementSignedAt;
@@ -526,7 +529,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                       {t.status === "PENDING" ? "ממתין" : t.status === "COMPLETED" ? "הושלם" : t.status}
                     </Badge>
                   </Td>
-                  <Td className="text-xs text-slate-500">{t.createdBy.fullName}</Td>
+                  <Td className="text-xs text-slate-500">{t.createdBy?.fullName ?? "—"}</Td>
                   <Td><Link href={`/transfers/${t.id}/document`} className="text-xs text-blue-600 hover:underline">תעודה</Link></Td>
                 </tr>
               ))}
@@ -537,6 +540,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
     </div>
   );
   } catch (e) {
+    if (isRedirectError(e)) throw e;
     console.error("[SignaturesPage RENDER ERROR at step:", _step, "]", e);
     throw e;
   }

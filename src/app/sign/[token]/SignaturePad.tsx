@@ -108,9 +108,17 @@ export default function SignaturePad({
     setError("");
     setSubmitting(true);
     const data = canvasRef.current!.toDataURL("image/png");
-    const res = isCompanySign
-      ? await completeCompanySignature(token, data)
-      : await completeSignature(token, data);
+    let res: { ok: boolean; error?: string };
+    try {
+      res = isCompanySign
+        ? await completeCompanySignature(token, data)
+        : await completeSignature(token, data);
+    } catch (e) {
+      console.error("[SignaturePad] server action threw:", e);
+      setSubmitting(false);
+      setError(e instanceof Error ? e.message : "שגיאה בביצוע החתימה — נסה שוב");
+      return;
+    }
     setSubmitting(false);
     if (res.ok) {
       setDone(true);
