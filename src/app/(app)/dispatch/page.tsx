@@ -50,6 +50,7 @@ export default async function DispatchPage() {
       select: {
         id: true, fullName: true, personalNumber: true, phone: true, companyId: true,
         company: { select: { name: true } },
+        companyRole: { select: { name: true } },
         drivingLicenses: { include: { licenseType: { select: { id: true, name: true } } } },
       },
       orderBy: { fullName: "asc" },
@@ -134,6 +135,7 @@ export default async function DispatchPage() {
           soldiers={soldiers.map((s) => ({
             id: s.id, fullName: s.fullName, personalNumber: s.personalNumber, phone: s.phone,
             companyId: s.companyId, companyName: s.company?.name ?? null,
+            roleName: s.companyRole?.name ?? null,
             licenseIds: s.drivingLicenses.map((dl) => dl.licenseType.id),
           }))}
           assignments={assignments.map((a) => ({

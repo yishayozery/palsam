@@ -94,7 +94,8 @@ export type Capability =
   | "attendance.manage"
   | "attendance.view"
   | "weapons.view_report"
-  | "ymach.manage";
+  | "ymach.manage"
+  | "certifications.view";
 
 const CAP_TO_SCREEN: Record<Capability, { screen: Screen; needsEdit: boolean }> = {
   "battalions.manage": { screen: "settings", needsEdit: true },
@@ -125,6 +126,7 @@ const CAP_TO_SCREEN: Record<Capability, { screen: Screen; needsEdit: boolean }> 
   "attendance.view": { screen: "attendance", needsEdit: false },
   "weapons.view_report": { screen: "armory_reports", needsEdit: false },
   "ymach.manage": { screen: "ymach", needsEdit: true },
+  "certifications.view": { screen: "certifications", needsEdit: false },
 };
 
 // ===================== SessionUser permissions =====================
@@ -188,6 +190,7 @@ const LEGACY_MATRIX: Record<Role, Capability[]> = {
     "signatures.manage", "transfer.approve", "gaps.resolve", "maintenance.manage",
     "reports.view", "audit.view", "dispatch.manage", "weapons.approve",
     "weapons.view", "attendance.manage", "attendance.view", "ymach.manage",
+    "certifications.view",
   ],
   WAREHOUSE_MANAGER: [
     "warehouse.operate", "catalog.manage", "kits.manage", "dictionaries.manage",
@@ -195,11 +198,13 @@ const LEGACY_MATRIX: Record<Role, Capability[]> = {
     "transfer.approve", "signatures.manage", "counts.manage", "counts.execute",
     "gaps.resolve", "reports.view", "dispatch.manage", "weapons.view_report",
     "attendance.manage", "attendance.view", "ymach.manage",
+    "certifications.view",
   ],
   COMPANY_REP: [
     "company.manage", "locations.manage", "donations.manage", "transfer.approve",
     "signatures.manage", "counts.manage", "counts.execute", "reports.view",
     "dispatch.manage", "attendance.manage", "attendance.view", "ymach.manage",
+    "certifications.view",
   ],
   VIEWER: ["reports.view", "dispatch.manage"],
   SHALISH: ["soldiers.roster", "reports.view", "dispatch.manage", "weapons.view"],
@@ -207,13 +212,13 @@ const LEGACY_MATRIX: Record<Role, Capability[]> = {
     "reports.view", "audit.view", "battalion.profile", "soldiers.roster",
     "company.manage", "signatures.manage", "counts.manage", "counts.execute",
     "gaps.resolve", "maintenance.manage", "dispatch.manage", "weapons.approve",
-    "weapons.view", "attendance.view",
+    "weapons.view", "attendance.view", "certifications.view",
   ],
   SAMAGAD: [
     "reports.view", "audit.view", "battalion.profile", "soldiers.roster",
     "company.manage", "signatures.manage", "counts.manage", "counts.execute",
     "gaps.resolve", "maintenance.manage", "dispatch.manage", "weapons.approve",
-    "weapons.view", "attendance.view",
+    "weapons.view", "attendance.view", "certifications.view",
   ],
 };
 

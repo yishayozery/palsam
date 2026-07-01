@@ -471,16 +471,16 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
         )}
       </Card>
 
-      {/* פריטים חתומים — מידע בלבד */}
+      {/* פריטים חתומים — סריאלי + כמותי */}
       <h2 className="font-bold text-slate-700 mb-2">ציוד חתום על חיילים</h2>
       <Card>
-        {signedUnits.length === 0 ? (
+        {signedUnits.length === 0 && soldierQtyHoldings.length === 0 ? (
           <EmptyState>אין ציוד חתום</EmptyState>
         ) : (
           <Table>
             <thead>
               <tr>
-                <Th>חייל</Th><Th>פריט</Th><Th>מס׳ סריאלי</Th><Th>מיקום פיזי</Th><Th>סטטוס</Th>
+                <Th>חייל</Th><Th>פריט</Th><Th>מס׳ סריאלי / כמות</Th><Th>מיקום פיזי</Th><Th>סטטוס</Th>
               </tr>
             </thead>
             <tbody>
@@ -491,6 +491,15 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                   <Td className="font-mono text-xs">{u.serialNumber}</Td>
                   <Td className="text-slate-500">{u.equipmentLocation?.name ?? u.physicalLocation ?? "—"}</Td>
                   <Td><Badge>{u.status.name}</Badge></Td>
+                </tr>
+              ))}
+              {soldierQtyHoldings.map((q) => (
+                <tr key={`qty-${q.soldierId}-${q.itemTypeId}-${q.statusId}`}>
+                  <Td className="font-medium text-blue-700">{q.soldierName}</Td>
+                  <Td>{q.itemName}</Td>
+                  <Td className="text-xs">×{q.quantity} {q.unit}</Td>
+                  <Td className="text-slate-500">—</Td>
+                  <Td><Badge>{q.statusName}</Badge></Td>
                 </tr>
               ))}
             </tbody>

@@ -18,8 +18,25 @@ export async function seedPresetRoles() {
   const existingNames = new Set(existing.map((r) => r.name));
 
   let created = 0;
+  let synced = 0;
   for (const preset of PRESET_ROLES) {
-    if (existingNames.has(preset.name)) continue;
+    if (existingNames.has(preset.name)) {
+      const role = await prisma.systemRole.findFirst({
+        where: { battalionId: bId, name: preset.name, isPreset: true },
+        include: { permissions: true },
+      });
+      if (role) {
+        const existingScreens = new Set(role.permissions.map((p) => p.screen));
+        const missing = preset.permissions.filter((p) => !existingScreens.has(p.screen));
+        if (missing.length > 0) {
+          await prisma.screenPermission.createMany({
+            data: missing.map((p) => ({ roleId: role.id, screen: p.screen, level: p.level })),
+          });
+          synced += missing.length;
+        }
+      }
+      continue;
+    }
     await prisma.systemRole.create({
       data: {
         battalionId: bId,
@@ -36,8 +53,8 @@ export async function seedPresetRoles() {
     created++;
   }
 
-  if (created > 0) {
-    await audit(user.id, "CREATE", "SystemRole", "seed-presets", { count: created });
+  if (created > 0 || synced > 0) {
+    await audit(user.id, "CREATE", "SystemRole", "seed-presets", { created, synced });
   }
   revalidatePath("/roles");
 }

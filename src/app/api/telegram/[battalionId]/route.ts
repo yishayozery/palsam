@@ -367,10 +367,24 @@ async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, 
   lines.push("");
   lines.push(allDone ? "✅ <b>כל השלבים הושלמו — ניתן לחתום על נשק</b>" : "⏳ <b>יש שלבים שלא הושלמו</b>");
 
-  // Signed serial items count
-  const signedCount = await prisma.serialUnit.count({
-    where: { signedSoldierId: soldier.id },
-  });
+  // Signed items count (serial + quantity)
+  const [signedSerialCount, signedQtyLines] = await Promise.all([
+    prisma.serialUnit.count({ where: { signedSoldierId: soldier.id } }),
+    prisma.transferLine.findMany({
+      where: {
+        transfer: { status: "COMPLETED", type: { in: ["SIGNOUT", "CHECKIN"] }, toSoldierId: soldier.id },
+        serialUnitId: null,
+      },
+      select: { itemTypeId: true, quantity: true, transfer: { select: { type: true } } },
+    }),
+  ]);
+  const qtyTypesMap = new Map<string, number>();
+  for (const l of signedQtyLines) {
+    const sign = l.transfer.type === "SIGNOUT" ? 1 : -1;
+    qtyTypesMap.set(l.itemTypeId, (qtyTypesMap.get(l.itemTypeId) ?? 0) + sign * l.quantity);
+  }
+  const signedQtyCount = Array.from(qtyTypesMap.values()).filter((q) => q > 0).length;
+  const signedCount = signedSerialCount + signedQtyCount;
   lines.push("");
   lines.push(`📦 פריטים חתומים: <b>${signedCount}</b>`);
   if (signedCount > 0) lines.push("לחץ <b>📦 ציוד חתום</b> לרשימה מלאה");
@@ -390,30 +404,57 @@ async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, 
 }
 
 async function handleEquipment(token: string, chatId: string, soldier: SoldierCtx) {
-  const items = await prisma.serialUnit.findMany({
-    where: { signedSoldierId: soldier.id },
-    select: {
-      serialNumber: true,
-      itemType: { select: { name: true } },
-    },
-    orderBy: { itemType: { name: "asc" } },
-  });
+  const [serialItems, qtyLines] = await Promise.all([
+    prisma.serialUnit.findMany({
+      where: { signedSoldierId: soldier.id },
+      select: { serialNumber: true, lotQuantity: true, itemType: { select: { name: true } } },
+      orderBy: { itemType: { name: "asc" } },
+    }),
+    prisma.transferLine.findMany({
+      where: {
+        transfer: { status: "COMPLETED", type: { in: ["SIGNOUT", "CHECKIN"] }, toSoldierId: soldier.id },
+        serialUnitId: null,
+      },
+      include: { itemType: { select: { name: true, unit: true } }, transfer: { select: { type: true } } },
+    }),
+  ]);
 
-  if (items.length === 0) {
+  const qtyMap = new Map<string, { name: string; unit: string; qty: number }>();
+  for (const l of qtyLines) {
+    const sign = l.transfer.type === "SIGNOUT" ? 1 : -1;
+    const cur = qtyMap.get(l.itemTypeId);
+    if (cur) { cur.qty += sign * l.quantity; }
+    else { qtyMap.set(l.itemTypeId, { name: l.itemType.name, unit: l.itemType.unit, qty: sign * l.quantity }); }
+  }
+  const qtyItems = Array.from(qtyMap.values()).filter((q) => q.qty > 0).sort((a, b) => a.name.localeCompare(b.name));
+
+  if (serialItems.length === 0 && qtyItems.length === 0) {
     await sendTelegramMessage(token, chatId, `📦 <b>${soldier.fullName}</b> — אין ציוד חתום כרגע.`);
     return;
   }
 
   const lines: string[] = [];
   lines.push(`📦 <b>ציוד חתום — ${soldier.fullName}</b>`);
-  lines.push("");
 
-  for (const item of items) {
-    lines.push(`• ${item.itemType.name} — <code>${item.serialNumber}</code>`);
+  if (serialItems.length > 0) {
+    lines.push("");
+    lines.push(`<b>🔫 סריאלי / אצוות (${serialItems.length})</b>`);
+    for (const item of serialItems) {
+      const lot = item.lotQuantity && item.lotQuantity > 1 ? ` (אצווה ×${item.lotQuantity})` : "";
+      lines.push(`• ${item.itemType.name} — <code>${item.serialNumber}</code>${lot}`);
+    }
+  }
+
+  if (qtyItems.length > 0) {
+    lines.push("");
+    lines.push(`<b>📦 כמותי (${qtyItems.length})</b>`);
+    for (const q of qtyItems) {
+      lines.push(`• ${q.name} — ×${q.qty} ${q.unit}`);
+    }
   }
 
   lines.push("");
-  lines.push(`סה״כ: <b>${items.length}</b> פריטים`);
+  lines.push(`סה״כ: <b>${serialItems.length + qtyItems.length}</b> פריטים`);
 
   await sendTelegramMessage(token, chatId, lines.join("\n"));
 }

@@ -63,7 +63,12 @@ export default function DispatchWebApp() {
   }, [tg]);
 
   useEffect(() => {
-    if (!battalionId || !initData) return;
+    if (!battalionId) return;
+    if (!initData) {
+      setError('⚠️ יש לפתוח את הטופס דרך כפתור השבצ"ק בבוט הטלגרם.\nלא ניתן לפתוח קישור זה בדפדפן רגיל.');
+      setLoading(false);
+      return;
+    }
     fetch(`/api/telegram/${battalionId}/dispatch`, {
       headers: { "x-telegram-init-data": initData },
     })

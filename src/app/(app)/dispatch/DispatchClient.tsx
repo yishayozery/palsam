@@ -15,6 +15,7 @@ type Vehicle = {
 type Soldier = {
   id: string; fullName: string; personalNumber: string | null; phone: string | null;
   companyId: string | null; companyName: string | null;
+  roleName: string | null;
   licenseIds: string[];
 };
 type Assignment = {
@@ -135,6 +136,7 @@ export default function DispatchClient({
       return {
         id: s.id, fullName: s.fullName, personalNumber: s.personalNumber, phone: null,
         companyId: full?.companyId ?? null, companyName: s.companyName,
+        roleName: full?.roleName ?? null,
         licenseIds: full?.licenseIds ?? [],
       };
     });
@@ -177,7 +179,7 @@ export default function DispatchClient({
     }
     if (soldierSearch.trim()) {
       const q = soldierSearch.toLowerCase();
-      list = list.filter((s) => (s.fullName + " " + (s.personalNumber ?? "") + " " + (s.companyName ?? "")).toLowerCase().includes(q));
+      list = list.filter((s) => (s.fullName + " " + (s.personalNumber ?? "") + " " + (s.companyName ?? "") + " " + (s.roleName ?? "")).toLowerCase().includes(q));
     }
     // החיילים שכבר נוספו מסומנים
     return list;
@@ -292,6 +294,7 @@ export default function DispatchClient({
                   onPick(s);
                 }}>
                 <span className={isAssigned ? "line-through" : ""}>{s.fullName}</span>
+                {s.roleName && <span className="text-[10px] bg-purple-100 text-purple-700 px-1 rounded">{s.roleName}</span>}
                 {s.personalNumber && <span className="text-[10px] text-slate-400 font-mono">{s.personalNumber}</span>}
                 {s.companyName && <span className="text-[10px] text-slate-400">({s.companyName})</span>}
                 {driverOnly && !hasLicense && <span className="text-[10px] text-rose-500">⚠️ אין הרשאה</span>}
@@ -742,7 +745,7 @@ export default function DispatchClient({
                           {chosenSoldiers.map((s) => (
                             <div key={s.id} className="bg-slate-700 rounded-lg p-2 flex items-center gap-2">
                               <span>🎖️</span>
-                              <div className="min-w-0 flex-1"><div className="text-sm font-medium truncate">{s.fullName}</div><div className="text-[11px] text-slate-400">לוחם{s.companyName ? ` · ${s.companyName}` : ""}</div></div>
+                              <div className="min-w-0 flex-1"><div className="text-sm font-medium truncate">{s.fullName}</div><div className="text-[11px] text-slate-400">{s.roleName ?? "לוחם"}{s.companyName ? ` · ${s.companyName}` : ""}</div></div>
                               <button onClick={() => setChosenSoldiers((prev) => prev.filter((p) => p.id !== s.id))} className="text-slate-500 hover:text-rose-400 text-sm">✕</button>
                             </div>
                           ))}
