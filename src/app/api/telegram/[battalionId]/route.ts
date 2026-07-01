@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendTelegramMessage } from "@/lib/telegram";
+import { sendTelegramMessage, answerCallbackQuery, editMessageText, MAIN_KEYBOARD } from "@/lib/telegram";
 
 export async function POST(
   req: NextRequest,
@@ -25,6 +25,15 @@ export async function POST(
     }
 
     const body = await req.json();
+    const token = battalion.telegramBotToken;
+
+    // --- Inline keyboard callback (verification responses) ---
+    const callback = body?.callback_query;
+    if (callback?.data && callback?.message?.chat?.id) {
+      await handleCallback(token, callback, battalionId);
+      return NextResponse.json({ ok: true });
+    }
+
     const message = body?.message;
     if (!message?.chat?.id || !message?.text) {
       return NextResponse.json({ ok: true });
@@ -32,10 +41,18 @@ export async function POST(
 
     const chatId = String(message.chat.id);
     const text = message.text.trim();
-    const token = battalion.telegramBotToken;
+
+    // Map Hebrew keyboard buttons to commands
+    const CMD_MAP: Record<string, string> = {
+      "📊 סטטוס": "/status",
+      "📦 ציוד חתום": "/equipment",
+      "ℹ️ מידע כללי": "/info",
+      "❓ עזרה": "/help",
+    };
+    const cmd = CMD_MAP[text] || text;
 
     // /start — registration
-    if (text === "/start") {
+    if (cmd === "/start") {
       await sendTelegramMessage(
         token,
         chatId,
@@ -45,8 +62,8 @@ export async function POST(
     }
 
     // /help
-    if (text === "/help") {
-      await sendTelegramMessage(token, chatId, HELP_TEXT);
+    if (cmd === "/help") {
+      await sendTelegramMessage(token, chatId, HELP_TEXT, MAIN_KEYBOARD);
       return NextResponse.json({ ok: true });
     }
 
@@ -66,7 +83,7 @@ export async function POST(
       },
     });
 
-    if (text === "/status") {
+    if (cmd === "/status") {
       if (!soldier) {
         await sendTelegramMessage(token, chatId, NOT_REGISTERED);
         return NextResponse.json({ ok: true });
@@ -75,7 +92,7 @@ export async function POST(
       return NextResponse.json({ ok: true });
     }
 
-    if (text === "/equipment") {
+    if (cmd === "/equipment") {
       if (!soldier) {
         await sendTelegramMessage(token, chatId, NOT_REGISTERED);
         return NextResponse.json({ ok: true });
@@ -84,7 +101,7 @@ export async function POST(
       return NextResponse.json({ ok: true });
     }
 
-    if (text === "/info") {
+    if (cmd === "/info") {
       const info = battalion.telegramBotInfo;
       if (!info) {
         await sendTelegramMessage(token, chatId, "ℹ️ לא הוגדר מידע כללי עדיין.\nפנה למפקד שיעדכן בהגדרות המערכת.");
@@ -95,10 +112,9 @@ export async function POST(
     }
 
     // Not a command — try personal number registration
-    const personalNumber = text.replace(/\D/g, "");
+    const personalNumber = cmd.replace(/\D/g, "");
     if (!personalNumber || personalNumber.length < 5) {
-      // Unknown text — show help
-      await sendTelegramMessage(token, chatId, `לא הבנתי. ${HELP_TEXT}`);
+      await sendTelegramMessage(token, chatId, `לא הבנתי. ${HELP_TEXT}`, MAIN_KEYBOARD);
       return NextResponse.json({ ok: true });
     }
 
@@ -121,7 +137,8 @@ export async function POST(
       await sendTelegramMessage(
         token,
         chatId,
-        `כבר מחובר/ת, ${target.fullName}! ✅\nשלח /help לרשימת פקודות.`,
+        `כבר מחובר/ת, ${target.fullName}! ✅`,
+        MAIN_KEYBOARD,
       );
       return NextResponse.json({ ok: true });
     }
@@ -134,7 +151,8 @@ export async function POST(
     await sendTelegramMessage(
       token,
       chatId,
-      `מעולה, ${target.fullName}! ✅\nהתחברת בהצלחה למערכת PALMY.\n\nשלח /help לרשימת פקודות.`,
+      `מעולה, ${target.fullName}! ✅\nהתחברת בהצלחה למערכת PALMY.\n\nבחר/י מהתפריט למטה:`,
+      MAIN_KEYBOARD,
     );
 
     return NextResponse.json({ ok: true });
@@ -144,12 +162,143 @@ export async function POST(
   }
 }
 
+// --- Callback handler for inline verification buttons ---
+async function handleCallback(
+  token: string,
+  callback: { id: string; data: string; message: { chat: { id: number }; message_id: number } },
+  battalionId: string,
+) {
+  const chatId = String(callback.message.chat.id);
+  const messageId = callback.message.message_id;
+  const data = callback.data;
+
+  // Format: verify:<itemId>:<found|denied>
+  if (data.startsWith("verify:")) {
+    const parts = data.split(":");
+    if (parts.length < 3) {
+      await answerCallbackQuery(token, callback.id, "שגיאה");
+      return;
+    }
+    const itemId = parts[1];
+    const found = parts[2] === "found";
+
+    const item = await prisma.verificationItem.findUnique({
+      where: { id: itemId },
+      include: { request: { select: { id: true, token: true, respondedAt: true, items: true } } },
+    });
+
+    if (!item || item.respondedAt) {
+      await answerCallbackQuery(token, callback.id, "כבר דווח");
+      return;
+    }
+
+    // Update this item
+    await prisma.verificationItem.update({
+      where: { id: itemId },
+      data: {
+        status: found ? "CONFIRMED" : "DENIED",
+        respondedAt: new Date(),
+      },
+    });
+
+    // Check if all items in this request are now answered
+    const allItems = await prisma.verificationItem.findMany({
+      where: { requestId: item.request.id },
+      select: { id: true, status: true, itemTypeName: true, serialNumber: true },
+    });
+
+    const allDone = allItems.every((i) => i.status !== "PENDING");
+
+    if (allDone) {
+      await prisma.verificationRequest.update({
+        where: { id: item.request.id },
+        data: { respondedAt: new Date() },
+      });
+
+      const summary = allItems.map((i) => {
+        const icon = i.status === "CONFIRMED" ? "✅" : "❌";
+        return `${icon} ${i.itemTypeName}${i.serialNumber ? ` (${i.serialNumber})` : ""}`;
+      }).join("\n");
+
+      await editMessageText(token, chatId, messageId, `📋 <b>אימות הושלם!</b>\n\n${summary}\n\nתודה על הדיווח! 🙏`);
+      await answerCallbackQuery(token, callback.id, "הדיווח נקלט ✅");
+    } else {
+      // Update message to show progress
+      const buttons = allItems.filter((i) => i.status === "PENDING").map((i) => ([
+        { text: `✅ ${i.itemTypeName}`, callback_data: `verify:${i.id}:found` },
+        { text: `❌`, callback_data: `verify:${i.id}:denied` },
+      ]));
+
+      const answered = allItems.filter((i) => i.status !== "PENDING").map((i) => {
+        const icon = i.status === "CONFIRMED" ? "✅" : "❌";
+        return `${icon} ${i.itemTypeName}${i.serialNumber ? ` (${i.serialNumber})` : ""}`;
+      }).join("\n");
+
+      const remaining = allItems.filter((i) => i.status === "PENDING").length;
+
+      await editMessageText(
+        token,
+        chatId,
+        messageId,
+        `🔍 <b>אימות ציוד</b>\n\n${answered ? answered + "\n\n" : ""}נותרו ${remaining} פריטים:`,
+        { inline_keyboard: buttons },
+      );
+      await answerCallbackQuery(token, callback.id, found ? "נמצא ✅" : "לא נמצא ❌");
+    }
+    return;
+  }
+
+  // Format: vbatch:<requestId>:<confirm|deny>
+  if (data.startsWith("vbatch:")) {
+    const parts = data.split(":");
+    const requestId = parts[1];
+    const confirmed = parts[2] === "confirm";
+
+    const request = await prisma.verificationRequest.findUnique({
+      where: { id: requestId },
+      include: { items: true },
+    });
+
+    if (!request || request.respondedAt) {
+      await answerCallbackQuery(token, callback.id, "כבר דווח");
+      return;
+    }
+
+    await prisma.$transaction([
+      ...request.items.map((item) =>
+        prisma.verificationItem.update({
+          where: { id: item.id },
+          data: { status: confirmed ? "CONFIRMED" : "DENIED", respondedAt: new Date() },
+        }),
+      ),
+      prisma.verificationRequest.update({
+        where: { id: requestId },
+        data: { respondedAt: new Date() },
+      }),
+    ]);
+
+    const icon = confirmed ? "✅" : "❌";
+    const label = confirmed ? "הכל נמצא" : "חסרים פריטים";
+    const itemList = request.items.map((i) =>
+      `${icon} ${i.itemTypeName}${i.serialNumber ? ` (${i.serialNumber})` : ""}`
+    ).join("\n");
+
+    await editMessageText(token, chatId, messageId, `📋 <b>אימות הושלם — ${label}</b>\n\n${itemList}\n\nתודה! 🙏`);
+    await answerCallbackQuery(token, callback.id, `דווח: ${label}`);
+    return;
+  }
+
+  await answerCallbackQuery(token, callback.id);
+}
+
 const HELP_TEXT = `📋 <b>פקודות זמינות:</b>
 
-/status — סטטוס חתימה ומבחנים
-/equipment — רשימת ציוד חתום עליך
-/info — מידע כללי (ארוחות, תפילות)
-/help — הודעה זו`;
+📊 <b>סטטוס</b> — סטטוס חתימה ומבחנים
+📦 <b>ציוד חתום</b> — רשימת ציוד חתום עליך
+ℹ️ <b>מידע כללי</b> — ארוחות, תפילות ועוד
+❓ <b>עזרה</b> — הודעה זו
+
+השתמש/י בכפתורים למטה 👇`;
 
 const NOT_REGISTERED = "⚠️ לא מחובר למערכת.\nשלח/י את המספר האישי כדי להתחבר.";
 
@@ -201,7 +350,7 @@ async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, 
   });
   lines.push("");
   lines.push(`📦 פריטים חתומים: <b>${signedCount}</b>`);
-  if (signedCount > 0) lines.push("שלח /equipment לרשימה מלאה");
+  if (signedCount > 0) lines.push("לחץ <b>📦 ציוד חתום</b> לרשימה מלאה");
 
   // Driving refresher
   if (soldier.drivingRefresherDate) {

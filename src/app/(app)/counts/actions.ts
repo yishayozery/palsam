@@ -412,7 +412,7 @@ export async function sendTelegramVerification(requestId: string) {
     include: {
       soldier: { select: { fullName: true, telegramChatId: true } },
       battalion: { select: { telegramBotToken: true, name: true } },
-      items: { select: { itemTypeName: true, serialNumber: true, expectedQuantity: true } },
+      items: { select: { id: true, itemTypeName: true, serialNumber: true, expectedQuantity: true } },
     },
   });
   if (!req || !req.soldier?.telegramChatId || !req.battalion.telegramBotToken) {
@@ -425,9 +425,35 @@ export async function sendTelegramVerification(requestId: string) {
   const itemsList = req.items.map((i) =>
     i.serialNumber ? `• ${i.itemTypeName} (${i.serialNumber})` : `• ${i.itemTypeName}`,
   ).join("\n");
-  const text = `🔍 <b>אימות ציוד — ${req.battalion.name}</b>\n\nשלום ${req.soldier.fullName},\nנדרש אימות שהציוד הבא נמצא ברשותך:\n\n${itemsList}\n\n👉 <a href="${baseUrl}/verify/${req.token}">לחץ כאן לאימות</a>`;
 
-  await sendTelegramMessage(req.battalion.telegramBotToken, req.soldier.telegramChatId, text);
+  // CONFIRM mode — inline buttons per item inside Telegram
+  if (req.mode === "CONFIRM") {
+    const buttons = req.items.map((i) => ([
+      { text: `✅ ${i.itemTypeName}${i.serialNumber ? ` (${i.serialNumber})` : ""}`, callback_data: `verify:${i.id}:found` },
+      { text: `❌`, callback_data: `verify:${i.id}:denied` },
+    ]));
+
+    const text = `🔍 <b>אימות ציוד — ${req.battalion.name}</b>\n\nשלום ${req.soldier.fullName},\nסמן/י עבור כל פריט האם נמצא ברשותך:`;
+    await sendTelegramMessage(req.battalion.telegramBotToken, req.soldier.telegramChatId, text, { inline_keyboard: buttons });
+
+  // BATCH mode — single confirm/deny for all items
+  } else if (req.mode === "BATCH") {
+    const text = `🔍 <b>אימות ציוד — ${req.battalion.name}</b>\n\nשלום ${req.soldier.fullName},\nהאם כל הפריטים הבאים נמצאים ברשותך?\n\n${itemsList}`;
+    await sendTelegramMessage(req.battalion.telegramBotToken, req.soldier.telegramChatId, text, {
+      inline_keyboard: [
+        [
+          { text: "✅ הכל נמצא", callback_data: `vbatch:${req.id}:confirm` },
+          { text: "❌ חסרים פריטים", callback_data: `vbatch:${req.id}:deny` },
+        ],
+      ],
+    });
+
+  // Other modes — link to web form
+  } else {
+    const text = `🔍 <b>אימות ציוד — ${req.battalion.name}</b>\n\nשלום ${req.soldier.fullName},\nנדרש אימות שהציוד הבא נמצא ברשותך:\n\n${itemsList}\n\n👉 <a href="${baseUrl}/verify/${req.token}">לחץ כאן לאימות</a>`;
+    await sendTelegramMessage(req.battalion.telegramBotToken, req.soldier.telegramChatId, text);
+  }
+
   await prisma.verificationRequest.update({
     where: { id: requestId },
     data: { sentAt: new Date(), sentVia: "TELEGRAM" },
@@ -530,11 +556,20 @@ export async function registerTelegramWebhook() {
     body: JSON.stringify({
       commands: [
         { command: "start", description: "הרשמה למערכת" },
-        { command: "status", description: "סטטוס חתימה ומבחנים" },
-        { command: "equipment", description: "רשימת ציוד חתום" },
-        { command: "info", description: "מידע כללי (ארוחות, תפילות)" },
-        { command: "help", description: "עזרה" },
+        { command: "status", description: "📊 סטטוס חתימה ומבחנים" },
+        { command: "equipment", description: "📦 רשימת ציוד חתום" },
+        { command: "info", description: "ℹ️ מידע כללי" },
+        { command: "help", description: "❓ עזרה ותפריט" },
       ],
+    }),
+  });
+
+  // כפתור תפריט ☰ ליד שדה הטקסט
+  await fetch(`${apiBase}/setChatMenuButton`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      menu_button: { type: "commands" },
     }),
   });
 
