@@ -5,8 +5,8 @@ import { TRANSFER_TYPE, TRANSFER_STATUS } from "./labels";
 Font.register({
   family: "Heebo",
   fonts: [
-    { src: "https://cdn.jsdelivr.net/fontsource/fonts/heebo@latest/hebrew-400-normal.woff2", fontWeight: 400 },
-    { src: "https://cdn.jsdelivr.net/fontsource/fonts/heebo@latest/hebrew-700-normal.woff2", fontWeight: 700 },
+    { src: "https://fonts.gstatic.com/s/heebo/v28/NGSpv5_NC0k9P_v6ZUCbLRAHxK1EiSyccg.ttf", fontWeight: 400 },
+    { src: "https://fonts.gstatic.com/s/heebo/v28/NGSpv5_NC0k9P_v6ZUCbLRAHxK1Ebiuccg.ttf", fontWeight: 700 },
   ],
 });
 
