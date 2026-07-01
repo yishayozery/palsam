@@ -246,13 +246,18 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
     orderBy: { name: "asc" },
   });
 
-  // מארזים מבצעיים — כדי שהחתמה/זיכוי יזהו מארזים על שם החייל (רס"פ + מחסנאי)
+  // מארזים מבצעיים — כדי שהחתמה/זיכוי יזהו מארזים על שם החייל (רס"פ + מחסנאי + מפ"מ)
   const opKitHolderIds = isCompanyRep && user.holderId
     ? [user.holderId]
     : isWM ? user.holderIds : [];
-  const operationalKits = opKitHolderIds.length > 0
+  const opKitWhere = isMafam
+    ? { battalionId: bId, active: true, assignedSoldierId: { not: null } as const }
+    : opKitHolderIds.length > 0
+      ? { holderId: { in: opKitHolderIds }, active: true, assignedSoldierId: { not: null } as const }
+      : null;
+  const operationalKits = opKitWhere
     ? await prisma.operationalKit.findMany({
-        where: { holderId: { in: opKitHolderIds }, active: true, assignedSoldierId: { not: null } },
+        where: opKitWhere,
         include: {
           items: { include: { itemType: { select: { id: true, name: true, sku: true } } } },
           assignedSoldier: { select: { id: true, fullName: true, personalNumber: true } },
