@@ -35,7 +35,11 @@ export default function CheckinControls({
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <form action={checkinSerial} className="flex items-center gap-1">
+      <form action={async (fd: FormData) => {
+        const res = await checkinSerial(fd);
+        if (res?.error) setError(res.error);
+        else router.refresh();
+      }} className="flex items-center gap-1">
         <input type="hidden" name="serialUnitId" value={serialUnitId} />
         <select name="statusId" className="rounded border border-slate-300 px-1.5 py-1 text-xs">
           {statuses.map((s) => (

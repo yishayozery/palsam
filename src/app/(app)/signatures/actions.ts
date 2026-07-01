@@ -413,7 +413,7 @@ export async function completeSignature(token: string, signatureData: string) {
 }
 
 /** זיכוי מהיר (Fast Check-in) */
-export async function checkinSerial(formData: FormData) {
+export async function checkinSerial(formData: FormData): Promise<{ error: string } | void> {
   const user = await requireUser();
   if (!can(user, "signatures.manage")) redirect("/signatures");
   const bId = user.battalionId!;
@@ -427,7 +427,7 @@ export async function checkinSerial(formData: FormData) {
   // 🔒 אכיפת מ.א. — אם הגדוד דורש, חייב להיות לחייל מ.א.
   if (await requiresPersonalId(bId)) {
     if (!su.signedSoldier?.personalNumber) {
-      throw new Error(`🔒 הגדוד דורש מ.א. בכל מסירה. החייל ${su.signedSoldier?.fullName ?? ""} לא מקושר למ.א.`);
+      return { error: `🔒 הגדוד דורש מ.א. בכל מסירה. החייל ${su.signedSoldier?.fullName ?? ""} לא מקושר למ.א.` };
     }
   }
 
@@ -516,7 +516,7 @@ export async function checkinSerial(formData: FormData) {
 }
 
 /** זיכוי כמותי של חייל: יוצר CHECKIN, מחזיר StockBalance למחסן. */
-export async function checkinQuantity(formData: FormData) {
+export async function checkinQuantity(formData: FormData): Promise<{ error: string } | void> {
   const user = await requireUser();
   if (!can(user, "signatures.manage")) redirect("/signatures");
   const bId = user.battalionId!;
@@ -527,7 +527,7 @@ export async function checkinQuantity(formData: FormData) {
   const quantity = parseInt(String(formData.get("quantity") || "0"), 10);
   let toHolderId = String(formData.get("toHolderId") || "") || (user.holderId ?? null);
   if (!soldierId || !itemTypeId || !statusId || quantity < 1) {
-    throw new Error("חסרים נתונים — חייל / פריט / כמות");
+    return { error: "חסרים נתונים — חייל / פריט / כמות" };
   }
   if (!toHolderId) {
     const origTransfer = await prisma.transfer.findFirst({
@@ -536,7 +536,7 @@ export async function checkinQuantity(formData: FormData) {
       orderBy: { createdAt: "desc" },
     });
     toHolderId = origTransfer?.fromHolderId ?? null;
-    if (!toHolderId) throw new Error("לא נמצא מחסן יעד להחזרה — פנה לקצין מחסן");
+    if (!toHolderId) return { error: "לא נמצא מחסן יעד להחזרה — פנה לקצין מחסן" };
   }
 
   await prisma.$transaction(async (tx) => {
