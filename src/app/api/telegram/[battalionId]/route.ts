@@ -54,6 +54,7 @@ export async function POST(
     const CMD_MAP: Record<string, string> = {
       "📊 סטטוס": "/status",
       "📦 ציוד חתום": "/equipment",
+      "🚗 שבצ\"ק": "/dispatch",
       "ℹ️ מידע כללי": "/info",
       "❓ עזרה": "/help",
     };
@@ -106,6 +107,19 @@ export async function POST(
         return NextResponse.json({ ok: true });
       }
       await handleEquipment(token, chatId, soldier);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (cmd === "/dispatch") {
+      if (!soldier) {
+        await sendTelegramMessage(token, chatId, NOT_REGISTERED);
+        return NextResponse.json({ ok: true });
+      }
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+      const webAppUrl = `${baseUrl}/bot/dispatch/${battalionId}`;
+      await sendTelegramMessage(token, chatId, '🚗 <b>שבצ"ק חדש</b>\n\nלחץ על הכפתור למטה לפתיחת טופס שבצ"ק:', {
+        inline_keyboard: [[{ text: "📝 פתח טופס שבצ\"ק", web_app: { url: webAppUrl } }]],
+      });
       return NextResponse.json({ ok: true });
     }
 
@@ -303,6 +317,7 @@ const HELP_TEXT = `📋 <b>פקודות זמינות:</b>
 
 📊 <b>סטטוס</b> — סטטוס חתימה ומבחנים
 📦 <b>ציוד חתום</b> — רשימת ציוד חתום עליך
+🚗 <b>שבצ"ק</b> — יצירת שבצ"ק חדש
 ℹ️ <b>מידע כללי</b> — ארוחות, תפילות ועוד
 ❓ <b>עזרה</b> — הודעה זו
 
