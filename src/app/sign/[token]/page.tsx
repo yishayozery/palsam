@@ -58,7 +58,46 @@ export default async function PublicSignPage({
     };
   }
   if (sig.status === "SIGNED") {
-    return <CenteredWithRedirect title="✅ נחתם בהצלחה" text={`תודה, ${signerName}. החתימה נקלטה במערכת.`} tone="ok" />;
+    const base = process.env.NEXT_PUBLIC_APP_URL || "";
+    const docUrl = sig.transferId ? `${base}/transfer-doc/${sig.transferId}` : null;
+    const soldierPhone = sig.soldier?.phone ?? sig.signerUser?.phone ?? null;
+    const certWaText = docUrl
+      ? encodeURIComponent(`שלום ${signerName}, מצורף אישור החתמת ציוד:\n${docUrl}`)
+      : null;
+    const certWaUrl = certWaText && soldierPhone
+      ? `https://wa.me/${soldierPhone.replace(/\D/g, "").replace(/^0/, "972")}?text=${certWaText}`
+      : certWaText
+        ? `https://wa.me/?text=${certWaText}`
+        : null;
+
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-lg p-8 text-center max-w-sm w-full">
+          <div className="text-5xl mb-3">✅</div>
+          <h1 className="text-2xl font-bold text-emerald-700">נחתם בהצלחה</h1>
+          <p className="text-sm text-slate-500 mt-2">{`תודה, ${signerName}. החתימה נקלטה במערכת.`}</p>
+          {sig.signedAt && (
+            <p className="text-xs text-slate-400 mt-1">
+              {sig.signedAt.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}
+            </p>
+          )}
+          <div className="mt-5 space-y-2">
+            {certWaUrl && (
+              <a href={certWaUrl} target="_blank" rel="noreferrer"
+                className="block w-full bg-green-600 hover:bg-green-700 text-white rounded-lg py-2.5 text-sm font-bold">
+                📲 שלח תעודה לחייל
+              </a>
+            )}
+            {docUrl && (
+              <a href={docUrl} target="_blank" rel="noreferrer"
+                className="block w-full bg-slate-800 hover:bg-slate-900 text-white rounded-lg py-2.5 text-sm font-bold">
+                📄 צפייה בתעודה
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   }
   if (sig.status === "EXPIRED" || (sig.tokenExpires && sig.tokenExpires < new Date())) {
     return <CenteredWithRedirect title="פג תוקף" text="הקישור אינו בתוקף. פנה לאחראי." tone="error" />;

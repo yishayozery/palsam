@@ -425,9 +425,18 @@ export async function checkinQuantity(formData: FormData) {
   const statusId = String(formData.get("statusId") || "");
   const newStatusId = String(formData.get("newStatusId") || "") || null;
   const quantity = parseInt(String(formData.get("quantity") || "0"), 10);
-  const toHolderId = String(formData.get("toHolderId") || "") || (user.holderId ?? null);
-  if (!soldierId || !itemTypeId || !statusId || quantity < 1 || !toHolderId) {
-    throw new Error("חסרים נתונים — חייל / פריט / כמות / מחסן יעד");
+  let toHolderId = String(formData.get("toHolderId") || "") || (user.holderId ?? null);
+  if (!soldierId || !itemTypeId || !statusId || quantity < 1) {
+    throw new Error("חסרים נתונים — חייל / פריט / כמות");
+  }
+  if (!toHolderId) {
+    const origTransfer = await prisma.transfer.findFirst({
+      where: { battalionId: bId, type: "SIGNOUT", status: "COMPLETED", toSoldierId: soldierId, lines: { some: { itemTypeId } } },
+      select: { fromHolderId: true },
+      orderBy: { createdAt: "desc" },
+    });
+    toHolderId = origTransfer?.fromHolderId ?? null;
+    if (!toHolderId) throw new Error("לא נמצא מחסן יעד להחזרה — פנה לקצין מחסן");
   }
 
   await prisma.$transaction(async (tx) => {
@@ -669,21 +678,39 @@ export async function checkinBatch(payload: {
       for (const q of qtyItems) {
         if (q.quantity < 1) continue;
         const finalStatusId = statusId || q.statusId;
-        const existing = await tx.stockBalance.findFirst({ where: { itemTypeId: q.itemTypeId, holderId: toHolderId, statusId: finalStatusId, battalionId: bId } });
+        // מציאת מחסן יעד: אם לא סופק, מחפשים את מחסן המקור מהחתמה המקורית
+        let targetHolder = toHolderId;
+        if (!targetHolder) {
+          const origTransfer = await tx.transfer.findFirst({
+            where: { battalionId: bId, type: "SIGNOUT", status: "COMPLETED", toSoldierId: soldierId, lines: { some: { itemTypeId: q.itemTypeId } } },
+            select: { fromHolderId: true },
+            orderBy: { createdAt: "desc" },
+          });
+          targetHolder = origTransfer?.fromHolderId ?? "";
+        }
+        if (!targetHolder) throw new Error("לא נמצא מחסן יעד להחזרה — פנה לקצין מחסן");
+        const existing = await tx.stockBalance.findFirst({ where: { itemTypeId: q.itemTypeId, holderId: targetHolder, statusId: finalStatusId, battalionId: bId } });
         if (existing) {
           await tx.stockBalance.update({ where: { id: existing.id }, data: { quantity: existing.quantity + q.quantity } });
         } else {
-          await tx.stockBalance.create({ data: { battalionId: bId, itemTypeId: q.itemTypeId, holderId: toHolderId, statusId: finalStatusId, quantity: q.quantity } });
+          await tx.stockBalance.create({ data: { battalionId: bId, itemTypeId: q.itemTypeId, holderId: targetHolder, statusId: finalStatusId, quantity: q.quantity } });
         }
         lines.push({ itemTypeId: q.itemTypeId, quantity: q.quantity, statusId: finalStatusId });
       }
 
       if (lines.length === 0) throw new Error("אין פריטים לזיכוי");
 
+      // מציאת מחסן יעד לטרנספר: סריאלי ← currentHolderId; כמותי ← מקור ההחתמה
+      const transferHolderId = toHolderId
+        || (serialUnitIds.length > 0
+          ? (await tx.serialUnit.findUnique({ where: { id: serialUnitIds[0] }, select: { currentHolderId: true } }))?.currentHolderId
+          : null)
+        || null;
+
       const transfer = await tx.transfer.create({
         data: {
           battalionId: bId, type: "CHECKIN", status: "COMPLETED",
-          toHolderId, toSoldierId: soldierId,
+          toHolderId: transferHolderId, toSoldierId: soldierId,
           createdById: user.id, approvedById: user.id, approvedAt: new Date(),
           reason: `זיכוי ${lines.length} פריטים`,
           lines: { create: lines },

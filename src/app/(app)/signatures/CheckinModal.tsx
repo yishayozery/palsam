@@ -456,7 +456,11 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
           {error && <div className="text-sm text-rose-700 font-medium mb-2">⚠️ {error}</div>}
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => { reset(); setOpen(false); }} disabled={busy}
-              className="flex-1 sm:flex-none rounded-lg border border-slate-300 px-4 py-2.5 text-sm disabled:opacity-50">ביטול</button>
+              className="flex-1 sm:flex-none rounded-lg border border-slate-300 px-4 py-2.5 text-sm disabled:opacity-50">סגור</button>
+            {(selectedUnits.size > 0 || Array.from(qtyReturn.values()).some((n) => n > 0)) && (
+              <button onClick={() => { setSelectedUnits(new Set()); setQtyReturn(new Map()); setPartialLotQty(new Map()); setNewStatusId(""); setError(null); }} disabled={busy}
+                className="flex-1 sm:flex-none rounded-lg border border-amber-300 text-amber-700 px-4 py-2.5 text-sm disabled:opacity-50">↩ נקה בחירה</button>
+            )}
             <button onClick={submit} disabled={busy || (selectedUnits.size === 0 && Array.from(qtyReturn.values()).every((n) => n < 1) && soldierOpKits.length === 0)}
               className="flex-1 sm:flex-none bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg px-5 py-2.5 text-sm font-bold flex items-center justify-center gap-2">
               {busy ? (
