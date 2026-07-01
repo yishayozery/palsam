@@ -28,16 +28,21 @@ export async function createSoldier(formData: FormData) {
   }
 
   const fullName = `${firstName} ${lastName}`;
-  await prisma.soldier.create({
+  const now = new Date();
+  const soldier = await prisma.soldier.create({
     data: {
       battalionId: bId, fullName, firstName, lastName,
       personalNumber: personalNumber || null,
       phone, companyId, squadId, platoon,
       status: enlistNow ? "ENLISTED" : "REGISTERED",
-      enlistedAt: enlistNow ? new Date() : null,
+      enlistedAt: enlistNow ? now : null,
       enlistedById: enlistNow ? user.id : null,
     },
   });
+  // פתיחת שמ"פ אוטומטית עם אישור גיוס
+  if (enlistNow) {
+    await prisma.callupPeriod.create({ data: { soldierId: soldier.id, startDate: now, createdById: user.id } });
+  }
 
   await audit(user.id, "CREATE_SOLDIER", "Soldier", personalNumber || fullName, { companyId, status: enlistNow ? "ENLISTED" : "REGISTERED" });
   revalidatePath("/roster");
@@ -68,16 +73,22 @@ export async function updateSoldier(formData: FormData) {
   revalidatePath("/roster");
 }
 
-/** אישור גיוס — החייל יכול עכשיו לחתום על ציוד */
+/** אישור גיוס — החייל יכול עכשיו לחתום על ציוד + נפתח שמ"פ אוטומטית */
 export async function enlistSoldier(formData: FormData) {
   const user = await requireCapability("soldiers.roster");
   const id = String(formData.get("id") || "");
   const s = await prisma.soldier.findUnique({ where: { id } });
   if (!s || s.battalionId !== user.battalionId) return;
+  const now = new Date();
   await prisma.soldier.update({
     where: { id },
-    data: { status: "ENLISTED", enlistedAt: new Date(), enlistedById: user.id },
+    data: { status: "ENLISTED", enlistedAt: now, enlistedById: user.id },
   });
+  // פתיחת שמ"פ אוטומטית — אם אין שמ"פ פתוח, נפתח אחד עם תאריך הגיוס
+  const openPeriod = await prisma.callupPeriod.findFirst({ where: { soldierId: id, endDate: null } });
+  if (!openPeriod) {
+    await prisma.callupPeriod.create({ data: { soldierId: id, startDate: now, createdById: user.id } });
+  }
   await audit(user.id, "ENLIST_SOLDIER", "Soldier", id);
   revalidatePath("/roster");
 }
@@ -98,6 +109,11 @@ export async function unenlistSoldier(formData: FormData) {
     where: { id },
     data: { status: "REGISTERED", enlistedAt: null, enlistedById: null },
   });
+  // סגירת שמ"פ פתוח
+  const openPeriod = await prisma.callupPeriod.findFirst({ where: { soldierId: id, endDate: null } });
+  if (openPeriod) {
+    await prisma.callupPeriod.update({ where: { id: openPeriod.id }, data: { endDate: new Date(), closedById: user.id, closedAt: new Date() } });
+  }
   await audit(user.id, "UNENLIST_SOLDIER", "Soldier", id);
   revalidatePath("/roster");
 }
