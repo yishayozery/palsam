@@ -29,7 +29,7 @@ export const SCREENS = {
   catalog: "הגדרות פריטים",
   warehouses: "מחסנים",
   allocations: "הקצאות/ציוד קבוע",
-  ymach: "מחסן ימ\"ח",
+  ymach: "מידוף ימ\"ח",
   settings: "הגדרות גדוד",
 } as const;
 
@@ -42,7 +42,7 @@ export const SCREEN_CATEGORIES: Record<ScreenCategory, { label: string; icon: st
     label: "מחסן",
     icon: "🏪",
     color: "amber",
-    screens: ["stock", "catalog", "signatures", "counts", "gaps", "transfers", "kits", "warehouses", "donations", "driving_licenses", "maintenance"],
+    screens: ["stock", "catalog", "signatures", "counts", "gaps", "transfers", "kits", "warehouses", "donations", "driving_licenses", "maintenance", "ymach"],
   },
   company: {
     label: "פלוגה",
@@ -194,7 +194,7 @@ const LEGACY_MATRIX: Record<Role, Capability[]> = {
     "locations.manage", "reps.manage", "company.manage", "donations.manage",
     "transfer.approve", "signatures.manage", "counts.manage", "counts.execute",
     "gaps.resolve", "reports.view", "dispatch.manage", "weapons.view_report",
-    "attendance.manage", "attendance.view",
+    "attendance.manage", "attendance.view", "ymach.manage",
   ],
   COMPANY_REP: [
     "company.manage", "locations.manage", "donations.manage", "transfer.approve",

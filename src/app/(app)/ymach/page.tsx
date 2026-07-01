@@ -16,34 +16,47 @@ export default async function YmachPage({
   const bId = user.battalionId!;
 
   const sp = await searchParams;
-  const companies = await prisma.holder.findMany({
-    where: { battalionId: bId, kind: "COMPANY", active: true },
+  // כל ה-holders עם תקן (baselines) — פלוגות ומחסנים כאחד
+  const holdersWithBaselines = await prisma.holder.findMany({
+    where: {
+      battalionId: bId, active: true,
+      companyItemBaselines: { some: { permanentQuantity: { gt: 0 } } },
+    },
     orderBy: { name: "asc" },
-    select: { id: true, name: true },
+    select: { id: true, name: true, kind: true },
   });
-  const isCompanyHolder = user.holderId ? companies.some((c) => c.id === user.holderId) : false;
-  const holderId = isCompanyHolder
+  // fallback: אם אין holders עם תקנים, מציגים את כל הפלוגות + מחסנים
+  const holders = holdersWithBaselines.length > 0
+    ? holdersWithBaselines
+    : await prisma.holder.findMany({
+        where: { battalionId: bId, active: true, kind: { in: ["COMPANY", "WAREHOUSE"] } },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, kind: true },
+      });
+  const isOwnHolder = user.holderId ? holders.some((h) => h.id === user.holderId) : false;
+  const holderId = isOwnHolder
     ? user.holderId
-    : (sp.companyId && companies.some((c) => c.id === sp.companyId) ? sp.companyId : companies[0]?.id) ?? null;
+    : (sp.companyId && holders.some((h) => h.id === sp.companyId) ? sp.companyId : holders[0]?.id) ?? null;
 
   if (!holderId) {
     return (
       <div>
-        <PageHeader title='מחסן ימ"ח' subtitle="ניהול מחסן פלוגתי — מדפים, ארגזים מבצעיים, ספירות" />
+        <PageHeader title="מידוף ימ״ח" subtitle="ניהול מידוף, ארגזים מבצעיים, ספירות ודוחות" />
         <Card className="p-6">
-          <p className="text-sm text-slate-400">אין פלוגות בגדוד.</p>
+          <p className="text-sm text-slate-400">אין פלוגות או מחסנים בגדוד.</p>
         </Card>
       </div>
     );
   }
 
   const tab = sp.tab || "warehouses";
-  const companyQ = !isCompanyHolder && holderId ? `&companyId=${holderId}` : "";
+  const companyQ = !isOwnHolder && holderId ? `&companyId=${holderId}` : "";
 
   const company = await prisma.holder.findUnique({
     where: { id: holderId },
-    select: { name: true, logoData: true },
+    select: { name: true, logoData: true, kind: true },
   });
+  const isWarehouse = company?.kind === "WAREHOUSE";
 
   // מחסני ימ"ח + מדפים + פריטים על מדפים
   const warehouses = await prisma.companyWarehouse.findMany({
@@ -119,9 +132,9 @@ export default async function YmachPage({
     select: { id: true, name: true },
   });
 
-  // חיילי הפלוגה (לשיוך ארגזים)
+  // חיילים לשיוך ארגזים — פלוגה: רק חיילי הפלוגה; מחסן: כל חיילי הגדוד
   const soldiers = await prisma.soldier.findMany({
-    where: { battalionId: bId, companyId: holderId, status: { in: ["ENLISTED", "REGISTERED"] } },
+    where: { battalionId: bId, ...(isWarehouse ? {} : { companyId: holderId }), status: { in: ["ENLISTED", "REGISTERED"] } },
     orderBy: { fullName: "asc" },
     select: { id: true, fullName: true, personalNumber: true },
   });
@@ -141,12 +154,12 @@ export default async function YmachPage({
   return (
     <div>
       <PageHeader
-        title={`מחסן ימ"ח — ${company?.name ?? ""}`}
+        title={`מידוף — ${company?.name ?? ""}`}
         subtitle="ניהול מידוף, ארגזים מבצעיים, ספירות ודוחות"
       />
 
-      {!isCompanyHolder && companies.length > 1 && (
-        <CompanyPicker companies={companies} selectedId={holderId} basePath="/ymach" extraParams={`tab=${sp.tab || "warehouses"}`} />
+      {!isOwnHolder && holders.length > 1 && (
+        <CompanyPicker companies={holders} selectedId={holderId} basePath="/ymach" extraParams={`tab=${sp.tab || "warehouses"}`} />
       )}
 
       {/* דשבורד קטן */}
