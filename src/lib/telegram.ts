@@ -21,6 +21,31 @@ export async function sendTelegramMessage(
   return res.json();
 }
 
+export async function sendTelegramDocument(
+  botToken: string,
+  chatId: string,
+  fileBuffer: Buffer | Uint8Array,
+  filename: string,
+  caption?: string,
+) {
+  const formData = new FormData();
+  formData.append("chat_id", chatId);
+  formData.append("document", new Blob([new Uint8Array(fileBuffer)], { type: "application/pdf" }), filename);
+  if (caption) {
+    formData.append("caption", caption);
+    formData.append("parse_mode", "HTML");
+  }
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Telegram sendDocument error: ${err}`);
+  }
+  return res.json();
+}
+
 export async function answerCallbackQuery(botToken: string, callbackQueryId: string, text?: string) {
   await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
     method: "POST",

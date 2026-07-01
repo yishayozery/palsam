@@ -35,11 +35,13 @@ export async function GET(
   const buf = await buildTransferPdfBuffer(t as Parameters<typeof buildTransferPdfBuffer>[0]);
   const docNumber = t.id.slice(-8).toUpperCase();
   const soldierName = t.toSoldier?.fullName ?? "document";
+  const safeFilename = `transfer-${docNumber}.pdf`;
+  const utf8Filename = `transfer-${docNumber}-${soldierName}.pdf`;
 
   return new NextResponse(new Uint8Array(buf), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="transfer-${docNumber}-${soldierName}.pdf"`,
+      "Content-Disposition": `inline; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(utf8Filename)}`,
     },
   });
 }

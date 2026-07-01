@@ -31,11 +31,52 @@ async function notifySoldierTelegram(soldierId: string, battalionId: string, tra
     if (!summary) return false;
 
     const header = action === "SIGN" ? "📝 התקבל ציוד חדש" : "↩️ ציוד הוחזר";
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
-    const docLink = transferId ? `\n\n📄 <a href="${baseUrl}/transfer-doc/${transferId}">צפה בתעודה</a>` : "";
     const text = formatSoldierSummaryForWhatsApp(summary, { headerTitle: `${header} — סיכום ציוד חתום` });
-    const { sendTelegramMessage } = await import("@/lib/telegram");
-    await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, text + docLink);
+    const { sendTelegramMessage, sendTelegramDocument } = await import("@/lib/telegram");
+
+    // שליחת PDF כמסמך אם יש תעודה
+    if (transferId) {
+      try {
+        const { buildTransferPdfBuffer } = await import("@/lib/email-pdf");
+        const transfer = await prisma.transfer.findUnique({
+          where: { id: transferId },
+          include: {
+            battalion: true,
+            fromHolder: { select: { name: true, signatureClause: true } },
+            toHolder: { select: { name: true } },
+            toSoldier: { select: { fullName: true, personalNumber: true } },
+            createdBy: { select: { fullName: true } },
+            approvedBy: { select: { fullName: true } },
+            lines: { include: { itemType: true, serialUnit: true, status: true } },
+            signatures: {
+              where: { status: "SIGNED" },
+              select: {
+                signedAt: true,
+                soldier: { select: { fullName: true, personalNumber: true } },
+                signerUser: { select: { fullName: true, title: true } },
+              },
+              take: 1,
+            },
+          },
+        });
+        if (transfer) {
+          const pdfBuf = await buildTransferPdfBuffer(transfer as Parameters<typeof buildTransferPdfBuffer>[0]);
+          const docNumber = transferId.slice(-8).toUpperCase();
+          await sendTelegramDocument(
+            battalion.telegramBotToken,
+            soldier.telegramChatId,
+            pdfBuf,
+            `transfer-${docNumber}.pdf`,
+            text,
+          );
+          return true;
+        }
+      } catch (pdfErr) {
+        console.error("[notifySoldierTelegram] PDF send failed, falling back to text:", pdfErr);
+      }
+    }
+
+    await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, text);
     return true;
   } catch (e) {
     console.error("[notifySoldierTelegram] failed (non-fatal):", e);
