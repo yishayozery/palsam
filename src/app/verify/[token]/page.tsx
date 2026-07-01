@@ -15,8 +15,23 @@ export default async function VerifyPage({
     where: { token },
     include: {
       soldier: { select: { fullName: true, personalNumber: true } },
+      holder: { select: { name: true } },
       session: { select: { id: true, status: true } },
-      battalion: { select: { name: true, logoData: true } },
+      battalion: {
+        select: {
+          name: true,
+          logoData: true,
+          holders: {
+            where: { active: true },
+            select: {
+              equipmentLocations: {
+                where: { active: true },
+                select: { id: true, name: true },
+              },
+            },
+          },
+        },
+      },
       items: {
         select: {
           id: true,
@@ -25,6 +40,10 @@ export default async function VerifyPage({
           status: true,
           photoData: true,
           note: true,
+          expectedQuantity: true,
+          reportedQuantity: true,
+          reportedSerial: true,
+          reportedLocation: true,
         },
       },
     },
@@ -32,6 +51,15 @@ export default async function VerifyPage({
   if (!req) notFound();
 
   const alreadyDone = !!req.respondedAt;
+  const name = req.soldier?.fullName || req.holder?.name || "";
+  const subtitle = req.soldier?.personalNumber
+    ? `${name} (${req.soldier.personalNumber})`
+    : name;
+
+  // Flatten equipment locations for LOCATION mode
+  const locations = req.battalion.holders
+    .flatMap((h) => h.equipmentLocations)
+    .map((el) => ({ id: el.id, name: el.name }));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-800 to-slate-950 p-4">
@@ -44,12 +72,7 @@ export default async function VerifyPage({
             )}
             <h1 className="text-lg font-bold text-slate-800">אימות ציוד</h1>
             <p className="text-sm text-slate-500">{req.battalion.name}</p>
-            <p className="text-sm text-slate-700 mt-2 font-medium">
-              {req.soldier.fullName}
-              {req.soldier.personalNumber && (
-                <span className="text-slate-400 mr-1">({req.soldier.personalNumber})</span>
-              )}
-            </p>
+            <p className="text-sm text-slate-700 mt-2 font-medium">{subtitle}</p>
           </div>
 
           {alreadyDone ? (
@@ -61,7 +84,13 @@ export default async function VerifyPage({
               </p>
             </div>
           ) : (
-            <VerificationClient token={token} items={req.items} soldierName={req.soldier.fullName} />
+            <VerificationClient
+              token={token}
+              items={req.items}
+              soldierName={name}
+              mode={req.mode}
+              locations={locations}
+            />
           )}
         </div>
       </div>

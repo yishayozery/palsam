@@ -380,6 +380,7 @@ model Holder {
   companyWarehouses     CompanyWarehouse[]     @relation("HolderCompanyWarehouses")
   operationalKits       OperationalKit[]       @relation("HolderOpKits")
   ymachGaps             YmachGap[]             @relation("HolderYmachGaps")
+  verificationRequests  VerificationRequest[]  @relation("HolderVerifications")
 
   @@index([battalionId])
   @@index([kind])
@@ -1800,15 +1801,27 @@ enum VerificationStatus {
   NO_RESPONSE
 }
 
-// בקשת אימות — אחת לכל חייל בספירה
+enum VerificationMode {
+  CONFIRM          // אישור קיום: נמצא / לא נמצא
+  SERIAL_ENTRY     // הקשת מספר סריאלי (המערכת משווה)
+  LOCATION         // בחירת מיקום מרשימה מוגדרת
+  QUANTITY_CONFIRM // אישור כמות (רואה כמות צפויה, מאשר/מתקן)
+  BLIND_COUNT      // ספירה עיוורת (מקליד כמות ללא מידע מקדים)
+  BATCH            // אצווה: מאשר קבוצת פריטים יחד
+}
+
+// בקשת אימות — לחייל או לפלוגה/מחסן
 model VerificationRequest {
   id            String   @id @default(cuid())
   battalionId   String
   battalion     Battalion @relation("BattalionVerifications", fields: [battalionId], references: [id], onDelete: Cascade)
   sessionId     String
   session       CountSession @relation("SessionVerifications", fields: [sessionId], references: [id], onDelete: Cascade)
-  soldierId     String
-  soldier       Soldier  @relation("SoldierVerifications", fields: [soldierId], references: [id], onDelete: Cascade)
+  soldierId     String?
+  soldier       Soldier?  @relation("SoldierVerifications", fields: [soldierId], references: [id], onDelete: Cascade)
+  holderId      String?
+  holder        Holder?   @relation("HolderVerifications", fields: [holderId], references: [id], onDelete: Cascade)
+  mode          VerificationMode @default(CONFIRM)
   token         String   @unique @default(cuid())
   sentAt        DateTime?
   sentVia       String?  // "WHATSAPP" | "TELEGRAM"
@@ -1819,22 +1832,29 @@ model VerificationRequest {
 
   @@index([sessionId])
   @@index([soldierId])
+  @@index([holderId])
   @@index([battalionId])
 }
 
-// פריט באימות — אחד לכל יחידה סריאלית בבקשה
+// פריט באימות
 model VerificationItem {
   id              String   @id @default(cuid())
   requestId       String
   request         VerificationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  serialUnitId    String
-  serialUnit      SerialUnit @relation("SerialUnitVerifications", fields: [serialUnitId], references: [id], onDelete: Cascade)
+  serialUnitId    String?
+  serialUnit      SerialUnit? @relation("SerialUnitVerifications", fields: [serialUnitId], references: [id], onDelete: Cascade)
   itemTypeName    String
-  serialNumber    String
+  serialNumber    String?
   status          VerificationStatus @default(PENDING)
   photoData       String?
   respondedAt     DateTime?
   note            String?
+  // שדות לאימות כמות
+  expectedQuantity  Int?
+  reportedQuantity  Int?
+  // שדות לאימות מיקום / הקשת מק"ט
+  reportedSerial    String?
+  reportedLocation  String?
 
   @@index([requestId])
 }

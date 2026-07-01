@@ -4,7 +4,15 @@ import { prisma } from "@/lib/prisma";
 
 export async function submitVerification(
   token: string,
-  responses: { itemId: string; found: boolean; photoData?: string; note?: string }[],
+  responses: {
+    itemId: string;
+    found: boolean;
+    photoData?: string;
+    note?: string;
+    reportedSerial?: string;
+    reportedLocation?: string;
+    reportedQuantity?: number;
+  }[],
 ) {
   const req = await prisma.verificationRequest.findUnique({
     where: { token },
@@ -21,6 +29,9 @@ export async function submitVerification(
           status: r.found ? "CONFIRMED" : "DENIED",
           photoData: r.photoData || null,
           note: r.note || null,
+          reportedSerial: r.reportedSerial || null,
+          reportedLocation: r.reportedLocation || null,
+          reportedQuantity: r.reportedQuantity ?? null,
           respondedAt: new Date(),
         },
       }),
