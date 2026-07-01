@@ -420,7 +420,7 @@ export async function sendTelegramVerification(requestId: string) {
   }
 
   const { sendTelegramMessage } = await import("@/lib/telegram");
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://palmy.co.il";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
 
   const itemsList = req.items.map((i) =>
     i.serialNumber ? `• ${i.itemTypeName} (${i.serialNumber})` : `• ${i.itemTypeName}`,
@@ -536,7 +536,7 @@ export async function registerTelegramWebhook() {
   });
   if (!battalion?.telegramBotToken) return { error: "טוקן בוט טלגרם לא מוגדר" };
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://palmy.co.il";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
   const webhookUrl = `${baseUrl}/api/telegram/${bId}`;
 
   const token = battalion.telegramBotToken;
