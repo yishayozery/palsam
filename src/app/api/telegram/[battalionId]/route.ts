@@ -20,6 +20,14 @@ export async function POST(
         drivingRefreshDays: true,
       },
     });
+    // fallback: אם אין armoryTestUrl על הגדוד — נבדוק על מחסן ארמון
+    if (battalion && !battalion.armoryTestUrl) {
+      const armoryHolder = await prisma.holder.findFirst({
+        where: { battalionId, warehouseType: "ARMORY", active: true, armoryTestUrl: { not: null } },
+        select: { armoryTestUrl: true },
+      });
+      if (armoryHolder?.armoryTestUrl) battalion.armoryTestUrl = armoryHolder.armoryTestUrl;
+    }
     if (!battalion?.telegramBotToken) {
       return NextResponse.json({ ok: false }, { status: 404 });
     }
