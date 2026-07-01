@@ -264,7 +264,7 @@ export async function createSignout(formData: FormData) {
   console.log("[createSignout] transaction OK, transferId:", transferId);
   } catch (txErr) {
     console.error("[createSignout] TRANSACTION FAILED:", txErr);
-    throw txErr;
+    throw new Error(txErr instanceof Error ? txErr.message : "שגיאה ביצירת ההחתמה");
   }
 
   await audit(user.id, "CREATE_SIGNOUT", "Transfer", transferId, { soldierId, method });
