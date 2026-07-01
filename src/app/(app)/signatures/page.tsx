@@ -252,6 +252,13 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
       })
     : [];
 
+  // מחסנים — למפ"מ שצריך לבחור מחסן יעד בזיכוי
+  const allWarehouses = !user.holderId ? await prisma.holder.findMany({
+    where: { battalionId: bId, kind: "WAREHOUSE", active: true },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  }) : [];
+
   // 🆕 דגל מ.א. - לתעודות חתום-בק
   const battalionConfig = await prisma.battalion.findUnique({
     where: { id: bId }, select: { requirePersonalIdOnHandover: true },
@@ -345,6 +352,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                 }))}
                 qtyHoldings={soldierQtyHoldings}
                 defaultToHolderId={user.holderId ?? null}
+                warehouses={allWarehouses}
                 statuses={statuses.map((s) => ({ id: s.id, name: s.name, isWear: s.isWear, isLoss: s.isLoss, isDefault: s.isDefault }))}
                 operationalKits={operationalKits.filter((k) => k.assignedSoldier).map((k) => ({
                   id: k.id, name: k.name, status: k.status,

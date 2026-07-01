@@ -21,10 +21,13 @@ type QtyHolding = {
 type Status = { id: string; name: string; isWear: boolean; isLoss: boolean; isDefault: boolean };
 type OpKitCheckin = { id: string; name: string; status: string; soldierId: string; soldierName: string; items: { itemTypeId: string; itemName: string; sku: string | null; quantity: number }[] };
 
-export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToHolderId, statuses, operationalKits = [] }: {
+type Warehouse = { id: string; name: string };
+
+export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToHolderId, warehouses = [], statuses, operationalKits = [] }: {
   signedUnits: Unit[];
   qtyHoldings?: QtyHolding[];
   defaultToHolderId?: string | null;
+  warehouses?: Warehouse[];
   statuses: Status[];
   operationalKits?: OpKitCheckin[];
 }) {
@@ -45,6 +48,8 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
   const [opKitReturned, setOpKitReturned] = useState<Record<string, Record<string, number>>>({});
   // סיבת חוסר (kitId → itemTypeId → reason)
   const [opKitReason, setOpKitReason] = useState<Record<string, Record<string, string>>>({});
+  // בחירת מחסן יעד (למפ"מ שלא מוגדר על מחסן)
+  const [targetHolderId, setTargetHolderId] = useState(defaultToHolderId ?? "");
   // מסך הצלחה אחרי זיכוי
   const [doneData, setDoneData] = useState<{ transferId: string; soldierName: string; soldierPhone: string | null } | null>(null);
 
@@ -88,7 +93,7 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
   const reset = () => {
     setSoldierId(""); setSoldierSearch(""); setSelectedUnits(new Set());
     setPartialLotQty(new Map()); setQtyReturn(new Map()); setNewStatusId(""); setError(null);
-    setOpKitReturned({}); setOpKitReason({}); setDoneData(null);
+    setOpKitReturned({}); setOpKitReason({}); setDoneData(null); setTargetHolderId(defaultToHolderId ?? "");
   };
 
   // לחיצה על יחידה — אם זו אצווה, פתח דיאלוג; אחרת סמן/בטל
@@ -154,7 +159,7 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
           partialLotQtys: partialLots,
           statusId: newStatusId,
           qtyItems,
-          toHolderId: defaultToHolderId ?? "",
+          toHolderId: targetHolderId || defaultToHolderId || "",
         });
         if (!res.ok) { setError(res.error); setBusy(false); return; }
         setDoneData(res);
@@ -398,6 +403,20 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
                 </label>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* בחירת מחסן יעד — למפ"מ שלא מוגדר על מחסן */}
+        {!defaultToHolderId && warehouses.length > 0 && soldierId && (
+          <div className="bg-blue-50 border-b border-blue-200 p-3">
+            <label className="block text-[11px] text-slate-600 mb-1">מחסן יעד להחזרה</label>
+            <select value={targetHolderId} onChange={(e) => setTargetHolderId(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white">
+              <option value="">— בחר מחסן —</option>
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
           </div>
         )}
 
