@@ -26,6 +26,7 @@ export default async function SettingsPage() {
             telegramBotToken: battalion.telegramBotToken,
             telegramBotInfo: battalion.telegramBotInfo,
             telegramBotUsername: battalion.telegramBotUsername,
+            soldierDepartureMessage: battalion.soldierDepartureMessage,
           }}
         />
       </Card>

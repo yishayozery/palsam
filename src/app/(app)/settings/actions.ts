@@ -21,13 +21,14 @@ export async function updateOperationalSettings(
   const armoryTestUrl = String(formData.get("armoryTestUrl") || "").trim() || null;
   const telegramBotToken = String(formData.get("telegramBotToken") || "").trim() || null;
   const telegramBotInfo = String(formData.get("telegramBotInfo") || "").trim() || null;
+  const soldierDepartureMessage = String(formData.get("soldierDepartureMessage") || "").trim() || null;
 
   if (!notificationEmail) return { error: "מייל לגיבוי תנועות חובה" };
 
   try {
     await prisma.battalion.update({
       where: { id: bId },
-      data: { requirePersonalIdOnHandover, senderEmail, notificationEmail, emailToBattalion, armoryTestUrl, telegramBotToken, telegramBotInfo },
+      data: { requirePersonalIdOnHandover, senderEmail, notificationEmail, emailToBattalion, armoryTestUrl, telegramBotToken, telegramBotInfo, soldierDepartureMessage },
     });
   } catch {
     return { error: "שמירה נכשלה" };

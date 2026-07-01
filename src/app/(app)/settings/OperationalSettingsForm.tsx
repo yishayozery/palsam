@@ -16,6 +16,7 @@ type Props = {
     telegramBotToken: string | null;
     telegramBotInfo: string | null;
     telegramBotUsername: string | null;
+    soldierDepartureMessage: string | null;
   };
 };
 
@@ -213,6 +214,27 @@ export default function OperationalSettingsForm({ battalion }: Props) {
           <div className="text-xs text-slate-500 mt-1.5">
             טקסט חופשי שיישלח כשחייל שולח <code className="bg-slate-100 px-1 rounded">/info</code> בבוט.
             רווחי שורה נשמרים. ניתן להשתמש ב-HTML: &lt;b&gt;בולט&lt;/b&gt;
+          </div>
+        </div>
+      )}
+
+      {/* 🚪 הודעת יציאה/חופשה */}
+      {battalion.telegramBotToken && (
+        <div className="p-3 rounded-lg border border-orange-200 bg-orange-50">
+          <label className="block text-sm font-medium text-slate-800 mb-1">
+            🚪 הודעת יציאה / חופשה לחייל
+          </label>
+          <textarea
+            name="soldierDepartureMessage"
+            defaultValue={battalion.soldierDepartureMessage ?? ""}
+            rows={3}
+            placeholder="🔒 אל תשכח לנעול את הנשק ולוודא שהציוד מאובטח! ריענון נעים ושבת שלום 🙏"
+            className="w-full rounded-lg border border-orange-300 px-3 py-2 text-sm"
+          />
+          <div className="text-xs text-slate-500 mt-1.5">
+            הודעה חופשית שנשלחת אוטומטית לחייל דרך הבוט כשמדווח עליו יציאה או חופשה
+            <b> והוא חתום על ציוד</b>. ההודעה תצורף לרשימת הציוד שחתום עליו.
+            אם ריק — תישלח הודעת ברירת מחדל עם תזכורת לנעילת נשק.
           </div>
         </div>
       )}

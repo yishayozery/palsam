@@ -5,6 +5,40 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
 
+async function notifyDeparture(soldierId: string, battalionId: string, statusName: string) {
+  try {
+    const soldier = await prisma.soldier.findUnique({
+      where: { id: soldierId },
+      select: { telegramChatId: true, fullName: true, personalNumber: true },
+    });
+    if (!soldier?.telegramChatId) return;
+
+    const battalion = await prisma.battalion.findUnique({
+      where: { id: battalionId },
+      select: { telegramBotToken: true, soldierDepartureMessage: true },
+    });
+    if (!battalion?.telegramBotToken) return;
+
+    const signedCount = await prisma.serialUnit.count({ where: { signedSoldierId: soldierId } });
+    if (signedCount === 0) return;
+
+    const { getSoldierEquipmentSummary, formatSoldierSummaryForWhatsApp } = await import("@/lib/soldier-summary");
+    const summary = await getSoldierEquipmentSummary(soldierId);
+    if (!summary) return;
+
+    const header = `⚠️ דיווח: ${statusName}`;
+    const text = formatSoldierSummaryForWhatsApp(summary, { headerTitle: `${header} — ציוד חתום עליך` });
+
+    const customMsg = battalion.soldierDepartureMessage?.trim();
+    const reminder = customMsg || "🔒 אל תשכח לנעול את הנשק ולוודא שהציוד מאובטח!";
+
+    const { sendTelegramMessage } = await import("@/lib/telegram");
+    await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, text + "\n\n" + reminder);
+  } catch (e) {
+    console.error("[notifyDeparture] failed (non-fatal):", e);
+  }
+}
+
 export async function saveAttendance(
   entries: { soldierId: string; date: string; statusId: string | null; type: "plan" | "record" }[],
 ): Promise<{ ok?: boolean; error?: string }> {
@@ -13,6 +47,8 @@ export async function saveAttendance(
     const canManage = can(user, "attendance.manage");
     const canView = can(user, "attendance.view");
     if (!canManage && !canView) return { error: "אין הרשאה" };
+
+    const departureAlerts: { soldierId: string; statusName: string }[] = [];
 
     for (const entry of entries) {
       const dateObj = new Date(entry.date + "T00:00:00Z");
@@ -35,11 +71,28 @@ export async function saveAttendance(
             update: { statusId: entry.statusId, updatedById: user.id },
             create: { soldierId: entry.soldierId, date: dateObj, statusId: entry.statusId, updatedById: user.id },
           });
+
+          const status = await prisma.attendanceStatus.findUnique({
+            where: { id: entry.statusId },
+            select: { isPresent: true, name: true },
+          });
+          if (status && !status.isPresent) {
+            departureAlerts.push({ soldierId: entry.soldierId, statusName: status.name });
+          }
         } else {
           await prisma.attendanceRecord.deleteMany({
             where: { soldierId: entry.soldierId, date: dateObj },
           });
         }
+      }
+    }
+
+    if (departureAlerts.length > 0) {
+      const seen = new Set<string>();
+      for (const alert of departureAlerts) {
+        if (seen.has(alert.soldierId)) continue;
+        seen.add(alert.soldierId);
+        void notifyDeparture(alert.soldierId, user.battalionId!, alert.statusName);
       }
     }
 
@@ -87,6 +140,12 @@ export async function closeCallup(
     const period = await prisma.callupPeriod.findUnique({ where: { id: callupId } });
     if (!period) return { error: "תקופת שמ\"פ לא נמצאה" };
     if (period.endDate) return { error: "שמ\"פ כבר סגור" };
+
+    const signedCount = await prisma.serialUnit.count({ where: { signedSoldierId: period.soldierId } });
+    if (signedCount > 0) {
+      return { error: `לא ניתן לסגור שמ"פ — החייל חתום על ${signedCount} פריטי ציוד. יש לזכות את הציוד לפני סגירה.` };
+    }
+
     await prisma.callupPeriod.update({
       where: { id: callupId },
       data: { endDate: new Date(endDate + "T00:00:00Z"), closedById: user.id, closedAt: new Date() },
@@ -104,6 +163,14 @@ export async function deleteCallup(
   try {
     const user = await requireUser();
     if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
+
+    const period = await prisma.callupPeriod.findUnique({ where: { id: callupId }, select: { soldierId: true } });
+    if (!period) return { error: "תקופת שמ\"פ לא נמצאה" };
+    const signedCount = await prisma.serialUnit.count({ where: { signedSoldierId: period.soldierId } });
+    if (signedCount > 0) {
+      return { error: `לא ניתן למחוק שמ"פ — החייל חתום על ${signedCount} פריטי ציוד.` };
+    }
+
     await prisma.callupPeriod.delete({ where: { id: callupId } });
     revalidatePath("/attendance");
     return { ok: true };
