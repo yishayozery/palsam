@@ -34,6 +34,7 @@ export default function SignaturePad({
   const [whatsappText, setWhatsappText] = useState<string | null>(null);
   const [soldierPhone, setSoldierPhone] = useState<string | null>(null);
   const [transferId, setTransferId] = useState<string | null>(null);
+  const [telegramSent, setTelegramSent] = useState<boolean | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const needsAck = !!(weaponsAgreement || signatureClause);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -108,7 +109,7 @@ export default function SignaturePad({
     setError("");
     setSubmitting(true);
     const data = canvasRef.current!.toDataURL("image/png");
-    let res: { ok: boolean; error?: string };
+    let res: { ok: boolean; error?: string; telegramSent?: boolean };
     try {
       res = isCompanySign
         ? await completeCompanySignature(token, data)
@@ -122,7 +123,7 @@ export default function SignaturePad({
     setSubmitting(false);
     if (res.ok) {
       setDone(true);
-      // 📲 טעינה אוטומטית של summary לשיתוף WhatsApp (רק לחתימת חייל)
+      if (res.telegramSent !== undefined) setTelegramSent(res.telegramSent);
       if (!isCompanySign) {
         try {
           const share = await getPostSignatureShareData(token);
@@ -150,6 +151,12 @@ export default function SignaturePad({
         <p className="font-bold text-emerald-700 text-xl">החתימה נקלטה בהצלחה!</p>
         <p className="text-sm text-slate-500 mt-2">תודה, {soldierName}.</p>
 
+        {telegramSent !== null && (
+          <div className={`mt-3 text-xs font-medium ${telegramSent ? "text-blue-600" : "text-slate-400"}`}>
+            {telegramSent ? "✅ הודעת טלגרם נשלחה לחייל" : "ℹ️ לחייל אין טלגרם מחובר — לא נשלחה הודעה"}
+          </div>
+        )}
+
         {whatsappText && (
           <div className="mt-4 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-right">
             <div className="text-xs font-bold text-emerald-900 mb-2">📋 סיכום כל הציוד שחתום עליך:</div>
@@ -168,29 +175,42 @@ export default function SignaturePad({
         )}
 
         {transferId && (() => {
+          const pdfUrl = `${window.location.origin}/api/transfer-doc/${transferId}/pdf`;
           const docUrl = `${window.location.origin}/transfer-doc/${transferId}`;
-          const pdfWaText = `שלום ${soldierName}, מצורף אישור ${whatsappText ? "החתמת" : ""} ציוד:\n${docUrl}`;
+          const pdfWaText = `שלום ${soldierName}, מצורף אישור החתמת ציוד.\nלהורדת התעודה כ-PDF:\n${pdfUrl}`;
           const pdfWaUrl = normalizedPhone
             ? `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(pdfWaText)}`
             : `https://wa.me/?text=${encodeURIComponent(pdfWaText)}`;
           return (
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 space-y-2">
               <a href={pdfWaUrl} target="_blank" rel="noopener noreferrer"
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-lg py-2 text-sm font-bold text-center">
-                📤 שלח טופס לחייל
+                className="block w-full bg-green-600 hover:bg-green-700 text-white rounded-lg py-2.5 text-sm font-bold text-center">
+                📤 שלח תעודה (PDF) לחייל
               </a>
-              <a href={docUrl} target="_blank" rel="noreferrer"
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-center hover:bg-slate-50">
-                📄 צפייה
-              </a>
+              <div className="flex gap-2">
+                <a href={pdfUrl} download
+                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-center hover:bg-slate-50 font-medium">
+                  ⬇️ הורד PDF
+                </a>
+                <a href={docUrl} target="_blank" rel="noreferrer"
+                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-center hover:bg-slate-50">
+                  📄 צפייה בתעודה
+                </a>
+              </div>
             </div>
           );
         })()}
 
-        <button onClick={() => router.push("/")}
-          className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-6 py-2 text-sm font-medium">
-          → חזרה
-        </button>
+        <div className="mt-4 flex gap-2">
+          <button onClick={() => router.push("/signatures")}
+            className="flex-1 bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-4 py-2 text-sm font-medium">
+            ✍️ המשך החתמות
+          </button>
+          <button onClick={() => router.push("/dashboard")}
+            className="flex-1 border border-slate-300 hover:bg-slate-50 rounded-lg px-4 py-2 text-sm font-medium">
+            🏠 חזרה לראשי
+          </button>
+        </div>
       </div>
     );
   }

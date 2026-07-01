@@ -59,16 +59,20 @@ export default async function PublicSignPage({
   }
   if (sig.status === "SIGNED") {
     const base = process.env.NEXT_PUBLIC_APP_URL || "";
+    const pdfUrl = sig.transferId ? `${base}/api/transfer-doc/${sig.transferId}/pdf` : null;
     const docUrl = sig.transferId ? `${base}/transfer-doc/${sig.transferId}` : null;
     const soldierPhone = sig.soldier?.phone ?? sig.signerUser?.phone ?? null;
-    const certWaText = docUrl
-      ? encodeURIComponent(`שלום ${signerName}, מצורף אישור החתמת ציוד:\n${docUrl}`)
+    const normalizedPhone = soldierPhone?.replace(/\D/g, "").replace(/^0/, "972") ?? "";
+    const pdfWaText = pdfUrl
+      ? encodeURIComponent(`שלום ${signerName}, מצורף אישור החתמת ציוד.\nלהורדת התעודה כ-PDF:\n${pdfUrl}`)
       : null;
-    const certWaUrl = certWaText && soldierPhone
-      ? `https://wa.me/${soldierPhone.replace(/\D/g, "").replace(/^0/, "972")}?text=${certWaText}`
-      : certWaText
-        ? `https://wa.me/?text=${certWaText}`
+    const pdfWaUrl = pdfWaText && normalizedPhone
+      ? `https://wa.me/${normalizedPhone}?text=${pdfWaText}`
+      : pdfWaText
+        ? `https://wa.me/?text=${pdfWaText}`
         : null;
+
+    const hasTelegram = !!(sig.soldier?.telegramChatId);
 
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
@@ -81,19 +85,38 @@ export default async function PublicSignPage({
               {sig.signedAt.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}
             </p>
           )}
+          <div className={`mt-3 text-xs font-medium ${hasTelegram ? "text-blue-600" : "text-slate-400"}`}>
+            {hasTelegram ? "✅ הודעת טלגרם נשלחה לחייל" : "ℹ️ לחייל אין טלגרם מחובר"}
+          </div>
           <div className="mt-5 space-y-2">
-            {certWaUrl && (
-              <a href={certWaUrl} target="_blank" rel="noreferrer"
+            {pdfWaUrl && (
+              <a href={pdfWaUrl} target="_blank" rel="noreferrer"
                 className="block w-full bg-green-600 hover:bg-green-700 text-white rounded-lg py-2.5 text-sm font-bold">
-                📲 שלח תעודה לחייל
+                📤 שלח תעודה (PDF) לחייל
+              </a>
+            )}
+            {pdfUrl && (
+              <a href={pdfUrl} download
+                className="block w-full border border-slate-300 hover:bg-slate-50 rounded-lg py-2.5 text-sm font-medium">
+                ⬇️ הורד PDF
               </a>
             )}
             {docUrl && (
               <a href={docUrl} target="_blank" rel="noreferrer"
-                className="block w-full bg-slate-800 hover:bg-slate-900 text-white rounded-lg py-2.5 text-sm font-bold">
+                className="block w-full border border-slate-300 hover:bg-slate-50 rounded-lg py-2.5 text-sm">
                 📄 צפייה בתעודה
               </a>
             )}
+          </div>
+          <div className="mt-4 flex gap-2">
+            <a href="/signatures"
+              className="flex-1 bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-4 py-2 text-sm font-medium">
+              ✍️ המשך החתמות
+            </a>
+            <a href="/dashboard"
+              className="flex-1 border border-slate-300 hover:bg-slate-50 rounded-lg px-4 py-2 text-sm font-medium">
+              🏠 חזרה לראשי
+            </a>
           </div>
         </div>
       </div>

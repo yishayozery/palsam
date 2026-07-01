@@ -11,23 +11,23 @@ import { requiresPersonalId } from "@/lib/handover";
 import { getSoldierEquipmentSummary, formatSoldierSummaryForWhatsApp, type SoldierEquipmentSummary } from "@/lib/soldier-summary";
 import type { SignatureMethod } from "@/generated/prisma";
 
-/** שליחת סיכום ציוד לחייל בטלגרם (non-blocking, non-fatal) */
-async function notifySoldierTelegram(soldierId: string, battalionId: string, transferId: string | null, action: "SIGN" | "CHECKIN") {
+/** שליחת סיכום ציוד לחייל בטלגרם — מחזיר true אם נשלח בהצלחה */
+async function notifySoldierTelegram(soldierId: string, battalionId: string, transferId: string | null, action: "SIGN" | "CHECKIN"): Promise<boolean> {
   try {
     const soldier = await prisma.soldier.findUnique({
       where: { id: soldierId },
       select: { telegramChatId: true, fullName: true },
     });
-    if (!soldier?.telegramChatId) return;
+    if (!soldier?.telegramChatId) return false;
 
     const battalion = await prisma.battalion.findUnique({
       where: { id: battalionId },
       select: { telegramBotToken: true },
     });
-    if (!battalion?.telegramBotToken) return;
+    if (!battalion?.telegramBotToken) return false;
 
     const summary = await getSoldierEquipmentSummary(soldierId);
-    if (!summary) return;
+    if (!summary) return false;
 
     const header = action === "SIGN" ? "📝 התקבל ציוד חדש" : "↩️ ציוד הוחזר";
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
@@ -35,8 +35,10 @@ async function notifySoldierTelegram(soldierId: string, battalionId: string, tra
     const text = formatSoldierSummaryForWhatsApp(summary, { headerTitle: `${header} — סיכום ציוד חתום` });
     const { sendTelegramMessage } = await import("@/lib/telegram");
     await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, text + docLink);
+    return true;
   } catch (e) {
     console.error("[notifySoldierTelegram] failed (non-fatal):", e);
+    return false;
   }
 }
 
@@ -356,10 +358,10 @@ export async function completeSignature(token: string, signatureData: string) {
     console.error("[completeSignature] weapons agreement auto-sign failed (non-fatal):", weaponsErr);
   }
 
-  void notifySoldierTelegram(soldierId, bId, sig.transferId, "SIGN");
+  const telegramSent = await notifySoldierTelegram(soldierId, bId, sig.transferId, "SIGN");
 
   revalidatePath("/signatures");
-  return { ok: true };
+  return { ok: true, telegramSent };
 }
 
 /** זיכוי מהיר (Fast Check-in) */
