@@ -876,12 +876,8 @@ export default function SignoutModal({
         <div className="border-t border-slate-200 p-3 bg-white shrink-0">
           {error && <div className="text-sm text-rose-700 font-medium mb-2">⚠️ {error}</div>}
           <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={() => { reset(); setOpen(false); }} disabled={busy}
-              className="flex-1 sm:flex-none rounded-lg border border-slate-300 px-4 py-2.5 text-sm disabled:opacity-50">סגור</button>
-            {cart.length > 0 && (
-              <button onClick={() => { setCart([]); setKitId(""); setError(null); }} disabled={busy}
-                className="flex-1 sm:flex-none rounded-lg border border-amber-300 text-amber-700 px-4 py-2.5 text-sm disabled:opacity-50">↩ נקה עגלה</button>
-            )}
+            <button onClick={() => { setError(null); }} disabled={busy}
+              className="flex-1 sm:flex-none rounded-lg border border-slate-300 px-4 py-2.5 text-sm disabled:opacity-50">ביטול</button>
             <button onClick={submit} disabled={busy || !soldierId || (cart.length === 0 && !kitId && soldierOpKits.length === 0)}
               className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-5 py-2.5 text-sm font-bold flex items-center justify-center gap-2">
               {busy ? (
