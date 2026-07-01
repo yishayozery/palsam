@@ -86,7 +86,10 @@ export default function SignaturePad({
     const res = await cancelSignatureByToken(token);
     setCancelling(false);
     if (res.ok) {
-      router.push(res.soldierId ? `/signatures?reopenFor=${res.soldierId}` : "/signatures");
+      const params = new URLSearchParams();
+      if (res.soldierId) params.set("reopenFor", res.soldierId);
+      if (res.serialIds?.length) params.set("preselect", res.serialIds.join(","));
+      router.push(`/signatures?${params.toString()}`);
     } else {
       setError(res.error || "שגיאה בביטול");
     }

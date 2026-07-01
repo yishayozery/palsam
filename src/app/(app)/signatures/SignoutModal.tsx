@@ -21,7 +21,7 @@ type CartItem = CartSerial | CartQty;
 type OpKitProp = { id: string; name: string; status: string; soldierId: string; soldierName: string; shelfLabel: string | null; items: { itemTypeId: string; itemName: string; sku: string | null; quantity: number }[] };
 
 export default function SignoutModal({
-  soldiers, companies = [], balances = [], units, kits, vehicles, equipmentLocations = [], lockCompanyId, isArmory = false, reopenForSoldierId, operationalKits = [],
+  soldiers, companies = [], balances = [], units, kits, vehicles, equipmentLocations = [], lockCompanyId, isArmory = false, reopenForSoldierId, preselectSerialIds, operationalKits = [],
 }: {
   soldiers: Soldier[]; companies?: Company[]; balances?: Balance[];
   units: Unit[]; kits: Kit[]; vehicles: Vehicle[];
@@ -29,6 +29,7 @@ export default function SignoutModal({
   lockCompanyId?: string | null;
   isArmory?: boolean;
   reopenForSoldierId?: string | null;
+  preselectSerialIds?: string[];
   operationalKits?: OpKitProp[];
 }) {
   const [open, setOpen] = useState(!!reopenForSoldierId);
@@ -36,7 +37,13 @@ export default function SignoutModal({
   const [companyFilter, setCompanyFilter] = useState(lockCompanyId ?? "");
   const [soldierSearch, setSoldierSearch] = useState("");
   const [itemSearch, setItemSearch] = useState("");
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    if (!preselectSerialIds?.length) return [];
+    return preselectSerialIds
+      .map((id) => units.find((u) => u.id === id))
+      .filter((u): u is Unit => !!u)
+      .map((u) => ({ type: "serial" as const, unitId: u.id, itemName: u.itemName, serial: u.serial, status: u.status }));
+  });
   const [kitId, setKitId] = useState("");
   const [vehicleId, setVehicleId] = useState("");
   const [equipmentLocationId, setEquipmentLocationId] = useState("");

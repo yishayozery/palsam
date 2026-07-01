@@ -14,8 +14,8 @@ import { ROLE_LABELS } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
-export default async function SignaturesPage({ searchParams }: { searchParams: Promise<{ reopenFor?: string }> }) {
-  const { reopenFor } = await searchParams;
+export default async function SignaturesPage({ searchParams }: { searchParams: Promise<{ reopenFor?: string; preselect?: string }> }) {
+  const { reopenFor, preselect } = await searchParams;
   const user = await requireUser();
   const bId = user.battalionId!;
   const canSign = can(user, "signatures.manage");
@@ -363,6 +363,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
               />
               <SignoutModal
                 reopenForSoldierId={reopenFor}
+                preselectSerialIds={preselect?.split(",").filter(Boolean)}
                 companies={companiesForFilter}
                 lockCompanyId={isCompanyRep ? user.holderId : null}
                 isArmory={!!(await prisma.holder.findFirst({ where: { id: user.holderId ?? "__", warehouseType: "ARMORY" } }))}

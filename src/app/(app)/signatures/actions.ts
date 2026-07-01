@@ -468,7 +468,7 @@ export async function checkinQuantity(formData: FormData) {
 }
 
 /** ביטול ציבורי לפי token — מאפשר לחייל/נמען לבטל לפני שחתם */
-export async function cancelSignatureByToken(token: string): Promise<{ ok?: boolean; error?: string; soldierId?: string }> {
+export async function cancelSignatureByToken(token: string): Promise<{ ok?: boolean; error?: string; soldierId?: string; serialIds?: string[] }> {
   try {
     const sig = await prisma.signature.findUnique({
       where: { token },
@@ -477,12 +477,12 @@ export async function cancelSignatureByToken(token: string): Promise<{ ok?: bool
     if (!sig) return { error: "לא נמצא" };
     if (sig.status !== "PENDING") return { error: "לא ניתן לבטל" };
     if (sig.tokenExpires && sig.tokenExpires < new Date()) return { error: "פג תוקף הקישור" };
+    let serialIds: string[] = [];
     await prisma.$transaction(async (tx) => {
-      await tx.signature.update({ where: { id: sig.id }, data: { status: "CANCELED" } });
       if (sig.transferId) {
         const transfer = await tx.transfer.findUnique({ where: { id: sig.transferId }, include: { lines: true } });
         if (transfer) {
-          await tx.transfer.update({ where: { id: sig.transferId }, data: { status: "REJECTED" } });
+          serialIds = transfer.lines.filter((l) => l.serialUnitId).map((l) => l.serialUnitId!);
           // החתמת פלוגה — מלאי הורד מראש ב-createCompanySign, צריך להחזיר
           if (sig.signerUserId && transfer.fromHolderId) {
             const { adjustQuantity } = await import("@/lib/inventory");
@@ -494,11 +494,18 @@ export async function cancelSignatureByToken(token: string): Promise<{ ok?: bool
               }
             }
           }
+          // מוחקים את ההחתמה + ה-Transfer — לא נחתם, לא קרה כלום במלאי
+          await tx.signature.delete({ where: { id: sig.id } });
+          await tx.transfer.delete({ where: { id: sig.transferId } });
+        } else {
+          await tx.signature.delete({ where: { id: sig.id } });
         }
+      } else {
+        await tx.signature.delete({ where: { id: sig.id } });
       }
     });
     revalidatePath("/signatures");
-    return { ok: true, soldierId: sig.soldierId ?? undefined };
+    return { ok: true, soldierId: sig.soldierId ?? undefined, serialIds };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "שגיאה" };
   }
