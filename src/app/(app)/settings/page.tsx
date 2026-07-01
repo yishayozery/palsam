@@ -2,11 +2,11 @@ import { requireCapability } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card } from "@/components/ui";
 import SettingsTabs from "@/components/SettingsTabs";
-import ProfileForm from "./ProfileForm";
+import OperationalSettingsForm from "./OperationalSettingsForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProfilePage() {
+export default async function SettingsPage() {
   const user = await requireCapability("battalion.profile");
   const battalion = await prisma.battalion.findUnique({ where: { id: user.battalionId! } });
   if (!battalion) return null;
@@ -14,12 +14,17 @@ export default async function ProfilePage() {
   return (
     <div>
       <PageHeader title="הגדרות גדוד" subtitle="פרופיל, מבנה ארגוני ומשתמשים" />
-      <SettingsTabs active="profile" />
+      <SettingsTabs active="ops" />
       <Card className="p-6 max-w-xl">
-        <ProfileForm
+        <OperationalSettingsForm
           battalion={{
-            name: battalion.name, code: battalion.code, brigade: battalion.brigade, commander: battalion.commander,
-            motto: battalion.motto, notes: battalion.notes, logoData: battalion.logoData,
+            requirePersonalIdOnHandover: battalion.requirePersonalIdOnHandover,
+            senderEmail: battalion.senderEmail,
+            notificationEmail: battalion.notificationEmail,
+            emailToBattalion: battalion.emailToBattalion,
+            telegramBotToken: battalion.telegramBotToken,
+            telegramBotInfo: battalion.telegramBotInfo,
+            telegramBotUsername: battalion.telegramBotUsername,
           }}
         />
       </Card>

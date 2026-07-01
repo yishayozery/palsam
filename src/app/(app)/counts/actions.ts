@@ -573,5 +573,19 @@ export async function registerTelegramWebhook() {
     }),
   });
 
-  return { ok: true, webhookUrl };
+  // שמירת username הבוט
+  let botUsername: string | null = null;
+  try {
+    const meRes = await fetch(`${apiBase}/getMe`);
+    const meData = await meRes.json();
+    if (meData.ok && meData.result?.username) {
+      botUsername = meData.result.username;
+      await prisma.battalion.update({
+        where: { id: bId },
+        data: { telegramBotUsername: botUsername },
+      });
+    }
+  } catch {}
+
+  return { ok: true, webhookUrl, botUsername };
 }
