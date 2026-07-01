@@ -11,6 +11,35 @@ import { requiresPersonalId } from "@/lib/handover";
 import { getSoldierEquipmentSummary, formatSoldierSummaryForWhatsApp, type SoldierEquipmentSummary } from "@/lib/soldier-summary";
 import type { SignatureMethod } from "@/generated/prisma";
 
+/** שליחת סיכום ציוד לחייל בטלגרם (non-blocking, non-fatal) */
+async function notifySoldierTelegram(soldierId: string, battalionId: string, transferId: string | null, action: "SIGN" | "CHECKIN") {
+  try {
+    const soldier = await prisma.soldier.findUnique({
+      where: { id: soldierId },
+      select: { telegramChatId: true, fullName: true },
+    });
+    if (!soldier?.telegramChatId) return;
+
+    const battalion = await prisma.battalion.findUnique({
+      where: { id: battalionId },
+      select: { telegramBotToken: true },
+    });
+    if (!battalion?.telegramBotToken) return;
+
+    const summary = await getSoldierEquipmentSummary(soldierId);
+    if (!summary) return;
+
+    const header = action === "SIGN" ? "📝 התקבל ציוד חדש" : "↩️ ציוד הוחזר";
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+    const docLink = transferId ? `\n\n📄 <a href="${baseUrl}/transfer-doc/${transferId}">צפה בתעודה</a>` : "";
+    const text = formatSoldierSummaryForWhatsApp(summary, { headerTitle: `${header} — סיכום ציוד חתום` });
+    const { sendTelegramMessage } = await import("@/lib/telegram");
+    await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, text + docLink);
+  } catch (e) {
+    console.error("[notifySoldierTelegram] failed (non-fatal):", e);
+  }
+}
+
 /** עדכון נייד חייל — משמש את SignoutModal כשאין טלפון */
 export async function updateSoldierPhone(soldierId: string, phone: string): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser();
@@ -327,6 +356,8 @@ export async function completeSignature(token: string, signatureData: string) {
     console.error("[completeSignature] weapons agreement auto-sign failed (non-fatal):", weaponsErr);
   }
 
+  void notifySoldierTelegram(soldierId, bId, sig.transferId, "SIGN");
+
   revalidatePath("/signatures");
   return { ok: true };
 }
@@ -427,6 +458,8 @@ export async function checkinSerial(formData: FormData) {
       await audit(user.id, "RESET_WEAPONS_FLAGS", "Soldier", su.signedSoldierId, { reason: "החזיר נשק אחרון" });
     }
   }
+
+  if (su.signedSoldierId) void notifySoldierTelegram(su.signedSoldierId, bId, null, "CHECKIN");
 
   revalidatePath("/signatures");
   revalidatePath("/my-equipment");
@@ -757,6 +790,8 @@ export async function checkinBatch(payload: {
         break;
       }
     }
+
+    void notifySoldierTelegram(soldierId, bId, transferId, "CHECKIN");
 
     revalidatePath("/signatures");
     revalidatePath("/my-equipment");

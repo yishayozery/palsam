@@ -246,10 +246,13 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
     orderBy: { name: "asc" },
   });
 
-  // 🆕 מארזים מבצעיים — כדי שהחתמה/זיכוי יזהו מארזים על שם החייל
-  const operationalKits = (isCompanyRep && user.holderId)
+  // מארזים מבצעיים — כדי שהחתמה/זיכוי יזהו מארזים על שם החייל (רס"פ + מחסנאי)
+  const opKitHolderIds = isCompanyRep && user.holderId
+    ? [user.holderId]
+    : isWM ? user.holderIds : [];
+  const operationalKits = opKitHolderIds.length > 0
     ? await prisma.operationalKit.findMany({
-        where: { holderId: user.holderId, active: true, assignedSoldierId: { not: null } },
+        where: { holderId: { in: opKitHolderIds }, active: true, assignedSoldierId: { not: null } },
         include: {
           items: { include: { itemType: { select: { id: true, name: true, sku: true } } } },
           assignedSoldier: { select: { id: true, fullName: true, personalNumber: true } },
