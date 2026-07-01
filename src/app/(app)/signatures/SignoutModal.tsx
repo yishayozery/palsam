@@ -309,14 +309,20 @@ export default function SignoutModal({
       }
     }
     try {
-      await createSignout(fd);
+      const result = await createSignout(fd);
+      if (result?.error) {
+        setError(result.error);
+        submittingRef.current = false;
+        setBusy(false);
+        return;
+      }
       // הצלחה: השרת יפנה לדף החתימה. אם הגענו לכאן ללא redirect — נסגור.
       reset(); setOpen(false);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       // NEXT_REDIRECT הוא אובייקט מיוחד — אם זה זה, פשוט מתעלמים (הניתוב בוצע)
       if (msg.includes("NEXT_REDIRECT")) return;
-      setError(msg);
+      setError(msg || "שגיאה לא צפויה");
       submittingRef.current = false;
       setBusy(false);
     }

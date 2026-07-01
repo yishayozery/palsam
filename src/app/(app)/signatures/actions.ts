@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/guard";
@@ -79,13 +80,13 @@ export async function getPostSignatureShareData(
 }
 
 /** יצירת החתמה (SIGNOUT): מחזיק ◄ חייל. */
-export async function createSignout(formData: FormData) {
+export async function createSignout(formData: FormData): Promise<{ error: string } | void> {
   let user;
   try {
     user = await requireUser();
   } catch (e) {
     console.error("[createSignout] requireUser failed:", e);
-    throw e;
+    return { error: "שגיאה באימות משתמש" };
   }
   if (!can(user, "signatures.manage")) redirect("/signatures");
   const bId = user.battalionId!;
@@ -102,13 +103,13 @@ export async function createSignout(formData: FormData) {
   const qtyValues = formData.getAll("qtyValue").map((v) => parseInt(String(v), 10) || 0);
   const qtyStatuses = formData.getAll("qtyStatus").map(String);
   const hasAnything = serialIds.length > 0 || kitId || qtyItems.length > 0;
-  if (!soldierId || !hasAnything) throw new Error("בחר חייל ולפחות פריט אחד");
+  if (!soldierId || !hasAnything) return { error: "בחר חייל ולפחות פריט אחד" };
 
   // 🔒 אכיפת מ.א. — אם הגדוד דורש, חייב להיות לחייל מ.א. במערכת
   if (await requiresPersonalId(bId)) {
     const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { fullName: true, personalNumber: true } });
     if (!soldier?.personalNumber) {
-      throw new Error(`🔒 הגדוד דורש מ.א. בכל מסירה. החייל ${soldier?.fullName ?? ""} לא מקושר למ.א. — עדכן ב-/roster לפני ההחתמה.`);
+      return { error: `🔒 הגדוד דורש מ.א. בכל מסירה. החייל ${soldier?.fullName ?? ""} לא מקושר למ.א. — עדכן ב-/roster לפני ההחתמה.` };
     }
   }
 
@@ -128,7 +129,7 @@ export async function createSignout(formData: FormData) {
     const { areAnyItemsArmory, getSoldierWeaponsEligibility } = await import("@/lib/weapons-eligibility");
     if (await areAnyItemsArmory(allItemTypeIds)) {
       const elig = await getSoldierWeaponsEligibility(soldierId);
-      if (!elig) throw new Error("חייל לא נמצא");
+      if (!elig) return { error: "חייל לא נמצא" };
       if (!elig.isFullyEligible) {
         const missing = elig.missingSteps.map((s) => {
           if (s === "enlisted") return "אישור שלישות (פנה לשליש)";
@@ -137,7 +138,7 @@ export async function createSignout(formData: FormData) {
           if (s === "weaponsAgreementSigned") return "חתימה על נוהל שמירת נשק (דרך הלינק לחייל)";
           return s;
         }).join(" + ");
-        throw new Error(`🚫 לא ניתן להחתים על נשק. החייל חסר: ${missing}`);
+        return { error: `🚫 לא ניתן להחתים על נשק. החייל חסר: ${missing}` };
       }
     }
   }
@@ -163,7 +164,7 @@ export async function createSignout(formData: FormData) {
         const newCount = allItemTypeIds.filter((id) => id === alloc.itemTypeId).length;
         if (currentSigned + newCount > alloc.quantity && alloc.blockOnExceed) {
           const item = await prisma.itemType.findUnique({ where: { id: alloc.itemTypeId }, select: { name: true } });
-          throw new Error(`📦 חריגה מהקצאה: ${soldier.company?.name ?? "פלוגה"} מוקצה ${alloc.quantity} × ${item?.name ?? "פריט"}, כבר חתום ${currentSigned}, מנסה להוסיף ${newCount}`);
+          return { error: `📦 חריגה מהקצאה: ${soldier.company?.name ?? "פלוגה"} מוקצה ${alloc.quantity} × ${item?.name ?? "פריט"}, כבר חתום ${currentSigned}, מנסה להוסיף ${newCount}` };
         }
       }
     }
@@ -187,7 +188,7 @@ export async function createSignout(formData: FormData) {
       const available = balance?.quantity ?? 0;
       if (available < quantity) {
         const item = await prisma.itemType.findUnique({ where: { id: itemTypeId }, select: { name: true } });
-        throw new Error(`🚫 לא מספיק מלאי של "${item?.name ?? itemTypeId}": מבקש ${quantity}, זמין ${available}`);
+        return { error: `🚫 לא מספיק מלאי של "${item?.name ?? itemTypeId}": מבקש ${quantity}, זמין ${available}` };
       }
     }
   }
@@ -264,15 +265,21 @@ export async function createSignout(formData: FormData) {
   console.log("[createSignout] transaction OK, transferId:", transferId);
   } catch (txErr) {
     console.error("[createSignout] TRANSACTION FAILED:", txErr);
-    throw new Error(txErr instanceof Error ? txErr.message : "שגיאה ביצירת ההחתמה");
+    return { error: txErr instanceof Error ? txErr.message : "שגיאה ביצירת ההחתמה" };
   }
 
-  await audit(user.id, "CREATE_SIGNOUT", "Transfer", transferId, { soldierId, method });
-  console.log("[createSignout] audit done, revalidating...");
-  revalidatePath("/signatures");
-  console.log("[createSignout] revalidate done, redirecting method=", method);
-  if (method === "ONSITE") redirect(`/sign/${token}`);
-  redirect(`/signatures/${token}`);
+  try {
+    await audit(user.id, "CREATE_SIGNOUT", "Transfer", transferId, { soldierId, method });
+    console.log("[createSignout] audit done, revalidating...");
+    revalidatePath("/signatures");
+    console.log("[createSignout] revalidate done, redirecting method=", method);
+    if (method === "ONSITE") redirect(`/sign/${token}`);
+    redirect(`/signatures/${token}`);
+  } catch (postErr) {
+    if (isRedirectError(postErr)) throw postErr;
+    console.error("[createSignout] POST-TX ERROR:", postErr);
+    return { error: postErr instanceof Error ? postErr.message : "שגיאה לאחר יצירת ההחתמה" };
+  }
 }
 
 /** השלמת חתימה (ציבורי) */
