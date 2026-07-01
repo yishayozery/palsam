@@ -63,7 +63,9 @@ export default function SignoutModal({
   const [phoneError, setPhoneError] = useState("");
 
   // מארזים מבצעיים — STORED, משויכים לחייל הנבחר
-  const soldierOpKits = operationalKits.filter((k) => k.soldierId === soldierId && k.status === "STORED");
+  const allSoldierOpKits = operationalKits.filter((k) => k.soldierId === soldierId && k.status === "STORED");
+  const [includedOpKitIds, setIncludedOpKitIds] = useState<Set<string>>(new Set());
+  const soldierOpKits = allSoldierOpKits.filter((k) => includedOpKitIds.has(k.id));
   const [opKitRemovedItems, setOpKitRemovedItems] = useState<Record<string, Record<string, number>>>({});
 
   const [kitShortageDialog, setKitShortageDialog] = useState<{
@@ -157,7 +159,7 @@ export default function SignoutModal({
 
   const reset = () => {
     setSoldierId(""); setCompanyFilter(lockCompanyId ?? ""); setSoldierSearch("");
-    setItemSearch(""); setCart([]); setKitId(""); setVehicleId(""); setMethod("ONSITE"); setError(null);
+    setItemSearch(""); setCart([]); setKitId(""); setVehicleId(""); setMethod("ONSITE"); setError(null); setIncludedOpKitIds(new Set());
     setBusy(false); submittingRef.current = false; setPhoneInput(""); setPhoneError("");
   };
 
@@ -363,7 +365,7 @@ export default function SignoutModal({
             </div>
             <div className="flex-[2] min-w-48">
               <label className="block text-[11px] text-slate-600 mb-0.5">בחר חייל ({filteredSoldiers.length})</label>
-              <select value={soldierId} onChange={(e) => setSoldierId(e.target.value)}
+              <select value={soldierId} onChange={(e) => { setSoldierId(e.target.value); setIncludedOpKitIds(new Set()); }}
                 className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white">
                 <option value="">— {filteredSoldiers.length === 0 ? "אין חיילים בפלוגה" : "בחר חייל"} —</option>
                 {filteredSoldiers.map((s) => (
@@ -417,15 +419,29 @@ export default function SignoutModal({
               )}
             </div>
             <div className="flex-1 md:overflow-y-auto p-2 space-y-1.5">
-              {/* מארזים מבצעיים */}
-              {soldierOpKits.length > 0 && (
+              {/* מארזים מבצעיים — עם אפשרות לבחור אם לכלול */}
+              {allSoldierOpKits.length > 0 && (
                 <div className="mb-2">
-                  <div className="text-xs font-bold text-emerald-700 mb-1">📦 מארזים מבצעיים ({soldierOpKits.length})</div>
-                  {soldierOpKits.map((kit) => (
-                    <div key={kit.id} className="bg-emerald-50 border border-emerald-200 rounded-lg p-2 mb-1.5">
-                      <div className="font-medium text-sm text-emerald-800">{kit.name}</div>
-                      {kit.shelfLabel && <div className="text-[10px] text-emerald-600">📍 {kit.shelfLabel}</div>}
-                      <div className="mt-1 space-y-0.5">
+                  <div className="text-xs font-bold text-emerald-700 mb-1">📦 מארזים מבצעיים ({allSoldierOpKits.length})</div>
+                  {allSoldierOpKits.map((kit) => {
+                    const included = includedOpKitIds.has(kit.id);
+                    return (
+                    <div key={kit.id} className={`border rounded-lg p-2 mb-1.5 ${included ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200"}`}>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={included} onChange={(e) => {
+                          setIncludedOpKitIds((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(kit.id); else next.delete(kit.id);
+                            return next;
+                          });
+                        }} className="w-4 h-4 rounded accent-emerald-600" />
+                        <div className="flex-1">
+                          <div className="font-medium text-sm text-emerald-800">{kit.name}</div>
+                          {kit.shelfLabel && <div className="text-[10px] text-emerald-600">📍 {kit.shelfLabel}</div>}
+                        </div>
+                      </label>
+                      {included && (
+                      <div className="mt-1 space-y-0.5 mr-6">
                         {kit.items.map((item) => {
                           const removedQty = opKitRemovedItems[kit.id]?.[item.itemTypeId] ?? 0;
                           const effectiveQty = item.quantity - removedQty;
@@ -461,11 +477,13 @@ export default function SignoutModal({
                           );
                         })}
                       </div>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
-              {cart.length === 0 && soldierOpKits.length === 0 ? (
+              {cart.length === 0 && allSoldierOpKits.length === 0 ? (
                 <div className="text-center text-slate-400 py-6 md:py-10 text-sm">
                   עגלה ריקה.<br />לחץ על פריט במלאי כדי להוסיף.
                 </div>

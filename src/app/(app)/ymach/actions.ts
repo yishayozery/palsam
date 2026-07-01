@@ -395,13 +395,13 @@ export async function signKit(
   removedItems?: { itemTypeId: string; quantity: number }[],
 ) {
   const user = await requireCapability("ymach.manage");
-  if (!user.holderId) return { error: "לא משויך" };
 
   const kit = await prisma.operationalKit.findUnique({
     where: { id: kitId },
     include: { items: true },
   });
-  if (!kit || kit.holderId !== user.holderId) return { error: "מארז לא תקין" };
+  if (!kit || kit.battalionId !== user.battalionId) return { error: "מארז לא תקין" };
+  if (!user.isAdmin && kit.holderId !== user.holderId) return { error: "מארז לא שייך למחסן שלך" };
   if (!kit.assignedSoldierId) return { error: "מארז לא צוות לחייל" };
   if (kit.status === "ISSUED") return { error: "מארז כבר אצל חייל" };
 
