@@ -51,7 +51,10 @@ export default async function SoldiersPage({
     prisma.soldier.findMany({
       where,
       orderBy: [{ squad: { sortOrder: "asc" } }, { fullName: "asc" }],
-      include: {
+      select: {
+        id: true, fullName: true, personalNumber: true, phone: true, platoon: true, status: true,
+        telegramChatId: true, drivingRefresherDate: true,
+        companyId: true, squadId: true, companyRoleId: true,
         company: true,
         squad: true,
         companyRole: true,
@@ -299,6 +302,7 @@ export default async function SoldiersPage({
                 {(s.squad?.name || s.platoon) && <Badge className="bg-indigo-100 text-indigo-700">{s.squad?.name ?? s.platoon}</Badge>}
                 {s.companyRole && <Badge className={s.companyRole.isCommander ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}>{s.companyRole.name}{s.companyRole.isCommander ? " ⭐" : ""}</Badge>}
                 {s.company && <Badge>{s.company.name}</Badge>}
+                {s.telegramChatId && <Badge className="bg-sky-100 text-sky-700">📱 בוט</Badge>}
                 {s.drivingLicenses.length > 0 && (
                   <Badge className="bg-green-100 text-green-700">🪪 {s.drivingLicenses.map((dl) => dl.licenseType.name).join(", ")}</Badge>
                 )}
