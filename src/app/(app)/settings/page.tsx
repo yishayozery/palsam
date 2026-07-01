@@ -22,6 +22,7 @@ export default async function SettingsPage() {
             senderEmail: battalion.senderEmail,
             notificationEmail: battalion.notificationEmail,
             emailToBattalion: battalion.emailToBattalion,
+            armoryTestUrl: battalion.armoryTestUrl,
             telegramBotToken: battalion.telegramBotToken,
             telegramBotInfo: battalion.telegramBotInfo,
             telegramBotUsername: battalion.telegramBotUsername,

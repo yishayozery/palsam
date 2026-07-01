@@ -12,6 +12,7 @@ type Props = {
     senderEmail: string | null;
     notificationEmail: string | null;
     emailToBattalion: boolean;
+    armoryTestUrl: string | null;
     telegramBotToken: string | null;
     telegramBotInfo: string | null;
     telegramBotUsername: string | null;
@@ -46,6 +47,26 @@ export default function OperationalSettingsForm({ battalion }: Props) {
           </div>
         </div>
       </label>
+
+      {/* 🔫 לינקים לתהליך חתימת נשק */}
+      <div className="p-3 rounded-lg border border-slate-200">
+        <h4 className="text-sm font-medium text-slate-800 mb-2">🔫 תהליך חתימת נשק</h4>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">לינק למבחן נוהל ארמון</label>
+            <input
+              type="url"
+              name="armoryTestUrl"
+              defaultValue={battalion.armoryTestUrl ?? ""}
+              placeholder="https://docs.google.com/forms/d/..."
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">
+              לינק לגוגל פורם או כל מבחן חיצוני. מוצג לחייל בבוט טלגרם כשעדיין לא עבר מבחן.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* 📧 מייל לגיבוי תנועות */}
       <div className="p-3 rounded-lg border border-amber-300 bg-amber-50">

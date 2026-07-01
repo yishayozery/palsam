@@ -18,6 +18,7 @@ export async function updateOperationalSettings(
   const senderEmail = String(formData.get("senderEmail") || "").trim() || null;
   const notificationEmail = String(formData.get("notificationEmail") || "").trim() || null;
   const emailToBattalion = notificationEmail ? true : formData.get("emailToBattalion") === "on";
+  const armoryTestUrl = String(formData.get("armoryTestUrl") || "").trim() || null;
   const telegramBotToken = String(formData.get("telegramBotToken") || "").trim() || null;
   const telegramBotInfo = String(formData.get("telegramBotInfo") || "").trim() || null;
 
@@ -26,7 +27,7 @@ export async function updateOperationalSettings(
   try {
     await prisma.battalion.update({
       where: { id: bId },
-      data: { requirePersonalIdOnHandover, senderEmail, notificationEmail, emailToBattalion, telegramBotToken, telegramBotInfo },
+      data: { requirePersonalIdOnHandover, senderEmail, notificationEmail, emailToBattalion, armoryTestUrl, telegramBotToken, telegramBotInfo },
     });
   } catch {
     return { error: "שמירה נכשלה" };
