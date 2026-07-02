@@ -9,6 +9,10 @@ type Line = {
   serialUnitId?: string | null;
   signedSoldier?: string | null;
   physicalLocation?: string | null;
+  equipmentLocation?: string | null;
+  shelfLabel?: string | null;
+  expiryDate?: string | null;
+  lotQuantity?: number | null;
   expected: number; isSerial: boolean;
 };
 
@@ -90,22 +94,36 @@ export default function CountExecutor({
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{l.item}</div>
                       {l.serial && <div className="font-mono text-xs text-slate-400 truncate">SN: {l.serial}</div>}
-                      {/* פרטים על יחידה סריאלית: חייל חתום + מיקום פיזי */}
-                      {l.isSerial && (l.signedSoldier || l.physicalLocation) && (
+                      {l.isSerial && (
                         <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
                           {l.signedSoldier && <span className="text-blue-600">🪖 {l.signedSoldier}</span>}
-                          {l.physicalLocation && <span className="text-emerald-700">📍 {l.physicalLocation}</span>}
+                          {(l.equipmentLocation || l.physicalLocation) && (
+                            <span className="text-emerald-700">📍 {l.equipmentLocation || l.physicalLocation}</span>
+                          )}
+                          {l.shelfLabel && <span className="text-violet-600">🗄️ {l.shelfLabel}</span>}
+                          {l.expiryDate && (
+                            <span className={new Date(l.expiryDate) < new Date() ? "text-rose-600 font-medium" : "text-amber-600"}>
+                              📅 {new Date(l.expiryDate).toLocaleDateString("he-IL")}
+                            </span>
+                          )}
+                          {l.lotQuantity && l.lotQuantity > 1 && <span className="text-slate-500">📦 כמות אצווה: {l.lotQuantity}</span>}
                         </div>
                       )}
                     </div>
                     <div className="text-xs text-slate-500 whitespace-nowrap">צפוי: <b>{l.expected}</b></div>
                     {l.isSerial ? (
-                      <select name={`count:${l.id}`} value={value}
-                        onChange={(e) => updateCount(l.id, e.target.value)}
-                        className={`w-28 rounded-lg border px-2 py-1 text-sm ${isGap ? "border-rose-400 bg-white" : "border-slate-300"}`}>
-                        <option value={String(l.expected)}>✓ נמצא</option>
-                        <option value="0">✗ חסר</option>
-                      </select>
+                      <div className="flex flex-col gap-1 items-end">
+                        <select name={`count:${l.id}`} value={value}
+                          onChange={(e) => updateCount(l.id, e.target.value)}
+                          className={`w-28 rounded-lg border px-2 py-1 text-sm ${isGap ? "border-rose-400 bg-white" : "border-slate-300"}`}>
+                          <option value={String(l.expected)}>✓ נמצא</option>
+                          <option value="0">✗ חסר</option>
+                        </select>
+                        {l.serial && (
+                          <input name={`sn:${l.id}`} type="text" placeholder="הקלד מס׳ סריאלי..."
+                            className="w-28 rounded-lg border border-slate-300 px-2 py-1 text-xs font-mono" />
+                        )}
+                      </div>
                     ) : (
                       <input name={`count:${l.id}`} type="number" min="0" value={value}
                         onChange={(e) => updateCount(l.id, e.target.value)}

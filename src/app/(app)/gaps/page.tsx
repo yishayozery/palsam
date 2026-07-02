@@ -30,7 +30,25 @@ export default async function GapsPage() {
   const [open, resolved] = await Promise.all([
     prisma.discrepancy.findMany({
       where: { battalionId: bId, status: "OPEN", ...scope },
-      include: { itemType: true, holder: true },
+      include: {
+        itemType: true, holder: true,
+        session: {
+          select: {
+            lines: {
+              select: {
+                serialUnit: {
+                  select: {
+                    serialNumber: true,
+                    physicalLocation: true,
+                    signedSoldier: { select: { fullName: true, phone: true, telegramChatId: true } },
+                    equipmentLocation: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
     }),
     prisma.discrepancy.findMany({
@@ -74,26 +92,52 @@ export default async function GapsPage() {
         ) : (
           <Table>
             <thead>
-              <tr><Th>פריט</Th><Th>מחזיק</Th><Th>סוג</Th><Th>צפוי</Th><Th>נספר</Th><Th>פער</Th><Th>טיפול</Th></tr>
+              <tr><Th>פריט</Th><Th>מחזיק</Th><Th>חייל / מיקום</Th><Th>סוג</Th><Th>צפוי</Th><Th>נספר</Th><Th>פער</Th><Th>הערה</Th><Th>טיפול</Th></tr>
             </thead>
             <tbody>
-              {open.map((d) => (
-                <tr key={d.id}>
-                  <Td className="font-medium">{d.itemType.name}</Td>
-                  <Td>{d.holder?.name ?? "—"}</Td>
-                  <Td>
-                    <Badge className={d.kind === "LOSS" ? "bg-rose-100 text-rose-700" : "bg-blue-100 text-blue-700"}>
-                      {DISCREPANCY_KIND[d.kind]}
-                    </Badge>
-                  </Td>
-                  <Td className="text-center">{d.expectedQty}</Td>
-                  <Td className="text-center">{d.countedQty}</Td>
-                  <Td className={`text-center font-bold ${d.diff < 0 ? "text-rose-600" : "text-blue-600"}`}>
-                    {d.diff > 0 ? `+${d.diff}` : d.diff}
-                  </Td>
-                  <Td>{canResolve || (d.sessionId && mySessionIds.has(d.sessionId)) ? <ResolveGap id={d.id} /> : <span className="text-xs text-slate-400">ממתין לאישור</span>}</Td>
-                </tr>
-              ))}
+              {open.map((d) => {
+                const relatedLines = d.session?.lines ?? [];
+                const line = relatedLines.find((l) => l.serialUnit?.signedSoldier);
+                const soldier = line?.serialUnit?.signedSoldier;
+                const anyLine = line ?? relatedLines.find((l) => l.serialUnit);
+                const location = anyLine?.serialUnit?.equipmentLocation?.name || anyLine?.serialUnit?.physicalLocation;
+                const isSNMismatch = d.resolution?.includes("אי-התאמת מס׳ סריאלי");
+                return (
+                  <tr key={d.id}>
+                    <Td className="font-medium">{d.itemType.name}</Td>
+                    <Td>{d.holder?.name ?? "—"}</Td>
+                    <Td>
+                      <div className="text-xs space-y-0.5">
+                        {soldier && <div className="text-blue-600">{soldier.fullName}</div>}
+                        {location && <div className="text-emerald-700">{location}</div>}
+                      </div>
+                    </Td>
+                    <Td>
+                      <Badge className={isSNMismatch ? "bg-amber-100 text-amber-700" : d.kind === "LOSS" ? "bg-rose-100 text-rose-700" : "bg-blue-100 text-blue-700"}>
+                        {isSNMismatch ? "סריאלי שגוי" : DISCREPANCY_KIND[d.kind]}
+                      </Badge>
+                    </Td>
+                    <Td className="text-center">{d.expectedQty}</Td>
+                    <Td className="text-center">{d.countedQty}</Td>
+                    <Td className={`text-center font-bold ${d.diff < 0 ? "text-rose-600" : d.diff > 0 ? "text-blue-600" : "text-amber-600"}`}>
+                      {d.diff > 0 ? `+${d.diff}` : d.diff === 0 ? "SN" : d.diff}
+                    </Td>
+                    <Td className="text-xs text-slate-500 max-w-40">
+                      <span className="block truncate" title={d.resolution ?? ""}>{d.resolution ?? "—"}</span>
+                    </Td>
+                    <Td>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {canResolve || (d.sessionId && mySessionIds.has(d.sessionId)) ? <ResolveGap id={d.id} /> : <span className="text-xs text-slate-400">ממתין</span>}
+                        {soldier?.phone && (
+                          <a href={`https://wa.me/972${soldier.phone.replace(/^0/, "")}?text=${encodeURIComponent(`שלום ${soldier.fullName}, נמצא פער בספירת מלאי עבור: ${d.itemType.name}. יש לבדוק ולעדכן.`)}`}
+                            target="_blank" rel="noreferrer"
+                            className="text-xs text-emerald-600 hover:text-emerald-800">📱</a>
+                        )}
+                      </div>
+                    </Td>
+                  </tr>
+                );
+              })}
             </tbody>
           </Table>
         )}

@@ -59,8 +59,10 @@ export async function toggleCountPlan(formData: FormData) {
   const plan = await prisma.countPlan.findUnique({ where: { id } });
   if (!plan || plan.battalionId !== user.battalionId) return;
   await prisma.countPlan.update({ where: { id }, data: { active: !plan.active } });
+  if (!plan.active) await generatePendingTasks();
   await audit(user.id, "UPDATE_COUNT_PLAN", "CountPlan", id, { active: !plan.active });
   revalidatePath("/counts/plans");
+  revalidatePath("/counts");
 }
 
 export async function deleteCountPlan(formData: FormData) {

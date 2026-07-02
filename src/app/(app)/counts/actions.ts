@@ -107,12 +107,11 @@ export async function purgeAllCountTasks(formData: FormData) {
   return { ok: true, deleted };
 }
 
-/** פתיחת ספירה — מייצר שורות ספירה לפי המלאי הצפוי בהיקף. */
+/** פתיחת ספירה — יוצר תכנית חד-פעמית + משימה ומתחיל ספירה. */
 export async function startCount(formData: FormData) {
   const user = await requireCapability("counts.execute");
   const bId = user.battalionId!;
   const type = String(formData.get("type") || "WAREHOUSE") as CountType;
-  const definitionId = String(formData.get("definitionId") || "") || null;
   const scopeHolderId = String(formData.get("scopeHolderId") || "") || null;
 
   // היקף המחזיקים
@@ -127,27 +126,69 @@ export async function startCount(formData: FormData) {
     holderIds = (await prisma.holder.findMany({ where: { battalionId: bId, active: true } })).map((h) => h.id);
   }
 
-  let sessionId = "";
-  await prisma.$transaction(async (tx) => {
-    const session = await tx.countSession.create({
-      data: { battalionId: bId, definitionId, type, status: type === "GLOBAL" ? "FROZEN" : "IN_PROGRESS", frozen: type === "GLOBAL", startedById: user.id },
-    });
-    sessionId = session.id;
+  const typeLabel = type === "WAREHOUSE" ? "מחסן" : type === "COMPANY" ? "פלוגתית" : "רוחבית";
+  const now = new Date();
 
-    const balances = await tx.stockBalance.findMany({ where: { battalionId: bId, holderId: { in: holderIds }, quantity: { gt: 0 } } });
-    for (const b of balances) {
-      await tx.countLine.create({ data: { sessionId: session.id, itemTypeId: b.itemTypeId, holderId: b.holderId, expectedQty: b.quantity } });
-    }
-    const units = await tx.serialUnit.findMany({
-      where: { battalionId: bId, OR: [{ currentHolderId: { in: holderIds } }, ...(type === "GLOBAL" ? [{ signedSoldierId: { not: null } }] : [])] },
-    });
-    for (const u of units) {
-      await tx.countLine.create({ data: { sessionId: session.id, itemTypeId: u.itemTypeId, holderId: u.currentHolderId, serialUnitId: u.id, expectedQty: u.lotQuantity ?? 1 } });
-    }
+  // 1. יצירת תכנית חד-פעמית
+  const plan = await prisma.countPlan.create({
+    data: {
+      battalionId: bId,
+      name: `ספירה ${typeLabel} — ${now.toLocaleDateString("he-IL")}`,
+      frequencyDays: 0,
+      graceMinutes: 1440,
+      scopeHolderIds: holderIds,
+      active: false, // חד-פעמית — לא ייצור משימות נוספות
+      createdById: user.id,
+      responsibleUserId: user.id,
+    },
   });
 
-  await audit(user.id, "START_COUNT", "CountSession", sessionId, { type });
-  redirect(`/counts/${sessionId}`);
+  // 2. יצירת משימות + התחלת ספירה לכל מחזיק
+  let firstSessionId = "";
+  for (const hId of holderIds) {
+    const task = await prisma.countTask.create({
+      data: {
+        battalionId: bId,
+        planId: plan.id,
+        holderId: hId,
+        assignedUserId: user.id,
+        scheduledAt: now,
+        dueAt: new Date(now.getTime() + 1440 * 60 * 1000),
+        status: "PENDING",
+      },
+      include: { holder: true, plan: true },
+    });
+
+    const holder = task.holder;
+    const sessionType = holder.kind === "WAREHOUSE" ? "WAREHOUSE" : "COMPANY";
+    const session = await prisma.countSession.create({
+      data: { battalionId: bId, type: sessionType, status: type === "GLOBAL" ? "FROZEN" : "IN_PROGRESS", frozen: type === "GLOBAL", startedById: user.id },
+    });
+
+    await prisma.countTask.update({
+      where: { id: task.id },
+      data: { sessionId: session.id, status: "IN_PROGRESS", startedAt: now },
+    });
+
+    const balances = await prisma.stockBalance.findMany({ where: { battalionId: bId, holderId: hId, quantity: { gt: 0 } } });
+    for (const b of balances) {
+      await prisma.countLine.create({ data: { sessionId: session.id, itemTypeId: b.itemTypeId, holderId: b.holderId, expectedQty: b.quantity } });
+    }
+    const unitWhere: Record<string, unknown> = { battalionId: bId, currentHolderId: hId, dischargedAt: null };
+    if (type === "GLOBAL") {
+      unitWhere.OR = [{ currentHolderId: hId }, { signedSoldierId: { not: null } }];
+      delete unitWhere.currentHolderId;
+    }
+    const units = await prisma.serialUnit.findMany({ where: unitWhere });
+    for (const u of units) {
+      await prisma.countLine.create({ data: { sessionId: session.id, itemTypeId: u.itemTypeId, holderId: u.currentHolderId, serialUnitId: u.id, expectedQty: u.lotQuantity ?? 1 } });
+    }
+
+    if (!firstSessionId) firstSessionId = session.id;
+  }
+
+  await audit(user.id, "START_COUNT", "CountPlan", plan.id, { type, holders: holderIds.length });
+  redirect(`/counts/${firstSessionId}`);
 }
 
 /** סיום ספירה — חישוב פערים. */
@@ -155,7 +196,10 @@ export async function submitCount(formData: FormData) {
   const user = await requireCapability("counts.execute");
   const bId = user.battalionId!;
   const sessionId = String(formData.get("sessionId") || "");
-  const session = await prisma.countSession.findUnique({ where: { id: sessionId }, include: { lines: true } });
+  const session = await prisma.countSession.findUnique({
+    where: { id: sessionId },
+    include: { lines: { include: { serialUnit: { select: { serialNumber: true } } } } },
+  });
   if (!session || session.battalionId !== bId || session.status === "COMPLETED") return;
 
   // איסוף עדכוני מיקום פיזי לכל יחידה סריאלית
@@ -165,6 +209,16 @@ export async function submitCount(formData: FormData) {
       const serialUnitId = key.slice("location:".length);
       const loc = String(val).trim();
       if (serialUnitId) locationUpdates.set(serialUnitId, loc);
+    }
+  }
+
+  // איסוף מספרים סריאליים שהוזנו בספירה
+  const enteredSerials = new Map<string, string>();
+  for (const [key, val] of formData.entries()) {
+    if (key.startsWith("sn:")) {
+      const lineId = key.slice("sn:".length);
+      const sn = String(val).trim();
+      if (lineId && sn) enteredSerials.set(lineId, sn);
     }
   }
 
@@ -182,16 +236,32 @@ export async function submitCount(formData: FormData) {
       const counted = parseInt(String(raw), 10);
       if (isNaN(counted)) continue;
       const recounted = formData.get(`recount:${line.id}`) === "on";
-      const note = recounted ? "ספירה חוזרת בוצעה" : null;
+
+      // בדיקת התאמת מספר סריאלי
+      const enteredSN = enteredSerials.get(line.id);
+      const expectedSN = line.serialUnit?.serialNumber;
+      const snMismatch = enteredSN && expectedSN && enteredSN !== expectedSN;
+
+      let note = recounted ? "ספירה חוזרת בוצעה" : null;
+      if (snMismatch) {
+        note = `${note ? note + " | " : ""}אי-התאמת סריאלי: הוקלד "${enteredSN}" במקום "${expectedSN}"`;
+      } else if (enteredSN && expectedSN && enteredSN === expectedSN) {
+        note = `${note ? note + " | " : ""}סריאלי אומת ✓`;
+      }
+
       await tx.countLine.update({ where: { id: line.id }, data: { countedQty: counted, note } });
-      if (counted !== line.expectedQty) {
+
+      const isQtyGap = counted !== line.expectedQty;
+      if (isQtyGap || snMismatch) {
         await tx.discrepancy.create({
           data: {
             battalionId: bId, sessionId: session.id, itemTypeId: line.itemTypeId, holderId: line.holderId,
             expectedQty: line.expectedQty, countedQty: counted, diff: counted - line.expectedQty,
-            kind: counted < line.expectedQty ? "LOSS" : "SURPLUS",
+            kind: snMismatch && !isQtyGap ? "LOSS" : (counted < line.expectedQty ? "LOSS" : "SURPLUS"),
             status: "OPEN",
-            resolution: recounted ? "ספירה חוזרת אומתה — פער אמיתי" : null,
+            resolution: snMismatch
+              ? `אי-התאמת מס׳ סריאלי: "${enteredSN}" במקום "${expectedSN}"${recounted ? " (ספירה חוזרת)" : ""}`
+              : recounted ? "ספירה חוזרת אומתה — פער אמיתי" : null,
           },
         });
       }
@@ -558,6 +628,7 @@ export async function registerTelegramWebhook() {
         { command: "start", description: "הרשמה למערכת" },
         { command: "status", description: "📊 סטטוס חתימה ומבחנים" },
         { command: "equipment", description: "📦 רשימת ציוד חתום" },
+        { command: "counts", description: "📊 ספירות מלאי" },
         { command: "info", description: "ℹ️ מידע כללי" },
         { command: "help", description: "❓ עזרה ותפריט" },
       ],

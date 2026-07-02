@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Card, Badge } from "@/components/ui";
-import { startCountFromTask } from "./taskActions";
+import { startCountFromTask, delegateCountTask } from "./taskActions";
 import { deleteCountTaskForm } from "./actions";
 
 type Task = {
@@ -14,8 +14,11 @@ type Task = {
   scheduledAt: string;
   dueAt: string;
   assignedUserName: string | null;
+  assignedUserId: string | null;
   sessionId: string | null;
 };
+
+type UserOption = { id: string; name: string };
 
 function fmt(dt: string) {
   const d = new Date(dt);
@@ -49,7 +52,36 @@ function ShareButton({ shareToken, holderName }: { shareToken: string; holderNam
   );
 }
 
-export default function MyCountTasks({ tasks, canManage = false }: { tasks: Task[]; canManage?: boolean }) {
+function DelegateButton({ taskId, users, currentUserId }: { taskId: string; users: UserOption[]; currentUserId: string | null }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const others = users.filter((u) => u.id !== currentUserId);
+  if (others.length === 0) return null;
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen(!open)}
+        className="text-xs text-violet-600 hover:text-violet-800 px-2 py-1">
+        🔄 האצל
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 min-w-48 max-h-48 overflow-auto">
+          {others.map((u) => (
+            <form key={u.id} action={async (fd) => { setLoading(true); await delegateCountTask(fd); setOpen(false); setLoading(false); }}>
+              <input type="hidden" name="taskId" value={taskId} />
+              <input type="hidden" name="newUserId" value={u.id} />
+              <button disabled={loading}
+                className="w-full text-right px-3 py-2 text-sm hover:bg-violet-50 disabled:opacity-50 border-b border-slate-100 last:border-0">
+                {u.name}
+              </button>
+            </form>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function MyCountTasks({ tasks, canManage = false, users = [] }: { tasks: Task[]; canManage?: boolean; users?: UserOption[] }) {
   const overdue = tasks.filter((t) => t.status === "OVERDUE");
   return (
     <div className="space-y-3 mb-6">
@@ -78,6 +110,9 @@ export default function MyCountTasks({ tasks, canManage = false }: { tasks: Task
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <ShareButton shareToken={t.shareToken} holderName={t.holderName} />
+              {!t.sessionId && users.length > 0 && (
+                <DelegateButton taskId={t.id} users={users} currentUserId={t.assignedUserId} />
+              )}
               {t.sessionId ? (
                 <a href={`/counts/${t.sessionId}`}
                   className="bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-4 py-2 text-sm font-medium">

@@ -22,7 +22,13 @@ export default async function CountSessionPage({
       lines: {
         include: {
           itemType: true, holder: true,
-          serialUnit: { include: { signedSoldier: { select: { fullName: true, personalNumber: true } } } },
+          serialUnit: {
+            include: {
+              signedSoldier: { select: { fullName: true, personalNumber: true } },
+              equipmentLocation: { select: { name: true } },
+              storedShelf: { select: { label: true } },
+            },
+          },
         },
         orderBy: [{ holder: { name: "asc" } }, { itemType: { name: "asc" } }],
       },
@@ -65,6 +71,10 @@ export default async function CountSessionPage({
             ? `${l.serialUnit.signedSoldier.fullName}${l.serialUnit.signedSoldier.personalNumber ? ` (${l.serialUnit.signedSoldier.personalNumber})` : ""}`
             : null,
           physicalLocation: l.serialUnit?.physicalLocation ?? null,
+          equipmentLocation: l.serialUnit?.equipmentLocation?.name ?? null,
+          shelfLabel: l.serialUnit?.storedShelf?.label ?? null,
+          expiryDate: l.serialUnit?.expiryDate?.toISOString() ?? null,
+          lotQuantity: l.serialUnit?.lotQuantity ?? null,
           expected: l.expectedQty,
           isSerial: !!l.serialUnitId,
         }))}

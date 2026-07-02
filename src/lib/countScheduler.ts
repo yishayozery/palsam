@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { sendTelegramMessage } from "./telegram";
 
 /** מחזיר את הזמן הבא לפי המגדר. אם השעות ריקות — לפי frequencyDays מהזמן הנוכחי. */
 export function nextOccurrenceFor(
@@ -63,7 +64,11 @@ export async function generatePendingTasks(now: Date = new Date()): Promise<numb
   for (const plan of plans) {
     // טווח תאריכים: דלג אם עתידי או הסתיים
     if (plan.startDate && now < plan.startDate) continue;
-    if (plan.endDate && now > plan.endDate) continue;
+    if (plan.endDate) {
+      const endOfDay = new Date(plan.endDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      if (now > endOfDay) continue;
+    }
 
     // הזמן האחרון שכבר ייצרנו אליו משימה
     const latest = await prisma.countTask.findFirst({
@@ -74,7 +79,11 @@ export async function generatePendingTasks(now: Date = new Date()): Promise<numb
     const startFrom = latest?.scheduledAt ?? earliestStart;
     const nextTime = nextOccurrenceFor(plan, startFrom);
     if (!nextTime || nextTime > now) continue; // עתידי — לא ניצור עדיין
-    if (plan.endDate && nextTime > plan.endDate) continue; // חרגנו
+    if (plan.endDate) {
+      const endOfDayForNext = new Date(plan.endDate);
+      endOfDayForNext.setHours(23, 59, 59, 999);
+      if (nextTime > endOfDayForNext) continue;
+    }
 
     const holderIds = await holdersForPlan(plan);
     const dueAt = new Date(nextTime.getTime() + plan.graceMinutes * 60 * 1000);
@@ -84,20 +93,124 @@ export async function generatePendingTasks(now: Date = new Date()): Promise<numb
       });
       if (exists) continue;
       const assigneeId = await pickAssignee(hId);
-      await prisma.countTask.create({
+      const newTask = await prisma.countTask.create({
         data: {
           battalionId: plan.battalionId, planId: plan.id, holderId: hId,
           assignedUserId: assigneeId, scheduledAt: nextTime, dueAt,
           status: "PENDING",
         },
+        include: {
+          holder: { select: { name: true } },
+          assignedUser: { select: { fullName: true, soldier: { select: { telegramChatId: true } } } },
+        },
       });
       created++;
+      // שליחת התראת טלגרם לאחראי על המשימה
+      await notifyTaskAssignee(plan.battalionId, newTask).catch(() => {});
     }
   }
-  // עדכון משימות OVERDUE
-  await prisma.countTask.updateMany({
+  // עדכון משימות OVERDUE + שליחת התראות
+  const overdueTasks = await prisma.countTask.findMany({
     where: { status: { in: ["PENDING", "IN_PROGRESS"] }, dueAt: { lt: now } },
-    data: { status: "OVERDUE" },
+    include: {
+      holder: { select: { name: true } },
+      plan: { select: { name: true, responsibleUserId: true, responsibleUser: { select: { soldier: { select: { telegramChatId: true } } } } } },
+      assignedUser: { select: { fullName: true, soldier: { select: { telegramChatId: true } } } },
+    },
   });
+  if (overdueTasks.length > 0) {
+    await prisma.countTask.updateMany({
+      where: { id: { in: overdueTasks.map((t) => t.id) } },
+      data: { status: "OVERDUE" },
+    });
+    for (const t of overdueTasks) {
+      await notifyOverdue(t.battalionId, t).catch(() => {});
+    }
+  }
   return created;
+}
+
+/** שליחת הודעת טלגרם לאחראי על משימת ספירה חדשה */
+async function notifyTaskAssignee(
+  battalionId: string,
+  task: {
+    id: string;
+    shareToken: string;
+    holder: { name: string };
+    assignedUser: { fullName: string; soldier: { telegramChatId: string | null } | null } | null;
+    scheduledAt: Date;
+    dueAt: Date;
+  },
+) {
+  const chatId = task.assignedUser?.soldier?.telegramChatId;
+  if (!chatId) return;
+
+  const battalion = await prisma.battalion.findUnique({
+    where: { id: battalionId },
+    select: { telegramBotToken: true, name: true },
+  });
+  if (!battalion?.telegramBotToken) return;
+
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+  const due = task.dueAt.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const text = [
+    `📋 <b>משימת ספירת מלאי חדשה</b>`,
+    ``,
+    `מחזיק: <b>${task.holder.name}</b>`,
+    `עד: ${due}`,
+    ``,
+    `👉 <a href="${baseUrl}/counts/share/${task.shareToken}">לחץ כאן לביצוע הספירה</a>`,
+  ].join("\n");
+
+  await sendTelegramMessage(battalion.telegramBotToken, chatId, text);
+}
+
+/** שליחת התראת OVERDUE לאחראי על המשימה + לאחראי התכנית */
+async function notifyOverdue(
+  battalionId: string,
+  task: {
+    id: string;
+    shareToken: string;
+    holder: { name: string };
+    plan: { name: string; responsibleUserId: string | null; responsibleUser: { soldier: { telegramChatId: string | null } | null } | null } | null;
+    assignedUser: { fullName: string; soldier: { telegramChatId: string | null } | null } | null;
+    dueAt: Date;
+  },
+) {
+  const battalion = await prisma.battalion.findUnique({
+    where: { id: battalionId },
+    select: { telegramBotToken: true },
+  });
+  if (!battalion?.telegramBotToken) return;
+  const token = battalion.telegramBotToken;
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+  const due = task.dueAt.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+  // notify assignee
+  const assigneeChatId = task.assignedUser?.soldier?.telegramChatId;
+  if (assigneeChatId) {
+    await sendTelegramMessage(token, assigneeChatId, [
+      `⏰ <b>משימת ספירה באיחור!</b>`,
+      ``,
+      `מחזיק: <b>${task.holder.name}</b>`,
+      `תכנית: ${task.plan?.name ?? "ספירה"}`,
+      `מועד אחרון: ${due}`,
+      ``,
+      `👉 <a href="${baseUrl}/counts/share/${task.shareToken}">לחץ כאן לביצוע עכשיו</a>`,
+    ].join("\n")).catch(() => {});
+  }
+
+  // notify plan responsible (if different from assignee)
+  const responsibleChatId = task.plan?.responsibleUser?.soldier?.telegramChatId;
+  if (responsibleChatId && responsibleChatId !== assigneeChatId) {
+    await sendTelegramMessage(token, responsibleChatId, [
+      `⚠️ <b>משימת ספירה באיחור</b>`,
+      ``,
+      `מחזיק: <b>${task.holder.name}</b>`,
+      `אחראי: ${task.assignedUser?.fullName ?? "לא שויך"}`,
+      `מועד אחרון: ${due}`,
+      ``,
+      `המשימה טרם בוצעה.`,
+    ].join("\n")).catch(() => {});
+  }
 }

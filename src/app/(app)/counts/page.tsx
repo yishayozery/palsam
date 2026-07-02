@@ -4,12 +4,9 @@ import { can } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card, Table, Th, Td, EmptyState } from "@/components/ui";
 import { COUNT_TYPE, COUNT_STATUS } from "@/lib/labels";
-import CrudSection from "@/components/CrudSection";
 import StartCount from "./StartCount";
 import MyCountTasks from "./MyCountTasks";
 import {
-  saveCountDefinition,
-  deleteCountDefinition,
   cancelCountSession,
   purgeAllCountTasksForm,
   deleteCountSessionForm,
@@ -67,12 +64,7 @@ export default async function CountsPage() {
   }
   storageMB = Math.round(storageMB / 1024 / 1024 * 10) / 10;
 
-  const [definitions, sessions, frequencies, holders] = await Promise.all([
-    prisma.countDefinition.findMany({
-      where: { battalionId: bId, active: true },
-      include: { frequency: true, scopeHolder: true },
-      orderBy: { createdAt: "desc" },
-    }),
+  const [sessions, holders, battalionUsers] = await Promise.all([
     prisma.countSession.findMany({
       where: { battalionId: bId },
       orderBy: { startedAt: "desc" },
@@ -82,8 +74,12 @@ export default async function CountsPage() {
         _count: { select: { lines: true, discrepancies: true } },
       },
     }),
-    prisma.countFrequency.findMany({ where: { battalionId: bId, active: true } }),
     prisma.holder.findMany({ where: { battalionId: bId, active: true, kind: "COMPANY" } }),
+    prisma.appUser.findMany({
+      where: { battalionId: bId, active: true },
+      select: { id: true, fullName: true },
+      orderBy: { fullName: "asc" },
+    }),
   ]);
 
   return (
@@ -100,6 +96,12 @@ export default async function CountsPage() {
               </Link>
             )}
             {canManage && (
+              <Link href="/counts/report"
+                className="bg-white border border-slate-300 text-slate-700 rounded-lg px-4 py-2 text-sm hover:bg-slate-50">
+                📊 דוח פיזור ציוד
+              </Link>
+            )}
+            {canManage && (
               <ConfirmForm action={purgeAllCountTasksForm}
                 hiddenFields={{ confirm: "DELETE-ALL" }}
                 message="למחוק את כל משימות הספירה? פעולה זו אינה משפיעה על תכניות, היסטוריה או ספירות שכבר בוצעו.">
@@ -108,7 +110,7 @@ export default async function CountsPage() {
                 </button>
               </ConfirmForm>
             )}
-            {canExecute && <StartCount holders={holders.map((h) => ({ id: h.id, name: h.name }))} definitions={definitions.map((d) => ({ id: d.id, name: d.name, type: d.type, scopeHolderId: d.scopeHolderId }))} />}
+            {canExecute && <StartCount holders={holders.map((h) => ({ id: h.id, name: h.name }))} />}
           </div>
         }
       />
@@ -130,6 +132,7 @@ export default async function CountsPage() {
       {myTasks.length > 0 && (
         <MyCountTasks
           canManage={canManage}
+          users={battalionUsers.map((u) => ({ id: u.id, name: u.fullName }))}
           tasks={myTasks.map((t) => ({
             id: t.id,
             shareToken: t.shareToken,
@@ -139,52 +142,13 @@ export default async function CountsPage() {
             scheduledAt: t.scheduledAt.toISOString(),
             dueAt: t.dueAt.toISOString(),
             assignedUserName: t.assignedUser?.fullName ?? null,
+            assignedUserId: t.assignedUserId,
             sessionId: t.sessionId,
           }))}
         />
       )}
 
-      {canManage && (
-        <div className="mb-6">
-          <CrudSection
-            title="הגדרות ספירה"
-            addLabel="הגדרה"
-            fields={[
-              { name: "name", label: "שם" },
-              {
-                name: "type", label: "סוג", type: "select", default: "WAREHOUSE",
-                options: [
-                  { value: "WAREHOUSE", label: "מחסן בלבד" },
-                  { value: "COMPANY", label: "פלוגתית" },
-                  { value: "GLOBAL", label: "רוחבית" },
-                ],
-              },
-              {
-                name: "frequencyId", label: "תדירות", type: "select",
-                options: [{ value: "", label: "—" }, ...frequencies.map((f) => ({ value: f.id, label: f.name }))],
-              },
-              {
-                name: "scopeHolderId", label: "מיקוד (אופציונלי)", type: "select",
-                options: [{ value: "", label: "כללי" }, ...holders.map((h) => ({ value: h.id, label: h.name }))],
-              },
-            ]}
-            saveAction={saveCountDefinition}
-            deleteAction={deleteCountDefinition}
-            rows={definitions.map((d) => ({
-              id: d.id,
-              values: { name: d.name, type: d.type, frequencyId: d.frequencyId ?? "", scopeHolderId: d.scopeHolderId ?? "" },
-              display: (
-                <span className="flex items-center gap-1.5">
-                  {d.name}
-                  <Badge>{COUNT_TYPE[d.type]}</Badge>
-                  {d.frequency && <Badge className="bg-slate-100 text-slate-600">{d.frequency.name}</Badge>}
-                  {d.scopeHolder && <Badge className="bg-blue-100 text-blue-700">{d.scopeHolder.name}</Badge>}
-                </span>
-              ),
-            }))}
-          />
-        </div>
-      )}
+      {/* הגדרות ספירה (CountDefinition) — מנגנון ישן, הוחלף ע״י תכניות ספירה (CountPlan) */}
 
       <h2 className="font-bold text-slate-700 mb-2">ספירות אחרונות</h2>
       <Card>

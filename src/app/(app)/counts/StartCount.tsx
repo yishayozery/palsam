@@ -4,15 +4,8 @@ import { useState } from "react";
 import { startCount } from "./actions";
 
 type Holder = { id: string; name: string };
-type Def = { id: string; name: string; type: string; scopeHolderId: string | null };
 
-export default function StartCount({
-  holders,
-  definitions,
-}: {
-  holders: Holder[];
-  definitions: Def[];
-}) {
+export default function StartCount({ holders }: { holders: Holder[] }) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState("WAREHOUSE");
 
@@ -31,20 +24,9 @@ export default function StartCount({
               <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700">✕</button>
             </div>
             <form action={startCount} className="p-5 space-y-4">
-              {definitions.length > 0 && (
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">לפי הגדרה (אופציונלי)</label>
-                  <select name="definitionId"
-                    onChange={(e) => {
-                      const d = definitions.find((x) => x.id === e.target.value);
-                      if (d) setType(d.type);
-                    }}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    <option value="">ספירה חופשית</option>
-                    {definitions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
-                </div>
-              )}
+              <p className="text-xs text-slate-500 bg-slate-50 rounded-lg p-2">
+                תיווצר תכנית ספירה חד-פעמית + משימת ביצוע אוטומטית.
+              </p>
               <div>
                 <label className="block text-xs text-slate-500 mb-1">סוג ספירה</label>
                 <select name="type" value={type} onChange={(e) => setType(e.target.value)}

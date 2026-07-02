@@ -67,6 +67,7 @@ export async function POST(
       "📋 תהליך חתימת נשק": "/status",
       "📦 הציוד שלי": "/equipment",
       "🚗 שיבוץ לרכב": "/dispatch",
+      "📊 ספירות מלאי": "/counts",
       "🕐 ארוחות ותפילות": "/info",
       "❓ עזרה": "/help",
       // backward compat — old button labels
@@ -153,6 +154,15 @@ export async function POST(
         `<i>🔒 הקישור תקף ל-24 שעות</i>`, {
         inline_keyboard: [[{ text: "📝 פתח טופס שבצ\"ק", web_app: { url: webAppUrl } }]],
       });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (cmd === "/counts") {
+      if (!soldier) {
+        await sendTelegramMessage(token, chatId, NOT_REGISTERED);
+        return NextResponse.json({ ok: true });
+      }
+      await handleCounts(token, chatId, soldier, battalionId);
       return NextResponse.json({ ok: true });
     }
 
@@ -343,6 +353,77 @@ async function handleCallback(
     return;
   }
 
+  // Format: delegate:<taskId>
+  if (data.startsWith("delegate:")) {
+    const taskId = data.split(":")[1];
+    const task = await prisma.countTask.findUnique({
+      where: { id: taskId },
+      include: { holder: { select: { name: true, users: { where: { active: true }, select: { id: true, fullName: true, soldier: { select: { telegramChatId: true } } } } } } },
+    });
+    if (!task || task.sessionId) {
+      await answerCallbackQuery(token, callback.id, "המשימה כבר בביצוע");
+      return;
+    }
+    const candidates = task.holder.users.filter((u) => u.id !== task.assignedUserId);
+    if (candidates.length === 0) {
+      await answerCallbackQuery(token, callback.id, "אין משתמשים נוספים");
+      return;
+    }
+    const buttons = candidates.map((u) => ([
+      { text: u.fullName, callback_data: `delegateto:${taskId}:${u.id}` },
+    ]));
+    await editMessageText(token, chatId, messageId,
+      `🔄 <b>האצלת משימה — ${task.holder.name}</b>\n\nלמי להאציל?`,
+      { inline_keyboard: buttons },
+    );
+    await answerCallbackQuery(token, callback.id);
+    return;
+  }
+
+  // Format: delegateto:<taskId>:<userId>
+  if (data.startsWith("delegateto:")) {
+    const parts = data.split(":");
+    const taskId = parts[1];
+    const newUserId = parts[2];
+    const task = await prisma.countTask.findUnique({
+      where: { id: taskId },
+      include: { holder: { select: { name: true } }, plan: { select: { name: true } } },
+    });
+    if (!task || task.sessionId) {
+      await answerCallbackQuery(token, callback.id, "המשימה כבר בביצוע");
+      return;
+    }
+    const newUser = await prisma.appUser.findUnique({
+      where: { id: newUserId },
+      select: { id: true, fullName: true, soldier: { select: { telegramChatId: true } } },
+    });
+    if (!newUser) {
+      await answerCallbackQuery(token, callback.id, "משתמש לא נמצא");
+      return;
+    }
+    await prisma.countTask.update({ where: { id: taskId }, data: { assignedUserId: newUserId } });
+    await editMessageText(token, chatId, messageId,
+      `✅ <b>המשימה הואצלה ל-${newUser.fullName}</b>\n\n📍 ${task.holder.name} · ${task.plan?.name ?? "ספירה"}`,
+    );
+    await answerCallbackQuery(token, callback.id, `הואצל ל-${newUser.fullName}`);
+    // Notify new assignee
+    const newChatId = newUser.soldier?.telegramChatId;
+    if (newChatId) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+      const due = task.dueAt.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      await sendTelegramMessage(token, newChatId, [
+        `🔄 <b>הואצלה אליך משימת ספירה</b>`,
+        ``,
+        `מחזיק: <b>${task.holder.name}</b>`,
+        `תכנית: ${task.plan?.name ?? "ספירה"}`,
+        `עד: ${due}`,
+        ``,
+        `👉 <a href="${baseUrl}/counts/share/${task.shareToken}">לחץ כאן לביצוע</a>`,
+      ].join("\n")).catch(() => {});
+    }
+    return;
+  }
+
   await answerCallbackQuery(token, callback.id);
 }
 
@@ -353,6 +434,8 @@ const HELP_TEXT = `📋 <b>מה כל כפתור עושה:</b>
 📦 <b>הציוד שלי</b> — רשימת כל הציוד החתום עליך (נשק, אפודים, ציוד אישי וכו׳)
 
 🚗 <b>שיבוץ לרכב</b> — יצירת שבצ"ק חדש: בחירת רכב, תאריך, שעה וחיילים
+
+📊 <b>ספירות מלאי</b> — משימות ספירה פתוחות עם לינק לביצוע
 
 🕐 <b>ארוחות ותפילות</b> — זמני ארוחות, תפילות ומידע כללי שהמפקד הגדיר
 
@@ -501,6 +584,52 @@ async function handleEquipment(token: string, chatId: string, soldier: SoldierCt
   lines.push(`סה״כ: <b>${serialItems.length + qtyItems.length}</b> פריטים`);
 
   await sendTelegramMessage(token, chatId, lines.join("\n"));
+}
+
+async function handleCounts(token: string, chatId: string, soldier: SoldierCtx, battalionId: string) {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+
+  const tasks = await prisma.countTask.findMany({
+    where: {
+      battalionId,
+      status: { in: ["PENDING", "IN_PROGRESS", "OVERDUE"] },
+      OR: [
+        { assignedUser: { soldier: { telegramChatId: chatId } } },
+        { holder: { users: { some: { soldier: { telegramChatId: chatId } } } } },
+      ],
+    },
+    include: {
+      holder: { select: { name: true } },
+      plan: { select: { name: true } },
+    },
+    orderBy: { scheduledAt: "asc" },
+    take: 10,
+  });
+
+  if (tasks.length === 0) {
+    await sendTelegramMessage(token, chatId, `📊 <b>ספירות מלאי — ${soldier.fullName}</b>\n\n✅ אין משימות ספירה פתוחות כרגע.`);
+    return;
+  }
+
+  const lines: string[] = [];
+  lines.push(`📊 <b>ספירות מלאי — ${soldier.fullName}</b>`);
+  lines.push(`נמצאו <b>${tasks.length}</b> משימות פתוחות:\n`);
+
+  const buttons: { text: string; callback_data: string }[][] = [];
+  for (const t of tasks) {
+    const status = t.status === "OVERDUE" ? "⏰ באיחור" : t.status === "IN_PROGRESS" ? "🔄 בביצוע" : "🔵 פתוח";
+    const due = t.dueAt.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    lines.push(`${status} <b>${t.plan?.name ?? "ספירה"}</b>`);
+    lines.push(`   📍 ${t.holder.name} · עד: ${due}`);
+    lines.push(`   👉 <a href="${baseUrl}/counts/share/${t.shareToken}">לביצוע הספירה</a>`);
+    lines.push("");
+    if (!t.sessionId) {
+      buttons.push([{ text: `🔄 האצל: ${t.holder.name}`, callback_data: `delegate:${t.id}` }]);
+    }
+  }
+
+  const keyboard = buttons.length > 0 ? { inline_keyboard: buttons } : undefined;
+  await sendTelegramMessage(token, chatId, lines.join("\n"), keyboard);
 }
 
 async function handlePhotoUpload(
