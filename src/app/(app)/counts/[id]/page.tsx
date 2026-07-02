@@ -22,6 +22,7 @@ export default async function CountSessionPage({
       lines: {
         include: {
           itemType: true, holder: true,
+          soldier: { select: { fullName: true, personalNumber: true } },
           serialUnit: {
             include: {
               signedSoldier: { select: { fullName: true, personalNumber: true } },
@@ -35,11 +36,37 @@ export default async function CountSessionPage({
     },
   });
   if (!session) notFound();
-  if (session.status === "COMPLETED") redirect("/counts");
+  if (session.status === "COMPLETED") redirect(`/counts/${id}/report`);
 
   const serialItemTypes = new Map<string, string>();
   for (const l of session.lines) {
     if (l.serialUnit) serialItemTypes.set(l.itemType.id, l.itemType.name);
+  }
+
+  const companyHolderIds = [...new Set(
+    session.lines.filter((l) => l.holder?.kind === "COMPANY").map((l) => l.holderId!),
+  )].filter(Boolean);
+
+  const signerMap: Record<string, string> = {};
+  if (companyHolderIds.length > 0) {
+    const sigs = await prisma.signature.findMany({
+      where: {
+        battalionId: session.battalionId,
+        signerUserId: { not: null },
+        transfer: { type: "ISSUE", toHolderId: { in: companyHolderIds } },
+      },
+      include: {
+        signerUser: { select: { fullName: true } },
+        transfer: { select: { toHolderId: true } },
+      },
+      orderBy: { signedAt: "desc" },
+    });
+    for (const sig of sigs) {
+      const hId = sig.transfer?.toHolderId;
+      if (hId && !signerMap[hId]) {
+        signerMap[hId] = sig.signerUser!.fullName;
+      }
+    }
   }
 
   return (
@@ -47,7 +74,12 @@ export default async function CountSessionPage({
       <PageHeader
         title="ביצוע ספירה"
         subtitle={`${COUNT_TYPE[session.type]} · ${session.lines.length} פריטים`}
-        action={session.frozen ? <Badge className="bg-amber-100 text-amber-800">מצב מוקפא ❄️</Badge> : undefined}
+        action={
+          <div className="flex gap-2">
+            {session.frozen && <Badge className="bg-amber-100 text-amber-800">מצב מוקפא ❄️</Badge>}
+            {session.isBlind && <Badge className="bg-indigo-100 text-indigo-800">ספירה עיוורת 🔍</Badge>}
+          </div>
+        }
       />
 
       {serialItemTypes.size > 0 && (
@@ -61,15 +93,19 @@ export default async function CountSessionPage({
 
       <CountExecutor
         sessionId={session.id}
+        isBlind={session.isBlind}
+        signerMap={signerMap}
         lines={session.lines.map((l) => ({
           id: l.id,
           item: l.itemType.name,
           holder: l.holder?.name ?? "—",
+          holderId: l.holderId ?? null,
           serial: l.serialUnit?.serialNumber ?? null,
           serialUnitId: l.serialUnitId,
-          signedSoldier: l.serialUnit?.signedSoldier
-            ? `${l.serialUnit.signedSoldier.fullName}${l.serialUnit.signedSoldier.personalNumber ? ` (${l.serialUnit.signedSoldier.personalNumber})` : ""}`
+          signedSoldier: (l.soldier || l.serialUnit?.signedSoldier)
+            ? `${(l.soldier ?? l.serialUnit?.signedSoldier)!.fullName}${(l.soldier ?? l.serialUnit?.signedSoldier)!.personalNumber ? ` (${(l.soldier ?? l.serialUnit?.signedSoldier)!.personalNumber})` : ""}`
             : null,
+          soldierId: l.soldierId ?? null,
           physicalLocation: l.serialUnit?.physicalLocation ?? null,
           equipmentLocation: l.serialUnit?.equipmentLocation?.name ?? null,
           shelfLabel: l.serialUnit?.storedShelf?.label ?? null,

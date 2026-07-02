@@ -82,6 +82,12 @@ enum CountType {
   GLOBAL
 }
 
+enum CountScope {
+  WAREHOUSE_STOCK
+  DISTRIBUTED
+  BOTH
+}
+
 enum CountSessionStatus {
   DRAFT
   FROZEN
@@ -595,6 +601,8 @@ model Soldier {
   operationalKits     OperationalKit[] @relation("SoldierOpKits")
   ymachGaps           YmachGap[]       @relation("SoldierYmachGaps")
   verificationRequests VerificationRequest[] @relation("SoldierVerifications")
+  countLines           CountLine[]            @relation("CountLineSoldier")
+  countTasks           CountTask[]            @relation("CountTaskSoldier")
   // מקושר למשתמש מערכת (קצין/רס"פ)
   appUser            AppUser?      @relation("SoldierAsUser")
 
@@ -1080,6 +1088,8 @@ model CountPlan {
   endDate        DateTime?
 
   active      Boolean  @default(true)
+  isBlind     Boolean  @default(false)
+  countScope  CountScope @default(WAREHOUSE_STOCK)
   createdById String
   createdBy   AppUser  @relation("CountPlanCreatedBy", fields: [createdById], references: [id])
   // אחראי ספירה — רואה את התכנית, סטטוס כל המשימות, ומייצא דוח. ברירת מחדל = createdBy.
@@ -1105,6 +1115,8 @@ model CountTask {
 
   holderId String
   holder   Holder @relation(fields: [holderId], references: [id])
+  soldierId String?
+  soldier   Soldier? @relation("CountTaskSoldier", fields: [soldierId], references: [id])
   // אחראי דיווח. ברירת מחדל = משתמש "הראשי" של ה-holder. ניתן להחליף.
   assignedUserId String?
   assignedUser   AppUser? @relation("CountTaskAssigned", fields: [assignedUserId], references: [id])
@@ -1154,6 +1166,7 @@ model CountSession {
   type         CountType
   status       CountSessionStatus @default(DRAFT)
   frozen       Boolean            @default(false)
+  isBlind      Boolean            @default(false)
   startedById  String
   startedBy    AppUser            @relation("CountStartedBy", fields: [startedById], references: [id])
   startedAt    DateTime           @default(now())
@@ -1177,8 +1190,13 @@ model CountLine {
   holder       Holder?      @relation(fields: [holderId], references: [id])
   serialUnitId String?
   serialUnit   SerialUnit?  @relation(fields: [serialUnitId], references: [id])
+  soldierId    String?
+  soldier      Soldier?     @relation("CountLineSoldier", fields: [soldierId], references: [id])
+  signerUserId String?
   expectedQty  Int          @default(0)
   countedQty   Int?
+  enteredSerial String?
+  photoData    String?
   note         String?
 
   @@index([sessionId])

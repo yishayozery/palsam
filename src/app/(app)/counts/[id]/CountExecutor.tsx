@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { submitCount } from "../actions";
 import { Card } from "@/components/ui";
 
 type Line = {
-  id: string; item: string; holder: string; serial: string | null;
+  id: string; item: string; holder: string; holderId?: string | null;
+  serial: string | null;
   serialUnitId?: string | null;
   signedSoldier?: string | null;
+  soldierId?: string | null;
   physicalLocation?: string | null;
   equipmentLocation?: string | null;
   shelfLabel?: string | null;
@@ -19,9 +21,13 @@ type Line = {
 export default function CountExecutor({
   sessionId,
   lines,
+  isBlind = false,
+  signerMap = {},
 }: {
   sessionId: string;
   lines: Line[];
+  isBlind?: boolean;
+  signerMap?: Record<string, string>;
 }) {
   const groups = useMemo(() => lines.reduce<Record<string, Line[]>>((acc, l) => {
     (acc[l.holder] ||= []).push(l);
@@ -30,21 +36,27 @@ export default function CountExecutor({
 
   const [counts, setCounts] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
-    for (const l of lines) init[l.id] = String(l.expected);
+    for (const l of lines) init[l.id] = isBlind ? "" : String(l.expected);
     return init;
   });
+  const [serials, setSerials] = useState<Record<string, string>>({});
+  const [photos, setPhotos] = useState<Record<string, string>>({});
   const [recountIds, setRecountIds] = useState<Set<string>>(new Set());
+  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const stats = useMemo(() => {
-    let match = 0, gap = 0;
+    let match = 0, gap = 0, filled = 0;
     for (const l of lines) {
       const v = counts[l.id];
       const n = parseInt(v ?? "", 10);
-      if (isNaN(n)) continue;
-      if (n === l.expected) match++; else gap++;
+      if (isNaN(n) || v === "") continue;
+      filled++;
+      if (!isBlind) {
+        if (n === l.expected) match++; else gap++;
+      }
     }
-    return { match, gap, total: lines.length };
-  }, [counts, lines]);
+    return { match, gap, total: lines.length, filled };
+  }, [counts, lines, isBlind]);
 
   const updateCount = (id: string, value: string) => {
     setCounts((c) => ({ ...c, [id]: value }));
@@ -54,37 +66,67 @@ export default function CountExecutor({
     }
   };
 
+  const handlePhoto = (lineId: string, file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => setPhotos((p) => ({ ...p, [lineId]: reader.result as string }));
+    reader.readAsDataURL(file);
+  };
+
   return (
     <form action={submitCount} className="space-y-4 pb-24">
       <input type="hidden" name="sessionId" value={sessionId} />
 
       {/* כרטיסי סיכום */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="p-3 text-center">
-          <div className="text-xs text-slate-500">סה״כ פריטים</div>
-          <div className="text-2xl font-bold text-slate-800 mt-1">{stats.total}</div>
-        </Card>
-        <Card className="p-3 text-center">
-          <div className="text-xs text-slate-500">תואמים</div>
-          <div className="text-2xl font-bold text-emerald-600 mt-1">{stats.match}</div>
-        </Card>
-        <Card className="p-3 text-center">
-          <div className="text-xs text-slate-500">פערים</div>
-          <div className="text-2xl font-bold text-rose-600 mt-1">{stats.gap}</div>
-        </Card>
-      </div>
+      {isBlind ? (
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="p-3 text-center">
+            <div className="text-xs text-slate-500">סה״כ פריטים</div>
+            <div className="text-2xl font-bold text-slate-800 mt-1">{stats.total}</div>
+          </Card>
+          <Card className="p-3 text-center">
+            <div className="text-xs text-slate-500">מולאו</div>
+            <div className="text-2xl font-bold text-indigo-600 mt-1">{stats.filled}</div>
+          </Card>
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-3">
+          <Card className="p-3 text-center">
+            <div className="text-xs text-slate-500">סה״כ פריטים</div>
+            <div className="text-2xl font-bold text-slate-800 mt-1">{stats.total}</div>
+          </Card>
+          <Card className="p-3 text-center">
+            <div className="text-xs text-slate-500">תואמים</div>
+            <div className="text-2xl font-bold text-emerald-600 mt-1">{stats.match}</div>
+          </Card>
+          <Card className="p-3 text-center">
+            <div className="text-xs text-slate-500">פערים</div>
+            <div className="text-2xl font-bold text-rose-600 mt-1">{stats.gap}</div>
+          </Card>
+        </div>
+      )}
+
+      {isBlind && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-sm text-indigo-800">
+          🔍 <b>ספירה עיוורת</b> — הקלד את מה שאתה רואה. הכמויות הצפויות מוסתרות ויושוו אחרי ההגשה.
+        </div>
+      )}
 
       {Object.entries(groups).map(([holder, items]) => (
         <Card key={holder} className="p-4">
-          <h3 className="font-bold text-slate-700 mb-3 flex items-center justify-between">
-            <span>📍 {holder}</span>
+          <h3 className="font-bold text-slate-700 mb-3 flex items-center justify-between flex-wrap gap-2">
+            <span className="flex items-center gap-2">
+              <span>📍 {holder}</span>
+              {items[0]?.holderId && signerMap[items[0].holderId] && (
+                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-normal">חתם: {signerMap[items[0].holderId!]}</span>
+              )}
+            </span>
             <span className="text-xs text-slate-400 font-normal">{items.length} פריטים</span>
           </h3>
           <div className="space-y-1.5">
             {items.map((l) => {
               const value = counts[l.id] ?? "";
               const counted = parseInt(value, 10);
-              const isGap = !isNaN(counted) && counted !== l.expected;
+              const isGap = !isBlind && !isNaN(counted) && counted !== l.expected;
               const diff = counted - l.expected;
               const recount = recountIds.has(l.id);
 
@@ -93,8 +135,8 @@ export default function CountExecutor({
                   <div className="flex items-center gap-3 text-sm">
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{l.item}</div>
-                      {l.serial && <div className="font-mono text-xs text-slate-400 truncate">SN: {l.serial}</div>}
-                      {l.isSerial && (
+                      {!isBlind && l.serial && <div className="font-mono text-xs text-slate-400 truncate">SN: {l.serial}</div>}
+                      {l.isSerial && !isBlind && (
                         <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
                           {l.signedSoldier && <span className="text-blue-600">🪖 {l.signedSoldier}</span>}
                           {(l.equipmentLocation || l.physicalLocation) && (
@@ -110,26 +152,83 @@ export default function CountExecutor({
                         </div>
                       )}
                     </div>
-                    <div className="text-xs text-slate-500 whitespace-nowrap">צפוי: <b>{l.expected}</b></div>
-                    {l.isSerial ? (
+                    {!isBlind && <div className="text-xs text-slate-500 whitespace-nowrap">צפוי: <b>{l.expected}</b></div>}
+
+                    {/* === Blind mode inputs === */}
+                    {isBlind ? (
                       <div className="flex flex-col gap-1 items-end">
-                        <select name={`count:${l.id}`} value={value}
-                          onChange={(e) => updateCount(l.id, e.target.value)}
-                          className={`w-28 rounded-lg border px-2 py-1 text-sm ${isGap ? "border-rose-400 bg-white" : "border-slate-300"}`}>
-                          <option value={String(l.expected)}>✓ נמצא</option>
-                          <option value="0">✗ חסר</option>
-                        </select>
-                        {l.serial && (
-                          <input name={`sn:${l.id}`} type="text" placeholder="הקלד מס׳ סריאלי..."
-                            className="w-28 rounded-lg border border-slate-300 px-2 py-1 text-xs font-mono" />
+                        {l.isSerial ? (
+                          <>
+                            <input type="text" placeholder="מס׳ סריאלי / אצווה"
+                              value={serials[l.id] ?? ""}
+                              onChange={(e) => setSerials((s) => ({ ...s, [l.id]: e.target.value }))}
+                              className="w-36 rounded-lg border border-slate-300 px-2 py-1 text-xs font-mono" />
+                            <input type="hidden" name={`enteredSerial:${l.id}`} value={serials[l.id] ?? ""} />
+                            {l.lotQuantity && l.lotQuantity > 1 && (
+                              <input name={`count:${l.id}`} type="number" min="0" placeholder="כמות"
+                                value={value} onChange={(e) => updateCount(l.id, e.target.value)}
+                                className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-xs" />
+                            )}
+                            {(!l.lotQuantity || l.lotQuantity <= 1) && (
+                              <>
+                                <select name={`count:${l.id}`} value={value}
+                                  onChange={(e) => updateCount(l.id, e.target.value)}
+                                  className="w-28 rounded-lg border border-slate-300 px-2 py-1 text-sm">
+                                  <option value="">—</option>
+                                  <option value="1">נמצא</option>
+                                  <option value="0">לא נמצא</option>
+                                </select>
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <input name={`count:${l.id}`} type="number" min="0" placeholder="כמות"
+                            value={value} onChange={(e) => updateCount(l.id, e.target.value)}
+                            className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm" />
                         )}
                       </div>
                     ) : (
-                      <input name={`count:${l.id}`} type="number" min="0" value={value}
-                        onChange={(e) => updateCount(l.id, e.target.value)}
-                        className={`w-24 rounded-lg border px-2 py-1 text-sm ${isGap ? "border-rose-400 bg-white" : "border-slate-300"}`} />
+                      /* === Normal mode inputs === */
+                      l.isSerial ? (
+                        <div className="flex flex-col gap-1 items-end">
+                          <select name={`count:${l.id}`} value={value}
+                            onChange={(e) => updateCount(l.id, e.target.value)}
+                            className={`w-28 rounded-lg border px-2 py-1 text-sm ${isGap ? "border-rose-400 bg-white" : "border-slate-300"}`}>
+                            <option value={String(l.expected)}>✓ נמצא</option>
+                            <option value="0">✗ חסר</option>
+                          </select>
+                          {l.serial && (
+                            <input name={`sn:${l.id}`} type="text" placeholder="הקלד מס׳ סריאלי..."
+                              className="w-28 rounded-lg border border-slate-300 px-2 py-1 text-xs font-mono" />
+                          )}
+                        </div>
+                      ) : (
+                        <input name={`count:${l.id}`} type="number" min="0" value={value}
+                          onChange={(e) => updateCount(l.id, e.target.value)}
+                          className={`w-24 rounded-lg border px-2 py-1 text-sm ${isGap ? "border-rose-400 bg-white" : "border-slate-300"}`} />
+                      )
                     )}
                   </div>
+
+                  {/* Photo capture */}
+                  {isBlind && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <input type="file" accept="image/*" capture="environment"
+                        ref={(el) => { fileRefs.current[l.id] = el; }}
+                        onChange={(e) => { if (e.target.files?.[0]) handlePhoto(l.id, e.target.files[0]); }}
+                        className="hidden" />
+                      <input type="hidden" name={`photo:${l.id}`} value={photos[l.id] ?? ""} />
+                      <button type="button" onClick={() => fileRefs.current[l.id]?.click()}
+                        className={`text-xs rounded-lg border px-2 py-1 ${photos[l.id] ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "border-slate-300 text-slate-500 hover:bg-slate-50"}`}>
+                        {photos[l.id] ? "📸 צולם ✓" : "📷 צלם"}
+                      </button>
+                      {photos[l.id] && (
+                        <button type="button" onClick={() => setPhotos((p) => { const n = { ...p }; delete n[l.id]; return n; })}
+                          className="text-[10px] text-rose-500">✕</button>
+                      )}
+                    </div>
+                  )}
+
                   {isGap && (
                     <div className="mt-2 flex items-center gap-3 text-xs flex-wrap">
                       <span className="text-rose-700 font-medium">
@@ -152,7 +251,7 @@ export default function CountExecutor({
                   )}
 
                   {/* עריכת מיקום פיזי — רק לסריאלי, לא לחתום על חייל */}
-                  {l.isSerial && l.serialUnitId && !l.signedSoldier && (
+                  {!isBlind && l.isSerial && l.serialUnitId && !l.signedSoldier && (
                     <div className="mt-2 flex items-center gap-2 text-xs">
                       <span className="text-slate-500">📍 מיקום:</span>
                       <input type="text" name={`location:${l.serialUnitId}`}
@@ -175,7 +274,11 @@ export default function CountExecutor({
       {/* Sticky footer */}
       <div className="fixed bottom-3 left-3 right-3 md:right-64 bg-white border-2 border-slate-300 rounded-xl shadow-lg p-3 flex items-center justify-between flex-wrap gap-3 z-30">
         <div className="text-sm">
-          {stats.gap > 0 ? (
+          {isBlind ? (
+            <span className="text-indigo-700 font-medium">
+              🔍 {stats.filled}/{stats.total} מולאו — פערים יחושבו אחרי ההגשה
+            </span>
+          ) : stats.gap > 0 ? (
             <span className="text-rose-700 font-medium">
               ⚠️ {stats.gap} פערים יירשמו אוטומטית במסך &quot;פערים&quot;
             </span>

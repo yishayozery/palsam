@@ -212,18 +212,27 @@ export async function submitCount(formData: FormData) {
     }
   }
 
-  // איסוף מספרים סריאליים שהוזנו בספירה
+  // איסוף מספרים סריאליים שהוזנו בספירה (normal mode: sn:, blind mode: enteredSerial:)
   const enteredSerials = new Map<string, string>();
   for (const [key, val] of formData.entries()) {
-    if (key.startsWith("sn:")) {
-      const lineId = key.slice("sn:".length);
+    if (key.startsWith("sn:") || key.startsWith("enteredSerial:")) {
+      const lineId = key.startsWith("sn:") ? key.slice("sn:".length) : key.slice("enteredSerial:".length);
       const sn = String(val).trim();
       if (lineId && sn) enteredSerials.set(lineId, sn);
     }
   }
 
+  // איסוף תמונות (blind mode)
+  const enteredPhotos = new Map<string, string>();
+  for (const [key, val] of formData.entries()) {
+    if (key.startsWith("photo:")) {
+      const lineId = key.slice("photo:".length);
+      const data = String(val).trim();
+      if (lineId && data && data.startsWith("data:")) enteredPhotos.set(lineId, data);
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
-    // עדכון מיקומים פיזיים
     for (const [serialUnitId, loc] of locationUpdates) {
       await tx.serialUnit.update({
         where: { id: serialUnitId },
@@ -249,7 +258,17 @@ export async function submitCount(formData: FormData) {
         note = `${note ? note + " | " : ""}סריאלי אומת ✓`;
       }
 
-      await tx.countLine.update({ where: { id: line.id }, data: { countedQty: counted, note } });
+      const photoData = enteredPhotos.get(line.id) ?? null;
+
+      await tx.countLine.update({
+        where: { id: line.id },
+        data: {
+          countedQty: counted,
+          note,
+          enteredSerial: enteredSN || null,
+          photoData,
+        },
+      });
 
       const isQtyGap = counted !== line.expectedQty;
       if (isQtyGap || snMismatch) {
@@ -267,11 +286,11 @@ export async function submitCount(formData: FormData) {
       }
     }
     await tx.countSession.update({ where: { id: sessionId }, data: { status: "COMPLETED", completedAt: new Date() } });
-  });
+  }, { timeout: 30000 });
 
   await audit(user.id, "SUBMIT_COUNT", "CountSession", sessionId);
   revalidatePath("/counts");
-  redirect("/gaps");
+  redirect(`/counts/${sessionId}/report`);
 }
 
 export async function createVerificationRequests(
@@ -492,19 +511,30 @@ export async function sendTelegramVerification(requestId: string) {
   const { sendTelegramMessage } = await import("@/lib/telegram");
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
 
-  const itemsList = req.items.map((i) =>
-    i.serialNumber ? `• ${i.itemTypeName} (${i.serialNumber})` : `• ${i.itemTypeName}`,
-  ).join("\n");
+  const fmtItem = (i: { itemTypeName: string; serialNumber: string | null }) =>
+    i.serialNumber ? `• <b>${i.itemTypeName}</b>\n   🔢 <code>${i.serialNumber}</code>` : `• <b>${i.itemTypeName}</b>`;
+
+  const itemsList = req.items.map(fmtItem).join("\n");
 
   // CONFIRM mode — inline buttons per item inside Telegram
   if (req.mode === "CONFIRM") {
+    const lines: string[] = [
+      `🔍 <b>אימות ציוד — ${req.battalion.name}</b>`,
+      ``,
+      `שלום ${req.soldier.fullName},`,
+      `סמן/י עבור כל פריט האם נמצא ברשותך:`,
+      ``,
+    ];
+    for (const i of req.items) {
+      lines.push(fmtItem(i));
+    }
+
     const buttons = req.items.map((i) => ([
-      { text: `✅ ${i.itemTypeName}${i.serialNumber ? ` (${i.serialNumber})` : ""}`, callback_data: `verify:${i.id}:found` },
-      { text: `❌`, callback_data: `verify:${i.id}:denied` },
+      { text: `✅ נמצא — ${i.itemTypeName}${i.serialNumber ? ` (${i.serialNumber})` : ""}`, callback_data: `verify:${i.id}:found` },
+      { text: `❌ חסר`, callback_data: `verify:${i.id}:denied` },
     ]));
 
-    const text = `🔍 <b>אימות ציוד — ${req.battalion.name}</b>\n\nשלום ${req.soldier.fullName},\nסמן/י עבור כל פריט האם נמצא ברשותך:`;
-    await sendTelegramMessage(req.battalion.telegramBotToken, req.soldier.telegramChatId, text, { inline_keyboard: buttons });
+    await sendTelegramMessage(req.battalion.telegramBotToken, req.soldier.telegramChatId, lines.join("\n"), { inline_keyboard: buttons });
 
   // BATCH mode — single confirm/deny for all items
   } else if (req.mode === "BATCH") {

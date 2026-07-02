@@ -4,7 +4,7 @@ import { can } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card, Table, Th, Td, EmptyState } from "@/components/ui";
 import { COUNT_TYPE, COUNT_STATUS } from "@/lib/labels";
-import StartCount from "./StartCount";
+import CountPlanForm from "./plans/CountPlanForm";
 import MyCountTasks from "./MyCountTasks";
 import {
   cancelCountSession,
@@ -64,7 +64,13 @@ export default async function CountsPage() {
   }
   storageMB = Math.round(storageMB / 1024 / 1024 * 10) / 10;
 
-  const [sessions, holders, battalionUsers] = await Promise.all([
+  // סקופ מחזיקים לפי תפקיד
+  const isWM = user.role === "WAREHOUSE_MANAGER" && user.holderIds && user.holderIds.length > 0;
+  const isCR = user.role === "COMPANY_REP" && !!user.holderId;
+  const myHolderIds = isWM ? user.holderIds : isCR ? [user.holderId!] : [];
+  const holderScope = (isWM || isCR) ? { id: { in: myHolderIds } } : {};
+
+  const [sessions, holders, categories, itemTypes, battalionUsers] = await Promise.all([
     prisma.countSession.findMany({
       where: { battalionId: bId },
       orderBy: { startedAt: "desc" },
@@ -74,10 +80,24 @@ export default async function CountsPage() {
         _count: { select: { lines: true, discrepancies: true } },
       },
     }),
-    prisma.holder.findMany({ where: { battalionId: bId, active: true, kind: "COMPANY" } }),
+    prisma.holder.findMany({
+      where: { battalionId: bId, active: true, kind: { in: ["WAREHOUSE", "COMPANY"] }, ...holderScope },
+      orderBy: [{ kind: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, kind: true, warehouseType: true },
+    }),
+    prisma.category.findMany({
+      where: { battalionId: bId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, warehouseType: true },
+    }),
+    prisma.itemType.findMany({
+      where: { battalionId: bId, active: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, sku: true },
+    }),
     prisma.appUser.findMany({
       where: { battalionId: bId, active: true },
-      select: { id: true, fullName: true },
+      select: { id: true, fullName: true, role: true, holder: { select: { name: true } } },
       orderBy: { fullName: "asc" },
     }),
   ]);
@@ -89,7 +109,7 @@ export default async function CountsPage() {
         subtitle="המשימות שלך + תכניות המפ״מ + ביצוע ספירה ידנית"
         action={
           <div className="flex gap-2 flex-wrap">
-            {isMafam && (
+            {canManage && (
               <Link href="/counts/plans"
                 className="bg-white border border-slate-300 text-slate-700 rounded-lg px-4 py-2 text-sm hover:bg-slate-50">
                 📋 תכניות ספירה
@@ -110,7 +130,16 @@ export default async function CountsPage() {
                 </button>
               </ConfirmForm>
             )}
-            {canExecute && <StartCount holders={holders.map((h) => ({ id: h.id, name: h.name }))} />}
+            {canExecute && (
+              <CountPlanForm
+                holders={holders.map((h) => ({ id: h.id, name: h.name, kind: h.kind, warehouseType: h.warehouseType }))}
+                categories={categories}
+                items={itemTypes.map((i) => ({ id: i.id, name: i.name, sku: i.sku }))}
+                users={battalionUsers
+                  .filter((u) => ["BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP"].includes(u.role))
+                  .map((u) => ({ id: u.id, name: u.fullName, role: u.role, holderName: u.holder?.name ?? null }))}
+              />
+            )}
           </div>
         }
       />
@@ -178,7 +207,9 @@ export default async function CountsPage() {
                   <Td className="text-xs text-slate-500">{s.startedBy.fullName}</Td>
                   <Td>
                     <div className="flex items-center gap-2 flex-wrap">
-                      {s.status !== "COMPLETED" && (
+                      {s.status === "COMPLETED" ? (
+                        <Link href={`/counts/${s.id}/report`} className="text-xs text-blue-600 hover:underline">📊 דוח</Link>
+                      ) : (
                         <Link href={`/counts/${s.id}`} className="text-xs text-blue-600 hover:underline">המשך ספירה</Link>
                       )}
                       {canManage && s.status !== "COMPLETED" && (

@@ -281,8 +281,9 @@ async function handleCallback(
       });
 
       const summary = allItems.map((i) => {
-        const icon = i.status === "CONFIRMED" ? "✅" : "❌";
-        return `${icon} ${i.itemTypeName}${i.serialNumber ? ` (${i.serialNumber})` : ""}`;
+        const icon = i.status === "CONFIRMED" ? "✅ נמצא" : "❌ חסר";
+        const sn = i.serialNumber ? `\n   🔢 <code>${i.serialNumber}</code>` : "";
+        return `${icon} — <b>${i.itemTypeName}</b>${sn}`;
       }).join("\n");
 
       await editMessageText(token, chatId, messageId, `📋 <b>אימות הושלם!</b>\n\n${summary}\n\nתודה על הדיווח! 🙏`);
@@ -290,13 +291,14 @@ async function handleCallback(
     } else {
       // Update message to show progress
       const buttons = allItems.filter((i) => i.status === "PENDING").map((i) => ([
-        { text: `✅ ${i.itemTypeName}`, callback_data: `verify:${i.id}:found` },
-        { text: `❌`, callback_data: `verify:${i.id}:denied` },
+        { text: `✅ נמצא — ${i.itemTypeName}${i.serialNumber ? ` (${i.serialNumber})` : ""}`, callback_data: `verify:${i.id}:found` },
+        { text: `❌ חסר`, callback_data: `verify:${i.id}:denied` },
       ]));
 
       const answered = allItems.filter((i) => i.status !== "PENDING").map((i) => {
-        const icon = i.status === "CONFIRMED" ? "✅" : "❌";
-        return `${icon} ${i.itemTypeName}${i.serialNumber ? ` (${i.serialNumber})` : ""}`;
+        const icon = i.status === "CONFIRMED" ? "✅ נמצא" : "❌ חסר";
+        const sn = i.serialNumber ? `\n   🔢 <code>${i.serialNumber}</code>` : "";
+        return `${icon} — <b>${i.itemTypeName}</b>${sn}`;
       }).join("\n");
 
       const remaining = allItems.filter((i) => i.status === "PENDING").length;
@@ -342,11 +344,12 @@ async function handleCallback(
       }),
     ]);
 
-    const icon = confirmed ? "✅" : "❌";
+    const icon = confirmed ? "✅ נמצא" : "❌ חסר";
     const label = confirmed ? "הכל נמצא" : "חסרים פריטים";
-    const itemList = request.items.map((i) =>
-      `${icon} ${i.itemTypeName}${i.serialNumber ? ` (${i.serialNumber})` : ""}`
-    ).join("\n");
+    const itemList = request.items.map((i) => {
+      const sn = i.serialNumber ? `\n   🔢 <code>${i.serialNumber}</code>` : "";
+      return `${icon} — <b>${i.itemTypeName}</b>${sn}`;
+    }).join("\n");
 
     await editMessageText(token, chatId, messageId, `📋 <b>אימות הושלם — ${label}</b>\n\n${itemList}\n\nתודה! 🙏`);
     await answerCallbackQuery(token, callback.id, `דווח: ${label}`);
