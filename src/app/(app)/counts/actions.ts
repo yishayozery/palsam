@@ -656,7 +656,7 @@ export async function registerTelegramWebhook() {
     body: JSON.stringify({
       commands: [
         { command: "start", description: "הרשמה למערכת" },
-        { command: "status", description: "📊 סטטוס חתימה ומבחנים" },
+        { command: "status", description: "📋 טפסים להחתמה — סטטוס שלבים" },
         { command: "equipment", description: "📦 רשימת ציוד חתום" },
         { command: "counts", description: "📊 ספירות מלאי" },
         { command: "info", description: "ℹ️ מידע כללי" },

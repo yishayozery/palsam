@@ -64,6 +64,7 @@ export async function POST(
 
     // Map Hebrew keyboard buttons to commands
     const CMD_MAP: Record<string, string> = {
+      "📋 טפסים להחתמה": "/status",
       "📋 תהליך חתימת נשק": "/status",
       "📦 הציוד שלי": "/equipment",
       "🚗 שיבוץ לרכב": "/dispatch",
@@ -432,7 +433,7 @@ async function handleCallback(
 
 const HELP_TEXT = `📋 <b>מה כל כפתור עושה:</b>
 
-📋 <b>תהליך חתימת נשק</b> — מה הסטטוס שלך? מראה אילו שלבים הושלמו (אישור מפקד, מבחן ארמון, חתימה על נוהל) ומה עוד צריך לעשות כדי לחתום על נשק
+📋 <b>טפסים להחתמה</b> — מה הסטטוס שלך? מראה אילו שלבים הושלמו (אישור מפקד, מבחן ארמון, חתימה על נוהל) ומה עוד צריך לעשות כדי לחתום על נשק
 
 📦 <b>הציוד שלי</b> — רשימת כל הציוד החתום עליך (נשק, אפודים, ציוד אישי וכו׳)
 
@@ -472,7 +473,7 @@ async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, 
   lines.push("");
 
   // Weapon signing status
-  lines.push("<b>🔫 תהליך חתימת נשק:</b>");
+  lines.push("<b>🔫 טפסים להחתמה:</b>");
 
   const step1 = soldier.weaponsApprovedAt;
   lines.push(`${step1 ? "✅" : "⬜"} אישור מג״ד/סמג״ד${step1 ? ` (${fmtDate(step1)})` : ""}`);
@@ -682,7 +683,7 @@ async function handlePhotoUpload(
     });
 
     await sendTelegramMessage(botToken, chatId,
-      `✅ <b>צילום מסך מבחן ארמון נשמר!</b>\n\n${soldier.fullName} — שלב מבחן נוהל ארמון הושלם.\nלחץ <b>📋 תהליך חתימת נשק</b> לצפייה בסטטוס.`, MAIN_KEYBOARD);
+      `✅ <b>צילום מסך מבחן ארמון נשמר!</b>\n\n${soldier.fullName} — שלב מבחן נוהל ארמון הושלם.\nלחץ <b>📋 טפסים להחתמה</b> לצפייה בסטטוס.`, MAIN_KEYBOARD);
   } catch (e) {
     console.error("[Telegram photo upload]", e);
     await sendTelegramMessage(botToken, chatId, "❌ שגיאה בשמירת התמונה. נסה שוב.");
