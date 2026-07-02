@@ -139,6 +139,11 @@ model Battalion {
   telegramBotInfo             String? // מידע כללי שהבוט ישלח (ארוחות, תפילות, טלפונים)
   telegramBotUsername         String? // username של הבוט (מתעדכן אוטומטית ברישום webhook)
   soldierDepartureMessage     String? // הודעה חופשית שנשלחת לחייל ביציאה/חופשה דרך הבוט
+  // תנאי חתימת נשק — הגדוד קובע אילו שלבים חובה לפני החתמה על נשק
+  requireEnlistment       Boolean @default(true) // שלישות חובה
+  requireWeaponsApproval  Boolean @default(true) // אישור מגד/סמגד חובה
+  requireArmoryTest       Boolean @default(true) // מבחן נוהל ארמון חובה
+  requireWeaponsAgreement Boolean @default(true) // חתימה על נוהל שמירת נשק חובה
   createdAt DateTime @default(now())
 
   users         AppUser[]

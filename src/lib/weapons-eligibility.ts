@@ -1,6 +1,13 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 
+export type WeaponsPolicy = {
+  requireEnlistment: boolean;
+  requireWeaponsApproval: boolean;
+  requireArmoryTest: boolean;
+  requireWeaponsAgreement: boolean;
+};
+
 export type EligibilityStatus = {
   enlisted: boolean;
   enlistedAt: Date | null;
@@ -17,11 +24,27 @@ export type EligibilityStatus = {
   weaponsAgreementSignedAt: Date | null;
 
   isFullyEligible: boolean;
-  missingSteps: string[]; // לדוגמה: ["enlisted", "weaponsApproved"]
+  missingSteps: string[];
 };
 
-/** מחזיר את סטטוס הזכאות לחימוש של חייל - בודק את כל 3 הדגלים + שלישות. */
-export async function getSoldierWeaponsEligibility(soldierId: string): Promise<EligibilityStatus | null> {
+export async function getWeaponsPolicy(battalionId: string): Promise<WeaponsPolicy> {
+  const b = await prisma.battalion.findUnique({
+    where: { id: battalionId },
+    select: {
+      requireEnlistment: true,
+      requireWeaponsApproval: true,
+      requireArmoryTest: true,
+      requireWeaponsAgreement: true,
+    },
+  });
+  return b ?? { requireEnlistment: true, requireWeaponsApproval: true, requireArmoryTest: true, requireWeaponsAgreement: true };
+}
+
+/** מחזיר את סטטוס הזכאות לחימוש של חייל — בודק רק שלבים שהגדוד דורש. */
+export async function getSoldierWeaponsEligibility(
+  soldierId: string,
+  policy?: WeaponsPolicy,
+): Promise<EligibilityStatus | null> {
   const s = await prisma.soldier.findUnique({
     where: { id: soldierId },
     select: {
@@ -29,9 +52,12 @@ export async function getSoldierWeaponsEligibility(soldierId: string): Promise<E
       weaponsApprovedAt: true, weaponsApprovedById: true,
       armoryTestProofImage: true, armoryTestProofAt: true,
       weaponsAgreementSignedAt: true,
+      battalionId: true,
     },
   });
   if (!s) return null;
+
+  const pol = policy ?? await getWeaponsPolicy(s.battalionId);
 
   const userIds = [s.enlistedById, s.weaponsApprovedById].filter((x): x is string => !!x);
   const users = userIds.length > 0
@@ -45,10 +71,10 @@ export async function getSoldierWeaponsEligibility(soldierId: string): Promise<E
   const weaponsAgreementSigned = !!s.weaponsAgreementSignedAt;
 
   const missingSteps: string[] = [];
-  if (!enlisted) missingSteps.push("enlisted");
-  if (!weaponsApproved) missingSteps.push("weaponsApproved");
-  if (!armoryTestSubmitted) missingSteps.push("armoryTestSubmitted");
-  if (!weaponsAgreementSigned) missingSteps.push("weaponsAgreementSigned");
+  if (pol.requireEnlistment && !enlisted) missingSteps.push("enlisted");
+  if (pol.requireWeaponsApproval && !weaponsApproved) missingSteps.push("weaponsApproved");
+  if (pol.requireArmoryTest && !armoryTestSubmitted) missingSteps.push("armoryTestSubmitted");
+  if (pol.requireWeaponsAgreement && !weaponsAgreementSigned) missingSteps.push("weaponsAgreementSigned");
 
   return {
     enlisted, enlistedAt: s.enlistedAt, enlistedByName: nameOf(s.enlistedById),

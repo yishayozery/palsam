@@ -2,6 +2,7 @@ import { requireScreen } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card } from "@/components/ui";
 import IneligibilityTable from "./IneligibilityTable";
+import { getWeaponsPolicy } from "@/lib/weapons-eligibility";
 
 export const dynamic = "force-dynamic";
 
@@ -9,28 +10,31 @@ export default async function IneligibilityReportPage() {
   const user = await requireScreen("armory_reports");
   const bId = user.battalionId!;
 
-  const soldiers = await prisma.soldier.findMany({
-    where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
-    include: {
-      company: { select: { name: true } },
-      signedSerialUnits: {
-        where: { currentHolder: { warehouseType: "ARMORY" } },
-        select: { id: true },
+  const [soldiers, armoryHolder, policy] = await Promise.all([
+    prisma.soldier.findMany({
+      where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
+      include: {
+        company: { select: { name: true } },
+        signedSerialUnits: {
+          where: { currentHolder: { warehouseType: "ARMORY" } },
+          select: { id: true },
+        },
       },
-    },
-    orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }],
-  });
-  const armoryHolder = await prisma.holder.findFirst({
-    where: { battalionId: bId, warehouseType: "ARMORY", active: true },
-    select: { armoryTestUrl: true },
-  });
+      orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }],
+    }),
+    prisma.holder.findFirst({
+      where: { battalionId: bId, warehouseType: "ARMORY", active: true },
+      select: { armoryTestUrl: true },
+    }),
+    getWeaponsPolicy(bId),
+  ]);
 
   const rows = soldiers.map((s) => {
     const missing: string[] = [];
-    if (s.status !== "ENLISTED") missing.push("שלישות");
-    if (!s.weaponsApprovedAt) missing.push('מג"ד/סמג"ד');
-    if (!s.armoryTestProofAt) missing.push("מבחן ארמון");
-    if (!s.weaponsAgreementSignedAt) missing.push("נוהל שמירה");
+    if (policy.requireEnlistment && s.status !== "ENLISTED") missing.push("שלישות");
+    if (policy.requireWeaponsApproval && !s.weaponsApprovedAt) missing.push('מג"ד/סמג"ד');
+    if (policy.requireArmoryTest && !s.armoryTestProofAt) missing.push("מבחן ארמון");
+    if (policy.requireWeaponsAgreement && !s.weaponsAgreementSignedAt) missing.push("נוהל שמירה");
     return {
       id: s.id,
       name: s.fullName,

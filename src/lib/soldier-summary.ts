@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { getWeaponsPolicy } from "@/lib/weapons-eligibility";
 
 export type SoldierEquipmentSummary = {
   soldier: { id: string; fullName: string; personalNumber: string | null; companyName: string | null; phone: string | null };
@@ -54,6 +55,13 @@ export async function getSoldierEquipmentSummary(soldierId: string): Promise<Sol
   const armoryTestSubmitted = !!soldier.armoryTestProofAt;
   const weaponsAgreementSigned = !!soldier.weaponsAgreementSignedAt;
 
+  const pol = await getWeaponsPolicy(soldier.battalionId);
+  const isFullyEligible =
+    (!pol.requireEnlistment || enlisted) &&
+    (!pol.requireWeaponsApproval || weaponsApproved) &&
+    (!pol.requireArmoryTest || armoryTestSubmitted) &&
+    (!pol.requireWeaponsAgreement || weaponsAgreementSigned);
+
   return {
     soldier: {
       id: soldier.id, fullName: soldier.fullName,
@@ -68,7 +76,7 @@ export async function getSoldierEquipmentSummary(soldierId: string): Promise<Sol
     qty,
     weaponsEligibility: {
       enlisted, weaponsApproved, armoryTestSubmitted, weaponsAgreementSigned,
-      isFullyEligible: enlisted && weaponsApproved && armoryTestSubmitted && weaponsAgreementSigned,
+      isFullyEligible,
     },
   };
 }
