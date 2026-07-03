@@ -64,11 +64,17 @@ const nextConfig: NextConfig = {
       "**/*.docx",
     ],
   },
-  // 🔒 מבטיח שמנוע ה-Prisma של linux תמיד ייכלל ב-bundle (אחרת PrismaClient
-  //    זורק ב-runtime → 500 בכל route שמייבא prisma).
+  // 🔒 מבטיח שמנוע ה-Prisma של linux + ה-binary של argon2 תמיד ייכללו
+  //    ב-bundle (dynamic require ש-Turbopack לא עוקב → אחרת 500 ב-runtime).
   outputFileTracingIncludes: {
-    "/**": ["./src/generated/prisma/libquery_engine-*"],
+    "*": [
+      "./src/generated/prisma/libquery_engine-*",
+      "./node_modules/argon2/prebuilds/linux-x64/**",
+    ],
   },
+  // 📦 מודולים native — לא לבנדל, לטעון מ-node_modules ב-runtime.
+  //    argon2 טוען .node binary ב-import; בנדולינג שובר אותו ב-Vercel.
+  serverExternalPackages: ["argon2"],
   experimental: {
     serverActions: { bodySizeLimit: "10mb" },
   },
