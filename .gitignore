@@ -48,3 +48,12 @@ next-env.d.ts
 _m.txt
 
 .vercel
+
+# scanned docs / data dumps (not for repo)
+/4/
+/*.jpg
+/*.jpeg
+/*.png
+/*.docx
+/*.xlsx
+commit_msg.txt
