@@ -168,292 +168,183 @@ async function startCountFromPlan(
     }
   }
 
-  // --- שלב 2: ציוד מפוזר — ציוד חתום על חיילים + ציוד ברמת פלוגה ---
+  // --- שלב 2: ציוד מפוזר — כל חייל שחתום על ציוד בהיקף (סריאלי או כמותי) מדווח ---
   if (includeDistributed) {
-    {
-      // ציוד חתום על חיילים
-      const signedUnits = await prisma.serialUnit.findMany({
+    // ההיקף נקבע לפי המחסנים/פלוגות שנבחרו:
+    //  • מחסן → כל הציוד מסוג המחסן (category.warehouseType) החתום על חיילים
+    //  • פלוגה → כל הציוד של חיילי אותה פלוגה
+    // בשילוב מסנני התכנית (קטגוריה/פריט/שיטת-מעקב). חייל-מרכזי: מי שחתום על
+    // ציוד רלוונטי — סריאלי או כמותי — משתתף ומדווח (ללא "רכיבה על סריאלי").
+    const scopedHolders = holderIds.length > 0
+      ? await prisma.holder.findMany({ where: { id: { in: holderIds } }, select: { id: true, kind: true, warehouseType: true } })
+      : [];
+    const scopedWhTypes = [...new Set(scopedHolders.filter((h) => h.kind === "WAREHOUSE" && h.warehouseType).map((h) => h.warehouseType as string))];
+    const scopedCompanyIds = scopedHolders.filter((h) => h.kind === "COMPANY").map((h) => h.id);
+
+    // סינון פריטים למפוזר: לפי סוג-מחסן של ההיקף + מסנני התכנית (קטגוריה/פריט/מעקב)
+    const distItemWhere: Record<string, unknown> = { battalionId: bId };
+    if (scopedWhTypes.length > 0 && scopedCompanyIds.length === 0) distItemWhere.category = { warehouseType: { in: scopedWhTypes } };
+    if (scopeItemTypeIds.length > 0) distItemWhere.id = { in: scopeItemTypeIds };
+    if (scopeCategoryIds.length > 0) distItemWhere.categoryId = { in: scopeCategoryIds };
+    if (trackingMethods.length > 0) distItemWhere.trackingMethod = { in: trackingMethods };
+    const distAllowedIds = Object.keys(distItemWhere).length > 1
+      ? (await prisma.itemType.findMany({ where: distItemWhere, select: { id: true } })).map((m) => m.id)
+      : null;
+    const soldierCompanyFilter = scopedCompanyIds.length > 0 ? { companyId: { in: scopedCompanyIds } } : {};
+
+    // 1. ציוד סריאלי חתום על חיילים (לפי בעלות-מחסן/פלוגה, לא מיקום פיזי)
+    const signedUnits = await prisma.serialUnit.findMany({
+      where: {
+        battalionId: bId, signedSoldierId: { not: null }, dischargedAt: null,
+        ...(distAllowedIds ? { itemTypeId: { in: distAllowedIds } } : {}),
+        ...(scopedCompanyIds.length > 0 ? { signedSoldier: { is: { companyId: { in: scopedCompanyIds } } } } : {}),
+      },
+      include: {
+        signedSoldier: { select: { id: true, fullName: true, telegramChatId: true, companyId: true } },
+        itemType: { select: { id: true, name: true } },
+      },
+    });
+
+    // 2. ציוד כמותי חתום על חיילים (TransferLine — SIGNOUT מוסיף, CHECKIN מוריד)
+    type QtyLine = { itemTypeId: string; itemName: string; quantity: number };
+    const qtyBySoldier = new Map<string, QtyLine[]>();
+    if (includeQuantity) {
+      const qtyRows = await prisma.transferLine.findMany({
         where: {
-          battalionId: bId,
-          currentHolderId: { in: holderIds },
-          signedSoldierId: { not: null },
-          dischargedAt: null,
+          transfer: {
+            status: "COMPLETED", type: { in: ["SIGNOUT", "CHECKIN"] }, battalionId: bId,
+            ...(scopedCompanyIds.length > 0 ? { toSoldier: { is: { companyId: { in: scopedCompanyIds } } } } : { toSoldierId: { not: null } }),
+          },
+          serialUnitId: null,
+          ...(distAllowedIds ? { itemTypeId: { in: distAllowedIds } } : {}),
         },
-        include: {
-          signedSoldier: { select: { id: true, fullName: true, telegramChatId: true, companyId: true } },
-          itemType: { select: { id: true, name: true } },
-        },
+        select: { itemTypeId: true, quantity: true, transfer: { select: { type: true, toSoldierId: true } }, itemType: { select: { name: true } } },
       });
-
-      // ציוד ברמת פלוגה — רק כשאין שלב מחסן (DISTRIBUTED בלבד), כי BOTH כבר מכסה זאת בשלב 1
-      const companyUnits = !includeWarehouse ? await prisma.serialUnit.findMany({
-        where: {
-          battalionId: bId,
-          currentHolderId: { in: holderIds },
-          signedSoldierId: null,
-          dischargedAt: null,
-          currentHolder: { kind: "COMPANY" },
-        },
-        include: {
-          itemType: { select: { id: true, name: true } },
-        },
-      }) : [];
-
-      const companyHolderList = !includeWarehouse ? await prisma.holder.findMany({
-        where: { id: { in: holderIds }, kind: "COMPANY" },
-        select: { id: true },
-      }) : [];
-      const companyHolderIdSet = new Set(companyHolderList.map((h) => h.id));
-      const companyBalances = !includeWarehouse ? await prisma.stockBalance.findMany({
-        where: {
-          battalionId: bId,
-          holderId: { in: companyHolderList.map((h) => h.id) },
-          quantity: { gt: 0 },
-        },
-      }) : [];
-
-      // קיבוץ לפי פלוגה (holder)
-      const byHolder = new Map<string, typeof signedUnits>();
-      for (const u of signedUnits) {
-        const hId = u.currentHolderId!;
-        (byHolder.get(hId) || (() => { const a: typeof signedUnits = []; byHolder.set(hId, a); return a; })()).push(u);
+      const acc = new Map<string, QtyLine & { soldierId: string }>();
+      for (const l of qtyRows) {
+        const sId = l.transfer.toSoldierId;
+        if (!sId) continue;
+        const key = `${sId}|${l.itemTypeId}`;
+        const sign = l.transfer.type === "SIGNOUT" ? 1 : -1;
+        const cur = acc.get(key);
+        if (cur) cur.quantity += sign * l.quantity;
+        else acc.set(key, { soldierId: sId, itemTypeId: l.itemTypeId, itemName: l.itemType.name, quantity: sign * l.quantity });
       }
-      // הוספת company holders שיש להם ציוד ברמת פלוגה אבל אין חיילים חתומים
-      for (const u of companyUnits) {
-        if (!byHolder.has(u.currentHolderId!)) byHolder.set(u.currentHolderId!, []);
+      for (const v of acc.values()) {
+        if (v.quantity <= 0) continue;
+        (qtyBySoldier.get(v.soldierId) || (() => { const a: QtyLine[] = []; qtyBySoldier.set(v.soldierId, a); return a; })())
+          .push({ itemTypeId: v.itemTypeId, itemName: v.itemName, quantity: v.quantity });
       }
-      for (const b of companyBalances) {
-        if (!byHolder.has(b.holderId)) byHolder.set(b.holderId, []);
+    }
+
+    // 3. איחוד חיילים משני המקורות — כל מי שחתום על ציוד בהיקף
+    type SUnit = typeof signedUnits[number];
+    const serialBySoldier = new Map<string, SUnit[]>();
+    for (const u of signedUnits) {
+      (serialBySoldier.get(u.signedSoldierId!) || (() => { const a: SUnit[] = []; serialBySoldier.set(u.signedSoldierId!, a); return a; })()).push(u);
+    }
+    const allSoldierIds = new Set<string>([...serialBySoldier.keys(), ...qtyBySoldier.keys()]);
+
+    if (allSoldierIds.size > 0) {
+      // פרטי חיילים (כולל חיילים עם ציוד כמותי בלבד)
+      const soldierInfo = new Map<string, { id: string; fullName: string; telegramChatId: string | null; companyId: string | null }>();
+      for (const u of signedUnits) if (u.signedSoldier) soldierInfo.set(u.signedSoldier.id, u.signedSoldier);
+      const missing = [...allSoldierIds].filter((id) => !soldierInfo.has(id));
+      if (missing.length > 0) {
+        const more = await prisma.soldier.findMany({ where: { id: { in: missing } }, select: { id: true, fullName: true, telegramChatId: true, companyId: true } });
+        for (const s of more) soldierInfo.set(s.id, s);
       }
 
-      // מציאת חותמי פלוגה: Signature.signerUserId על Transfer מסוג ISSUE
+      // חותמי פלוגה (Signature על Transfer מסוג ISSUE) — לתצוגה בדוח
       const companySigners = new Map<string, string>();
       const issueSignatures = await prisma.signature.findMany({
-        where: {
-          battalionId: bId,
-          signerUserId: { not: null },
-          transfer: { type: "ISSUE" },
-        },
-        include: {
-          signerUser: { select: { fullName: true } },
-          transfer: { select: { toHolderId: true } },
-        },
+        where: { battalionId: bId, signerUserId: { not: null }, transfer: { type: "ISSUE" } },
+        include: { transfer: { select: { toHolderId: true } } },
         orderBy: { signedAt: "desc" },
       });
       for (const sig of issueSignatures) {
         const hId = sig.transfer?.toHolderId;
-        if (hId && !companySigners.has(hId)) {
-          companySigners.set(hId, sig.signerUserId!);
-        }
+        if (hId && !companySigners.has(hId)) companySigners.set(hId, sig.signerUserId!);
       }
 
-      // 📦 ציוד כמותי חתום על חייל — נספר יחד עם החייל (רק אם המסנן כולל QUANTITY).
-      //    מקור: TransferLine (SIGNOUT מוסיף, CHECKIN מוריד). מאוגרג לפי חייל+פריט.
-      type QtyLine = { itemTypeId: string; itemName: string; quantity: number };
-      const qtyBySoldier = new Map<string, QtyLine[]>();
-      const qtyDone = new Set<string>(); // מונע כפילות אם לחייל ציוד בכמה holders
-      if (includeQuantity) {
-        const soldierIds = [...new Set(signedUnits.map((u) => u.signedSoldierId!).filter(Boolean))];
-        if (soldierIds.length > 0) {
-          const qtyLines = await prisma.transferLine.findMany({
-            where: {
-              transfer: { status: "COMPLETED", type: { in: ["SIGNOUT", "CHECKIN"] }, toSoldierId: { in: soldierIds } },
-              serialUnitId: null,
-              ...(allowedItemTypeIds ? { itemTypeId: { in: allowedItemTypeIds } } : {}),
-            },
-            select: {
-              itemTypeId: true, quantity: true,
-              transfer: { select: { type: true, toSoldierId: true } },
-              itemType: { select: { name: true } },
-            },
+      // session אחד לכל הספירה המפוזרת
+      const session = await prisma.countSession.create({
+        data: { battalionId: bId, type: "COMPANY", status: freeze ? "FROZEN" : "IN_PROGRESS", frozen: freeze, isBlind: blind, startedById: userId },
+      });
+      await prisma.countTask.create({
+        data: {
+          battalionId: bId, planId, holderId: holderIds[0] ?? scopedHolders[0]?.id ?? "",
+          assignedUserId: userId, scheduledAt: now, dueAt: new Date(now.getTime() + 1440 * 60 * 1000),
+          status: "IN_PROGRESS", sessionId: session.id, startedAt: now,
+        },
+      });
+
+      const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { telegramBotToken: true, name: true } });
+
+      for (const soldierId of allSoldierIds) {
+        const soldier = soldierInfo.get(soldierId)!;
+        const signerUserId = soldier.companyId ? (companySigners.get(soldier.companyId) ?? null) : null;
+        const lineHolderId = soldier.companyId ?? holderIds[0] ?? scopedHolders[0]?.id ?? null;
+        const serialUnits = serialBySoldier.get(soldierId) ?? [];
+        const qtyItems = qtyBySoldier.get(soldierId) ?? [];
+
+        for (const u of serialUnits) {
+          await prisma.countLine.create({
+            data: { sessionId: session.id, itemTypeId: u.itemTypeId, holderId: lineHolderId, serialUnitId: u.id, expectedQty: u.lotQuantity ?? 1, soldierId, signerUserId },
           });
-          const acc = new Map<string, QtyLine & { soldierId: string }>();
-          for (const l of qtyLines) {
-            const sId = l.transfer.toSoldierId!;
-            const key = `${sId}|${l.itemTypeId}`;
-            const sign = l.transfer.type === "SIGNOUT" ? 1 : -1;
-            const cur = acc.get(key);
-            if (cur) cur.quantity += sign * l.quantity;
-            else acc.set(key, { soldierId: sId, itemTypeId: l.itemTypeId, itemName: l.itemType.name, quantity: sign * l.quantity });
-          }
-          for (const v of acc.values()) {
-            if (v.quantity <= 0) continue;
-            (qtyBySoldier.get(v.soldierId) || (() => { const a: QtyLine[] = []; qtyBySoldier.set(v.soldierId, a); return a; })())
-              .push({ itemTypeId: v.itemTypeId, itemName: v.itemName, quantity: v.quantity });
-          }
         }
-      }
+        for (const q of qtyItems) {
+          await prisma.countLine.create({
+            data: { sessionId: session.id, itemTypeId: q.itemTypeId, holderId: lineHolderId, expectedQty: q.quantity, soldierId, signerUserId },
+          });
+        }
 
-      for (const [hId, units] of byHolder) {
-        const signerUserId = companySigners.get(hId) ?? null;
-
-        // יצירת session אחד per company לציוד מפוזר
-        const session = await prisma.countSession.create({
+        const vReq = await prisma.verificationRequest.create({
           data: {
-            battalionId: bId,
-            type: "COMPANY",
-            status: "IN_PROGRESS",
-            frozen: false,
-            isBlind: blind,
-            startedById: userId,
+            battalionId: bId, sessionId: session.id, soldierId, mode: blind ? "BLIND_COUNT" : "CONFIRM",
+            items: {
+              create: [
+                ...serialUnits.map((u) => ({ serialUnitId: u.id, itemTypeName: u.itemType.name, serialNumber: u.serialNumber, expectedQuantity: u.lotQuantity ?? 1 })),
+                ...qtyItems.map((q) => ({ itemTypeName: q.itemName, expectedQuantity: q.quantity })),
+              ],
+            },
           },
         });
 
-        // CountTask ברמת holder
-        const holderTask = await prisma.countTask.create({
-          data: {
-            battalionId: bId, planId, holderId: hId,
-            assignedUserId: userId,
-            scheduledAt: now,
-            dueAt: new Date(now.getTime() + 1440 * 60 * 1000),
-            status: "IN_PROGRESS",
-            sessionId: session.id,
-            startedAt: now,
-          },
-        });
-        void holderTask;
+        if (soldier.telegramChatId && battalion?.telegramBotToken) {
+          try {
+            const { sendTelegramMessage } = await import("@/lib/telegram");
+            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+            const serialLines = serialUnits.map((u) =>
+              u.serialNumber ? `• <b>${u.itemType.name}</b>\n   🔢 <code>${u.serialNumber}</code>` : `• <b>${u.itemType.name}</b>`);
+            const qtyLinesTxt = qtyItems.map((q) => `• <b>${q.itemName}</b> ×${q.quantity}`);
+            const itemsList = [...serialLines, ...qtyLinesTxt].join("\n");
 
-        // CountLines ברמת חייל (ציוד חתום)
-        for (const u of units) {
-          await prisma.countLine.create({
-            data: {
-              sessionId: session.id,
-              itemTypeId: u.itemTypeId,
-              holderId: u.currentHolderId!,
-              serialUnitId: u.id,
-              expectedQty: u.lotQuantity ?? 1,
-              soldierId: u.signedSoldierId,
-              signerUserId,
-            },
-          });
-        }
-
-        // CountLines — ציוד סריאלי ברמת פלוגה (לא חתום על חייל)
-        const holderCompanyUnits = companyUnits.filter((u) => u.currentHolderId === hId);
-        for (const u of holderCompanyUnits) {
-          await prisma.countLine.create({
-            data: {
-              sessionId: session.id,
-              itemTypeId: u.itemTypeId,
-              holderId: hId,
-              serialUnitId: u.id,
-              expectedQty: u.lotQuantity ?? 1,
-              signerUserId,
-            },
-          });
-        }
-
-        // CountLines — מלאי כמותי ברמת פלוגה
-        if (companyHolderIdSet.has(hId)) {
-          const holderBalances = companyBalances.filter((b) => b.holderId === hId);
-          for (const b of holderBalances) {
-            await prisma.countLine.create({
-              data: {
-                sessionId: session.id,
-                itemTypeId: b.itemTypeId,
-                holderId: hId,
-                expectedQty: b.quantity,
-                signerUserId,
-              },
-            });
-          }
-        }
-
-        // יצירת VerificationRequests + שליחת טלגרם לכל חייל
-        const bySoldier = new Map<string, typeof units>();
-        for (const u of units) {
-          if (!u.signedSoldierId) continue;
-          (bySoldier.get(u.signedSoldierId) || (() => { const a: typeof units = []; bySoldier.set(u.signedSoldierId, a); return a; })()).push(u);
-        }
-
-        const battalion = await prisma.battalion.findUnique({
-          where: { id: bId },
-          select: { telegramBotToken: true, name: true },
-        });
-
-        for (const [soldierId, soldierUnits] of bySoldier) {
-          const soldier = soldierUnits[0].signedSoldier!;
-
-          // ציוד כמותי של החייל — נספר פעם אחת (אם עוד לא נספר ב-session אחר בקריאה זו)
-          const qtyItems = !qtyDone.has(soldierId) ? (qtyBySoldier.get(soldierId) ?? []) : [];
-          if (qtyItems.length > 0) {
-            qtyDone.add(soldierId);
-            for (const q of qtyItems) {
-              await prisma.countLine.create({
-                data: {
-                  sessionId: session.id, itemTypeId: q.itemTypeId, holderId: hId,
-                  expectedQty: q.quantity, soldierId, signerUserId,
-                },
+            if (blind) {
+              const text = `📋 <b>ספירת ציוד — ${battalion.name}</b>\n\nשלום ${soldier.fullName},\nנדרשת ספירת ציוד.\nאנא דווח/י על הפריטים הבאים:\n\n${itemsList}\n\n👉 <a href="${baseUrl}/verify/${vReq.token}">לחץ כאן לדיווח</a>`;
+              await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, text);
+            } else {
+              const vItems = await prisma.verificationItem.findMany({
+                where: { requestId: vReq.id },
+                select: { id: true, itemTypeName: true, serialNumber: true, expectedQuantity: true },
               });
+              const buttons = vItems.map((vi) => ([
+                { text: `✅ נמצא — ${vi.itemTypeName}${vi.serialNumber ? ` (${vi.serialNumber})` : (vi.expectedQuantity ?? 1) > 1 ? ` ×${vi.expectedQuantity}` : ""}`, callback_data: `verify:${vi.id}:found` },
+                { text: `❌ חסר`, callback_data: `verify:${vi.id}:denied` },
+              ]));
+              const text = [
+                `📋 <b>ספירת ציוד — ${battalion.name}</b>`, ``,
+                `שלום ${soldier.fullName},`, `סמן/י עבור כל פריט האם נמצא ברשותך:`, ``, itemsList,
+              ].join("\n");
+              await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, text, { inline_keyboard: buttons });
             }
-          }
 
-          const vReq = await prisma.verificationRequest.create({
-            data: {
-              battalionId: bId,
-              sessionId: session.id,
-              soldierId,
-              mode: blind ? "BLIND_COUNT" : "CONFIRM",
-              items: {
-                create: [
-                  ...soldierUnits.map((u) => ({
-                    serialUnitId: u.id,
-                    itemTypeName: u.itemType.name,
-                    serialNumber: u.serialNumber,
-                    expectedQuantity: u.lotQuantity ?? 1,
-                  })),
-                  ...qtyItems.map((q) => ({
-                    itemTypeName: q.itemName,
-                    expectedQuantity: q.quantity,
-                  })),
-                ],
-              },
-            },
-          });
-
-          // שליחת טלגרם אוטומטית
-          if (soldier.telegramChatId && battalion?.telegramBotToken) {
-            try {
-              const { sendTelegramMessage } = await import("@/lib/telegram");
-              const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
-              const serialLines = soldierUnits.map((u) =>
-                u.serialNumber ? `• <b>${u.itemType.name}</b>\n   🔢 <code>${u.serialNumber}</code>` : `• <b>${u.itemType.name}</b>`);
-              const qtyLinesTxt = qtyItems.map((q) => `• <b>${q.itemName}</b> ×${q.quantity}`);
-              const itemsList = [...serialLines, ...qtyLinesTxt].join("\n");
-
-              if (blind) {
-                const text = `📋 <b>ספירת ציוד — ${battalion.name}</b>\n\nשלום ${soldier.fullName},\nנדרשת ספירת ציוד.\nאנא דווח/י על הפריטים הבאים:\n\n${itemsList}\n\n👉 <a href="${baseUrl}/verify/${vReq.token}">לחץ כאן לדיווח</a>`;
-                await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, text);
-              } else {
-                const vItems = await prisma.verificationItem.findMany({
-                  where: { requestId: vReq.id },
-                  select: { id: true, itemTypeName: true, serialNumber: true, expectedQuantity: true },
-                });
-                const buttons = vItems.map((vi) => ([
-                  { text: `✅ נמצא — ${vi.itemTypeName}${vi.serialNumber ? ` (${vi.serialNumber})` : (vi.expectedQuantity ?? 1) > 1 ? ` ×${vi.expectedQuantity}` : ""}`, callback_data: `verify:${vi.id}:found` },
-                  { text: `❌ חסר`, callback_data: `verify:${vi.id}:denied` },
-                ]));
-                const text = [
-                  `📋 <b>ספירת ציוד — ${battalion.name}</b>`,
-                  ``,
-                  `שלום ${soldier.fullName},`,
-                  `סמן/י עבור כל פריט האם נמצא ברשותך:`,
-                  ``,
-                  itemsList,
-                ].join("\n");
-                await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, text, { inline_keyboard: buttons });
-              }
-
-              await prisma.verificationRequest.update({
-                where: { id: vReq.id },
-                data: { sentAt: new Date(), sentVia: "TELEGRAM" },
-              });
-            } catch { /* Telegram send failure — non-fatal */ }
-          }
+            await prisma.verificationRequest.update({ where: { id: vReq.id }, data: { sentAt: new Date(), sentVia: "TELEGRAM" } });
+          } catch { /* Telegram send failure — non-fatal */ }
         }
-
-        if (!firstSessionId) firstSessionId = session.id;
       }
+
+      if (!firstSessionId) firstSessionId = session.id;
     }
   }
 
