@@ -46,16 +46,15 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: false,
   // 🪶 חיתוך גודל serverless functions — Prisma+Turbopack עוקבים אחרי כל
   // הפרויקט ומכניסים 500MB+ לכל function (מעל מגבלת 250MB → deploy_failed).
-  // מוציאים מנועי Prisma לפלטפורמות שאינן Vercel, כלי build, ותמונות זמניות.
-  // ⚠️ לא להוציא libquery_engine-rhel-openssl — זה המנוע ש-Vercel מריץ בפועל.
+  // ⚠️ מוציאים רק דברים שבטוח לא נחוצים ב-runtime: כלי build ומנועי Prisma
+  //    לפלטפורמות שאינן linux. לא נוגעים ב-@prisma/engines/rhel/debian!
   outputFileTracingExcludes: {
     "*": [
-      "node_modules/@prisma/engines/**",
-      "node_modules/prisma/**",
       "node_modules/@swc/**",
       "node_modules/@esbuild/**",
       "node_modules/esbuild/**",
       "node_modules/typescript/**",
+      "node_modules/.cache/**",
       "src/generated/prisma/**/query_engine-windows*",
       "src/generated/prisma/**/*.tmp*",
       "src/generated/prisma/**/libquery_engine-darwin*",
@@ -64,6 +63,11 @@ const nextConfig: NextConfig = {
       "**/*.png",
       "**/*.docx",
     ],
+  },
+  // 🔒 מבטיח שמנוע ה-Prisma של linux תמיד ייכלל ב-bundle (אחרת PrismaClient
+  //    זורק ב-runtime → 500 בכל route שמייבא prisma).
+  outputFileTracingIncludes: {
+    "/**": ["./src/generated/prisma/libquery_engine-*"],
   },
   experimental: {
     serverActions: { bodySizeLimit: "10mb" },
