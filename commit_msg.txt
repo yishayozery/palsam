@@ -1,0 +1,9 @@
+feat: split roster/soldiers permissions, remove attachments from dashboard, fix labels
+
+- New "roster" screen permission separate from "soldiers" (company soldiers)
+- Kashrag sees company soldiers but not roster (shalish screen)
+- Shalish/Magad/Samagad get roster access, Kashrag does not
+- Removed attachment requests from main dashboard (handled in roster)
+- Renamed "my inventory" nav and title to be holder-agnostic
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
