@@ -55,7 +55,8 @@ export async function createCountPlan(formData: FormData) {
   });
 
   if (startNow) {
-    const sessionId = await startCountFromPlan(bId, plan.id, scopeHolderIds, user.id, freeze, isBlind, countScope);
+    const sessionId = await startCountFromPlan(bId, plan.id, scopeHolderIds, user.id, freeze, isBlind, countScope,
+      { scopeCategoryIds, scopeItemTypeIds, trackingMethods });
     await audit(user.id, "CREATE_COUNT_PLAN", "CountPlan", plan.id, { name, startNow: true });
     revalidatePath("/counts/plans");
     revalidatePath("/counts");
@@ -73,6 +74,7 @@ async function startCountFromPlan(
   bId: string, planId: string, scopeHolderIds: string[], userId: string,
   freeze: boolean, blind: boolean = false,
   scope: "WAREHOUSE_STOCK" | "DISTRIBUTED" | "BOTH" = "WAREHOUSE_STOCK",
+  filters?: { scopeCategoryIds?: string[]; scopeItemTypeIds?: string[]; trackingMethods?: string[] },
 ): Promise<string> {
   let holderIds = scopeHolderIds;
   if (holderIds.length === 0) {
@@ -84,6 +86,24 @@ async function startCountFromPlan(
 
   const includeWarehouse = scope === "WAREHOUSE_STOCK" || scope === "BOTH";
   const includeDistributed = scope === "DISTRIBUTED" || scope === "BOTH";
+
+  // 🎯 סינון פריטים לפי בחירת מקים הספירה: קטגוריה / פריט ספציפי / שיטת מעקב.
+  //    ריק בכל השלוש = הכל. allowedItemTypeIds=null אומר "ללא הגבלה".
+  const scopeCategoryIds = filters?.scopeCategoryIds ?? [];
+  const scopeItemTypeIds = filters?.scopeItemTypeIds ?? [];
+  const trackingMethods = filters?.trackingMethods ?? [];
+  const itemTypeFilter: Record<string, unknown> = {};
+  if (scopeItemTypeIds.length > 0) itemTypeFilter.id = { in: scopeItemTypeIds };
+  if (scopeCategoryIds.length > 0) itemTypeFilter.categoryId = { in: scopeCategoryIds };
+  if (trackingMethods.length > 0) itemTypeFilter.trackingMethod = { in: trackingMethods };
+  let allowedItemTypeIds: string[] | null = null;
+  if (Object.keys(itemTypeFilter).length > 0) {
+    allowedItemTypeIds = (await prisma.itemType.findMany({
+      where: { battalionId: bId, ...itemTypeFilter }, select: { id: true },
+    })).map((m) => m.id);
+  }
+  // האם לכלול ציוד כמותי? רק אם המסנן ריק או כולל QUANTITY במפורש.
+  const includeQuantity = trackingMethods.length === 0 || trackingMethods.includes("QUANTITY");
 
   const now = new Date();
   let firstSessionId = "";
@@ -119,9 +139,13 @@ async function startCountFromPlan(
         data: { sessionId: session.id, status: "IN_PROGRESS", startedAt: now },
       });
 
-      const balances = await prisma.stockBalance.findMany({
-        where: { battalionId: bId, holderId: hId, quantity: { gt: 0 } },
-      });
+      // ציוד כמותי במחסן — רק אם המסנן כולל QUANTITY
+      const balances = includeQuantity ? await prisma.stockBalance.findMany({
+        where: {
+          battalionId: bId, holderId: hId, quantity: { gt: 0 },
+          ...(allowedItemTypeIds ? { itemTypeId: { in: allowedItemTypeIds } } : {}),
+        },
+      }) : [];
       for (const b of balances) {
         await prisma.countLine.create({
           data: { sessionId: session.id, itemTypeId: b.itemTypeId, holderId: b.holderId, expectedQty: b.quantity },
@@ -129,7 +153,10 @@ async function startCountFromPlan(
       }
 
       const units = await prisma.serialUnit.findMany({
-        where: { battalionId: bId, currentHolderId: hId, dischargedAt: null },
+        where: {
+          battalionId: bId, currentHolderId: hId, dischargedAt: null,
+          ...(allowedItemTypeIds ? { itemTypeId: { in: allowedItemTypeIds } } : {}),
+        },
       });
       for (const u of units) {
         await prisma.countLine.create({
@@ -217,6 +244,43 @@ async function startCountFromPlan(
         const hId = sig.transfer?.toHolderId;
         if (hId && !companySigners.has(hId)) {
           companySigners.set(hId, sig.signerUserId!);
+        }
+      }
+
+      // 📦 ציוד כמותי חתום על חייל — נספר יחד עם החייל (רק אם המסנן כולל QUANTITY).
+      //    מקור: TransferLine (SIGNOUT מוסיף, CHECKIN מוריד). מאוגרג לפי חייל+פריט.
+      type QtyLine = { itemTypeId: string; itemName: string; quantity: number };
+      const qtyBySoldier = new Map<string, QtyLine[]>();
+      const qtyDone = new Set<string>(); // מונע כפילות אם לחייל ציוד בכמה holders
+      if (includeQuantity) {
+        const soldierIds = [...new Set(signedUnits.map((u) => u.signedSoldierId!).filter(Boolean))];
+        if (soldierIds.length > 0) {
+          const qtyLines = await prisma.transferLine.findMany({
+            where: {
+              transfer: { status: "COMPLETED", type: { in: ["SIGNOUT", "CHECKIN"] }, toSoldierId: { in: soldierIds } },
+              serialUnitId: null,
+              ...(allowedItemTypeIds ? { itemTypeId: { in: allowedItemTypeIds } } : {}),
+            },
+            select: {
+              itemTypeId: true, quantity: true,
+              transfer: { select: { type: true, toSoldierId: true } },
+              itemType: { select: { name: true } },
+            },
+          });
+          const acc = new Map<string, QtyLine & { soldierId: string }>();
+          for (const l of qtyLines) {
+            const sId = l.transfer.toSoldierId!;
+            const key = `${sId}|${l.itemTypeId}`;
+            const sign = l.transfer.type === "SIGNOUT" ? 1 : -1;
+            const cur = acc.get(key);
+            if (cur) cur.quantity += sign * l.quantity;
+            else acc.set(key, { soldierId: sId, itemTypeId: l.itemTypeId, itemName: l.itemType.name, quantity: sign * l.quantity });
+          }
+          for (const v of acc.values()) {
+            if (v.quantity <= 0) continue;
+            (qtyBySoldier.get(v.soldierId) || (() => { const a: QtyLine[] = []; qtyBySoldier.set(v.soldierId, a); return a; })())
+              .push({ itemTypeId: v.itemTypeId, itemName: v.itemName, quantity: v.quantity });
+          }
         }
       }
 
@@ -309,6 +373,21 @@ async function startCountFromPlan(
 
         for (const [soldierId, soldierUnits] of bySoldier) {
           const soldier = soldierUnits[0].signedSoldier!;
+
+          // ציוד כמותי של החייל — נספר פעם אחת (אם עוד לא נספר ב-session אחר בקריאה זו)
+          const qtyItems = !qtyDone.has(soldierId) ? (qtyBySoldier.get(soldierId) ?? []) : [];
+          if (qtyItems.length > 0) {
+            qtyDone.add(soldierId);
+            for (const q of qtyItems) {
+              await prisma.countLine.create({
+                data: {
+                  sessionId: session.id, itemTypeId: q.itemTypeId, holderId: hId,
+                  expectedQty: q.quantity, soldierId, signerUserId,
+                },
+              });
+            }
+          }
+
           const vReq = await prisma.verificationRequest.create({
             data: {
               battalionId: bId,
@@ -316,12 +395,18 @@ async function startCountFromPlan(
               soldierId,
               mode: blind ? "BLIND_COUNT" : "CONFIRM",
               items: {
-                create: soldierUnits.map((u) => ({
-                  serialUnitId: u.id,
-                  itemTypeName: u.itemType.name,
-                  serialNumber: u.serialNumber,
-                  expectedQuantity: u.lotQuantity ?? 1,
-                })),
+                create: [
+                  ...soldierUnits.map((u) => ({
+                    serialUnitId: u.id,
+                    itemTypeName: u.itemType.name,
+                    serialNumber: u.serialNumber,
+                    expectedQuantity: u.lotQuantity ?? 1,
+                  })),
+                  ...qtyItems.map((q) => ({
+                    itemTypeName: q.itemName,
+                    expectedQuantity: q.quantity,
+                  })),
+                ],
               },
             },
           });
@@ -331,9 +416,10 @@ async function startCountFromPlan(
             try {
               const { sendTelegramMessage } = await import("@/lib/telegram");
               const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
-              const fmtItem = (u: { itemType: { name: string }; serialNumber: string | null }) =>
-                u.serialNumber ? `• <b>${u.itemType.name}</b>\n   🔢 <code>${u.serialNumber}</code>` : `• <b>${u.itemType.name}</b>`;
-              const itemsList = soldierUnits.map(fmtItem).join("\n");
+              const serialLines = soldierUnits.map((u) =>
+                u.serialNumber ? `• <b>${u.itemType.name}</b>\n   🔢 <code>${u.serialNumber}</code>` : `• <b>${u.itemType.name}</b>`);
+              const qtyLinesTxt = qtyItems.map((q) => `• <b>${q.itemName}</b> ×${q.quantity}`);
+              const itemsList = [...serialLines, ...qtyLinesTxt].join("\n");
 
               if (blind) {
                 const text = `📋 <b>ספירת ציוד — ${battalion.name}</b>\n\nשלום ${soldier.fullName},\nנדרשת ספירת ציוד.\nאנא דווח/י על הפריטים הבאים:\n\n${itemsList}\n\n👉 <a href="${baseUrl}/verify/${vReq.token}">לחץ כאן לדיווח</a>`;
@@ -341,10 +427,10 @@ async function startCountFromPlan(
               } else {
                 const vItems = await prisma.verificationItem.findMany({
                   where: { requestId: vReq.id },
-                  select: { id: true, itemTypeName: true, serialNumber: true },
+                  select: { id: true, itemTypeName: true, serialNumber: true, expectedQuantity: true },
                 });
                 const buttons = vItems.map((vi) => ([
-                  { text: `✅ נמצא — ${vi.itemTypeName}${vi.serialNumber ? ` (${vi.serialNumber})` : ""}`, callback_data: `verify:${vi.id}:found` },
+                  { text: `✅ נמצא — ${vi.itemTypeName}${vi.serialNumber ? ` (${vi.serialNumber})` : (vi.expectedQuantity ?? 1) > 1 ? ` ×${vi.expectedQuantity}` : ""}`, callback_data: `verify:${vi.id}:found` },
                   { text: `❌ חסר`, callback_data: `verify:${vi.id}:denied` },
                 ]));
                 const text = [
@@ -353,7 +439,7 @@ async function startCountFromPlan(
                   `שלום ${soldier.fullName},`,
                   `סמן/י עבור כל פריט האם נמצא ברשותך:`,
                   ``,
-                  ...soldierUnits.map(fmtItem),
+                  itemsList,
                 ].join("\n");
                 await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, text, { inline_keyboard: buttons });
               }
