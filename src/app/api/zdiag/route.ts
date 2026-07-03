@@ -1,20 +1,24 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET() {
-  const out: Record<string, unknown> = {};
+  const steps: string[] = [];
   try {
-    const argon2 = (await import("argon2")).default;
-    const h = await argon2.hash("diagtest123");
-    out.argon2 = { ok: true, prefix: h.slice(0, 12) };
+    steps.push("start");
+    const mod = await import("argon2");
+    steps.push("argon2-imported");
+    const h = await mod.default.hash("x");
+    steps.push("argon2-hashed:" + h.slice(0, 8));
   } catch (e) {
-    out.argon2 = { ok: false, error: String(e), code: (e as { code?: string })?.code };
+    return new Response("ARGON2_FAIL @ " + steps.join(">") + " :: " + String(e), { status: 200 });
   }
   try {
     const { prisma } = await import("@/lib/prisma");
+    steps.push("prisma-imported");
     const n = await prisma.battalion.count();
-    out.prisma = { ok: true, battalions: n };
+    steps.push("prisma-count:" + n);
   } catch (e) {
-    out.prisma = { ok: false, error: String(e), code: (e as { code?: string })?.code };
+    return new Response("PRISMA_FAIL @ " + steps.join(">") + " :: " + String(e), { status: 200 });
   }
-  return Response.json(out);
+  return new Response("ALL_OK :: " + steps.join(">"), { status: 200 });
 }
