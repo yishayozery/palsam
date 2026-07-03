@@ -117,7 +117,13 @@ export default async function CountsPage() {
       select: { id: true, name: true, sku: true },
     }),
     prisma.appUser.findMany({
-      where: { battalionId: bId, active: true },
+      // אחראי ספירה — רק אנשי המקים (פלוגה/מחסן שלו) או הוא עצמו; מפ"מ רואה הכל
+      where: {
+        battalionId: bId, active: true,
+        ...(isWM ? { OR: [{ id: user.id }, { holderId: { in: user.holderIds } }] }
+          : isCR ? { OR: [{ id: user.id }, { holderId: user.holderId }, { soldier: { is: { companyId: user.holderId } } }] }
+          : {}),
+      },
       select: { id: true, fullName: true, role: true, holder: { select: { name: true } } },
       orderBy: { fullName: "asc" },
     }),
