@@ -14,6 +14,27 @@ export default async function CountReportPage() {
     return <div className="p-8 text-center text-slate-500">אין הרשאה לצפייה בדוח זה.</div>;
   }
 
+  // 🔒 Scoping לפי תפקיד — כל אחד רואה רק את הציוד הרלוונטי לו:
+  //  • קשר"ג (מנהל מחסן): הציוד מסוג המחסן שלו, כולל מה שמוחתם הלאה
+  //  • רס"פ (נציג פלוגה): הציוד שהפלוגה חתומה עליו (מכל מחסן)
+  //  • מפ"מ/אדמין: הכל
+  const isWM = user.role === "WAREHOUSE_MANAGER" && (user.holderIds?.length ?? 0) > 0;
+  const isCR = user.role === "COMPANY_REP" && !!user.holderId;
+  const myWhTypes = isWM
+    ? (await prisma.holder.findMany({ where: { id: { in: user.holderIds } }, select: { warehouseType: true } }))
+        .map((h) => h.warehouseType).filter((t): t is NonNullable<typeof t> => !!t)
+    : [];
+
+  const stockWhere: Record<string, unknown> = { battalionId: bId, quantity: { gt: 0 } };
+  const serialWhere: Record<string, unknown> = { battalionId: bId, dischargedAt: null };
+  if (isWM) {
+    stockWhere.holderId = { in: user.holderIds };
+    serialWhere.itemType = { category: { warehouseType: { in: myWhTypes } } };
+  } else if (isCR) {
+    stockWhere.holderId = user.holderId;
+    serialWhere.OR = [{ currentHolderId: user.holderId }, { signedSoldier: { is: { companyId: user.holderId } } }];
+  }
+
   const [holders, stockBalances, serialUnits, lastSessions] = await Promise.all([
     prisma.holder.findMany({
       where: { battalionId: bId, active: true, kind: { in: ["WAREHOUSE", "COMPANY"] } },
@@ -21,7 +42,7 @@ export default async function CountReportPage() {
       select: { id: true, name: true, kind: true },
     }),
     prisma.stockBalance.findMany({
-      where: { battalionId: bId, quantity: { gt: 0 } },
+      where: stockWhere,
       select: {
         id: true, quantity: true,
         holderId: true,
@@ -30,7 +51,7 @@ export default async function CountReportPage() {
       },
     }),
     prisma.serialUnit.findMany({
-      where: { battalionId: bId, dischargedAt: null },
+      where: serialWhere,
       select: {
         id: true, serialNumber: true, lotQuantity: true,
         currentHolderId: true,

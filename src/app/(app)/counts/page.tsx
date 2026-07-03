@@ -70,6 +70,27 @@ export default async function CountsPage() {
   const myHolderIds = isWM ? user.holderIds : isCR ? [user.holderId!] : [];
   const holderScope = (isWM || isCR) ? { id: { in: myHolderIds } } : {};
 
+  // 🔒 סקופ קטגוריות/פריטים בטופס — רק מה ששייך למשתמש (הקשר"ג לא רואה מוצרים זרים):
+  //  • קשר"ג: לפי סוג המחסן שלו · רס"פ: רק פריטים שהפלוגה מחזיקה · מפ"מ: הכל
+  const myWhTypes = isWM
+    ? (await prisma.holder.findMany({ where: { id: { in: user.holderIds } }, select: { warehouseType: true } }))
+        .map((h) => h.warehouseType).filter((t): t is NonNullable<typeof t> => !!t)
+    : [];
+  let crItemTypeIds: string[] = [];
+  if (isCR) {
+    const [su, sb] = await Promise.all([
+      prisma.serialUnit.findMany({ where: { battalionId: bId, dischargedAt: null, OR: [{ currentHolderId: user.holderId! }, { signedSoldier: { is: { companyId: user.holderId! } } }] }, select: { itemTypeId: true }, distinct: ["itemTypeId"] }),
+      prisma.stockBalance.findMany({ where: { battalionId: bId, holderId: user.holderId!, quantity: { gt: 0 } }, select: { itemTypeId: true }, distinct: ["itemTypeId"] }),
+    ]);
+    crItemTypeIds = [...new Set([...su.map((x) => x.itemTypeId), ...sb.map((x) => x.itemTypeId)])];
+  }
+  const categoryWhere = isWM ? { battalionId: bId, warehouseType: { in: myWhTypes } }
+    : isCR ? { battalionId: bId, itemTypes: { some: { id: { in: crItemTypeIds } } } }
+    : { battalionId: bId };
+  const itemWhere = isWM ? { battalionId: bId, active: true, category: { warehouseType: { in: myWhTypes } } }
+    : isCR ? { battalionId: bId, active: true, id: { in: crItemTypeIds } }
+    : { battalionId: bId, active: true };
+
   const [sessions, holders, categories, itemTypes, battalionUsers] = await Promise.all([
     prisma.countSession.findMany({
       where: { battalionId: bId },
@@ -86,12 +107,12 @@ export default async function CountsPage() {
       select: { id: true, name: true, kind: true, warehouseType: true },
     }),
     prisma.category.findMany({
-      where: { battalionId: bId },
+      where: categoryWhere,
       orderBy: { name: "asc" },
       select: { id: true, name: true, warehouseType: true },
     }),
     prisma.itemType.findMany({
-      where: { battalionId: bId, active: true },
+      where: itemWhere,
       orderBy: { name: "asc" },
       select: { id: true, name: true, sku: true },
     }),

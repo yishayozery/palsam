@@ -19,9 +19,10 @@ const FREQ_OPTS = [
   { v: 1, l: "יומי" }, { v: 2, l: "כל יומיים" }, { v: 7, l: "שבועי" },
   { v: 14, l: "כל שבועיים" }, { v: 30, l: "חודשי" },
 ];
+// ערכות (KIT) הן להחתמה מהירה בלבד — לא רלוונטי לספירה.
 const METHODS = [
   { v: "QUANTITY", l: "כמותי" }, { v: "SERIAL", l: "סריאלי" },
-  { v: "LOT", l: "אצוות" }, { v: "KIT", l: "ערכות" },
+  { v: "LOT", l: "אצוות" },
 ];
 
 export default function CountPlanForm({ holders, categories, items, users = [], buttonLabel, buttonClass }: {
