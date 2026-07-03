@@ -124,6 +124,13 @@ export default function VerificationClient({
     if (!allAnswered) return;
     setError(null);
     startTransition(async () => {
+      // 🎯 התאמת סריאלי מבוססת-קבוצה — לא לפי סדר השורות. אם לפלוגה 4 מכשירים
+      //    והחייל מקיש אותם בסדר אחר, כל סריאלי שהוקש איפשהו נחשב "נמצא".
+      const norm = (s: string) => s.trim().replace(/\s+/g, "").toUpperCase();
+      const serialItems = items.filter((i) => itemAction(i) === "serial");
+      const typedSerials = new Set(serialItems.map((i) => norm(responses[i.id].reportedSerial)).filter(Boolean));
+      const expectedSerials = new Set(serialItems.map((i) => (i.serialNumber ? norm(i.serialNumber) : "")).filter(Boolean));
+
       const payload = items.map((item) => {
         const r = responses[item.id];
         if (mode === "BATCH") {
@@ -134,9 +141,16 @@ export default function VerificationClient({
         const expiryNote = item.expectedExpiry && exp && exp !== item.expectedExpiry ? `תוקף: רשום ${item.expectedExpiry}, דווח ${exp}` : undefined;
         switch (itemAction(item)) {
           case "serial": {
-            const match = r.reportedSerial.trim() === item.serialNumber;
-            const note = [match ? undefined : `הוקלד: ${r.reportedSerial.trim()}`, expiryNote].filter(Boolean).join(" · ") || undefined;
-            return { itemId: item.id, found: match, reportedSerial: r.reportedSerial.trim(), reportedLocation: loc, reportedExpiry: exp, photoData: r.photoData || undefined, note };
+            const typed = r.reportedSerial.trim();
+            // נמצא = הסריאלי הצפוי הוקש באחת מהשורות (לא משנה באיזו)
+            const found = item.serialNumber ? typedSerials.has(norm(item.serialNumber)) : typed.length > 0;
+            const unknownTyped = typed && !expectedSerials.has(norm(typed));
+            const note = [
+              found ? undefined : (item.serialNumber ? `לא הוקש: ${item.serialNumber}` : undefined),
+              unknownTyped ? `סריאלי לא מוכר: ${typed}` : undefined,
+              expiryNote,
+            ].filter(Boolean).join(" · ") || undefined;
+            return { itemId: item.id, found, reportedSerial: typed || undefined, reportedLocation: loc, reportedExpiry: exp, photoData: r.photoData || undefined, note };
           }
           case "location":
             return { itemId: item.id, found: true, reportedLocation: loc, reportedExpiry: exp, note: expiryNote };
