@@ -315,30 +315,36 @@ async function startCountFromPlan(
           try {
             const { sendTelegramMessage } = await import("@/lib/telegram");
             const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
-            const serialLines = serialUnits.map((u) =>
-              u.serialNumber ? `• <b>${u.itemType.name}</b>\n   🔢 <code>${u.serialNumber}</code>` : `• <b>${u.itemType.name}</b>`);
-            const qtyLinesTxt = qtyItems.map((q) => `• <b>${q.itemName}</b> ×${q.quantity}`);
-            const itemsList = [...serialLines, ...qtyLinesTxt].join("\n");
+            const link = `${baseUrl}/verify/${vReq.token}`;
+            const serialCount = serialUnits.length;
+            const qtyCount = qtyItems.length;
 
+            let text: string;
             if (blind) {
-              const text = `📋 <b>ספירת ציוד — ${battalion.name}</b>\n\nשלום ${soldier.fullName},\nנדרשת ספירת ציוד.\nאנא דווח/י על הפריטים הבאים:\n\n${itemsList}\n\n👉 <a href="${baseUrl}/verify/${vReq.token}">לחץ כאן לדיווח</a>`;
-              await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, text);
-            } else {
-              const vItems = await prisma.verificationItem.findMany({
-                where: { requestId: vReq.id },
-                select: { id: true, itemTypeName: true, serialNumber: true, expectedQuantity: true },
-              });
-              const buttons = vItems.map((vi) => ([
-                { text: `✅ נמצא — ${vi.itemTypeName}${vi.serialNumber ? ` (${vi.serialNumber})` : (vi.expectedQuantity ?? 1) > 1 ? ` ×${vi.expectedQuantity}` : ""}`, callback_data: `verify:${vi.id}:found` },
-                { text: `❌ חסר`, callback_data: `verify:${vi.id}:denied` },
-              ]));
-              const text = [
-                `📋 <b>ספירת ציוד — ${battalion.name}</b>`, ``,
-                `שלום ${soldier.fullName},`, `סמן/י עבור כל פריט האם נמצא ברשותך:`, ``, itemsList,
+              // 🔒 עיוור — לא חושפים סריאלי/כמות. רק מה צריך לדווח.
+              const parts: string[] = [];
+              if (serialCount > 0) parts.push(`🔢 ${serialCount} פריטים סריאליים — הקש/י את המספר הסריאלי של כל אחד`);
+              if (qtyCount > 0) parts.push(`🔢 ${qtyCount} פריטים כמותיים — ספור/י ודווח/י כמות`);
+              text = [
+                `📋 <b>ספירת ציוד עיוורת — ${battalion.name}</b>`, ``,
+                `שלום ${soldier.fullName},`,
+                `נדרשת ספירת ציוד. אין לך את הנתונים מראש — דווח/י מה שמצאת בפועל:`, ``,
+                ...parts, ``,
+                `👉 <a href="${link}">לחץ כאן לדיווח</a>`,
               ].join("\n");
-              await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, text, { inline_keyboard: buttons });
+            } else {
+              // אישור — מציגים את הציוד; הדיווח (כולל מיקום/תוקף) בדף הייעודי.
+              const serialLines = serialUnits.map((u) =>
+                u.serialNumber ? `• <b>${u.itemType.name}</b> — <code>${u.serialNumber}</code>` : `• <b>${u.itemType.name}</b>`);
+              const qtyLinesTxt = qtyItems.map((q) => `• <b>${q.itemName}</b> ×${q.quantity}`);
+              text = [
+                `📋 <b>ספירת ציוד — ${battalion.name}</b>`, ``,
+                `שלום ${soldier.fullName},`, `אשר/י את הציוד הבא ודווח/י מה שחסר/שונה:`, ``,
+                ...serialLines, ...qtyLinesTxt, ``,
+                `👉 <a href="${link}">לחץ כאן לדיווח</a>`,
+              ].join("\n");
             }
-
+            await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, text);
             await prisma.verificationRequest.update({ where: { id: vReq.id }, data: { sentAt: new Date(), sentVia: "TELEGRAM" } });
           } catch { /* Telegram send failure — non-fatal */ }
         }
