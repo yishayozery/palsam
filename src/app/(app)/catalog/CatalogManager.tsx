@@ -17,6 +17,7 @@ export type EditData = {
   imageData: string | null;
   homeLocationId?: string | null;
   trackExpiry?: boolean;
+  expiryAlertDays?: number | null;
 };
 
 function compressImage(file: File): Promise<string> {
@@ -132,7 +133,13 @@ export default function CatalogManager({ categories, locations = [], edit }: { c
                     className="w-4 h-4" />
                   <span className="font-medium">⏳ פריט עם תאריך תפוגה</span>
                 </label>
-                <p className="text-[11px] text-slate-500 mr-6 mt-0.5">סמן כדי לחייב הזנת תאריך תפוגה בקבלת מלאי. הפריט יופיע בדשבורד התראות תפוגה.</p>
+                <p className="text-[11px] text-slate-500 mr-6 mt-0.5">סמן כדי לחייב הזנת תאריך תפוגה בקבלת מלאי. הפריט יופיע במסך ניהול תוקף.</p>
+                <div className="mr-6 mt-2 flex items-center gap-2">
+                  <label className="text-xs text-slate-600">🔔 התראה</label>
+                  <input type="number" name="expiryAlertDays" min={1} defaultValue={edit?.expiryAlertDays ?? 90}
+                    className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm" />
+                  <span className="text-xs text-slate-600">ימים לפני פקיעת התוקף</span>
+                </div>
               </div>
 
               <div>

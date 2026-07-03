@@ -41,6 +41,7 @@ export const NAV: NavItem[] = [
   { href: "/stock/brigade", label: "החתמות חטיבה", icon: "🤝", group: "לוגיסטי", screen: "stock" },
   { href: "/signatures", label: "החתמות", icon: "✍️", group: "לוגיסטי", screen: "signatures" },
   { href: "/counts", label: "ספירות מלאי", icon: "🔢", group: "לוגיסטי", screen: "counts" },
+  { href: "/expiry", label: "ניהול תוקף", icon: "📅", group: "לוגיסטי", screen: "stock" },
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "לוגיסטי", screen: "gaps" },
   { href: "/my-inventory", label: "המלאי שלי", icon: "📦", group: "לוגיסטי", screen: "soldiers" },
   { href: "/my-inventory/locations", label: "מיקומי ציוד", icon: "📍", group: "לוגיסטי", screen: "soldiers" },

@@ -781,6 +781,7 @@ model ItemType {
   trackLocation  Boolean          @default(false)
   // האם הפריט יש לו תאריך תפוגה — אם כן, חובה להזין תאריך תפוגה בקבלה למלאי
   trackExpiry    Boolean          @default(false)
+  expiryAlertDays Int?            // התראה X ימים לפני פקיעת תוקף (רק לפריטי trackExpiry)
   // תרומה / ציוד לא-צבאי (נגזר מ-association לתאימות)
   isDonated      Boolean          @default(false)
   signable       Boolean          @default(true) // האם ניתן להחתים חיילים על הפריט
@@ -1881,6 +1882,9 @@ model VerificationItem {
   // שדות לאימות מיקום / הקשת מק"ט
   reportedSerial    String?
   reportedLocation  String?
+  // שדות לאימות תוקף — expectedExpiry = התאריך הידוע במערכת; reportedExpiry = מה שדווח
+  expectedExpiry    DateTime?
+  reportedExpiry    DateTime?
 
   @@index([requestId])
 }

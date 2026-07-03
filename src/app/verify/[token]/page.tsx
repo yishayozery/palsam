@@ -44,6 +44,7 @@ export default async function VerifyPage({
           reportedQuantity: true,
           reportedSerial: true,
           reportedLocation: true,
+          expectedExpiry: true,
         },
       },
     },
@@ -86,7 +87,7 @@ export default async function VerifyPage({
           ) : (
             <VerificationClient
               token={token}
-              items={req.items}
+              items={req.items.map((it) => ({ ...it, expectedExpiry: it.expectedExpiry ? it.expectedExpiry.toISOString().slice(0, 10) : null }))}
               soldierName={name}
               mode={req.mode}
               locations={locations}

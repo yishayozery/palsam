@@ -12,6 +12,7 @@ export async function submitVerification(
     reportedSerial?: string;
     reportedLocation?: string;
     reportedQuantity?: number;
+    reportedExpiry?: string;
   }[],
 ) {
   const req = await prisma.verificationRequest.findUnique({
@@ -32,6 +33,7 @@ export async function submitVerification(
           reportedSerial: r.reportedSerial || null,
           reportedLocation: r.reportedLocation || null,
           reportedQuantity: r.reportedQuantity ?? null,
+          reportedExpiry: r.reportedExpiry ? new Date(r.reportedExpiry) : null,
           respondedAt: new Date(),
         },
       }),

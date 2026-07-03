@@ -14,6 +14,7 @@ type Item = {
   reportedQuantity: number | null;
   reportedSerial: string | null;
   reportedLocation: string | null;
+  expectedExpiry: string | null;
 };
 
 type Response = {
@@ -23,6 +24,7 @@ type Response = {
   reportedSerial: string;
   reportedLocation: string;
   reportedQuantity: string;
+  reportedExpiry: string;
 };
 
 // סוג הפעולה שכל פריט דורש — נגזר מטבע הפריט + מצב הבקשה.
@@ -75,7 +77,7 @@ export default function VerificationClient({
 }) {
   const [responses, setResponses] = useState<Record<string, Response>>(() => {
     const init: Record<string, Response> = {};
-    for (const item of items) init[item.id] = { found: null, photoData: null, note: "", reportedSerial: "", reportedLocation: "", reportedQuantity: "" };
+    for (const item of items) init[item.id] = { found: null, photoData: null, note: "", reportedSerial: "", reportedLocation: "", reportedQuantity: "", reportedExpiry: item.expectedExpiry ?? "" };
     return init;
   });
   const [batchConfirmed, setBatchConfirmed] = useState<boolean | null>(null);
@@ -128,21 +130,25 @@ export default function VerificationClient({
           return { itemId: item.id, found: batchConfirmed!, photoData: undefined, note: undefined };
         }
         const loc = r.reportedLocation.trim() || undefined;
+        const exp = r.reportedExpiry || undefined;
+        const expiryNote = item.expectedExpiry && exp && exp !== item.expectedExpiry ? `תוקף: רשום ${item.expectedExpiry}, דווח ${exp}` : undefined;
         switch (itemAction(item)) {
           case "serial": {
             const match = r.reportedSerial.trim() === item.serialNumber;
-            return { itemId: item.id, found: match, reportedSerial: r.reportedSerial.trim(), reportedLocation: loc, photoData: r.photoData || undefined, note: match ? undefined : `הוקלד: ${r.reportedSerial.trim()}` };
+            const note = [match ? undefined : `הוקלד: ${r.reportedSerial.trim()}`, expiryNote].filter(Boolean).join(" · ") || undefined;
+            return { itemId: item.id, found: match, reportedSerial: r.reportedSerial.trim(), reportedLocation: loc, reportedExpiry: exp, photoData: r.photoData || undefined, note };
           }
           case "location":
-            return { itemId: item.id, found: true, reportedLocation: loc, note: undefined };
+            return { itemId: item.id, found: true, reportedLocation: loc, reportedExpiry: exp, note: expiryNote };
           case "quantity":
           case "quantity_confirm": {
             const qty = parseInt(r.reportedQuantity, 10) || 0;
             const match = item.expectedQuantity == null || qty === item.expectedQuantity;
-            return { itemId: item.id, found: match, reportedQuantity: qty, reportedLocation: loc, note: match ? undefined : `צפוי: ${item.expectedQuantity ?? "?"}, דווח: ${qty}` };
+            const note = [match ? undefined : `צפוי: ${item.expectedQuantity ?? "?"}, דווח: ${qty}`, expiryNote].filter(Boolean).join(" · ") || undefined;
+            return { itemId: item.id, found: match, reportedQuantity: qty, reportedLocation: loc, reportedExpiry: exp, note };
           }
           default:
-            return { itemId: item.id, found: r.found!, photoData: r.photoData || undefined, reportedLocation: loc, note: r.note || undefined };
+            return { itemId: item.id, found: r.found!, photoData: r.photoData || undefined, reportedLocation: loc, reportedExpiry: exp, note: [r.note || undefined, expiryNote].filter(Boolean).join(" · ") || undefined };
         }
       });
       const result = await submitVerification(token, payload);
@@ -279,6 +285,16 @@ export default function VerificationClient({
 
                 {/* מיקום אופציונלי לפריט סריאלי/כמותי */}
                 {(action === "serial" || action === "quantity" || action === "quantity_confirm") && locations.length > 0 && locationPicker(item)}
+
+                {/* תוקף — אישור מול התאריך הידוע במערכת (כמו אצווה) */}
+                {item.expectedExpiry && (
+                  <div className="mt-2">
+                    <div className="text-[11px] text-amber-700 mb-1">📅 תוקף רשום: {new Date(item.expectedExpiry).toLocaleDateString("he-IL")} — אשר/י או תקן/י</div>
+                    <input type="date" value={r.reportedExpiry}
+                      onChange={(e) => setResponses((p) => ({ ...p, [item.id]: { ...p[item.id], reportedExpiry: e.target.value } }))}
+                      className="w-full border-2 border-amber-200 focus:border-amber-400 rounded-lg px-3 py-2 text-sm outline-none" />
+                  </div>
+                )}
 
                 {/* צילום — זמין באישור */}
                 {action === "confirm" && (

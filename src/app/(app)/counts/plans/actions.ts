@@ -304,7 +304,7 @@ async function startCountFromPlan(
             battalionId: bId, sessionId: session.id, soldierId, mode: blind ? "BLIND_COUNT" : "CONFIRM",
             items: {
               create: [
-                ...serialUnits.map((u) => ({ serialUnitId: u.id, itemTypeName: u.itemType.name, serialNumber: u.serialNumber, expectedQuantity: u.lotQuantity ?? 1 })),
+                ...serialUnits.map((u) => ({ serialUnitId: u.id, itemTypeName: u.itemType.name, serialNumber: u.serialNumber, expectedQuantity: u.lotQuantity ?? 1, expectedExpiry: u.expiryDate })),
                 ...qtyItems.map((q) => ({ itemTypeName: q.itemName, expectedQuantity: q.quantity })),
               ],
             },
