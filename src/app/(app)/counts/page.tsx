@@ -125,8 +125,8 @@ export default async function CountsPage() {
               <ConfirmForm action={purgeAllCountTasksForm}
                 hiddenFields={{ confirm: "DELETE-ALL" }}
                 message="למחוק את כל משימות הספירה? פעולה זו אינה משפיעה על תכניות, היסטוריה או ספירות שכבר בוצעו.">
-                <button className="bg-rose-50 border border-rose-300 text-rose-700 rounded-lg px-3 py-2 text-xs hover:bg-rose-100">
-                  🗑️ ניקוי כל המשימות
+                <button title="ניקוי כל המשימות" className="order-last text-rose-400 hover:text-rose-600 text-xs px-1.5 py-1">
+                  🗑️
                 </button>
               </ConfirmForm>
             )}
