@@ -44,37 +44,6 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BUILD_DATE: BUILD_DATE,
   },
   productionBrowserSourceMaps: false,
-  // 🪶 חיתוך גודל serverless functions — Prisma+Turbopack עוקבים אחרי כל
-  // הפרויקט ומכניסים 500MB+ לכל function (מעל מגבלת 250MB → deploy_failed).
-  // ⚠️ מוציאים רק דברים שבטוח לא נחוצים ב-runtime: כלי build ומנועי Prisma
-  //    לפלטפורמות שאינן linux. לא נוגעים ב-@prisma/engines/rhel/debian!
-  outputFileTracingExcludes: {
-    "*": [
-      "node_modules/@swc/**",
-      "node_modules/@esbuild/**",
-      "node_modules/esbuild/**",
-      "node_modules/typescript/**",
-      "node_modules/.cache/**",
-      "src/generated/prisma/**/query_engine-windows*",
-      "src/generated/prisma/**/*.tmp*",
-      "src/generated/prisma/**/libquery_engine-darwin*",
-      "**/*.jpg",
-      "**/*.jpeg",
-      "**/*.png",
-      "**/*.docx",
-    ],
-  },
-  // 🔒 מבטיח שמנוע ה-Prisma של linux + ה-binary של argon2 תמיד ייכללו
-  //    ב-bundle (dynamic require ש-Turbopack לא עוקב → אחרת 500 ב-runtime).
-  outputFileTracingIncludes: {
-    "*": [
-      "./src/generated/prisma/libquery_engine-*",
-      "./node_modules/argon2/prebuilds/linux-x64/**",
-    ],
-  },
-  // 📦 מודולים native — לא לבנדל, לטעון מ-node_modules ב-runtime.
-  //    argon2 טוען .node binary ב-import; בנדולינג שובר אותו ב-Vercel.
-  serverExternalPackages: ["argon2"],
   experimental: {
     serverActions: { bodySizeLimit: "10mb" },
   },
