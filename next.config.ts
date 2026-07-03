@@ -1,17 +1,14 @@
 import type { NextConfig } from "next";
-import { execSync } from "child_process";
 
-// 🏷️ זיהוי גרסה - מתעדכן אוטומטית בכל פריסה
+// 🏷️ זיהוי גרסה - מתעדכן אוטומטית בכל פריסה.
+// ⚠️ אין להשתמש ב-child_process/fs כאן! זה גורם ל-Turbopack לעקוב אחרי כל
+// הפרויקט (NFT) ומנפח כל serialess function מעל מגבלת 250MB → deploy_failed.
+// ב-Vercel VERCEL_GIT_COMMIT_SHA זמין אוטומטית. לוקלי אפשר להזריק דרך
+// NEXT_PUBLIC_BUILD_VERSION ב-.env, אחרת "dev".
 function getBuildVersion(): string {
-  // ב-Vercel: שתי ENV vars זמינות אוטומטית
   const vercelSha = process.env.VERCEL_GIT_COMMIT_SHA;
   if (vercelSha) return vercelSha.slice(0, 7);
-  // לוקלי: ננסה לקרוא מגיט
-  try {
-    return execSync("git rev-parse --short HEAD", { encoding: "utf-8" }).trim();
-  } catch {
-    return "dev";
-  }
+  return process.env.NEXT_PUBLIC_BUILD_VERSION || "dev";
 }
 
 function getBuildDate(): string {
@@ -47,6 +44,27 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BUILD_DATE: BUILD_DATE,
   },
   productionBrowserSourceMaps: false,
+  // 🪶 חיתוך גודל serverless functions — Prisma+Turbopack עוקבים אחרי כל
+  // הפרויקט ומכניסים 500MB+ לכל function (מעל מגבלת 250MB → deploy_failed).
+  // מוציאים מנועי Prisma לפלטפורמות שאינן Vercel, כלי build, ותמונות זמניות.
+  // ⚠️ לא להוציא libquery_engine-rhel-openssl — זה המנוע ש-Vercel מריץ בפועל.
+  outputFileTracingExcludes: {
+    "*": [
+      "node_modules/@prisma/engines/**",
+      "node_modules/prisma/**",
+      "node_modules/@swc/**",
+      "node_modules/@esbuild/**",
+      "node_modules/esbuild/**",
+      "node_modules/typescript/**",
+      "src/generated/prisma/**/query_engine-windows*",
+      "src/generated/prisma/**/*.tmp*",
+      "src/generated/prisma/**/libquery_engine-darwin*",
+      "**/*.jpg",
+      "**/*.jpeg",
+      "**/*.png",
+      "**/*.docx",
+    ],
+  },
   experimental: {
     serverActions: { bodySizeLimit: "10mb" },
   },
