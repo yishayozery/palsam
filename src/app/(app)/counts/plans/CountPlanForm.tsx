@@ -48,6 +48,7 @@ export default function CountPlanForm({ holders, categories, items, users = [], 
   const [isBlind, setIsBlind] = useState(false);
   const [countScope, setCountScope] = useState("WAREHOUSE_STOCK");
   const [startNow, setStartNow] = useState(true);
+  const [completionHours, setCompletionHours] = useState(24);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -365,11 +366,18 @@ export default function CountPlanForm({ holders, categories, items, users = [], 
                   </p>
                 </div>
               </label>
+              <div className="mt-3 flex items-center gap-2 pt-3 border-t border-emerald-200">
+                <label className="text-xs font-semibold text-emerald-900">⏰ זמן גג לביצוע:</label>
+                <input type="number" min={1} value={completionHours}
+                  onChange={(e) => setCompletionHours(Math.max(1, parseInt(e.target.value) || 24))}
+                  className="w-20 rounded-lg border border-emerald-300 px-2 py-1 text-sm" />
+                <span className="text-xs text-emerald-700">שעות (יופיע בהודעה לחיילים)</span>
+              </div>
             </div>
           )}
 
-          {/* graceMinutes hidden for one-time */}
-          {isOneTime && <input type="hidden" name="graceMinutes" value={1440} />}
+          {/* graceMinutes לחד-פעמי = זמן הגג לביצוע */}
+          {isOneTime && <input type="hidden" name="graceMinutes" value={completionHours * 60} />}
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
             <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-slate-300 px-5 py-2 text-sm hover:bg-slate-50">ביטול</button>

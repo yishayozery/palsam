@@ -56,7 +56,7 @@ export async function createCountPlan(formData: FormData) {
 
   if (startNow) {
     const sessionId = await startCountFromPlan(bId, plan.id, scopeHolderIds, user.id, freeze, isBlind, countScope,
-      { scopeCategoryIds, scopeItemTypeIds, trackingMethods });
+      { scopeCategoryIds, scopeItemTypeIds, trackingMethods }, graceMinutes);
     await audit(user.id, "CREATE_COUNT_PLAN", "CountPlan", plan.id, { name, startNow: true });
     revalidatePath("/counts/plans");
     revalidatePath("/counts");
@@ -75,6 +75,7 @@ async function startCountFromPlan(
   freeze: boolean, blind: boolean = false,
   scope: "WAREHOUSE_STOCK" | "DISTRIBUTED" | "BOTH" = "WAREHOUSE_STOCK",
   filters?: { scopeCategoryIds?: string[]; scopeItemTypeIds?: string[]; trackingMethods?: string[] },
+  graceMinutes: number = 1440,
 ): Promise<string> {
   let holderIds = scopeHolderIds;
   if (holderIds.length === 0) {
@@ -116,7 +117,7 @@ async function startCountFromPlan(
           battalionId: bId, planId, holderId: hId,
           assignedUserId: userId,
           scheduledAt: now,
-          dueAt: new Date(now.getTime() + 1440 * 60 * 1000),
+          dueAt: new Date(now.getTime() + graceMinutes * 60 * 1000),
           status: "PENDING",
         },
         include: { holder: true },
@@ -271,7 +272,7 @@ async function startCountFromPlan(
       const session = await prisma.countSession.create({
         data: { battalionId: bId, type: "COMPANY", status: freeze ? "FROZEN" : "IN_PROGRESS", frozen: freeze, isBlind: blind, startedById: userId },
       });
-      const dueAt = new Date(now.getTime() + 1440 * 60 * 1000);
+      const dueAt = new Date(now.getTime() + graceMinutes * 60 * 1000);
       const dueStr = dueAt.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" });
       await prisma.countTask.create({
         data: {
