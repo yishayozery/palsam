@@ -127,7 +127,7 @@ export default async function GapsPage() {
                     </Td>
                     <Td>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        {canResolve || (d.sessionId && mySessionIds.has(d.sessionId)) ? <ResolveGap id={d.id} /> : <span className="text-xs text-slate-400">ממתין</span>}
+                        {canResolve || (d.sessionId && mySessionIds.has(d.sessionId)) ? <ResolveGap id={d.id} expectedQty={d.expectedQty} /> : <span className="text-xs text-slate-400">ממתין</span>}
                         {soldier?.phone && (
                           <a href={`https://wa.me/972${soldier.phone.replace(/^0/, "")}?text=${encodeURIComponent(`שלום ${soldier.fullName}, נמצא פער בספירת מלאי עבור: ${d.itemType.name}. יש לבדוק ולעדכן.`)}`}
                             target="_blank" rel="noreferrer"
