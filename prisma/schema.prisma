@@ -1095,6 +1095,8 @@ model CountPlan {
 
   active      Boolean  @default(true)
   isBlind     Boolean  @default(false)
+  signOnComplete   Boolean @default(false) // "ספירת החתמה" — הדיווח מחתים את החייל/פלוגה על הציוד
+  correctByReporter Boolean @default(false) // האם המדווח בקצה יכול לתקן, או רק מקים הספירה
   countScope  CountScope @default(WAREHOUSE_STOCK)
   createdById String
   createdBy   AppUser  @relation("CountPlanCreatedBy", fields: [createdById], references: [id])
@@ -1173,6 +1175,8 @@ model CountSession {
   status       CountSessionStatus @default(DRAFT)
   frozen       Boolean            @default(false)
   isBlind      Boolean            @default(false)
+  signOnComplete    Boolean       @default(false)
+  correctByReporter Boolean       @default(false)
   startedById  String
   startedBy    AppUser            @relation("CountStartedBy", fields: [startedById], references: [id])
   startedAt    DateTime           @default(now())

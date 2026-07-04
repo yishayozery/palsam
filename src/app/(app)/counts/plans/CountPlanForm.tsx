@@ -46,6 +46,8 @@ export default function CountPlanForm({ holders, categories, items, users = [], 
   const [endDate, setEndDate] = useState("");
   const [freezeState, setFreezeState] = useState(false);
   const [isBlind, setIsBlind] = useState(false);
+  const [signOnComplete, setSignOnComplete] = useState(false);
+  const [correctByReporter, setCorrectByReporter] = useState(false);
   const [countScope, setCountScope] = useState("WAREHOUSE_STOCK");
   const [startNow, setStartNow] = useState(true);
   const [completionHours, setCompletionHours] = useState(24);
@@ -66,6 +68,7 @@ export default function CountPlanForm({ holders, categories, items, users = [], 
       setScopeItemTypeIds([]); setTrackingMethods([]); setFrequencyDays(0);
       setScheduledTimes("08:00"); setDaysOfWeek([]); setGraceMinutes(60);
       setStartDate(""); setEndDate(""); setFreezeState(false); setIsBlind(false);
+      setSignOnComplete(false); setCorrectByReporter(false);
       setCountScope("WAREHOUSE_STOCK"); setStartNow(true);
       setOpen(false);
     } catch (e) {
@@ -266,6 +269,36 @@ export default function CountPlanForm({ holders, categories, items, users = [], 
                 <span className="text-sm font-semibold text-indigo-900">🔍 ספירה עיוורת</span>
                 <p className="text-xs text-indigo-700 mt-0.5">
                   הסופר מקליד כמויות ומספרים סריאליים בלי לראות את הצפוי. המערכת משווה אחרי ההגשה.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {/* ספירת החתמה */}
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" name="signOnComplete" checked={signOnComplete}
+                onChange={(e) => setSignOnComplete(e.target.checked)}
+                className="w-4 h-4 rounded accent-emerald-600" />
+              <div>
+                <span className="text-sm font-semibold text-emerald-900">✍️ ספירת החתמה</span>
+                <p className="text-xs text-emerald-700 mt-0.5">
+                  הדיווח מהווה החתמה — הציוד שהחייל/פלוגה מאשר/ת נחתם עליו/ה בסיום (בלי תנועת מלאי).
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {/* מי יכול לתקן */}
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" name="correctByReporter" checked={correctByReporter}
+                onChange={(e) => setCorrectByReporter(e.target.checked)}
+                className="w-4 h-4 rounded accent-slate-600" />
+              <div>
+                <span className="text-sm font-semibold text-slate-800">✏️ המדווח בקצה יכול לתקן</span>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  מסומן — החייל/פלוגה יכול/ה לפתוח מחדש ולתקן את הדיווח. לא מסומן — רק מקים הספירה מתקן (במסך פערים).
                 </p>
               </div>
             </label>

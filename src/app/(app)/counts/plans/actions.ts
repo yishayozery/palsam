@@ -38,6 +38,8 @@ export async function createCountPlan(formData: FormData) {
   const startNow = isOneTime && formData.get("startNow") === "on";
   const freeze = formData.get("freezeState") === "on";
   const isBlind = formData.get("isBlind") === "on";
+  const signOnComplete = formData.get("signOnComplete") === "on";
+  const correctByReporter = formData.get("correctByReporter") === "on";
   const countScope = String(formData.get("countScope") || "WAREHOUSE_STOCK") as "WAREHOUSE_STOCK" | "DISTRIBUTED" | "BOTH";
 
   const plan = await prisma.countPlan.create({
@@ -48,6 +50,8 @@ export async function createCountPlan(formData: FormData) {
       startDate, endDate,
       active: !isOneTime,
       isBlind,
+      signOnComplete,
+      correctByReporter,
       countScope,
       createdById: user.id,
       responsibleUserId: responsibleUserId ?? user.id,
@@ -56,7 +60,7 @@ export async function createCountPlan(formData: FormData) {
 
   if (startNow) {
     const sessionId = await startCountFromPlan(bId, plan.id, scopeHolderIds, user.id, freeze, isBlind, countScope,
-      { scopeCategoryIds, scopeItemTypeIds, trackingMethods }, graceMinutes);
+      { scopeCategoryIds, scopeItemTypeIds, trackingMethods }, graceMinutes, { signOnComplete, correctByReporter });
     await audit(user.id, "CREATE_COUNT_PLAN", "CountPlan", plan.id, { name, startNow: true });
     revalidatePath("/counts/plans");
     revalidatePath("/counts");
@@ -76,7 +80,10 @@ async function startCountFromPlan(
   scope: "WAREHOUSE_STOCK" | "DISTRIBUTED" | "BOTH" = "WAREHOUSE_STOCK",
   filters?: { scopeCategoryIds?: string[]; scopeItemTypeIds?: string[]; trackingMethods?: string[] },
   graceMinutes: number = 1440,
+  flags?: { signOnComplete?: boolean; correctByReporter?: boolean },
 ): Promise<string> {
+  const signOnComplete = flags?.signOnComplete ?? false;
+  const correctByReporter = flags?.correctByReporter ?? false;
   let holderIds = scopeHolderIds;
   if (holderIds.length === 0) {
     holderIds = (await prisma.holder.findMany({
@@ -131,6 +138,8 @@ async function startCountFromPlan(
           status: freeze ? "FROZEN" : "IN_PROGRESS",
           frozen: freeze,
           isBlind: blind,
+          signOnComplete,
+          correctByReporter,
           startedById: userId,
         },
       });
@@ -270,7 +279,7 @@ async function startCountFromPlan(
 
       // session אחד לכל הספירה המפוזרת
       const session = await prisma.countSession.create({
-        data: { battalionId: bId, type: "COMPANY", status: freeze ? "FROZEN" : "IN_PROGRESS", frozen: freeze, isBlind: blind, startedById: userId },
+        data: { battalionId: bId, type: "COMPANY", status: freeze ? "FROZEN" : "IN_PROGRESS", frozen: freeze, isBlind: blind, signOnComplete, correctByReporter, startedById: userId },
       });
       const dueAt = new Date(now.getTime() + graceMinutes * 60 * 1000);
       const dueStr = dueAt.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" });

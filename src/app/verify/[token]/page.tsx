@@ -16,7 +16,7 @@ export default async function VerifyPage({
     include: {
       soldier: { select: { fullName: true, personalNumber: true } },
       holder: { select: { name: true } },
-      session: { select: { id: true, status: true } },
+      session: { select: { id: true, status: true, correctByReporter: true } },
       battalion: {
         select: {
           name: true,
@@ -51,7 +51,8 @@ export default async function VerifyPage({
   });
   if (!req) notFound();
 
-  const alreadyDone = !!req.respondedAt;
+  // אם הספירה מאפשרת תיקון ע"י המדווח — לא חוסמים אחרי דיווח (ניתן לפתוח ולתקן)
+  const alreadyDone = !!req.respondedAt && !req.session?.correctByReporter;
   const name = req.soldier?.fullName || req.holder?.name || "";
   const subtitle = req.soldier?.personalNumber
     ? `${name} (${req.soldier.personalNumber})`

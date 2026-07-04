@@ -17,10 +17,14 @@ export async function submitVerification(
 ) {
   const req = await prisma.verificationRequest.findUnique({
     where: { token },
-    select: { id: true, respondedAt: true, sessionId: true, battalionId: true, soldierId: true },
+    select: {
+      id: true, respondedAt: true, sessionId: true, battalionId: true, soldierId: true,
+      session: { select: { signOnComplete: true, correctByReporter: true } },
+    },
   });
   if (!req) return { error: "בקשה לא נמצאה" };
-  if (req.respondedAt) return { error: "כבר דווח" };
+  // חסימת דיווח כפול — אלא אם הספירה מאפשרת תיקון ע"י המדווח בקצה
+  if (req.respondedAt && !req.session?.correctByReporter) return { error: "כבר דווח" };
 
   // 1. עדכון תגובות החייל על ה-VerificationItem
   await prisma.$transaction(
@@ -53,12 +57,14 @@ export async function submitVerification(
       select: { id: true, itemTypeId: true, serialUnitId: true, holderId: true, expectedQty: true, countedQty: true },
     });
 
+    const usedLineIds = new Set<string>();
     for (const it of items) {
-      // התאמת שורת ספירה: סריאלי לפי serialUnitId, כמותי לפי itemTypeId (ושורה שטרם עודכנה)
+      // התאמת שורת ספירה: סריאלי לפי serialUnitId, כמותי לפי itemTypeId (שורה שטרם שובצה בדיווח זה)
       const line = it.serialUnitId
         ? lines.find((l) => l.serialUnitId === it.serialUnitId)
-        : lines.find((l) => l.itemTypeId === it.itemTypeId && !l.serialUnitId && l.countedQty === null);
+        : lines.find((l) => l.itemTypeId === it.itemTypeId && !l.serialUnitId && !usedLineIds.has(l.id));
       if (!line) continue;
+      usedLineIds.add(line.id);
 
       const expected = line.expectedQty;
       const counted = it.status === "CONFIRMED"
@@ -68,6 +74,10 @@ export async function submitVerification(
       await prisma.countLine.update({ where: { id: line.id }, data: { countedQty: counted } });
       line.countedQty = counted; // מונע התאמה כפולה של אותה שורה
 
+      // מחיקת פער פתוח קודם לאותו פריט/מחזיק (אידמפוטנטי — תומך בתיקון/דיווח חוזר)
+      await prisma.discrepancy.deleteMany({
+        where: { sessionId: req.sessionId ?? undefined, itemTypeId: line.itemTypeId, holderId: line.holderId, status: "OPEN" },
+      });
       const diff = counted - expected;
       if (diff !== 0) {
         await prisma.discrepancy.create({
@@ -81,6 +91,20 @@ export async function submitVerification(
       }
     }
   } catch { /* סנכרון הוא best-effort — לא מפיל את הדיווח */ }
+
+  // 3. ✍️ ספירת החתמה — הדיווח מחתים את החייל על הציוד הסריאלי שאישר (בלי תנועת מלאי)
+  if (req.session?.signOnComplete && req.soldierId) {
+    try {
+      const confirmed = await prisma.verificationItem.findMany({
+        where: { requestId: req.id, status: "CONFIRMED", serialUnitId: { not: null } },
+        select: { serialUnitId: true },
+      });
+      const ids = confirmed.map((i) => i.serialUnitId!).filter(Boolean);
+      if (ids.length > 0) {
+        await prisma.serialUnit.updateMany({ where: { id: { in: ids } }, data: { signedSoldierId: req.soldierId } });
+      }
+    } catch { /* best-effort */ }
+  }
 
   await prisma.verificationRequest.update({
     where: { id: req.id },
