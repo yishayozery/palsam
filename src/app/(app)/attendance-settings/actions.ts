@@ -6,6 +6,20 @@ import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 
+/** שמירת הגדרת תזכורת הבוקר לדיווח נוכחות */
+export async function saveAttendanceReminder(formData: FormData) {
+  const user = await requireUser();
+  if (!can(user, "attendance.manage") && !can(user, "battalion.profile")) return;
+  const enabled = formData.get("enabled") === "on";
+  const text = String(formData.get("text") || "").trim() || null;
+  await prisma.battalion.update({
+    where: { id: user.battalionId! },
+    data: { attendanceReminderEnabled: enabled, attendanceReminderText: text },
+  });
+  await audit(user.id, "UPDATE_ATTENDANCE_REMINDER", "Battalion", user.battalionId!, { enabled });
+  revalidatePath("/attendance-settings");
+}
+
 export async function upsertAttendanceStatus(
   formData: FormData,
 ): Promise<{ ok?: boolean; error?: string }> {

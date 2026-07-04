@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
-import { sendTelegramMessage, answerCallbackQuery, editMessageText, MAIN_KEYBOARD } from "@/lib/telegram";
+import { sendTelegramMessage, answerCallbackQuery, editMessageText, MAIN_KEYBOARD, buildMainKeyboard } from "@/lib/telegram";
 
 export async function POST(
   req: NextRequest,
@@ -69,6 +69,7 @@ export async function POST(
       "📦 הציוד שלי": "/equipment",
       "🚗 שיבוץ לרכב": "/dispatch",
       "📊 ספירות מלאי": "/counts",
+      "🗓️ דיווח נוכחות": "/attendance",
       "🕐 ארוחות ותפילות": "/info",
       "❓ עזרה": "/help",
       // backward compat — old button labels
@@ -89,13 +90,7 @@ export async function POST(
       return NextResponse.json({ ok: true });
     }
 
-    // /help
-    if (cmd === "/help") {
-      await sendTelegramMessage(token, chatId, HELP_TEXT, MAIN_KEYBOARD);
-      return NextResponse.json({ ok: true });
-    }
-
-    // Commands that require a linked soldier
+    // טעינת החייל המקושר + תפקידו (לתפריט דינמי)
     const soldier = await prisma.soldier.findFirst({
       where: { battalionId, telegramChatId: chatId },
       select: {
@@ -108,8 +103,29 @@ export async function POST(
         weaponsAgreementSignedAt: true,
         drivingRefresherDate: true,
         company: { select: { name: true } },
+        appUser: { select: { role: true } },
       },
     });
+    const canAttendance = soldier?.appUser?.role === "COMPANY_REP";
+    const keyboard = buildMainKeyboard(canAttendance);
+
+    // /help
+    if (cmd === "/help") {
+      await sendTelegramMessage(token, chatId, HELP_TEXT, keyboard);
+      return NextResponse.json({ ok: true });
+    }
+
+    // /attendance — דיווח נוכחות (רק למדווחי פלוגה)
+    if (cmd === "/attendance") {
+      if (!canAttendance) {
+        await sendTelegramMessage(token, chatId, "🗓️ דיווח נוכחות זמין למדווחי הפלוגה בלבד (רס״פ).", keyboard);
+        return NextResponse.json({ ok: true });
+      }
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+      await sendTelegramMessage(token, chatId,
+        `🗓️ <b>דיווח נוכחות — ${battalion.name}</b>\n\nדווח/י את נוכחות ${soldier?.company?.name || "הפלוגה"} להיום:\n\n👉 <a href="${baseUrl}/attendance">לחץ כאן לדיווח</a>`, keyboard);
+      return NextResponse.json({ ok: true });
+    }
 
     if (cmd === "/status") {
       if (!soldier) {
@@ -180,7 +196,7 @@ export async function POST(
     // Not a command — try personal number registration
     const personalNumber = cmd.replace(/\D/g, "");
     if (!personalNumber || personalNumber.length < 5) {
-      await sendTelegramMessage(token, chatId, `לא הבנתי. ${HELP_TEXT}`, MAIN_KEYBOARD);
+      await sendTelegramMessage(token, chatId, `לא הבנתי. ${HELP_TEXT}`, keyboard);
       return NextResponse.json({ ok: true });
     }
 

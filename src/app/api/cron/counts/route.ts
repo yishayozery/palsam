@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generatePendingTasks } from "@/lib/countScheduler";
+import { sendAttendanceReminders } from "@/lib/attendanceReminder";
 
 export async function GET(req: Request) {
   const expected = process.env.CRON_SECRET || "";
@@ -16,7 +17,9 @@ export async function GET(req: Request) {
 
   try {
     const created = await generatePendingTasks();
-    return NextResponse.json({ ok: true, createdTasks: created });
+    // תזכורת בוקר לדיווח נוכחות (רץ פעם ביום בבוקר יחד עם מתזמן הספירות)
+    const reminders = await sendAttendanceReminders().catch(() => 0);
+    return NextResponse.json({ ok: true, createdTasks: created, attendanceReminders: reminders });
   } catch {
     return NextResponse.json({ ok: false, error: "internal error" }, { status: 500 });
   }
