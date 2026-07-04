@@ -95,9 +95,11 @@ export default async function CountsPage() {
     prisma.countSession.findMany({
       where: { battalionId: bId },
       orderBy: { startedAt: "desc" },
-      take: 15,
+      take: 40,
       include: {
-        startedBy: true,
+        startedBy: { select: { id: true, fullName: true } },
+        lines: { select: { countedQty: true } },
+        task: { select: { dueAt: true, plan: { select: { name: true, createdById: true, responsibleUserId: true } } } },
         _count: { select: { lines: true, discrepancies: true } },
       },
     }),
@@ -128,6 +130,21 @@ export default async function CountsPage() {
       orderBy: { fullName: "asc" },
     }),
   ]);
+
+  // פיצול: "הספירות שלי" (שיזמתי/אני אחראי) מול שאר הספירות בגדוד
+  const sessionRows = sessions.map((s) => ({
+    id: s.id, type: s.type, status: s.status,
+    startedAt: s.startedAt,
+    planName: s.task?.plan?.name ?? null,
+    dueAt: s.task?.dueAt ?? null,
+    startedByName: s.startedBy.fullName,
+    total: s._count.lines,
+    done: s.lines.filter((l) => l.countedQty !== null).length,
+    gaps: s._count.discrepancies,
+    mine: s.startedBy.id === user.id || s.task?.plan?.createdById === user.id || s.task?.plan?.responsibleUserId === user.id,
+  }));
+  const myCounts = sessionRows.filter((r) => r.mine);
+  const otherCounts = sessionRows.filter((r) => !r.mine);
 
   return (
     <div>
@@ -204,52 +221,42 @@ export default async function CountsPage() {
         />
       )}
 
-      {/* הגדרות ספירה (CountDefinition) — מנגנון ישן, הוחלף ע״י תכניות ספירה (CountPlan) */}
-
-      <h2 className="font-bold text-slate-700 mb-2">ספירות אחרונות</h2>
-      <Card>
-        {sessions.length === 0 ? (
-          <EmptyState>טרם בוצעו ספירות</EmptyState>
+      {/* 📋 הספירות שלי — שיזמת או שאתה אחראי עליהן */}
+      <div className="flex items-center gap-2 mb-2">
+        <h2 className="font-bold text-slate-700">📋 הספירות שלי</h2>
+        <span className="text-xs text-slate-400">(שיזמת / אחראי עליהן — לחץ לדוח מלא)</span>
+      </div>
+      <Card className="mb-6">
+        {myCounts.length === 0 ? (
+          <EmptyState>לא יזמת ספירות</EmptyState>
         ) : (
           <Table>
             <thead>
-              <tr><Th>תאריך</Th><Th>סוג</Th><Th>סטטוס</Th><Th>שורות</Th><Th>פערים</Th><Th>בוצע ע״י</Th><Th></Th></tr>
+              <tr><Th>תאריך / שם</Th><Th>סוג</Th><Th>סטטוס</Th><Th>בוצע</Th><Th>פערים</Th><Th>יעד לסיום</Th><Th></Th></tr>
             </thead>
             <tbody>
-              {sessions.map((s) => (
+              {myCounts.map((s) => (
                 <tr key={s.id}>
-                  <Td className="text-xs text-slate-500">{s.startedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</Td>
+                  <Td className="text-xs">
+                    <div className="text-slate-500">{s.startedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</div>
+                    {s.planName && <div className="font-medium text-slate-700">{s.planName}</div>}
+                  </Td>
                   <Td><Badge>{COUNT_TYPE[s.type]}</Badge></Td>
-                  <Td>
-                    <Badge className={s.status === "COMPLETED" ? "bg-slate-200 text-slate-700" : "bg-amber-100 text-amber-800"}>
-                      {COUNT_STATUS[s.status]}
-                    </Badge>
-                  </Td>
-                  <Td className="text-center">{s._count.lines}</Td>
-                  <Td className="text-center">
-                    {s._count.discrepancies > 0
-                      ? <span className="text-rose-600 font-bold">{s._count.discrepancies}</span>
-                      : "—"}
-                  </Td>
-                  <Td className="text-xs text-slate-500">{s.startedBy.fullName}</Td>
+                  <Td><Badge className={s.status === "COMPLETED" ? "bg-slate-200 text-slate-700" : "bg-amber-100 text-amber-800"}>{COUNT_STATUS[s.status]}</Badge></Td>
+                  <Td className="text-center text-xs">{s.done}/{s.total}</Td>
+                  <Td className="text-center">{s.gaps > 0 ? <span className="text-rose-600 font-bold">{s.gaps}</span> : "—"}</Td>
+                  <Td className="text-xs text-slate-500 whitespace-nowrap">{s.dueAt ? s.dueAt.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" }) : "—"}</Td>
                   <Td>
                     <div className="flex items-center gap-2 flex-wrap">
-                      {s.status === "COMPLETED" ? (
-                        <Link href={`/counts/${s.id}/report`} className="text-xs text-blue-600 hover:underline">📊 דוח</Link>
-                      ) : (
-                        <Link href={`/counts/${s.id}`} className="text-xs text-blue-600 hover:underline">המשך ספירה</Link>
-                      )}
+                      {s.status === "COMPLETED"
+                        ? <Link href={`/counts/${s.id}/report`} className="text-xs text-blue-600 hover:underline font-medium">📊 דוח</Link>
+                        : <Link href={`/counts/${s.id}`} className="text-xs text-blue-600 hover:underline">המשך</Link>}
                       {canManage && s.status !== "COMPLETED" && (
-                        <form action={cancelCountSession}>
-                          <input type="hidden" name="id" value={s.id} />
-                          <button className="text-xs text-rose-500 hover:text-rose-700" title="ביטול ספירה (נשאר ביומן)">✕ בטל</button>
-                        </form>
+                        <form action={cancelCountSession}><input type="hidden" name="id" value={s.id} /><button className="text-xs text-rose-500 hover:text-rose-700" title="ביטול ספירה">✕</button></form>
                       )}
                       {canManage && (
-                        <ConfirmForm action={deleteCountSessionForm}
-                          hiddenFields={{ id: s.id }}
-                          message={`למחוק לצמיתות את ספירה זו (${s.startedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })})? כולל ${s._count.lines} שורות ו-${s._count.discrepancies} פערים.`}>
-                          <button className="text-xs text-rose-500 hover:text-rose-700" title="מחיקה לצמיתות">🗑️ מחק</button>
+                        <ConfirmForm action={deleteCountSessionForm} hiddenFields={{ id: s.id }} message={`למחוק לצמיתות ספירה זו? כולל ${s.total} שורות ו-${s.gaps} פערים.`}>
+                          <button className="text-xs text-rose-500 hover:text-rose-700" title="מחיקה לצמיתות">🗑️</button>
                         </ConfirmForm>
                       )}
                     </div>
@@ -260,6 +267,45 @@ export default async function CountsPage() {
           </Table>
         )}
       </Card>
+
+      {/* ספירות אחרות בגדוד — למנהלים בלבד */}
+      {canManage && otherCounts.length > 0 && (
+        <>
+          <h2 className="font-bold text-slate-700 mb-2">ספירות אחרות בגדוד</h2>
+          <Card>
+            <Table>
+              <thead>
+                <tr><Th>תאריך / שם</Th><Th>סוג</Th><Th>סטטוס</Th><Th>בוצע</Th><Th>פערים</Th><Th>בוצע ע״י</Th><Th></Th></tr>
+              </thead>
+              <tbody>
+                {otherCounts.map((s) => (
+                  <tr key={s.id}>
+                    <Td className="text-xs">
+                      <div className="text-slate-500">{s.startedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</div>
+                      {s.planName && <div className="font-medium text-slate-700">{s.planName}</div>}
+                    </Td>
+                    <Td><Badge>{COUNT_TYPE[s.type]}</Badge></Td>
+                    <Td><Badge className={s.status === "COMPLETED" ? "bg-slate-200 text-slate-700" : "bg-amber-100 text-amber-800"}>{COUNT_STATUS[s.status]}</Badge></Td>
+                    <Td className="text-center text-xs">{s.done}/{s.total}</Td>
+                    <Td className="text-center">{s.gaps > 0 ? <span className="text-rose-600 font-bold">{s.gaps}</span> : "—"}</Td>
+                    <Td className="text-xs text-slate-500">{s.startedByName}</Td>
+                    <Td>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {s.status === "COMPLETED"
+                          ? <Link href={`/counts/${s.id}/report`} className="text-xs text-blue-600 hover:underline">📊 דוח</Link>
+                          : <Link href={`/counts/${s.id}`} className="text-xs text-blue-600 hover:underline">המשך</Link>}
+                        <ConfirmForm action={deleteCountSessionForm} hiddenFields={{ id: s.id }} message={`למחוק לצמיתות ספירה זו? כולל ${s.total} שורות ו-${s.gaps} פערים.`}>
+                          <button className="text-xs text-rose-500 hover:text-rose-700" title="מחיקה לצמיתות">🗑️</button>
+                        </ConfirmForm>
+                      </div>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
