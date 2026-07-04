@@ -271,10 +271,12 @@ async function startCountFromPlan(
       const session = await prisma.countSession.create({
         data: { battalionId: bId, type: "COMPANY", status: freeze ? "FROZEN" : "IN_PROGRESS", frozen: freeze, isBlind: blind, startedById: userId },
       });
+      const dueAt = new Date(now.getTime() + 1440 * 60 * 1000);
+      const dueStr = dueAt.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" });
       await prisma.countTask.create({
         data: {
           battalionId: bId, planId, holderId: holderIds[0] ?? scopedHolders[0]?.id ?? "",
-          assignedUserId: userId, scheduledAt: now, dueAt: new Date(now.getTime() + 1440 * 60 * 1000),
+          assignedUserId: userId, scheduledAt: now, dueAt,
           status: "IN_PROGRESS", sessionId: session.id, startedAt: now,
         },
       });
@@ -304,8 +306,8 @@ async function startCountFromPlan(
             battalionId: bId, sessionId: session.id, soldierId, mode: blind ? "BLIND_COUNT" : "CONFIRM",
             items: {
               create: [
-                ...serialUnits.map((u) => ({ serialUnitId: u.id, itemTypeName: u.itemType.name, serialNumber: u.serialNumber, expectedQuantity: u.lotQuantity ?? 1, expectedExpiry: u.expiryDate })),
-                ...qtyItems.map((q) => ({ itemTypeName: q.itemName, expectedQuantity: q.quantity })),
+                ...serialUnits.map((u) => ({ serialUnitId: u.id, itemTypeId: u.itemTypeId, itemTypeName: u.itemType.name, serialNumber: u.serialNumber, expectedQuantity: u.lotQuantity ?? 1, expectedExpiry: u.expiryDate })),
+                ...qtyItems.map((q) => ({ itemTypeId: q.itemTypeId, itemTypeName: q.itemName, expectedQuantity: q.quantity })),
               ],
             },
           },
@@ -330,6 +332,7 @@ async function startCountFromPlan(
                 `שלום ${soldier.fullName},`,
                 `נדרשת ספירת ציוד. אין לך את הנתונים מראש — דווח/י מה שמצאת בפועל:`, ``,
                 ...parts, ``,
+                `⏰ <b>יש לסיים עד: ${dueStr}</b>`, ``,
                 `👉 <a href="${link}">לחץ כאן לדיווח</a>`,
               ].join("\n");
             } else {
@@ -341,6 +344,7 @@ async function startCountFromPlan(
                 `📋 <b>ספירת ציוד — ${battalion.name}</b>`, ``,
                 `שלום ${soldier.fullName},`, `אשר/י את הציוד הבא ודווח/י מה שחסר/שונה:`, ``,
                 ...serialLines, ...qtyLinesTxt, ``,
+                `⏰ <b>יש לסיים עד: ${dueStr}</b>`, ``,
                 `👉 <a href="${link}">לחץ כאן לדיווח</a>`,
               ].join("\n");
             }

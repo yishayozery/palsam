@@ -1885,6 +1885,8 @@ model VerificationItem {
   // שדות לאימות תוקף — expectedExpiry = התאריך הידוע במערכת; reportedExpiry = מה שדווח
   expectedExpiry    DateTime?
   reportedExpiry    DateTime?
+  // קישור לפריט — לסנכרון תגובת החייל חזרה ל-CountLine + יצירת Discrepancy
+  itemTypeId        String?
 
   @@index([requestId])
 }
