@@ -146,6 +146,22 @@ export async function createSignout(formData: FormData): Promise<{ error: string
   const hasAnything = serialIds.length > 0 || kitId || qtyItems.length > 0;
   if (!soldierId || !hasAnything) return { error: "בחר חייל ולפחות פריט אחד" };
 
+  // 🔒 הקפאת מצב — אם יש ספירה בהקפאה שטרם הסתיימה עבור המחסן/פלוגה של המחתים,
+  //    חוסמים החתמה עד לסיום הספירה (כדי לא לשבש את מצב המלאי הקפוא).
+  if (user.holderId) {
+    const frozen = await prisma.countSession.findFirst({
+      where: {
+        battalionId: bId, frozen: true, status: { not: "COMPLETED" },
+        OR: [{ task: { holderId: user.holderId } }, { lines: { some: { holderId: user.holderId } } }],
+      },
+      select: { id: true },
+    });
+    if (frozen) {
+      const url = `${process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il"}/counts/${frozen.id}`;
+      return { error: `🔒 לא ניתן להחתים כעת — קיימת ספירה בהקפאת מצב שטרם הסתיימה עבור המחסן/פלוגה שלך. יש להשלים אותה תחילה:\n${url}` };
+    }
+  }
+
   // 🔒 אכיפת מ.א. — אם הגדוד דורש, חייב להיות לחייל מ.א. במערכת
   if (await requiresPersonalId(bId)) {
     const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { fullName: true, personalNumber: true } });
