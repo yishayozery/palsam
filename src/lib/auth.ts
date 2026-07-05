@@ -209,3 +209,31 @@ export async function setPasswordByInvite(
   });
   return toSession(updated);
 }
+
+/** בונה את פרטי עוגיית ה-session — לשימוש ב-Route Handler (שם לא ניתן לקרוא ל-createSession). */
+export async function buildSessionCookie(user: SessionUser) {
+  const token = await new SignJWT({ ...user })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(`${MAX_AGE}s`)
+    .sign(SECRET);
+  return {
+    name: COOKIE,
+    value: token,
+    options: { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge: MAX_AGE },
+  };
+}
+
+/** מממש לינק כניסה חד-פעמי (מהבוט) — מאמת תוקף, מבטל (חד-פעמי), ומחזיר SessionUser. */
+export async function consumeMagicToken(token: string): Promise<SessionUser | null> {
+  if (!token) return null;
+  const user = await prisma.appUser.findUnique({
+    where: { magicToken: token },
+    include: { customRole: true, systemRole: { include: { permissions: true } }, assignedHolders: true, assignedSquads: true },
+  });
+  if (!user) return null;
+  const valid = user.active && user.magicTokenExp && user.magicTokenExp.getTime() >= Date.now();
+  // חד-פעמי: מבטלים את הטוקן בכל מקרה (גם אם פג/לא תקף)
+  await prisma.appUser.update({ where: { id: user.id }, data: { magicToken: null, magicTokenExp: null } }).catch(() => {});
+  return valid ? toSession(user) : null;
+}

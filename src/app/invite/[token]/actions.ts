@@ -28,5 +28,6 @@ export async function activateAccount(
 
   await createSession(user);
   await audit(user.id, "ACTIVATE", "AppUser", user.id);
-  redirect("/");
+  // מפקד יחידה (מנהל Holder) — מונחה ישר להקים את הצוות שלו
+  redirect(user.holderIds.length > 0 ? "/team" : "/");
 }

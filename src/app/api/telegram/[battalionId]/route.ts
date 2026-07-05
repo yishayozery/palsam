@@ -71,6 +71,7 @@ export async function POST(
       "📊 ספירות מלאי": "/counts",
       "🗓️ דיווח נוכחות": "/attendance",
       "🕐 ארוחות ותפילות": "/info",
+      "👥 מנה צוות": "/team",
       "❓ עזרה": "/help",
       // backward compat — old button labels
       "📊 סטטוס": "/status",
@@ -103,15 +104,34 @@ export async function POST(
         weaponsAgreementSignedAt: true,
         drivingRefresherDate: true,
         company: { select: { name: true } },
-        appUser: { select: { role: true } },
+        appUser: { select: { id: true, role: true, holderId: true, assignedHolders: { select: { holderId: true } } } },
       },
     });
     const canAttendance = soldier?.appUser?.role === "COMPANY_REP";
-    const keyboard = buildMainKeyboard(canAttendance);
+    const mgr = soldier?.appUser;
+    const canManageTeam = !!(mgr && (mgr.holderId || (mgr.assignedHolders?.length ?? 0) > 0));
+    const keyboard = buildMainKeyboard(canAttendance, canManageTeam);
 
     // /help
     if (cmd === "/help") {
       await sendTelegramMessage(token, chatId, HELP_TEXT, keyboard);
+      return NextResponse.json({ ok: true });
+    }
+
+    // /team — מינוי צוות: הבוט שולח לינק כניסה חד-פעמי מאובטח (הפעולה עצמה מאחורי login)
+    if (cmd === "/team") {
+      if (!mgr || !canManageTeam) {
+        await sendTelegramMessage(token, chatId, "👥 מינוי צוות זמין למפקדי יחידה (מפ / קצין מחסן) בלבד.", keyboard);
+        return NextResponse.json({ ok: true });
+      }
+      const magic = nanoid(40);
+      await prisma.appUser.update({
+        where: { id: mgr.id },
+        data: { magicToken: magic, magicTokenExp: new Date(Date.now() + 10 * 60 * 1000) },
+      });
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+      await sendTelegramMessage(token, chatId,
+        `👥 <b>מינוי צוות</b>\n\nלחץ/י כדי להיכנס ולמנות רספ״ים / סגנים / מפקדי מחלקות:\n\n👉 <a href="${baseUrl}/magic/${magic}">כניסה מאובטחת</a>\n\n<i>🔒 הקישור אישי, חד-פעמי, ותקף ל-10 דקות בלבד.</i>`, keyboard);
       return NextResponse.json({ ok: true });
     }
 

@@ -210,6 +210,8 @@ model AppUser {
   customRole   CustomRole? @relation(fields: [customRoleId], references: [id])
   passwordSet  Boolean    @default(true) // false עד הגדרת סיסמה דרך קישור ההזמנה
   inviteToken  String?    @unique
+  magicToken    String?   @unique // לינק כניסה חד-פעמי מהבוט (קצר-מועד)
+  magicTokenExp DateTime? // תפוגת ה-magicToken
   battalionId  String? // null עבור SUPER_ADMIN
   battalion    Battalion? @relation(fields: [battalionId], references: [id])
   // המחזיק הראשי: פלוגה (COMPANY_REP) או מחסן ראשי (WAREHOUSE_MANAGER)

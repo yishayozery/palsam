@@ -74,18 +74,19 @@ export async function editMessageText(
   });
 }
 
-/** תפריט דינמי — כפתור "דיווח נוכחות" מוצג רק למדווחי פלוגה. */
-export function buildMainKeyboard(canReportAttendance = false) {
+/** תפריט דינמי — כפתורי "דיווח נוכחות" ו"מנה צוות" מוצגים רק למי שרשאי. */
+export function buildMainKeyboard(canReportAttendance = false, canManageTeam = false) {
   const rows: { text: string }[][] = [
     [{ text: "📋 טפסים להחתמה" }, { text: "📦 הציוד שלי" }],
     [{ text: "🚗 שיבוץ לרכב" }, { text: "📊 ספירות מלאי" }],
   ];
   if (canReportAttendance) {
     rows.push([{ text: "🗓️ דיווח נוכחות" }, { text: "🕐 ארוחות ותפילות" }]);
-    rows.push([{ text: "❓ עזרה" }]);
   } else {
-    rows.push([{ text: "🕐 ארוחות ותפילות" }, { text: "❓ עזרה" }]);
+    rows.push([{ text: "🕐 ארוחות ותפילות" }]);
   }
+  if (canManageTeam) rows.push([{ text: "👥 מנה צוות" }, { text: "❓ עזרה" }]);
+  else rows.push([{ text: "❓ עזרה" }]);
   return { keyboard: rows, resize_keyboard: true, is_persistent: true };
 }
 
