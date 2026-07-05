@@ -37,11 +37,18 @@ async function loadTransfer(transferId: string) {
   });
 }
 
+/** זיכוי מחייל: הכיוון הפוך — החייל הוא המקור והמחסן הוא היעד. */
+function isSoldierReturn(t: TransferWithDetails): boolean {
+  return t.type === "CHECKIN" && !!t.toSoldier;
+}
+
 function recipientName(t: TransferWithDetails): string {
+  if (isSoldierReturn(t)) return t.toHolder?.name ?? "מחסן";
   return t.toSoldier?.fullName ?? t.toHolder?.name ?? "—";
 }
 
 function senderName(t: TransferWithDetails): string {
+  if (isSoldierReturn(t)) return t.toSoldier?.fullName ?? "חייל";
   return t.fromHolder?.name ?? "חטיבה (גורם חיצוני)";
 }
 
@@ -94,7 +101,7 @@ function buildEmailHtml(t: TransferWithDetails): string {
       <tr><td style="color:#64748b;width:80px">מס׳ תנועה:</td><td><b style="font-family:monospace;font-size:14px;letter-spacing:0.05em">${docNumber}</b></td></tr>
       <tr><td style="color:#64748b">תאריך:</td><td><b>${dateStr} ${timeStr}</b></td></tr>
       <tr><td style="color:#64748b">מאת:</td><td><b>${fromName}</b></td></tr>
-      <tr><td style="color:#64748b">אל:</td><td><b>${toName}</b>${t.toSoldier?.personalNumber ? ` (מ.א. ${t.toSoldier.personalNumber})` : ""}</td></tr>
+      <tr><td style="color:#64748b">אל:</td><td><b>${toName}</b>${!isSoldierReturn(t) && t.toSoldier?.personalNumber ? ` (מ.א. ${t.toSoldier.personalNumber})` : ""}</td></tr>
       <tr><td style="color:#64748b">סטטוס:</td><td>${TRANSFER_STATUS[t.status]}</td></tr>
       <tr><td style="color:#64748b">בוצע ע״י:</td><td>${t.createdBy.fullName}</td></tr>
       ${t.approvedBy ? `<tr><td style="color:#64748b">אושר ע״י:</td><td>${t.approvedBy.fullName}</td></tr>` : ""}
@@ -217,8 +224,8 @@ function buildPrintableHtml(t: TransferWithDetails): string {
 
     <!-- פרטי העברה -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;font-size:13px">
-      <div><span style="color:#64748b">מאת:</span> <span style="font-weight:500">${t.fromHolder?.name ?? "חטיבה (גורם חיצוני)"}</span></div>
-      <div><span style="color:#64748b">אל:</span> <span style="font-weight:500">${t.toSoldier?.fullName ?? t.toHolder?.name ?? "חטיבה (גורם חיצוני)"}</span></div>
+      <div><span style="color:#64748b">מאת:</span> <span style="font-weight:500">${senderName(t)}</span></div>
+      <div><span style="color:#64748b">אל:</span> <span style="font-weight:500">${recipientName(t)}</span></div>
       <div><span style="color:#64748b">סטטוס:</span> <span style="font-weight:500">${TRANSFER_STATUS[t.status]}</span></div>
       ${t.reason ? `<div><span style="color:#64748b">הערה:</span> ${t.reason}</div>` : ""}
     </div>

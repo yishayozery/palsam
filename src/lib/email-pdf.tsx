@@ -77,8 +77,14 @@ function TransferPDF({ t }: { t: TransferData }) {
   const unitName = t.battalion?.name || "גדוד";
   const dateStr = t.createdAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" });
   const timeStr = t.createdAt.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" });
-  const fromName = t.fromHolder?.name ?? "חטיבה (גורם חיצוני)";
-  const toName = t.toSoldier?.fullName ?? t.toHolder?.name ?? "חטיבה (גורם חיצוני)";
+  // זיכוי מחייל: הכיוון הפוך — החייל הוא המקור והמחסן הוא היעד
+  const isSoldierReturn = t.type === "CHECKIN" && !!t.toSoldier;
+  const fromName = isSoldierReturn
+    ? (t.toSoldier?.fullName ?? "חייל")
+    : (t.fromHolder?.name ?? "חטיבה (גורם חיצוני)");
+  const toName = isSoldierReturn
+    ? (t.toHolder?.name ?? "מחסן")
+    : (t.toSoldier?.fullName ?? t.toHolder?.name ?? "חטיבה (גורם חיצוני)");
   const sig = t.signatures?.[0];
   const approverName = t.approvedBy?.fullName ?? sig?.soldier?.fullName ?? sig?.signerUser?.fullName ?? "________________";
   const totalQty = t.lines.reduce((sum, l) => sum + (l.quantity || (l.serialUnit?.lotQuantity ?? 1)), 0);
@@ -108,7 +114,7 @@ function TransferPDF({ t }: { t: TransferData }) {
           <View style={s.gridItem}>
             <Text style={s.gridLabel}>אל: </Text>
             <Text style={s.gridValue}>{toName}</Text>
-            {t.toSoldier?.personalNumber && <Text style={s.gridLabel}> (מ.א. {t.toSoldier.personalNumber})</Text>}
+            {!isSoldierReturn && t.toSoldier?.personalNumber && <Text style={s.gridLabel}> (מ.א. {t.toSoldier.personalNumber})</Text>}
           </View>
           <View style={s.gridItem}>
             <Text style={s.gridLabel}>סטטוס: </Text>
