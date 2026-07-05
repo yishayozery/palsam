@@ -74,19 +74,17 @@ export async function editMessageText(
   });
 }
 
-/** תפריט דינמי — כפתורי "דיווח נוכחות" ו"מנה צוות" מוצגים רק למי שרשאי. */
+/** תפריט דינמי — קומפקטי (ללא כפתור עזרה; ההסבר נשלח ברישום). "דיווח נוכחות"/"מנה צוות" רק למי שרשאי. */
 export function buildMainKeyboard(canReportAttendance = false, canManageTeam = false) {
   const rows: { text: string }[][] = [
     [{ text: "📋 טפסים להחתמה" }, { text: "📦 הציוד שלי" }],
     [{ text: "🚗 שיבוץ לרכב" }, { text: "📊 ספירות מלאי" }],
   ];
-  if (canReportAttendance) {
-    rows.push([{ text: "🗓️ דיווח נוכחות" }, { text: "🕐 ארוחות ותפילות" }]);
-  } else {
-    rows.push([{ text: "🕐 ארוחות ותפילות" }]);
-  }
-  if (canManageTeam) rows.push([{ text: "👥 מנה צוות" }, { text: "❓ עזרה" }]);
-  else rows.push([{ text: "❓ עזרה" }]);
+  const extra: { text: string }[] = [];
+  if (canReportAttendance) extra.push({ text: "🗓️ דיווח נוכחות" });
+  extra.push({ text: "🕐 ארוחות ותפילות" });
+  if (canManageTeam) extra.push({ text: "👥 מנה צוות" });
+  rows.push(extra);
   return { keyboard: rows, resize_keyboard: true, is_persistent: true };
 }
 

@@ -82,10 +82,15 @@ export async function getSoldierEquipmentSummary(soldierId: string): Promise<Sol
 }
 
 /** בונה טקסט WhatsApp - "מה חתום עליי" - בפורמט קריא */
-export function formatSoldierSummaryForWhatsApp(s: SoldierEquipmentSummary, opts?: { headerTitle?: string }): string {
+export function formatSoldierSummaryForWhatsApp(
+  s: SoldierEquipmentSummary,
+  opts?: { headerTitle?: string; hideWeaponsEligibility?: boolean; hideSoldierLine?: boolean },
+): string {
   const lines: string[] = [];
   lines.push(opts?.headerTitle ?? "📋 סיכום ציוד חתום");
-  lines.push(`חייל: ${s.soldier.fullName}${s.soldier.personalNumber ? ` (${s.soldier.personalNumber})` : ""}${s.soldier.companyName ? ` · ${s.soldier.companyName}` : ""}`);
+  if (!opts?.hideSoldierLine) {
+    lines.push(`חייל: ${s.soldier.fullName}${s.soldier.personalNumber ? ` (${s.soldier.personalNumber})` : ""}${s.soldier.companyName ? ` · ${s.soldier.companyName}` : ""}`);
+  }
   lines.push("");
   if (s.serials.length === 0 && s.qty.length === 0) {
     lines.push("אין ציוד חתום.");
@@ -107,7 +112,7 @@ export function formatSoldierSummaryForWhatsApp(s: SoldierEquipmentSummary, opts
       lines.push(`• ${q.itemName} × ${q.quantity} ${q.unit}${wear}`);
     }
   }
-  if (s.weaponsEligibility) {
+  if (s.weaponsEligibility && !opts?.hideWeaponsEligibility) {
     lines.push("");
     const e = s.weaponsEligibility;
     lines.push(`🔫 זכאות לנשק: ${e.isFullyEligible ? "✅ זכאי" : "❌ לא זכאי"}`);

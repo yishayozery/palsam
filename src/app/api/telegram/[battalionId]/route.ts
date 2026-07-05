@@ -253,7 +253,7 @@ export async function POST(
     await sendTelegramMessage(
       token,
       chatId,
-      `מעולה, ${target.fullName}! ✅\nהתחברת בהצלחה למערכת PALMY.\n\nבחר/י מהתפריט למטה:`,
+      `מעולה, ${target.fullName}! ✅\nהתחברת בהצלחה למערכת PALMY.\n\n${HELP_TEXT}`,
       MAIN_KEYBOARD,
     );
 
@@ -478,8 +478,6 @@ const HELP_TEXT = `📋 <b>מה כל כפתור עושה:</b>
 📊 <b>ספירות מלאי</b> — משימות ספירה פתוחות עם לינק לביצוע
 
 🕐 <b>ארוחות ותפילות</b> — זמני ארוחות, תפילות ומידע כללי שהמפקד הגדיר
-
-❓ <b>עזרה</b> — הודעה זו
 
 השתמש/י בכפתורים למטה 👇`;
 

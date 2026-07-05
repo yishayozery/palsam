@@ -30,8 +30,27 @@ async function notifySoldierTelegram(soldierId: string, battalionId: string, tra
     const summary = await getSoldierEquipmentSummary(soldierId);
     if (!summary) return false;
 
-    const header = action === "SIGN" ? "📝 התקבל ציוד חדש" : "↩️ ציוד הוחזר";
-    const text = formatSoldierSummaryForWhatsApp(summary, { headerTitle: `${header} — סיכום ציוד חתום` });
+    let text: string;
+    if (action === "SIGN") {
+      text = formatSoldierSummaryForWhatsApp(summary, { headerTitle: "📝 התקבל ציוד חדש — סיכום ציוד חתום", hideWeaponsEligibility: true });
+    } else {
+      // CHECKIN — מה הוחזר + מה נשאר חתום (ללא זכאות נשק)
+      const returned = transferId ? await prisma.transferLine.findMany({
+        where: { transferId },
+        select: { quantity: true, itemType: { select: { name: true, unit: true } }, serialUnit: { select: { serialNumber: true } } },
+      }) : [];
+      const head: string[] = [];
+      head.push("↩️ זיכוי ציוד");
+      head.push(`חייל: ${summary.soldier.fullName}${summary.soldier.personalNumber ? ` (${summary.soldier.personalNumber})` : ""}${summary.soldier.companyName ? ` · ${summary.soldier.companyName}` : ""}`);
+      head.push("");
+      head.push(`✅ הוחזר (${returned.length}):`);
+      for (const l of returned) {
+        head.push(`• ${l.itemType.name}${l.serialUnit ? ` · SN: ${l.serialUnit.serialNumber}` : ` × ${l.quantity} ${l.itemType.unit}`}`);
+      }
+      if (returned.length === 0) head.push("• —");
+      const remaining = formatSoldierSummaryForWhatsApp(summary, { headerTitle: "📦 נשאר חתום עליך:", hideWeaponsEligibility: true, hideSoldierLine: true });
+      text = head.join("\n") + "\n\n" + remaining;
+    }
     const { sendTelegramMessage, sendTelegramDocument } = await import("@/lib/telegram");
 
     // שליחת PDF כמסמך אם יש תעודה
