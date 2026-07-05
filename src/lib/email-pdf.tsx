@@ -1,5 +1,5 @@
 import React from "react";
-import { renderToBuffer, Document, Page, View, Text, Font, StyleSheet } from "@react-pdf/renderer";
+import { renderToBuffer, Document, Page, View, Text, Font, StyleSheet, Image } from "@react-pdf/renderer";
 import { TRANSFER_TYPE, TRANSFER_STATUS } from "./labels";
 
 Font.register({
@@ -43,6 +43,7 @@ const s = StyleSheet.create({
   footer: { fontSize: 8, color: "#94a3b8", textAlign: "center" as never, marginTop: 24 },
   totalRow: { flexDirection: "row-reverse", backgroundColor: "#f1f5f9" },
   bold: { fontWeight: 700 },
+  logo: { width: 46, height: 46, marginBottom: 4, alignSelf: "flex-end" as never, objectFit: "contain" as never },
 });
 
 type TransferData = {
@@ -51,7 +52,7 @@ type TransferData = {
   status: string;
   reason: string | null;
   createdAt: Date;
-  battalion: { name: string; code: string; motto: string | null } | null;
+  battalion: { name: string; code: string; motto: string | null; logoData?: string | null } | null;
   fromHolder: { name: string; signatureClause: string | null } | null;
   toHolder: { name: string } | null;
   toSoldier: { fullName: string; personalNumber: string | null } | null;
@@ -91,6 +92,7 @@ function TransferPDF({ t }: { t: TransferData }) {
             <Text style={s.subtitle}>{TRANSFER_TYPE[t.type as keyof typeof TRANSFER_TYPE] ?? t.type}</Text>
           </View>
           <View style={s.meta}>
+            {t.battalion?.logoData && <Image src={t.battalion.logoData} style={s.logo} />}
             <Text style={s.metaBold}>{unitName}</Text>
             {t.battalion?.motto && <Text style={s.metaLight}>״{t.battalion.motto}״</Text>}
             <Text style={s.metaLight}>מס׳ תעודה: {docNumber}</Text>
