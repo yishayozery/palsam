@@ -147,21 +147,27 @@ export async function notifyTransactionEmail(params: {
     const replyTo = battalion.notificationEmail || undefined;
     const senderFrom = battalion.senderEmail ? `${battalion.name} <${battalion.senderEmail}>` : undefined;
 
+    const recipients = [...allRecipients];
+    const logResult = (r: { ok: boolean; error?: string }) => {
+      if (r.ok) console.log(`[email] ✅ נשלח ל-${recipients.join(", ")} (${params.action} ${params.entity})`);
+      else console.error(`[email] ❌ כשל לשליחה ל-${recipients.join(", ")}: ${r.error}`);
+    };
+
     const transferId = await resolveTransferId(params.entity, params.entityId);
     if (transferId) {
       const rich = await buildTransferAttachments(transferId).catch(() => null);
       if (rich) {
-        void sendEmail({
-          to: [...allRecipients], subject: rich.subject,
+        logResult(await sendEmail({
+          to: recipients, subject: rich.subject,
           text, from: senderFrom, replyTo,
           html: rich.html,
           attachments: rich.attachments,
-        });
+        }));
         return;
       }
     }
 
-    void sendEmail({ to: [...allRecipients], subject, text, from: senderFrom, replyTo });
+    logResult(await sendEmail({ to: recipients, subject, text, from: senderFrom, replyTo }));
   } catch {
     // לא מפיל שום פעולה אם המייל נכשל
   }
