@@ -362,6 +362,7 @@ model Holder {
   weaponsAgreementText String?
   armoryTestUrl        String?
   notificationEmails   String?  // כתובות מייל להתראות (מופרדות בפסיקים)
+  delegateCap   Int?           // תקרת רספ"ים/סגנים שאפשר למנות ל-Holder זה (null = ברירת מחדל 2)
   createdAt     DateTime       @default(now())
 
   users            AppUser[]          @relation("HolderUsers")
