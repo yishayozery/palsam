@@ -82,6 +82,19 @@ export async function createBattalion(formData: FormData) {
   revalidatePath("/admin/battalions");
 }
 
+/** אדמין-על: איפוס סיסמת משתמש (מפמ) — מחדש inviteToken ומאפס passwordSet.
+ *  אחרי הפעולה מופיע לינק הזמנה חדש (/invite/[token]) לשליחה למשתמש. */
+export async function resetUserPassword(formData: FormData) {
+  const admin = await requireSuperAdmin();
+  const id = String(formData.get("id") || "");
+  const user = await prisma.appUser.findUnique({ where: { id }, select: { username: true } });
+  if (!user) return;
+  const inviteToken = nanoid(28);
+  await prisma.appUser.update({ where: { id }, data: { inviteToken, passwordSet: false } });
+  await audit(admin.id, "RESET_PASSWORD", "AppUser", user.username, {});
+  revalidatePath("/admin/battalions");
+}
+
 export async function toggleBattalion(formData: FormData) {
   const admin = await requireSuperAdmin();
   const id = String(formData.get("id") || "");
