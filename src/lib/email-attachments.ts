@@ -58,7 +58,8 @@ function buildSubject(t: TransferWithDetails): string {
   const from = senderName(t);
   const target = recipientName(t);
   const docNumber = t.id.slice(-8).toUpperCase();
-  return `[${code}] ${action} · ${from} → ${target} · ${docNumber}`;
+  // RTL: החץ שמאלה מייצג נכון את הכיוון מקור→יעד בעברית
+  return `[${code}] ${action} · ${from} ← ${target} · ${docNumber}`;
 }
 
 function sanitizeFilename(s: string): string {
