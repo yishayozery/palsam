@@ -451,7 +451,7 @@ export async function checkinSerial(formData: FormData): Promise<{ error: string
   const isPartial = isLot && partialLotQty > 0 && partialLotQty < (su.lotQuantity ?? 1);
   const lineQty = isPartial ? partialLotQty : (su.lotQuantity ?? 1);
 
-  await prisma.$transaction(async (tx) => {
+  const serialCheckinTransferId = await prisma.$transaction(async (tx) => {
     if (isPartial) {
       const finalStatus = statusId || su.statusId;
       // 🆕 ניסיון מיזוג: חפש אצווה-הורה במחסן עם אותו סטטוס וSN-מקור — וצרף אליה.
@@ -504,16 +504,23 @@ export async function checkinSerial(formData: FormData): Promise<{ error: string
       // זיכוי שלם — היחידה חוזרת למחסן
       await tx.serialUnit.update({ where: { id: serialUnitId }, data: { signedSoldierId: null, ...(statusId ? { statusId } : {}) } });
     }
-    await tx.transfer.create({
+    const t = await tx.transfer.create({
       data: {
         battalionId: bId, type: "CHECKIN", status: "COMPLETED", toHolderId: su.currentHolderId, createdById: user.id, approvedById: user.id, approvedAt: new Date(),
         reason: isPartial ? `זיכוי חלקי מאצווה ${su.serialNumber} — ${partialLotQty}/${su.lotQuantity}` : "זיכוי מהיר",
         lines: { create: { itemTypeId: su.itemTypeId, quantity: lineQty, serialUnitId: su.id, statusId: statusId || su.statusId } },
       },
+      select: { id: true },
     });
+    return t.id;
   });
 
   await audit(user.id, "CHECKIN", "SerialUnit", serialUnitId, { soldier: su.signedSoldier?.fullName, partial: isPartial ? partialLotQty : null });
+  // מייל התראה + PDF — דרך ישות Transfer (ה-audit רושם SerialUnit ולכן אינו מפעיל מייל לבדו)
+  {
+    const { notifyTransactionEmail } = await import("@/lib/email");
+    void notifyTransactionEmail({ battalionId: bId, userId: user.id, action: "CHECKIN", entity: "Transfer", entityId: serialCheckinTransferId, holderId: su.currentHolderId, details: { serialUnitId, soldier: su.signedSoldier?.fullName } });
+  }
 
   // 🔫 איפוס דגלי נשק אם החייל החזיר את הנשק האחרון
   if (su.signedSoldierId && !isPartial) {
@@ -525,7 +532,7 @@ export async function checkinSerial(formData: FormData): Promise<{ error: string
     }
   }
 
-  if (su.signedSoldierId) void notifySoldierTelegram(su.signedSoldierId, bId, null, "CHECKIN");
+  if (su.signedSoldierId) void notifySoldierTelegram(su.signedSoldierId, bId, serialCheckinTransferId, "CHECKIN");
 
   revalidatePath("/signatures");
   revalidatePath("/my-equipment");
@@ -851,6 +858,11 @@ export async function checkinBatch(payload: {
     });
 
     await audit(user.id, "CHECKIN_BATCH", "Soldier", soldierId, { items: serialUnitIds.length + qtyItems.length });
+    // מייל התראה + PDF — דרך ישות Transfer (ה-audit רושם Soldier ולכן אינו מפעיל מייל לבדו)
+    {
+      const { notifyTransactionEmail } = await import("@/lib/email");
+      void notifyTransactionEmail({ battalionId: bId, userId: user.id, action: "CHECKIN_BATCH", entity: "Transfer", entityId: transferId, holderId: toHolderId || null, details: { soldierId, items: serialUnitIds.length + qtyItems.length } });
+    }
 
     for (const unitId of serialUnitIds) {
       const su = await prisma.serialUnit.findUnique({ where: { id: unitId }, select: { signedSoldierId: true, itemTypeId: true } });
