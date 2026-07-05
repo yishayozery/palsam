@@ -404,7 +404,7 @@ export const PRESET_ROLES: {
 
 export const ROLE_LABELS: Record<Role, string> = {
   SUPER_ADMIN: "אדמין-על",
-  BATTALION_ADMIN: 'מפמ (אחראי מערכת)',
+  BATTALION_ADMIN: "מנהל מערכת",
   WAREHOUSE_MANAGER: "קצין מחסן",
   COMPANY_REP: 'רס"פ פלוגתי',
   VIEWER: "צופה",

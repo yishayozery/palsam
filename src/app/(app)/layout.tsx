@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/guard";
-import { can } from "@/lib/rbac";
+import { can, ROLE_LABELS } from "@/lib/rbac";
 import { NAV, GROUP_CONTEXT } from "@/lib/nav";
 import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/Sidebar";
@@ -12,9 +12,13 @@ export default async function AppLayout({
 }) {
   const user = await requireUser();
 
-  // טוען title טרי מ-DB כדי שלא תידרש התנתקות לאחר עדכון תפקיד
-  const fresh = await prisma.appUser.findUnique({ where: { id: user.id }, select: { title: true } });
-  const displayTitle = fresh?.title || user.title || user.roleLabel;
+  // טוען title+תפקיד טריים מ-DB כדי שלא תידרש התנתקות לאחר עדכון תפקיד/תווית
+  const fresh = await prisma.appUser.findUnique({
+    where: { id: user.id },
+    select: { title: true, role: true, systemRole: { select: { name: true } }, customRole: { select: { name: true } } },
+  });
+  const freshRoleLabel = fresh?.systemRole?.name ?? fresh?.customRole?.name ?? (fresh ? ROLE_LABELS[fresh.role] : user.roleLabel);
+  const displayTitle = fresh?.title || user.title || freshRoleLabel;
 
   const holderKind = user.holderId
     ? (await prisma.holder.findUnique({ where: { id: user.holderId }, select: { kind: true } }))?.kind
