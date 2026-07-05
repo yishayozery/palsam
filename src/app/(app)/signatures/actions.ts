@@ -559,6 +559,14 @@ export async function checkinQuantity(formData: FormData): Promise<{ error: stri
       orderBy: { createdAt: "desc" },
     });
     toHolderId = origTransfer?.fromHolderId ?? null;
+    // fallback: החתמה ע"י מנהל מערכת יכולה להיות ללא fromHolderId — מחזירים למחסן לפי סוג הפריט
+    if (!toHolderId) {
+      const it = await prisma.itemType.findUnique({ where: { id: itemTypeId }, select: { category: { select: { warehouseType: true } } } });
+      const wt = it?.category?.warehouseType ?? null;
+      const wh = (wt && await prisma.holder.findFirst({ where: { battalionId: bId, kind: "WAREHOUSE", active: true, warehouseType: wt }, select: { id: true } }))
+        || await prisma.holder.findFirst({ where: { battalionId: bId, kind: "WAREHOUSE", active: true }, select: { id: true } });
+      toHolderId = wh?.id ?? null;
+    }
     if (!toHolderId) return { error: "לא נמצא מחסן יעד להחזרה — פנה לקצין מחסן" };
   }
 
