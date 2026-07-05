@@ -555,7 +555,7 @@ export async function checkinQuantity(formData: FormData): Promise<{ error: stri
     if (!toHolderId) return { error: "לא נמצא מחסן יעד להחזרה — פנה לקצין מחסן" };
   }
 
-  await prisma.$transaction(async (tx) => {
+  const checkinTransferId = await prisma.$transaction(async (tx) => {
     const finalStatusId = newStatusId || statusId;
     // מחזיר ל-StockBalance של המחסן עם הסטטוס הסופי
     const existing = await tx.stockBalance.findFirst({
@@ -568,7 +568,7 @@ export async function checkinQuantity(formData: FormData): Promise<{ error: stri
         data: { battalionId: bId, itemTypeId, holderId: toHolderId, statusId: finalStatusId, quantity },
       });
     }
-    await tx.transfer.create({
+    const t = await tx.transfer.create({
       data: {
         battalionId: bId, type: "CHECKIN", status: "COMPLETED",
         toHolderId, toSoldierId: soldierId,
@@ -576,12 +576,17 @@ export async function checkinQuantity(formData: FormData): Promise<{ error: stri
         reason: "זיכוי כמותי מחייל",
         lines: { create: { itemTypeId, quantity, statusId: finalStatusId } },
       },
+      select: { id: true },
     });
+    return t.id;
   });
 
   await audit(user.id, "CHECKIN_QTY", "Soldier", soldierId, { itemTypeId, quantity });
-
-  void notifySoldierTelegram(soldierId, bId, null, "CHECKIN");
+  // מייל התראה + PDF — דרך ישות Transfer (ה-audit רושם Soldier ולכן אינו מפעיל מייל לבדו)
+  const { notifyTransactionEmail } = await import("@/lib/email");
+  void notifyTransactionEmail({ battalionId: bId, userId: user.id, action: "CHECKIN_QTY", entity: "Transfer", entityId: checkinTransferId, holderId: toHolderId, details: { itemTypeId, quantity, soldierId } });
+  // טלגרם עם PDF תעודת הזיכוי
+  void notifySoldierTelegram(soldierId, bId, checkinTransferId, "CHECKIN");
 
   revalidatePath("/signatures");
 }
