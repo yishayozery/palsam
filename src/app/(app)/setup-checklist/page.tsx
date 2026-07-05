@@ -37,7 +37,7 @@ export default async function SetupChecklistPage() {
     baselinesCount,
     kitsCount,
   ] = await Promise.all([
-    prisma.battalion.findUnique({ where: { id: bId }, select: { name: true, commander: true, brigade: true, logoData: true } }),
+    prisma.battalion.findUnique({ where: { id: bId }, select: { name: true, commander: true, brigade: true, logoData: true, telegramBotToken: true, notificationEmail: true, senderEmail: true } }),
     prisma.holder.count({ where: { battalionId: bId, kind: "COMPANY", active: true } }),
     prisma.holder.count({ where: { battalionId: bId, kind: "WAREHOUSE", active: true } }),
     prisma.squad.count({ where: { battalionId: bId, active: true } }),
@@ -74,6 +74,14 @@ export default async function SetupChecklistPage() {
       title: "משתמשים",
       items: [
         { label: "הקמת משתמשים (קצין מחסן, רס\"פ, שליש...)", href: "/users/all", done: usersCount > 1, detail: `${usersCount} משתמשים`, required: true },
+      ],
+    },
+    {
+      title: "התראות (טלגרם + מייל)",
+      items: [
+        { label: "בוט טלגרם — טוקן + רישום Webhook", href: "/settings", done: !!battalion?.telegramBotToken, detail: battalion?.telegramBotToken ? "מוגדר" : "טרם הוגדר (BotFather → טוקן → /settings)", required: false },
+        { label: "מייל התראות (לאן נשלחות ההתראות)", href: "/settings", done: !!battalion?.notificationEmail, detail: battalion?.notificationEmail || "טרם הוגדר — יכול להיות כל Gmail", required: false },
+        { label: "כתובת שליחה (From) — רק אם דומיין מאומת ב-Resend", href: "/settings", done: !!battalion?.senderEmail, detail: battalion?.senderEmail || "השאר ריק אם אין דומיין מאומת (משתמש בברירת מחדל)", required: false },
       ],
     },
     {
