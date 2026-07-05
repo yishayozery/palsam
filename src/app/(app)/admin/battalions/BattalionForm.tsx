@@ -47,7 +47,7 @@ export default function BattalionForm() {
                 </div>
               </div>
               <div className="border-t border-slate-200 pt-3">
-                <div className="text-sm font-semibold text-slate-700 mb-2">משתמש מפמ (אחראי מערכת)</div>
+                <div className="text-sm font-semibold text-slate-700 mb-2">מנהל מערכת ראשון</div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-slate-500 mb-1">שם מלא</label>
@@ -63,7 +63,7 @@ export default function BattalionForm() {
                   <input name="mafamPhone" placeholder="05X-XXXXXXX" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
                 </div>
               </div>
-              <p className="text-xs text-slate-400">הגדוד ייווצר עם 4 מחסנים + סטטוסי בסיס. למפמ ייווצר קישור הזמנה (יגדיר סיסמה בכניסה ראשונה).</p>
+              <p className="text-xs text-slate-400">הגדוד ייווצר עם 4 מחסנים + סטטוסי בסיס. למנהל המערכת ייווצר קישור הזמנה (יגדיר סיסמה בכניסה ראשונה). ניתן להוסיף מנהלי מערכת נוספים אחרי ההקמה.</p>
               <div className="flex justify-end gap-2 pt-1">
                 <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
                 <button className="bg-slate-800 text-white rounded-lg px-4 py-2 text-sm">הקמה</button>

@@ -62,7 +62,7 @@ export default async function RepsPage() {
                   </Td>
                   <Td>
                     {l.repUser && !l.repUser.passwordSet && l.repUser.inviteToken
-                      ? <InviteLink token={l.repUser.inviteToken} phone={l.repUser.phone} baseUrl={baseUrl} />
+                      ? <InviteLink token={l.repUser.inviteToken} phone={l.repUser.phone} baseUrl={baseUrl} role="rep" />
                       : l.repUser ? <Badge className="bg-emerald-100 text-emerald-700">פעיל</Badge> : "—"}
                   </Td>
                   <Td>

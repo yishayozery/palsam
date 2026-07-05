@@ -95,6 +95,59 @@ export async function resetUserPassword(formData: FormData) {
   revalidatePath("/admin/battalions");
 }
 
+/** אדמין-על: הוספת מנהל (מפמ) נוסף לגדוד — לגדוד יכולים להיות כמה מנהלים.
+ *  נוצר עם לינק הזמנה (המשתמש יגדיר סיסמה בכניסה ראשונה). */
+export async function addBattalionAdmin(formData: FormData) {
+  const admin = await requireSuperAdmin();
+  const battalionId = String(formData.get("battalionId") || "");
+  const fullName = String(formData.get("fullName") || "").trim();
+  const userRaw = String(formData.get("username") || "").trim();
+  const phone = String(formData.get("phone") || "").trim() || null;
+  if (!battalionId || !fullName || !userRaw) return;
+  const bat = await prisma.battalion.findUnique({ where: { id: battalionId }, select: { code: true, brigade: true } });
+  if (!bat) return;
+  const username = await resolveUniqueUsername(userRaw, bat.brigade || bat.code);
+  await prisma.appUser.create({
+    data: {
+      username, fullName, phone, role: "BATTALION_ADMIN", battalionId,
+      passwordHash: await hashPassword(nanoid(32)), passwordSet: false, inviteToken: nanoid(28),
+    },
+  });
+  await audit(admin.id, "ADD_BATTALION_ADMIN", "AppUser", username, { battalionId });
+  revalidatePath("/admin/battalions");
+}
+
+/** אדמין-על: עריכת פרטי מנהל גדוד — שם מלא, שם משתמש, טלפון. */
+export async function updateBattalionAdmin(formData: FormData) {
+  const admin = await requireSuperAdmin();
+  const id = String(formData.get("id") || "");
+  const fullName = String(formData.get("fullName") || "").trim();
+  const userRaw = String(formData.get("username") || "").trim();
+  const phone = String(formData.get("phone") || "").trim() || null;
+  if (!id || !fullName || !userRaw) return;
+  const user = await prisma.appUser.findUnique({ where: { id }, select: { username: true, battalion: { select: { code: true, brigade: true } } } });
+  if (!user) return;
+  const username = userRaw === user.username
+    ? user.username
+    : await resolveUniqueUsername(userRaw, user.battalion?.brigade || user.battalion?.code, id);
+  await prisma.appUser.update({ where: { id }, data: { fullName, username, phone } });
+  await audit(admin.id, "UPDATE_BATTALION_ADMIN", "AppUser", username, { from: user.username });
+  revalidatePath("/admin/battalions");
+}
+
+/** אדמין-על: הסרת מנהל מהגדוד. אם זה המנהל היחיד — חסימה (הגדוד חייב מנהל אחד לפחות). */
+export async function removeBattalionAdmin(formData: FormData) {
+  const admin = await requireSuperAdmin();
+  const id = String(formData.get("id") || "");
+  const user = await prisma.appUser.findUnique({ where: { id }, select: { username: true, battalionId: true, role: true } });
+  if (!user || user.role !== "BATTALION_ADMIN" || !user.battalionId) return;
+  const count = await prisma.appUser.count({ where: { battalionId: user.battalionId, role: "BATTALION_ADMIN" } });
+  if (count <= 1) throw new Error("לא ניתן להסיר את המנהל היחיד של הגדוד. הוסף מנהל אחר קודם.");
+  await prisma.appUser.delete({ where: { id } });
+  await audit(admin.id, "REMOVE_BATTALION_ADMIN", "AppUser", user.username, { battalionId: user.battalionId });
+  revalidatePath("/admin/battalions");
+}
+
 export async function toggleBattalion(formData: FormData) {
   const admin = await requireSuperAdmin();
   const id = String(formData.get("id") || "");

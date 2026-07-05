@@ -13,6 +13,13 @@ type CheckItem = {
   required: boolean;
 };
 
+type RoleLane = {
+  role: string;      // התפקיד האחראי על השלב
+  icon: string;
+  gate: string | null; // שער סנכרון — מה חייב להסתיים קודם
+  items: CheckItem[];
+};
+
 export default async function SetupChecklistPage() {
   const user = await requireCapability("battalion.profile");
   const bId = user.battalionId!;
@@ -36,6 +43,7 @@ export default async function SetupChecklistPage() {
     allocationsCount,
     baselinesCount,
     kitsCount,
+    telegramLinkedCount,
   ] = await Promise.all([
     prisma.battalion.findUnique({ where: { id: bId }, select: { name: true, commander: true, brigade: true, logoData: true, telegramBotToken: true, notificationEmail: true, senderEmail: true } }),
     prisma.holder.count({ where: { battalionId: bId, kind: "COMPANY", active: true } }),
@@ -55,64 +63,60 @@ export default async function SetupChecklistPage() {
     prisma.companyAllocation.count({ where: { battalionId: bId } }),
     prisma.companyItemBaseline.count({ where: { battalionId: bId } }),
     prisma.kitInstance.count({ where: { battalionId: bId } }),
+    prisma.soldier.count({ where: { battalionId: bId, telegramChatId: { not: null } } }),
   ]);
 
   const hasProfile = !!(battalion?.commander || battalion?.brigade || battalion?.logoData);
 
-  const groups: { title: string; items: CheckItem[] }[] = [
+  // ===== צ'קליסט העלייה-לאוויר לפי תפקיד — בסדר תלויות (שערי סנכרון) =====
+  const groups: RoleLane[] = [
     {
-      title: "מבנה ארגוני",
+      role: "מנהל מערכת · תשתית הגדוד",
+      icon: "🏛️",
+      gate: null,
       items: [
         { label: "הגדרות גדוד (שם, מפקד, חטיבה, לוגו)", href: "/profile", done: hasProfile, detail: hasProfile ? "מוגדר" : "טרם הוגדר", required: true },
         { label: "הקמת פלוגות", href: "/profile", done: companiesCount > 0, detail: `${companiesCount} פלוגות`, required: true },
         { label: "הקמת מחסנים", href: "/warehouses", done: warehousesCount > 0, detail: `${warehousesCount} מחסנים`, required: true },
-        { label: "הקמת מחלקות בפלוגות", href: "/soldiers", done: squadsCount > 0, detail: `${squadsCount} מחלקות`, required: true },
+        { label: "הקמת מחלקות בפלוגות", href: "/soldiers", done: squadsCount > 0, detail: `${squadsCount} מחלקות`, required: false },
         { label: "הגדרת תפקידים בפלוגה (מ\"פ, סמ\"פ...)", href: "/soldiers", done: companyRolesCount > 0, detail: `${companyRolesCount} תפקידים`, required: false },
-      ],
-    },
-    {
-      title: "משתמשים",
-      items: [
-        { label: "הקמת משתמשים (קצין מחסן, רס\"פ, שליש...)", href: "/users/all", done: usersCount > 1, detail: `${usersCount} משתמשים`, required: true },
-      ],
-    },
-    {
-      title: "התראות (טלגרם + מייל)",
-      items: [
-        { label: "בוט טלגרם — טוקן + רישום Webhook", href: "/settings", done: !!battalion?.telegramBotToken, detail: battalion?.telegramBotToken ? "מוגדר" : "טרם הוגדר (BotFather → טוקן → /settings)", required: false },
-        { label: "מייל התראות (לאן נשלחות ההתראות)", href: "/settings", done: !!battalion?.notificationEmail, detail: battalion?.notificationEmail || "טרם הוגדר — יכול להיות כל Gmail", required: false },
-        { label: "כתובת שליחה (From) — רק אם דומיין מאומת ב-Resend", href: "/settings", done: !!battalion?.senderEmail, detail: battalion?.senderEmail || "השאר ריק אם אין דומיין מאומת (משתמש בברירת מחדל)", required: false },
-      ],
-    },
-    {
-      title: "קטלוג פריטים",
-      items: [
-        { label: "הגדרת קטגוריות", href: "/items", done: categoriesCount > 0, detail: `${categoriesCount} קטגוריות`, required: true },
-        { label: "הגדרת פריטים", href: "/items", done: itemTypesCount > 0, detail: `${itemTypesCount} פריטים`, required: true },
         { label: "סטטוסי פריטים (תקין, בלאי, אבוד...)", href: "/items", done: statusesCount > 0, detail: `${statusesCount} סטטוסים`, required: true },
+        { label: "סטטוסי נוכחות", href: "/attendance-settings", done: attendanceStatusCount > 0, detail: `${attendanceStatusCount} סטטוסים`, required: false },
+        { label: "בוט טלגרם — טוקן + Webhook", href: "/settings", done: !!battalion?.telegramBotToken, detail: battalion?.telegramBotToken ? "מוגדר" : "BotFather → טוקן → /settings", required: false },
+        { label: "מייל התראות", href: "/settings", done: !!battalion?.notificationEmail, detail: battalion?.notificationEmail || "כל Gmail מתאים", required: false },
+        { label: "כתובת שליחה (From) — רק אם דומיין מאומת", href: "/settings", done: !!battalion?.senderEmail, detail: battalion?.senderEmail || "השאר ריק אם אין דומיין מאומת", required: false },
+        { label: "הקמת משתמשים לכל הגורמים + שליחת לינקי הזמנה", href: "/users/all", done: usersCount > 1, detail: `${usersCount} משתמשים`, required: true },
       ],
     },
     {
-      title: "חיילים",
+      role: "שליש · קליטת חיילים",
+      icon: "🎖️",
+      gate: "אחרי שמנהל המערכת הקים משתמשים ושלח הזמנות",
       items: [
         { label: "קליטת חיילים (ייבוא / ידני)", href: "/soldiers", done: soldiersCount > 0, detail: `${soldiersCount} חיילים`, required: true },
         { label: "אישור גיוס לחיילים", href: "/roster", done: enlistedCount > 0, detail: `${enlistedCount} מאושרים`, required: true },
       ],
     },
     {
-      title: "מלאי",
+      role: "קציני מחסן · קטלוג ומלאי",
+      icon: "📦",
+      gate: "אחרי שמנהל המערכת הקים משתמשים",
       items: [
-        { label: "קליטת מלאי ראשוני למחסנים", href: "/stock", done: stockCount > 0 || serialCount > 0, detail: `${stockCount} יתרות כמותיות, ${serialCount} יחידות סריאליות`, required: true },
+        { label: "הגדרת קטגוריות", href: "/items", done: categoriesCount > 0, detail: `${categoriesCount} קטגוריות`, required: true },
+        { label: "הגדרת פריטים", href: "/items", done: itemTypesCount > 0, detail: `${itemTypesCount} פריטים`, required: true },
+        { label: "קליטת מלאי ראשוני למחסנים", href: "/stock", done: stockCount > 0 || serialCount > 0, detail: `${stockCount} כמותי, ${serialCount} סריאלי`, required: true },
+        { label: "ערכות החתמה (קיטים)", href: "/kits", done: kitsCount > 0, detail: `${kitsCount} תבניות`, required: false },
       ],
     },
     {
-      title: "הגדרות נוספות (אופציונלי)",
+      role: 'מפ"ים ורספ"ים · פלוגה',
+      icon: "👤",
+      gate: "אחרי חיילים (שליש) + מלאי (קציני מחסן)",
       items: [
-        { label: "סטטוסי נוכחות", href: "/attendance-settings", done: attendanceStatusCount > 0, detail: `${attendanceStatusCount} סטטוסים`, required: false },
-        { label: "ערכות החתמה (קיטים)", href: "/kits", done: kitsCount > 0, detail: `${kitsCount} תבניות`, required: false },
+        { label: "חיבור חיילים לבוט הטלגרם (לתזכורות ודיווח)", href: "/soldiers", done: telegramLinkedCount > 0, detail: telegramLinkedCount > 0 ? `${telegramLinkedCount} מחוברים` : "טרם חובר אף חייל", required: false },
         { label: "הקצאות ציוד לפלוגה", href: "/armory-allocations", done: allocationsCount > 0, detail: `${allocationsCount} הקצאות`, required: false },
         { label: "ציוד קבוע לפלוגה", href: "/permanent-items", done: baselinesCount > 0, detail: `${baselinesCount} הגדרות`, required: false },
-        { label: "תכניות ספירה", href: "/counts/plans", done: countPlansCount > 0, detail: `${countPlansCount} תכניות`, required: false },
+        { label: "תכניות ספירה + ספירת החתמה חד-פעמית", href: "/counts/plans", done: countPlansCount > 0, detail: `${countPlansCount} תכניות`, required: false },
       ],
     },
   ];
@@ -128,8 +132,8 @@ export default async function SetupChecklistPage() {
   return (
     <div>
       <PageHeader
-        title="📋 צ'קליסט הקמת גדוד"
-        subtitle="מעקב אחר שלבי ההקמה — סטטוס מתעדכן אוטומטית לפי מה שקיים במערכת"
+        title="📋 צ'קליסט עלייה לאוויר"
+        subtitle="לפי תפקיד ובסדר תלויות — הסטטוס מתעדכן אוטומטית לפי מה שקיים במערכת"
       />
 
       <Card className="p-4 mb-4">
@@ -160,10 +164,29 @@ export default async function SetupChecklistPage() {
       </Card>
 
       <div className="space-y-4">
-        {groups.map((g) => (
-          <Card key={g.title} className="overflow-hidden">
-            <div className="bg-slate-50 border-b border-slate-200 px-4 py-2">
-              <h2 className="font-bold text-sm text-slate-700">{g.title}</h2>
+        {groups.map((g, gi) => {
+          const laneReq = g.items.filter((i) => i.required);
+          const laneDone = laneReq.filter((i) => i.done).length;
+          const laneComplete = laneReq.length > 0 && laneDone === laneReq.length;
+          return (
+          <Card key={g.role} className="overflow-hidden">
+            <div className="bg-slate-50 border-b border-slate-200 px-4 py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-bold text-sm text-slate-700 flex items-center gap-2">
+                  <span className="text-slate-400 font-mono text-xs">{gi + 1}</span>
+                  <span>{g.icon} {g.role}</span>
+                </h2>
+                {laneReq.length > 0 && (
+                  <span className={`text-[11px] font-medium rounded-full px-2 py-0.5 ${laneComplete ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>
+                    {laneDone}/{laneReq.length} חובה
+                  </span>
+                )}
+              </div>
+              {g.gate && (
+                <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 mt-1.5 inline-block">
+                  🔒 שער סנכרון: {g.gate}
+                </div>
+              )}
             </div>
             <div className="divide-y divide-slate-100">
               {g.items.map((item) => (
@@ -193,7 +216,8 @@ export default async function SetupChecklistPage() {
               ))}
             </div>
           </Card>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

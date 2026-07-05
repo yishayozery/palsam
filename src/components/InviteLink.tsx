@@ -1,21 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import { buildInviteText, type InviteRole } from "@/lib/goliveTasks";
 
 export default function InviteLink({
   token,
   phone,
   baseUrl,
   label = "ממתין להפעלה",
+  role,
 }: {
   token: string;
   phone?: string | null;
   baseUrl: string;
   label?: string;
+  role?: InviteRole | null;
 }) {
   const [copied, setCopied] = useState(false);
   const link = `${baseUrl}/invite/${token}`;
-  const text = `הוזמנת למערכת PALMY. קישור להגדרת סיסמה: ${link}`;
+  const text = buildInviteText(link, role);
   const wa = phone
     ? `https://wa.me/${phone.replace(/\D/g, "").replace(/^0/, "972")}?text=${encodeURIComponent(text)}`
     : `https://wa.me/?text=${encodeURIComponent(text)}`;
