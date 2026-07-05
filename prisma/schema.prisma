@@ -159,6 +159,7 @@ model Battalion {
   stockBalances StockBalance[]
   soldierItemLocations SoldierItemLocation[]
   companyItemBaselines CompanyItemBaseline[] @relation("BattalionBaselines")
+  shiftHandovers       ShiftHandover[]
   companyAllocations   CompanyAllocation[]  @relation("BattalionAllocations")
   vehicleAssignments   VehicleAssignment[] @relation("BattalionDispatch")
   serialUnits   SerialUnit[]
@@ -381,6 +382,7 @@ model Holder {
   secondarySoldiers Soldier[]        @relation("SoldierSecondary")
   discrepancies    Discrepancy[]
   companyItemBaselines CompanyItemBaseline[] @relation("HolderBaselines")
+  shiftHandovers       ShiftHandover[]       @relation("HolderShiftHandovers")
   companyAllocations   CompanyAllocation[]  @relation("HolderAllocations")
   squads               Squad[]
   companyRoles         CompanyRole[]
@@ -566,6 +568,7 @@ model Soldier {
   companyRole    CompanyRole? @relation(fields: [companyRoleId], references: [id])
   companyId      String?
   company        Holder?   @relation(fields: [companyId], references: [id])
+  dutyRound      Int?      // סבב תעסוקה — לשיבוץ החלפות סבב ברמת פלוגה
   // שיוך משני — מחסן שהחייל גם משתייך אליו (למשל חייל ארמון שגם בפלוגה א')
   secondaryHolderId String?
   secondaryHolder   Holder? @relation("SoldierSecondary", fields: [secondaryHolderId], references: [id])
@@ -1383,6 +1386,42 @@ model CallupPeriod {
 
   @@index([soldierId])
   @@index([startDate])
+}
+
+// ===================== העברת משמרת / סבב (Shift Handover) =====================
+
+model ShiftHandover {
+  id            String    @id @default(cuid())
+  battalionId   String
+  battalion     Battalion @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  companyId     String    // Holder (פלוגה)
+  company       Holder    @relation("HolderShiftHandovers", fields: [companyId], references: [id], onDelete: Cascade)
+  fromRound     Int?      // סבב יוצא
+  toRound       Int?      // סבב נכנס
+  title         String?
+  status        String    @default("OPEN") // OPEN | COMPLETED
+  note          String?
+  createdById   String
+  completedById String?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  items ShiftHandoverItem[]
+
+  @@index([battalionId, companyId])
+}
+
+model ShiftHandoverItem {
+  id          String        @id @default(cuid())
+  handoverId  String
+  handover    ShiftHandover @relation(fields: [handoverId], references: [id], onDelete: Cascade)
+  category    String        // EQUIPMENT | DISPATCH | COUNT | GAP | MANUAL
+  label       String
+  done        Boolean       @default(false)
+  note        String?
+  sortOrder   Int           @default(0)
+
+  @@index([handoverId])
 }
 
 // ===================== תעסוקה (Employment) =====================

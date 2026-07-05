@@ -13,6 +13,7 @@ type Soldier = {
   personalNumber: string | null; phone: string | null;
   companyId: string | null; companyName: string | null; platoon: string | null;
   squadId: string | null; squadName: string | null;
+  dutyRound: number | null;
   roleName: string | null; roleIsCommander: boolean;
   status: string; attached: boolean; signedCount: number;
   enlistedAt: string | null; dischargedAt: string | null;
@@ -164,12 +165,19 @@ function EditForm({ soldier, companies, squads, onDone }: { soldier: Soldier; co
           onInput={(e) => { e.currentTarget.value = e.currentTarget.value.replace(/\D/g, ""); }}
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
       </div>
-      <div>
-        <label className="block text-xs text-slate-600 mb-1">מחלקה</label>
-        <select name="squadId" defaultValue={soldier.squadId ?? ""} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">— ללא —</option>
-          {companySquads.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-xs text-slate-600 mb-1">מחלקה</label>
+          <select name="squadId" defaultValue={soldier.squadId ?? ""} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="">— ללא —</option>
+            {companySquads.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-slate-600 mb-1">🔄 סבב תעסוקה</label>
+          <input type="number" name="dutyRound" min={1} defaultValue={soldier.dutyRound ?? ""} placeholder="מס' סבב"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </div>
       </div>
       <label className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer">
         <input type="checkbox" name="attached" defaultChecked={soldier.attached} />
@@ -404,6 +412,7 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
   const [q, setQ] = useState(initialQ);
   const [company, setCompany] = useState(initialCompany);
   const [status, setStatus] = useState(initialStatus);
+  const [round, setRound] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [attachOpen, setAttachOpen] = useState(initialTab === "attachments");
@@ -458,6 +467,7 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
   const filtered = useMemo(() => {
     return soldiers.filter((s) => {
       if (company && s.companyId !== company) return false;
+      if (round && String(s.dutyRound ?? "") !== round) return false;
       if (status === "enlisted" && s.status !== "ENLISTED") return false;
       if (status === "pending" && s.status !== "REGISTERED") return false;
       if (status === "inactive" && s.status !== "DISCHARGED" && s.status !== "INACTIVE") return false;
@@ -468,7 +478,16 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
       }
       return true;
     });
-  }, [soldiers, q, company, status]);
+  }, [soldiers, q, company, status, round]);
+
+  // סיכום סבבים (על התוצאה המסוננת, לפני פילטר הסבב) — כמה בכל סבב
+  const roundCounts = useMemo(() => {
+    const src = soldiers.filter((s) => (!company || s.companyId === company) && s.status !== "DISCHARGED" && s.status !== "INACTIVE");
+    const m = new Map<string, number>();
+    for (const s of src) { const k = s.dutyRound != null ? String(s.dutyRound) : "—"; m.set(k, (m.get(k) ?? 0) + 1); }
+    return [...m.entries()].sort((a, b) => (a[0] === "—" ? 1 : b[0] === "—" ? -1 : parseInt(a[0]) - parseInt(b[0])));
+  }, [soldiers, company]);
+  const allRounds = useMemo(() => [...new Set(soldiers.map((s) => s.dutyRound).filter((r): r is number => r != null))].sort((a, b) => a - b), [soldiers]);
 
   return (
     <>
@@ -495,6 +514,14 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
               <option value="pending">ממתינים</option>
               <option value="inactive">לא פעילים</option>
               <option value="attached">מסופחים</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">🔄 סבב</label>
+            <select value={round} onChange={(e) => setRound(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              <option value="">כל הסבבים</option>
+              {allRounds.map((r) => <option key={r} value={String(r)}>סבב {r}</option>)}
+              <option value="—">ללא סבב</option>
             </select>
           </div>
           <span className="text-xs text-slate-500 self-end pb-2">{filtered.length} חיילים</span>
@@ -542,6 +569,18 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
         </div>
       )}
 
+      {/* סיכום סבבים — כמה חיילים בכל סבב (בפלוגה המסוננת) */}
+      {roundCounts.length > 1 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {roundCounts.map(([r, n]) => (
+            <button key={r} onClick={() => setRound(round === r ? "" : r)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition ${round === r ? "bg-purple-600 text-white border-purple-600" : "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"}`}>
+              {r === "—" ? "ללא סבב" : `🔄 סבב ${r}`}: {n}
+            </button>
+          ))}
+        </div>
+      )}
+
       <Card>
         <Table>
           <thead>
@@ -564,7 +603,10 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
                   </div>
                 </Td>
                 <Td className="font-mono text-xs">{s.personalNumber ?? <span className="text-slate-300">—</span>}</Td>
-                <Td>{s.companyName ?? <span className="text-slate-300">—</span>}</Td>
+                <Td>
+                  {s.companyName ?? <span className="text-slate-300">—</span>}
+                  {s.dutyRound != null && <Badge className="mr-1 text-[10px] bg-purple-100 text-purple-700">🔄 סבב {s.dutyRound}</Badge>}
+                </Td>
                 <Td>
                   {s.roleName ? (
                     <Badge className={s.roleIsCommander ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}>

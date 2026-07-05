@@ -85,6 +85,7 @@ export default async function RosterPage({
           personalNumber: s.personalNumber, phone: s.phone,
           companyId: s.companyId, companyName: s.company?.name ?? null,
           platoon: s.platoon, squadId: s.squadId, squadName: s.squad?.name ?? null,
+          dutyRound: s.dutyRound,
           roleName: s.companyRole?.name ?? null, roleIsCommander: s.companyRole?.isCommander ?? false,
           status: s.status, attached: s.attached,
           signedCount: s._count.signedSerialUnits + s._count.signedKitInstances,
