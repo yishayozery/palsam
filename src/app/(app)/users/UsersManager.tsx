@@ -17,7 +17,7 @@ type User = {
 
 const ROLE_OPTS = ["BATTALION_ADMIN", "SHALISH", "MAGAD", "SAMAGAD", "VIEWER"] as const;
 const BUILTIN_LABELS: Record<string, string> = {
-  BATTALION_ADMIN: 'מפ״מ (הכל)',
+  BATTALION_ADMIN: "מנהל מערכת (הכל)",
   SHALISH: "שליש גדודי (שלישות + גיוס)",
   MAGAD: 'מג"ד (צפייה + אישור נשק)',
   SAMAGAD: 'סמג"ד (צפייה + אישור נשק)',
