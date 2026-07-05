@@ -60,7 +60,7 @@ export default async function DashboardPage({
   const { warehouse: selectedWh = "" } = await searchParams;
 
   if (user.role === "COMPANY_REP" && user.holderId) {
-    return <CompanyRepDashboard userName={user.fullName} bId={bId} companyId={user.holderId} />;
+    return <CompanyRepDashboard userName={user.fullName} roleLabel={user.roleLabel} bId={bId} companyId={user.holderId} />;
   }
 
   const isWarehouseManager = user.role === "WAREHOUSE_MANAGER";

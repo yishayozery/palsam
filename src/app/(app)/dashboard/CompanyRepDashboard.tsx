@@ -4,9 +4,9 @@ import { Card, PageHeader, StatCard, Badge } from "@/components/ui";
 import { WAREHOUSE_TYPE_SHORT, WAREHOUSE_TYPE_ICON } from "@/lib/rbac";
 
 export default async function CompanyRepDashboard({
-  userName, bId, companyId,
+  userName, roleLabel, bId, companyId,
 }: {
-  userName: string; bId: string; companyId: string;
+  userName: string; roleLabel: string; bId: string; companyId: string;
 }) {
   const company = await prisma.holder.findUnique({ where: { id: companyId }, select: { name: true } });
 
@@ -82,7 +82,7 @@ export default async function CompanyRepDashboard({
     <div>
       <PageHeader
         title={`שלום, ${userName}`}
-        subtitle={`רס״פ פלוגה — ${company?.name ?? ""}`}
+        subtitle={`${roleLabel} — ${company?.name ?? ""}`}
         action={
           <div className="flex gap-2">
             <Link href="/return" className="bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-4 py-2 text-sm font-medium">↩️ זיכוי לגדוד</Link>
