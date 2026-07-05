@@ -60,6 +60,7 @@ export const NAV: NavItem[] = [
   // ===== עזרה =====
   { href: "/security", label: "אבטחה (2FA)", icon: "🔐", group: "עזרה" },
   { href: "/help", label: "מקראת השימוש", icon: "📖", group: "עזרה" },
+  { href: "/support", label: "עזרה ותמיכה", icon: "🆘", group: "עזרה" },
   { href: "/backup", label: "בדיקת גיבוי", icon: "📂", group: "עזרה" },
 ];
 

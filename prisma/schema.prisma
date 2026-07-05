@@ -160,6 +160,7 @@ model Battalion {
   soldierItemLocations SoldierItemLocation[]
   companyItemBaselines CompanyItemBaseline[] @relation("BattalionBaselines")
   shiftHandovers       ShiftHandover[]
+  supportQuestions     SupportQuestion[]     @relation("BattalionSupport")
   companyAllocations   CompanyAllocation[]  @relation("BattalionAllocations")
   vehicleAssignments   VehicleAssignment[] @relation("BattalionDispatch")
   serialUnits   SerialUnit[]
@@ -1949,4 +1950,33 @@ model DispatchToken {
 
   @@index([token])
   @@index([battalionId])
+}
+
+// ===================== עזרה למפקדים (Support) =====================
+
+// הגדרות תמיכה גלובליות (אדמין-על) — singleton
+model AppConfig {
+  id                     String  @id @default("singleton")
+  supportWhatsappEnabled Boolean @default(false)
+  supportWhatsappNumber  String? // מספר בפורמט בינ"ל ללא + (למשל 972501234567)
+  supportMessage         String? // טקסט פתיחה לוואטסאפ
+  updatedAt              DateTime @updatedAt
+}
+
+// שאלה/צורך שמפקד מעלה
+model SupportQuestion {
+  id           String   @id @default(cuid())
+  battalionId  String
+  battalion    Battalion @relation("BattalionSupport", fields: [battalionId], references: [id], onDelete: Cascade)
+  askedById    String?
+  askedByName  String
+  category     String?  // "שאלה" | "תקלה" | "צורך/בקשה"
+  question     String
+  status       String   @default("OPEN") // OPEN | ANSWERED
+  answer       String?
+  answeredById String?
+  answeredAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([battalionId, status])
 }
