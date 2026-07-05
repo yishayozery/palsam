@@ -8,14 +8,46 @@ import { hashPassword } from "@/lib/auth";
 import { resolveUniqueUsername } from "@/lib/usernames";
 import { sendTelegramMessage } from "@/lib/telegram";
 import { buildInviteText } from "@/lib/goliveTasks";
+import { PRESET_ROLES, AREA_ROLE_EQUIP, AREA_ROLE_PERSONNEL } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 
-const DEFAULT_DELEGATE_CAP = 2; // תקרת ברירת מחדל למינוי רספ"ים/סגנים (ראה גם team/page.tsx)
 const SQUAD_ROLE_NAME = "מפקד מחלקה";
+
+/** מיפוי תחום המינוי → שם תפקיד המערכת (null = תפקיד רס"פ כללי/legacy). */
+const AREA_TO_ROLE: Record<string, string | null> = {
+  general: null,
+  equip: AREA_ROLE_EQUIP,
+  personnel: AREA_ROLE_PERSONNEL,
+};
 
 /** האם המשתמש רשאי לנהל את ה-Holder (מנהל ישיר, או מנהל מערכת). */
 function canManageHolder(user: { holderIds: string[]; isAdmin: boolean; isSuperAdmin: boolean }, holderId: string) {
   return user.isAdmin || user.isSuperAdmin || user.holderIds.includes(holderId);
+}
+
+/** מחזיר את מזהה תפקיד-התחום לגדוד — יוצר אותו lazily מהגדרת ה-preset אם חסר. */
+async function ensureAreaRole(bId: string, roleName: string): Promise<string | null> {
+  const existing = await prisma.systemRole.findUnique({ where: { battalionId_name: { battalionId: bId, name: roleName } }, select: { id: true } });
+  if (existing) return existing.id;
+  const preset = PRESET_ROLES.find((r) => r.name === roleName);
+  if (!preset) return null;
+  const created = await prisma.systemRole.create({
+    data: {
+      battalionId: bId, name: preset.name, isPreset: true,
+      isAdmin: preset.isAdmin, isCommander: preset.isCommander, sortOrder: preset.sortOrder,
+      permissions: { create: preset.permissions.map((p) => ({ screen: p.screen, level: p.level })) },
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+/** סופר רספ"ים פעילים לפלוגה (לא כולל מפקדי מחלקות ואת הממנה עצמו). */
+async function countCompanyReps(holderId: string, excludeUserId: string): Promise<number> {
+  const squadUserIds = (await prisma.userSquad.findMany({
+    where: { user: { holderId, active: true } }, select: { userId: true },
+  })).map((x) => x.userId);
+  return prisma.appUser.count({ where: { holderId, active: true, id: { notIn: [excludeUserId, ...squadUserIds] } } });
 }
 
 /**
@@ -41,6 +73,13 @@ export async function appointSubUser(formData: FormData) {
   const isWarehouse = holder.kind === "WAREHOUSE";
   const apptType = isWarehouse ? "deputy" : String(formData.get("apptType") || "rep");
   const squadId = String(formData.get("squadId") || "").trim() || null;
+  const apptArea = String(formData.get("apptArea") || "general"); // general | equip | personnel — לרס"פ פלוגתי
+
+  const battalion = await prisma.battalion.findUnique({
+    where: { id: bId },
+    select: { brigade: true, code: true, telegramBotToken: true, defaultDelegateCap: true },
+  });
+  const defaultCap = battalion?.defaultDelegateCap ?? 2;
 
   // פרטים — עדיפות לחייל מהרשימה (מקור אמת לשם/נייד/טלגרם)
   let fullName = String(formData.get("fullName") || "").trim();
@@ -79,11 +118,11 @@ export async function appointSubUser(formData: FormData) {
       select: { user: { select: { fullName: true } } },
     });
     if (existing) throw new Error(`למחלקה ${squad.name} כבר יש מפקד פעיל (${existing.user.fullName}). הסר קודם.`);
-    const role = await prisma.systemRole.findUnique({ where: { battalionId_name: { battalionId: bId, name: SQUAD_ROLE_NAME } }, select: { id: true } });
-    roleData = { role: "COMPANY_REP", systemRoleId: role?.id ?? null, customRoleId: null };
+    const roleId = await ensureAreaRole(bId, SQUAD_ROLE_NAME);
+    roleData = { role: "COMPANY_REP", systemRoleId: roleId, customRoleId: null };
   } else if (isWarehouse) {
     // סגן מחסן — אותו תפקיד כמו מנהל המחסן (הרשאות זהות)
-    const cap = holder.delegateCap ?? DEFAULT_DELEGATE_CAP;
+    const cap = holder.delegateCap ?? defaultCap;
     const current = await prisma.appUser.count({ where: { holderId, active: true, id: { not: user.id } } });
     if (current >= cap) throw new Error(`הגעת לתקרה (${cap}). הסר קיים, או בקש ממנהל המערכת להגדיל.`);
     // מקור התפקיד: אם הממנה מנהל את המחסן — התפקיד שלו. אחרת (מנהל מערכת) — תפקיד מנהל קיים, אחרת WAREHOUSE_MANAGER.
@@ -97,15 +136,16 @@ export async function appointSubUser(formData: FormData) {
       customRoleId: src?.customRoleId ?? null,
     };
   } else {
-    // רס"פ פלוגתי
-    const cap = holder.delegateCap ?? DEFAULT_DELEGATE_CAP;
-    const current = await prisma.appUser.count({ where: { holderId, active: true, role: "COMPANY_REP", systemRoleId: null, id: { not: user.id } } });
+    // רס"פ פלוגתי — לפי תחום: כללי / ציוד / כ"א
+    const cap = holder.delegateCap ?? defaultCap;
+    const current = await countCompanyReps(holderId, user.id);
     if (current >= cap) throw new Error(`הגעת לתקרה (${cap}). הסר קיים, או בקש ממנהל המערכת להגדיל.`);
-    roleData = { role: "COMPANY_REP", systemRoleId: null, customRoleId: null };
+    const areaRoleName = AREA_TO_ROLE[apptArea] ?? null;
+    const systemRoleId = areaRoleName ? await ensureAreaRole(bId, areaRoleName) : null;
+    roleData = { role: "COMPANY_REP", systemRoleId, customRoleId: null };
     inviteRole = "rep";
   }
 
-  const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { brigade: true, code: true, telegramBotToken: true } });
   const holderSlug = holder.name.replace(/[^֐-׿a-zA-Z0-9]+/g, "").toLowerCase().slice(0, 12) || "unit";
   const suffix = [holderSlug, battalion?.brigade || battalion?.code || ""].filter(Boolean).join(".");
   const username = await resolveUniqueUsername(enteredUsername, suffix);
@@ -162,5 +202,16 @@ export async function setDelegateCap(formData: FormData) {
   if (!holder || (!user.isSuperAdmin && holder.battalionId !== user.battalionId)) throw new Error("יחידה לא נמצאה");
   await prisma.holder.update({ where: { id: holderId }, data: { delegateCap: cap } });
   await audit(user.id, "SET_DELEGATE_CAP", "Holder", holderId, { cap });
+  revalidatePath("/team");
+}
+
+/** מנהל מערכת בלבד: תקרת ברירת מחדל גדודית (חלה על יחידות ללא תקרה משלהן). */
+export async function setDefaultDelegateCap(formData: FormData) {
+  const user = await requireUser();
+  if (!user.isAdmin && !user.isSuperAdmin) throw new Error("רק מנהל מערכת יכול לשנות תקרה");
+  if (!user.battalionId) return;
+  const cap = Math.max(0, Math.min(20, parseInt(String(formData.get("cap") || "2"), 10) || 0));
+  await prisma.battalion.update({ where: { id: user.battalionId }, data: { defaultDelegateCap: cap } });
+  await audit(user.id, "SET_DEFAULT_DELEGATE_CAP", "Battalion", user.battalionId, { cap });
   revalidatePath("/team");
 }

@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { Card } from "@/components/ui";
 import InviteLink from "@/components/InviteLink";
-import { appointSubUser, removeSubUser, setDelegateCap } from "./actions";
+import { appointSubUser, removeSubUser, setDelegateCap, setDefaultDelegateCap } from "./actions";
 
-type SubUser = { id: string; username: string; fullName: string; phone: string | null; passwordSet: boolean; inviteToken: string | null; telegramLinked: boolean };
+type SubUser = { id: string; username: string; fullName: string; phone: string | null; passwordSet: boolean; inviteToken: string | null; telegramLinked: boolean; area?: string };
 type SquadCmd = SubUser & { squadName: string };
 type SoldierOpt = { id: string; fullName: string; squadId: string | null; telegramLinked: boolean };
 type SquadOpt = { id: string; name: string };
@@ -45,6 +45,7 @@ function AppointForm({ holder, apptType }: { holder: Holder; apptType: "rep" | "
   const [username, setUsername] = useState("");
   const [manualName, setManualName] = useState("");
   const [squadId, setSquadId] = useState("");
+  const [area, setArea] = useState("general");
 
   const label = apptType === "squad" ? "מפקד מחלקה" : apptType === "deputy" ? "סגן" : "רס״פ";
   // לטובת מפקד מחלקה — אם נבחרה מחלקה, מסנן חיילים לפיה
@@ -54,11 +55,22 @@ function AppointForm({ holder, apptType }: { holder: Holder; apptType: "rep" | "
   return (
     <form
       action={appointSubUser}
-      onSubmit={() => { setSoldierId(""); setUsername(""); setManualName(""); setSquadId(""); }}
+      onSubmit={() => { setSoldierId(""); setUsername(""); setManualName(""); setSquadId(""); setArea("general"); }}
       className="px-4 py-3 border-t border-slate-100 bg-slate-50/50 flex flex-wrap items-end gap-2"
     >
       <input type="hidden" name="holderId" value={holder.id} />
       <input type="hidden" name="apptType" value={apptType} />
+      {apptType === "rep" && (
+        <div>
+          <label className="block text-[11px] text-slate-500 mb-0.5">תחום</label>
+          <select name="apptArea" value={area} onChange={(e) => setArea(e.target.value)}
+            className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white min-w-[8rem]">
+            <option value="general">כללי (הכל)</option>
+            <option value="equip">רס״פ מחסן</option>
+            <option value="personnel">רס״פ שלישות</option>
+          </select>
+        </div>
+      )}
       {apptType === "squad" && (
         <div>
           <label className="block text-[11px] text-slate-500 mb-0.5">מחלקה</label>
@@ -118,7 +130,7 @@ function HolderCard({ holder, baseUrl, isAdmin }: { holder: Holder; baseUrl: str
 
       {/* רספ"ים / סגנים */}
       <div className="divide-y divide-slate-100">
-        {holder.subUsers.map((u) => <PersonRow key={u.id} u={u} baseUrl={baseUrl} inviteRole={isWarehouse ? null : "rep"} />)}
+        {holder.subUsers.map((u) => <PersonRow key={u.id} u={u} baseUrl={baseUrl} inviteRole={isWarehouse ? null : "rep"} suffix={!isWarehouse && u.area && u.area !== "כללי" ? u.area : undefined} />)}
         {holder.subUsers.length === 0 && <div className="px-4 py-2 text-xs text-slate-400">טרם מונו {roleLabel}ים.</div>}
       </div>
       {atCap ? (
@@ -157,14 +169,20 @@ function HolderCard({ holder, baseUrl, isAdmin }: { holder: Holder; baseUrl: str
   );
 }
 
-export default function TeamClient({ holders, baseUrl, isAdmin }: { holders: Holder[]; baseUrl: string; isAdmin: boolean }) {
+export default function TeamClient({ holders, baseUrl, isAdmin, defaultCap }: { holders: Holder[]; baseUrl: string; isAdmin: boolean; defaultCap: number }) {
   const companies = holders.filter((h) => h.kind === "COMPANY");
   const warehouses = holders.filter((h) => h.kind === "WAREHOUSE");
   return (
     <div className="space-y-4">
       {isAdmin && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900">
-          💡 תמונת-על: כל היחידות בגדוד עם רספ״ים/סגנים/מפקדי מחלקות מול התקרה. אדום = הגעה לתקרה. אפשר לשנות תקרה פר-יחידה.
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900 space-y-2">
+          <div>💡 תמונת-על: כל היחידות בגדוד עם רספ״ים/סגנים/מפקדי מחלקות מול התקרה. אדום = הגעה לתקרה.</div>
+          <form action={setDefaultDelegateCap} className="flex items-center gap-2 border-t border-blue-200 pt-2">
+            <span className="font-medium">תקרת ברירת מחדל לגדוד:</span>
+            <input name="cap" type="number" min={0} max={20} defaultValue={defaultCap} className="w-16 rounded border border-blue-300 px-2 py-0.5 text-xs" />
+            <button className="text-blue-700 font-medium hover:underline">שמור</button>
+            <span className="text-blue-500">חלה על יחידות ללא תקרה משלהן. אפשר לשנות פר-יחידה בכל כרטיס.</span>
+          </form>
         </div>
       )}
       {companies.length > 0 && (

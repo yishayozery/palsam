@@ -135,6 +135,7 @@ model Battalion {
   emailToBattalion            Boolean @default(true) // האם לשלוח התראות גם למייל הגדוד (בנוסף למחסן/פלוגה)
   armoryTestUrl               String? // קישור למבחן נוהל ארמון חיצוני (אם יש)
   drivingRefreshDays          Int     @default(180) // ימי תוקף ריענון נהיגה
+  defaultDelegateCap          Int     @default(2) // תקרת ברירת מחדל לרספ"ים/סגנים ליחידה (Holder.delegateCap גובר)
   attendanceReminderEnabled   Boolean @default(false) // תזכורת בוקר אוטומטית לדיווח נוכחות
   attendanceReminderText      String? // טקסט מותאם לתזכורת (אופציונלי)
   telegramBotToken            String? // טוקן בוט טלגרם לשליחת הודעות אוטומטיות

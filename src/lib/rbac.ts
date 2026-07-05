@@ -252,6 +252,10 @@ function buildPerms(
     .filter((p) => p.level !== ("NONE" as PermissionLevel));
 }
 
+// שמות תפקידי-התחום להאצלת רס"פ (מקור אמת אחד — משמש גם ב-team/actions)
+export const AREA_ROLE_EQUIP = 'רס"פ מחסן';        // תחום לוגיסטי — החתמות, ספירות, מסירות
+export const AREA_ROLE_PERSONNEL = 'רס"פ שלישות';  // תחום כ"א — חיילים, נוכחות, שבצ"ק
+
 export const PRESET_ROLES: {
   name: string; isAdmin: boolean; isCommander: boolean; sortOrder: number;
   permissions: { screen: Screen; level: PermissionLevel }[];
@@ -370,6 +374,28 @@ export const PRESET_ROLES: {
       { screen: "signatures", level: "EDIT" }, { screen: "counts", level: "EDIT" },
       { screen: "gaps", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
       { screen: "reports", level: "VIEW" },
+    ],
+  },
+
+  // ===== רספ"ים לפי תחום (להאצלה מ-/team) =====
+  {
+    // רס"פ מחסן — לוגיסטיקה פלוגתית (החתמות, ספירות, מסירות)
+    name: AREA_ROLE_EQUIP, isAdmin: false, isCommander: false, sortOrder: 13,
+    permissions: [
+      { screen: "dashboard", level: "VIEW" }, { screen: "signatures", level: "EDIT" },
+      { screen: "counts", level: "EDIT" }, { screen: "gaps", level: "EDIT" },
+      { screen: "transfers", level: "EDIT" }, { screen: "stock", level: "VIEW" },
+      { screen: "ymach", level: "EDIT" }, { screen: "donations", level: "EDIT" },
+      { screen: "reports", level: "VIEW" },
+    ],
+  },
+  {
+    // רס"פ שלישות — כוח אדם פלוגתי (חיילים, נוכחות)
+    name: AREA_ROLE_PERSONNEL, isAdmin: false, isCommander: false, sortOrder: 14,
+    permissions: [
+      { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
+      { screen: "attendance", level: "EDIT" }, { screen: "certifications", level: "VIEW" },
+      { screen: "dispatch", level: "EDIT" }, { screen: "reports", level: "VIEW" },
     ],
   },
 ];

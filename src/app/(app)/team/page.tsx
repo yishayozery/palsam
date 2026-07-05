@@ -13,6 +13,9 @@ export default async function TeamPage() {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
   const isAdmin = user.isAdmin || user.isSuperAdmin;
 
+  const battalion = bId ? await prisma.battalion.findUnique({ where: { id: bId }, select: { defaultDelegateCap: true } }) : null;
+  const defaultCap = battalion?.defaultDelegateCap ?? DEFAULT_DELEGATE_CAP;
+
   // מנהל מערכת רואה את כל היחידות (תמונת-על); מנהל יחידה רואה את שלו בלבד.
   const holders = bId
     ? await prisma.holder.findMany({
@@ -33,7 +36,7 @@ export default async function TeamPage() {
     ? await Promise.all([
         prisma.appUser.findMany({
           where: { holderId: { in: holderIds }, active: true, id: { not: user.id } },
-          select: { id: true, username: true, fullName: true, phone: true, holderId: true, passwordSet: true, inviteToken: true, systemRoleId: true, soldier: { select: { telegramChatId: true } } },
+          select: { id: true, username: true, fullName: true, phone: true, holderId: true, passwordSet: true, inviteToken: true, systemRole: { select: { name: true } }, soldier: { select: { telegramChatId: true } } },
           orderBy: { createdAt: "asc" },
         }),
         prisma.soldier.findMany({
@@ -51,7 +54,7 @@ export default async function TeamPage() {
   const cmdSquadByUser = new Map((squadCmdLinks as { userId: string; squadId: string }[]).map((l) => [l.userId, l.squadId]));
   const squadNameById = new Map((squads as { id: string; name: string }[]).map((s) => [s.id, s.name]));
 
-  type U = { id: string; username: string; fullName: string; phone: string | null; holderId: string | null; passwordSet: boolean; inviteToken: string | null; systemRoleId: string | null; soldier: { telegramChatId: string | null } | null };
+  type U = { id: string; username: string; fullName: string; phone: string | null; holderId: string | null; passwordSet: boolean; inviteToken: string | null; systemRole: { name: string } | null; soldier: { telegramChatId: string | null } | null };
   const allUsers = subUsers as U[];
 
   const data = holders.map((h) => {
@@ -64,11 +67,12 @@ export default async function TeamPage() {
       id: h.id,
       kind: h.kind,
       name: h.name,
-      cap: h.delegateCap ?? DEFAULT_DELEGATE_CAP,
+      cap: h.delegateCap ?? defaultCap,
       capIsDefault: h.delegateCap == null,
       subUsers: reps.map((u) => ({
         id: u.id, username: u.username, fullName: u.fullName, phone: u.phone,
         passwordSet: u.passwordSet, inviteToken: u.inviteToken, telegramLinked: !!u.soldier?.telegramChatId,
+        area: u.systemRole?.name ?? "כללי",
       })),
       squadCommanders: squadCmds.map((u) => ({
         id: u.id, username: u.username, fullName: u.fullName, phone: u.phone,
@@ -96,7 +100,7 @@ export default async function TeamPage() {
           אינך מנהל יחידה (פלוגה/מחסן) שאפשר למנות אליה צוות. אם זו טעות — פנה למנהל המערכת.
         </Card>
       ) : (
-        <TeamClient holders={data} baseUrl={baseUrl} isAdmin={isAdmin} />
+        <TeamClient holders={data} baseUrl={baseUrl} isAdmin={isAdmin} defaultCap={defaultCap} />
       )}
     </div>
   );
