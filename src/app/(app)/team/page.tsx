@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card } from "@/components/ui";
+import PeopleTabs from "@/components/PeopleTabs";
 import TeamClient from "./TeamClient";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ export default async function TeamPage() {
           orderBy: { createdAt: "asc" },
         }),
         prisma.soldier.findMany({
-          where: { companyId: { in: holderIds } },
+          where: { battalionId: bId!, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
           select: { id: true, fullName: true, companyId: true, squadId: true, telegramChatId: true },
           orderBy: { fullName: "asc" },
         }),
@@ -83,8 +84,9 @@ export default async function TeamPage() {
       squads: (squads as { id: string; name: string; companyId: string }[])
         .filter((s) => s.companyId === h.id && !takenSquadIds.has(s.id))
         .map((s) => ({ id: s.id, name: s.name })),
-      soldiers: (soldiers as { id: string; fullName: string; companyId: string | null; squadId: string | null; telegramLinked?: boolean; telegramChatId: string | null }[])
-        .filter((s) => s.companyId === h.id && !linkedSet.has(s.id))
+      // פלוגה → חיילי הפלוגה; מחסן → כל חיילי הגדוד (למחסן אין חיילים משויכים). ללא חיילים שכבר מקושרים למשתמש.
+      soldiers: (soldiers as { id: string; fullName: string; companyId: string | null; squadId: string | null; telegramChatId: string | null }[])
+        .filter((s) => (h.kind === "WAREHOUSE" ? true : s.companyId === h.id) && !linkedSet.has(s.id))
         .map((s) => ({ id: s.id, fullName: s.fullName, squadId: s.squadId, telegramLinked: !!s.telegramChatId })),
     };
   });
@@ -95,6 +97,7 @@ export default async function TeamPage() {
         title="🧑‍🤝‍🧑 הצוות שלי"
         subtitle={isAdmin ? "מבנה ארגוני — רספ״ים, סגנים ומפקדי מחלקות מול תקרה" : "מינוי רספ״ים, סגנים ומפקדי מחלקות — עם הזמנה בטלגרם"}
       />
+      <PeopleTabs active="team" />
       {data.length === 0 ? (
         <Card className="p-6 text-center text-slate-400 text-sm">
           אינך מנהל יחידה (פלוגה/מחסן) שאפשר למנות אליה צוות. אם זו טעות — פנה למנהל המערכת.

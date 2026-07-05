@@ -39,23 +39,30 @@ function PersonRow({ u, baseUrl, inviteRole, suffix }: { u: SubUser; baseUrl: st
   );
 }
 
-// טופס מינוי משותף (רס"פ / סגן / מפקד מחלקה)
+// טופס מינוי משותף (רס"פ / סגן / מפקד מחלקה) — בחירת שם רק מרשימת החיילים (ללא הקמה ידנית)
 function AppointForm({ holder, apptType }: { holder: Holder; apptType: "rep" | "deputy" | "squad" }) {
   const [soldierId, setSoldierId] = useState("");
   const [username, setUsername] = useState("");
-  const [manualName, setManualName] = useState("");
   const [squadId, setSquadId] = useState("");
   const [area, setArea] = useState("general");
 
   const label = apptType === "squad" ? "מפקד מחלקה" : apptType === "deputy" ? "סגן" : "רס״פ";
-  // לטובת מפקד מחלקה — אם נבחרה מחלקה, מסנן חיילים לפיה
+  // למפקד מחלקה — אם נבחרה מחלקה, מסנן חיילים לפיה
   const soldiers = apptType === "squad" && squadId ? holder.soldiers.filter((s) => s.squadId === squadId) : holder.soldiers;
   const selected = holder.soldiers.find((s) => s.id === soldierId);
+
+  if (holder.soldiers.length === 0) {
+    return (
+      <div className="px-4 py-2.5 text-xs text-slate-400 border-t border-slate-100">
+        אין חיילים זמינים למינוי. הוסף חייל תחילה ב״חיילי הפלוגה״.
+      </div>
+    );
+  }
 
   return (
     <form
       action={appointSubUser}
-      onSubmit={() => { setSoldierId(""); setUsername(""); setManualName(""); setSquadId(""); setArea("general"); }}
+      onSubmit={() => { setSoldierId(""); setUsername(""); setSquadId(""); setArea("general"); }}
       className="px-4 py-3 border-t border-slate-100 bg-slate-50/50 flex flex-wrap items-end gap-2"
     >
       <input type="hidden" name="holderId" value={holder.id} />
@@ -74,7 +81,7 @@ function AppointForm({ holder, apptType }: { holder: Holder; apptType: "rep" | "
       {apptType === "squad" && (
         <div>
           <label className="block text-[11px] text-slate-500 mb-0.5">מחלקה</label>
-          <select name="squadId" required value={squadId} onChange={(e) => { setSquadId(e.target.value); setSoldierId(""); }}
+          <select name="squadId" required value={squadId} onChange={(e) => { setSquadId(e.target.value); setSoldierId(""); setUsername(""); }}
             className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white min-w-[7rem]">
             <option value="">— בחר —</option>
             {holder.squads.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -82,30 +89,25 @@ function AppointForm({ holder, apptType }: { holder: Holder; apptType: "rep" | "
         </div>
       )}
       <div>
-        <label className="block text-[11px] text-slate-500 mb-0.5">חייל {soldiers.length === 0 && "(מלא ידנית)"}</label>
-        <select name="soldierId" value={soldierId}
-          onChange={(e) => { setSoldierId(e.target.value); const s = soldiers.find((x) => x.id === e.target.value); if (s) { setUsername(suggestUsername(s.fullName)); setManualName(""); } }}
-          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white min-w-[9rem]">
-          <option value="">— ידני —</option>
+        <label className="block text-[11px] text-slate-500 mb-0.5">חייל</label>
+        <select name="soldierId" required value={soldierId}
+          onChange={(e) => { setSoldierId(e.target.value); const s = soldiers.find((x) => x.id === e.target.value); setUsername(s ? suggestUsername(s.fullName) : ""); }}
+          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white min-w-[10rem]">
+          <option value="">— בחר חייל —</option>
           {soldiers.map((s) => <option key={s.id} value={s.id}>{s.fullName}{s.telegramLinked ? " 📲" : ""}</option>)}
         </select>
       </div>
-      {!soldierId && (
-        <div>
-          <label className="block text-[11px] text-slate-500 mb-0.5">שם מלא</label>
-          <input name="fullName" value={manualName} onChange={(e) => { setManualName(e.target.value); if (!username) setUsername(suggestUsername(e.target.value)); }}
-            className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm w-28" />
-        </div>
-      )}
       <div>
         <label className="block text-[11px] text-slate-500 mb-0.5">שם משתמש</label>
         <input name="username" required value={username} onChange={(e) => setUsername(e.target.value)}
           className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm w-24 font-mono" />
       </div>
       <button className="bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-4 py-1.5 text-sm font-medium">מנה {label}</button>
-      {selected?.telegramLinked
-        ? <span className="text-[11px] text-sky-600">📲 יישלח בטלגרם</span>
-        : <span className="text-[11px] text-slate-400">לינק לוואטסאפ</span>}
+      {apptType === "squad" && squadId && soldiers.length === 0
+        ? <span className="text-[11px] text-amber-600">אין חיילים במחלקה זו</span>
+        : selected?.telegramLinked
+          ? <span className="text-[11px] text-sky-600">📲 יישלח בטלגרם</span>
+          : <span className="text-[11px] text-slate-400">לינק לוואטסאפ</span>}
     </form>
   );
 }

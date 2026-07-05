@@ -3,6 +3,7 @@ import { can, canEdit } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui";
+import PeopleTabs from "@/components/PeopleTabs";
 import CrudSection from "@/components/CrudSection";
 import { saveCertificationType, toggleCertificationType } from "./actions";
 import CertificationEditor from "./CertificationEditor";
@@ -55,6 +56,7 @@ export default async function CertificationsPage({
         title="הסמכות"
         subtitle={`${soldiers.length} חיילים · ${certTypes.length} סוגי הסמכות`}
       />
+      <PeopleTabs active="certifications" />
 
       <div className="flex gap-1 mb-4 border-b border-slate-200">
         {TABS.map((t) => (

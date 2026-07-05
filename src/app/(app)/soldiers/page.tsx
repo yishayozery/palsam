@@ -8,6 +8,7 @@ import { importSoldiers } from "./import-actions";
 import SoldierEquipmentButton from "./SoldierEquipmentButton";
 import CompanyFilter from "./CompanyFilter";
 import AttachmentRequestSection from "./AttachmentRequestSection";
+import PeopleTabs from "@/components/PeopleTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -247,6 +248,7 @@ export default async function SoldiersPage({
         subtitle="לחץ '🪖 ציוד חתום' ליד כל חייל לפירוט הציוד, התאריכים ומי החתים"
         action={<ImportExcel action={importSoldiers} templateHref="/soldiers/template" label="ייבוא חיילים" />}
       />
+      <PeopleTabs active="soldiers" />
       {!isCompanyHolder && user.squadIds.length === 0 && companies.length > 0 && effectiveCompanyId && (
         <CompanyFilter companies={companies} selectedId={effectiveCompanyId} />
       )}

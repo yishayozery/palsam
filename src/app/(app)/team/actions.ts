@@ -102,6 +102,7 @@ export async function appointSubUser(formData: FormData) {
       telegramChatId = soldier.telegramChatId;
     }
   }
+  if (!soldierId) throw new Error("יש לבחור חייל מהרשימה (אין הקמה ידנית)");
   if (!fullName || !enteredUsername) throw new Error("חסר שם או שם משתמש");
 
   // ===== קביעת תפקיד + אכיפת תקרה לפי סוג המינוי =====
