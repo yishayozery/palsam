@@ -94,6 +94,7 @@ export default async function TeamPage() {
   return (
     <div>
       <PageHeader
+        helpKey="team"
         title="🧑‍🤝‍🧑 הצוות שלי"
         subtitle={isAdmin ? "מבנה ארגוני — רספ״ים, סגנים ומפקדי מחלקות מול תקרה" : "מינוי רספ״ים, סגנים ומפקדי מחלקות — עם הזמנה בטלגרם"}
       />

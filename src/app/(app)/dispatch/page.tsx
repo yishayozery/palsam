@@ -93,6 +93,7 @@ export default async function DispatchPage() {
   return (
     <div>
       <PageHeader
+        helpKey="dispatch"
         title="🚗 שבצ&quot;ק - שיבוץ רכבים"
         subtitle="שיבוץ חיילים לרכב למשימה. ניתן לצפייה ועריכה ע&quot;י כל המשתמשים."
       />

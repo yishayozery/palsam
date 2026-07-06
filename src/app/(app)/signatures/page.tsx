@@ -302,6 +302,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
   return (
     <div>
       <PageHeader
+        helpKey="signatures"
         title={isMafam ? "החתמות פלוגה / חייל" : "חתימות חיילים"}
         subtitle={isMafam ? "כל ההחתמות של פלוגות וחיילים בגדוד — מעקב והיסטוריה" : "החתמה דיגיטלית (QR/וואטסאפ/שרבוט) וזיכוי מהיר"}
         action={

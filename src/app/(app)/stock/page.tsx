@@ -171,6 +171,7 @@ export default async function StockPage({
   return (
     <div>
       <PageHeader
+        helpKey="stock"
         title={isScoped ? "מלאי המחסן" : "מלאי הגדוד"}
         subtitle={isScoped
           ? `המלאי במחסניך בלבד (${myWarehouseTypes.length} מחסנים)`

@@ -32,16 +32,12 @@ export default function SupportClient({ isAdmin, isSuperAdmin, waLink, config, q
         <Card className="p-4 bg-amber-50 border-amber-200">
           <h3 className="font-bold text-amber-900 text-sm mb-2">⚙️ הגדרת כפתור ווטסאפ (אדמין-על, גלובלי)</h3>
           <form action={saveSupportConfig} className="space-y-2">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="supportWhatsappEnabled" defaultChecked={config.enabled} className="w-4 h-4 accent-emerald-600" />
-              <span className="font-medium">הצג כפתור עזרה בוואטסאפ לכל המפקדים</span>
-            </label>
             <input name="supportWhatsappNumber" defaultValue={config.number} placeholder="מספר בינ״ל ללא + (למשל 972501234567)"
               className="w-full rounded-lg border border-amber-300 px-3 py-2 text-sm" />
             <input name="supportMessage" defaultValue={config.message} placeholder="טקסט פתיחה (אופציונלי)"
               className="w-full rounded-lg border border-amber-300 px-3 py-2 text-sm" />
             <button className="bg-amber-700 hover:bg-amber-800 text-white rounded-lg px-4 py-2 text-sm font-medium">💾 שמור</button>
-            <p className="text-[11px] text-amber-700">💡 מומלץ להפעיל בעיקר בעלייה לאוויר.</p>
+            <p className="text-[11px] text-amber-700">💡 יש מספר → הכפתור מופיע לכל המפקדים. ריק → אין תמיכת ווטסאפ.</p>
           </form>
         </Card>
       )}

@@ -149,6 +149,7 @@ export default async function CountsPage() {
   return (
     <div>
       <PageHeader
+        helpKey="counts"
         title="ספירות מלאי"
         subtitle="המשימות שלך + תכניות המפ״מ + ביצוע ספירה ידנית"
         action={

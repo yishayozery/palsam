@@ -214,6 +214,7 @@ export default async function MyInventoryPage({
       )}
 
       <PageHeader
+        helpKey="my-inventory"
         title={`המלאי שלי — ${company?.name ?? ""}`}
         subtitle="כל הציוד שאתה חתום עליו מול הגדוד והמחסנים"
         action={

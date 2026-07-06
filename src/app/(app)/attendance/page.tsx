@@ -254,6 +254,7 @@ export default async function AttendancePage({
   return (
     <div>
       <PageHeader
+        helpKey="attendance"
         title={pageTitle}
         subtitle={mode === "plan" ? "תוכנית עבודה — תכנון נוכחות קדימה" : "ביצוע בפועל — נוכחות אמיתית"}
       />

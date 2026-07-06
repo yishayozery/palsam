@@ -62,7 +62,7 @@ export default async function WarehousesPage() {
 
   return (
     <div>
-      <PageHeader title="מחסנים" subtitle="בחר מחסן לניהול מלאי, החתמות ודוחות — לפי ההרשאות שלך" />
+      <PageHeader helpKey="warehouses" title="מחסנים" subtitle="בחר מחסן לניהול מלאי, החתמות ודוחות — לפי ההרשאות שלך" />
 
       {whStats.length > 0 && (
         <>

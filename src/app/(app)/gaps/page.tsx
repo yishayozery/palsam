@@ -62,6 +62,7 @@ export default async function GapsPage() {
   return (
     <div>
       <PageHeader
+        helpKey="gaps"
         title="ניהול פערים"
         subtitle="חוסרים וחריגות מספירות — אישור ע״י מחולל הספירה או מנהל המערכת"
       />

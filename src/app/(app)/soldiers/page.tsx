@@ -244,6 +244,7 @@ export default async function SoldiersPage({
   return (
     <div>
       <PageHeader
+        helpKey="soldiers"
         title="חיילים"
         subtitle="לחץ '🪖 ציוד חתום' ליד כל חייל לפירוט הציוד, התאריכים ומי החתים"
         action={<ImportExcel action={importSoldiers} templateHref="/soldiers/template" label="ייבוא חיילים" />}

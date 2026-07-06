@@ -47,8 +47,8 @@ export async function deleteQuestion(formData: FormData) {
 export async function saveSupportConfig(formData: FormData) {
   const user = await requireUser();
   if (!user.isSuperAdmin) return;
-  const enabled = formData.get("supportWhatsappEnabled") === "on";
   const number = String(formData.get("supportWhatsappNumber") || "").replace(/\D/g, "") || null;
+  const enabled = !!number; // נוכחות מספר = מופעל
   const message = String(formData.get("supportMessage") || "").trim() || null;
   await prisma.appConfig.upsert({
     where: { id: "singleton" },
