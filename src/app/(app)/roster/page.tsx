@@ -62,6 +62,7 @@ export default async function RosterPage({
   return (
     <div>
       <PageHeader
+        helpKey="roster"
         title="שלישות — חיילי הגדוד"
         subtitle="ניהול רשימת חיילים. רק חיילים שאושרו (גויסו) יכולים לחתום על ציוד."
       />
