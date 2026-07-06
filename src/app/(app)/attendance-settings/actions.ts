@@ -12,9 +12,11 @@ export async function saveAttendanceReminder(formData: FormData) {
   if (!can(user, "attendance.manage") && !can(user, "battalion.profile")) return;
   const enabled = formData.get("enabled") === "on";
   const text = String(formData.get("text") || "").trim() || null;
+  const deadlineRaw = String(formData.get("deadline") || "").trim();
+  const deadline = /^\d{1,2}:\d{2}$/.test(deadlineRaw) ? deadlineRaw : null;
   await prisma.battalion.update({
     where: { id: user.battalionId! },
-    data: { attendanceReminderEnabled: enabled, attendanceReminderText: text },
+    data: { attendanceReminderEnabled: enabled, attendanceReminderText: text, attendanceDeadline: deadline },
   });
   await audit(user.id, "UPDATE_ATTENDANCE_REMINDER", "Battalion", user.battalionId!, { enabled });
   revalidatePath("/attendance-settings");

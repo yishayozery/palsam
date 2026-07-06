@@ -15,7 +15,7 @@ export default async function AttendanceSettingsPage() {
 
   const battalion = await prisma.battalion.findUnique({
     where: { id: bId },
-    select: { attendanceReminderEnabled: true, attendanceReminderText: true, telegramBotToken: true },
+    select: { attendanceReminderEnabled: true, attendanceReminderText: true, attendanceDeadline: true, telegramBotToken: true },
   });
   const reporterCount = await prisma.appUser.count({
     where: { battalionId: bId, active: true, role: "COMPANY_REP", soldier: { is: { telegramChatId: { not: null } } } },
@@ -49,18 +49,25 @@ export default async function AttendanceSettingsPage() {
       <Card className="p-4 mb-4 bg-blue-50 border-blue-200">
         <h3 className="font-bold text-blue-900 text-sm mb-1">🗓️ תזכורת בוקר לדיווח נוכחות</h3>
         <p className="text-xs text-blue-800 mb-3">
-          כשמופעל, כל בוקר נשלח טלגרם למדווחי הפלוגות (רס״פ עם טלגרם מקושר) עם לינק לדיווח נוכחות.
-          {" "}כרגע <b>{reporterCount}</b> מדווחים יקבלו.
+          כשמופעל, ב-<b>07:00</b> נשלח טלגרם למדווחי הפלוגות (מפ/רס״פ) ולמפקדי המחלקות (כל מפקד על המחלקה שלו; השאר על אחריות המפ/רס״פ).
+          {" "}אם הוגדרה <b>שעת גג</b>, חצי שעה לפניה נשלחת תזכורת חוזרת רק למי שטרם דיווח.
+          {" "}כרגע <b>{reporterCount}</b> מדווחי פלוגה מקושרים לטלגרם.
           {!battalion?.telegramBotToken && <span className="text-rose-600"> ⚠️ בוט טלגרם לא מוגדר בגדוד.</span>}
         </p>
         <form action={saveAttendanceReminder} className="space-y-2">
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="enabled" defaultChecked={battalion?.attendanceReminderEnabled ?? false} className="w-4 h-4 rounded accent-blue-600" />
-            <span className="font-medium text-blue-900">הפעל תזכורת בוקר יומית</span>
+            <span className="font-medium text-blue-900">הפעל תזכורות דיווח נוכחות</span>
           </label>
-          <input name="text" defaultValue={battalion?.attendanceReminderText ?? ""} placeholder="טקסט מותאם (אופציונלי) — למשל: בוקר טוב, דווחו נוכחות עד 09:00"
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-blue-900 font-medium">🕘 שעת גג לדיווח:</span>
+            <input type="time" name="deadline" defaultValue={battalion?.attendanceDeadline ?? ""} step={1800}
+              className="rounded-lg border border-blue-300 px-2 py-1.5 text-sm" />
+            <span className="text-[11px] text-blue-700">תזכורת חוזרת תישלח חצי שעה לפני (ריק = ללא תזכורת חוזרת)</span>
+          </div>
+          <input name="text" defaultValue={battalion?.attendanceReminderText ?? ""} placeholder="טקסט פתיחה מותאם (אופציונלי) — למשל: בוקר טוב, דווחו נוכחות"
             className="w-full rounded-lg border border-blue-300 px-3 py-2 text-sm" />
-          <button className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-4 py-2 text-sm font-medium">💾 שמור תזכורת</button>
+          <button className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-4 py-2 text-sm font-medium">💾 שמור הגדרות</button>
         </form>
       </Card>
 

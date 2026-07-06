@@ -139,6 +139,7 @@ model Battalion {
   supportWhatsapp             String? // מספר ווטסאפ תמיכה לגדוד זה (בינ"ל, גובר על ההגדרה הגלובלית)
   attendanceReminderEnabled   Boolean @default(false) // תזכורת בוקר אוטומטית לדיווח נוכחות
   attendanceReminderText      String? // טקסט מותאם לתזכורת (אופציונלי)
+  attendanceDeadline          String? // שעת גג לדיווח נוכחות (HH:mm) — תזכורת חוזרת חצי שעה לפני
   telegramBotToken            String? // טוקן בוט טלגרם לשליחת הודעות אוטומטיות
   telegramBotInfo             String? // מידע כללי שהבוט ישלח (ארוחות, תפילות, טלפונים)
   telegramBotUsername         String? // username של הבוט (מתעדכן אוטומטית ברישום webhook)
