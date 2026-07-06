@@ -39,7 +39,8 @@ export async function toggleCertificationType(formData: FormData) {
 
 export async function saveSoldierCertifications(formData: FormData) {
   const user = await requireUser();
-  if (!canEdit(user, "certifications")) return;
+  // הצמדת הסמכות לחייל = ניהול חיילים (מפ/מפמ/אדמין). לא דורש הרשאת עריכה על מסך "הסמכות".
+  if (!canEdit(user, "soldiers")) return;
   const bId = user.battalionId!;
 
   const soldierId = String(formData.get("soldierId") || "");
@@ -61,4 +62,5 @@ export async function saveSoldierCertifications(formData: FormData) {
   });
   await audit(user.id, "UPDATE_CERTIFICATIONS", "Soldier", soldierId, { count: certTypeIds.length });
   revalidatePath("/certifications");
+  revalidatePath("/soldiers");
 }

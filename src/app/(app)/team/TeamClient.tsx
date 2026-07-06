@@ -9,8 +9,12 @@ type SubUser = { id: string; username: string; fullName: string; phone: string |
 type SquadCmd = SubUser & { squadName: string };
 type SoldierOpt = { id: string; fullName: string; squadId: string | null; telegramLinked: boolean };
 type SquadOpt = { id: string; name: string };
+type Commander = { name: string; role: string };
+type SquadStruct = { name: string; leader: Commander | null; memberCount: number };
+type Hierarchy = { commanders: Commander[]; squads: SquadStruct[]; total: number } | null;
 type Holder = {
   id: string; kind: string; name: string; cap: number; capIsDefault: boolean;
+  hierarchy?: Hierarchy;
   subUsers: SubUser[]; squadCommanders: SquadCmd[]; squads: SquadOpt[]; soldiers: SoldierOpt[];
 };
 
@@ -129,6 +133,37 @@ function HolderCard({ holder, baseUrl, isAdmin }: { holder: Holder; baseUrl: str
           {holder.subUsers.length}/{holder.cap}
         </span>
       </div>
+
+      {/* מבנה פיקוד — נבנה מתפקידי החיילים (מפ/ס.מפ/מ"מ). רק לפלוגות. */}
+      {!isWarehouse && holder.hierarchy && (
+        <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-l from-amber-50/50 to-transparent">
+          <div className="text-[11px] font-bold text-slate-500 mb-2">🎖️ מבנה פיקוד <span className="font-normal text-slate-400">({holder.hierarchy.total} חיילים)</span></div>
+          {holder.hierarchy.commanders.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {holder.hierarchy.commanders.map((c, i) => (
+                <span key={i} className="text-xs bg-amber-100 text-amber-800 rounded-full px-2.5 py-1 font-medium">⭐ {c.role}: {c.name}</span>
+              ))}
+            </div>
+          ) : (
+            <div className="text-[11px] text-slate-400 mb-2">לא הוגדרו מפ/ס.מפ — סמן תפקיד פיקודי (ללא מחלקה) לחייל במסך חיילים.</div>
+          )}
+          {holder.hierarchy.squads.length > 0 ? (
+            <div className="space-y-1">
+              {holder.hierarchy.squads.map((sq, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className="font-medium text-indigo-700 bg-indigo-50 rounded px-2 py-0.5 min-w-[4.5rem] text-center">{sq.name}</span>
+                  {sq.leader
+                    ? <span className="text-slate-600">מ״מ: <b>{sq.leader.name}</b></span>
+                    : <span className="text-slate-400">טרם מונה מ״מ</span>}
+                  <span className="text-slate-400 mr-auto">{sq.memberCount} חיילים</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-[11px] text-slate-400">לא הוגדרו מחלקות. הגדר במסך חיילים ← מחלקות.</div>
+          )}
+        </div>
+      )}
 
       {/* רספ"ים / סגנים */}
       <div className="divide-y divide-slate-100">

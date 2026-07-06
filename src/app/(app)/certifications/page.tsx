@@ -2,79 +2,40 @@ import { requireUser } from "@/lib/guard";
 import { can, canEdit } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { PageHeader } from "@/components/ui";
+import { PageHeader, Card } from "@/components/ui";
 import PeopleTabs from "@/components/PeopleTabs";
 import CrudSection from "@/components/CrudSection";
 import { saveCertificationType, toggleCertificationType } from "./actions";
-import CertificationEditor from "./CertificationEditor";
 
 export const dynamic = "force-dynamic";
 
-export default async function CertificationsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ tab?: string }>;
-}) {
+export default async function CertificationsPage() {
   const user = await requireUser();
   const canView = can(user, "certifications");
   if (!canView) redirect("/dashboard");
   const bId = user.battalionId!;
-  const { tab = "soldiers" } = await searchParams;
 
-  const canEditCerts = canEdit(user, "certifications");
-  const canManageTypes = canEditCerts;
+  const canManageTypes = canEdit(user, "certifications");
 
-  const [certTypes, soldiers, companies] = await Promise.all([
-    prisma.certificationType.findMany({
-      where: { battalionId: bId, active: true },
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    }),
-    prisma.soldier.findMany({
-      where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
-      orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }],
-      include: {
-        company: { select: { name: true } },
-        squad: { select: { name: true } },
-        certifications: { select: { certificationTypeId: true } },
-      },
-    }),
-    prisma.holder.findMany({
-      where: { battalionId: bId, kind: "COMPANY", active: true },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
-  ]);
-
-  const TABS = [
-    { key: "soldiers", label: "הסמכות פר חייל" },
-    { key: "types", label: "סוגי הסמכות" },
-  ] as const;
+  const certTypes = await prisma.certificationType.findMany({
+    where: { battalionId: bId, active: true },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    include: { _count: { select: { soldiers: true } } },
+  });
 
   return (
     <div>
       <PageHeader
-        title="הסמכות"
-        subtitle={`${soldiers.length} חיילים · ${certTypes.length} סוגי הסמכות`}
+        title="🏅 סוגי הסמכות"
+        subtitle="הגדרת סוגי ההסמכות בגדוד (מטוליסט, נגב, חובש…). ההצמדה לחיילים מתבצעת במסך חיילים."
       />
       <PeopleTabs active="certifications" />
 
-      <div className="flex gap-1 mb-4 border-b border-slate-200">
-        {TABS.map((t) => (
-          <a
-            key={t.key}
-            href={`?tab=${t.key}`}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
-              tab === t.key
-                ? "border-blue-600 text-blue-700"
-                : "border-transparent text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            {t.label}
-          </a>
-        ))}
-      </div>
+      <Card className="p-3 mb-4 bg-blue-50 border-blue-200 text-xs text-blue-900">
+        💡 כאן מגדירים רק את <b>רשימת סוגי ההסמכות</b>. כדי לשייך הסמכה לחייל — עבור למסך <b>חיילי הפלוגה</b> ולחץ על תא ה״הסמכות״ ליד החייל.
+      </Card>
 
-      {tab === "types" && canManageTypes && (
+      {canManageTypes ? (
         <CrudSection
           title="סוגי הסמכות"
           addLabel="סוג הסמכה"
@@ -84,25 +45,24 @@ export default async function CertificationsPage({
           rows={certTypes.map((ct) => ({
             id: ct.id,
             values: { name: ct.name },
-            display: <span className="font-medium">{ct.name}</span>,
+            display: (
+              <span className="flex items-center gap-2">
+                <span className="font-medium">{ct.name}</span>
+                <span className="text-[11px] text-slate-400">· {ct._count.soldiers} חיילים</span>
+              </span>
+            ),
           }))}
         />
-      )}
-
-      {tab === "soldiers" && (
-        <CertificationEditor
-          soldiers={soldiers.map((s) => ({
-            id: s.id,
-            fullName: s.fullName,
-            companyId: s.companyId,
-            companyName: s.company?.name ?? null,
-            squadName: s.squad?.name ?? null,
-            certifications: s.certifications.map((c) => c.certificationTypeId),
-          }))}
-          certTypes={certTypes.map((ct) => ({ id: ct.id, name: ct.name }))}
-          companies={companies.map((c) => ({ id: c.id, name: c.name }))}
-          canEdit={canEditCerts}
-        />
+      ) : (
+        <div className="space-y-2">
+          {certTypes.map((ct) => (
+            <Card key={ct.id} className="px-4 py-2.5 flex items-center gap-2">
+              <span className="font-medium">{ct.name}</span>
+              <span className="text-[11px] text-slate-400">· {ct._count.soldiers} חיילים</span>
+            </Card>
+          ))}
+          {certTypes.length === 0 && <div className="text-sm text-slate-400 p-4">לא הוגדרו סוגי הסמכות.</div>}
+        </div>
       )}
     </div>
   );

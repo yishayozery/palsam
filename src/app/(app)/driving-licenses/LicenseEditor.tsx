@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveSoldierLicenses } from "./actions";
 
@@ -19,8 +19,7 @@ function getRefreshStatus(refresherDate: string | null, refreshDays: number): "o
   if (!refresherDate) return "missing";
   const expiry = new Date(refresherDate);
   expiry.setDate(expiry.getDate() + refreshDays);
-  const now = new Date();
-  const daysLeft = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const daysLeft = Math.ceil((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   if (daysLeft < 0) return "expired";
   if (daysLeft <= 30) return "warning";
   return "ok";
@@ -42,15 +41,24 @@ export default function LicenseEditor({
   const [refresherDate, setRefresherDate] = useState("");
   const [pending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
+  const [onlyDrivers, setOnlyDrivers] = useState(false);
   const router = useRouter();
 
-  const filtered = search.trim()
-    ? soldiers.filter((s) =>
-        s.fullName.toLowerCase().includes(search.trim().toLowerCase()) ||
-        (s.companyName && s.companyName.toLowerCase().includes(search.trim().toLowerCase())) ||
-        (s.squadName && s.squadName.toLowerCase().includes(search.trim().toLowerCase()))
-      )
-    : soldiers;
+  const typeName = useMemo(() => new Map(licenseTypes.map((t) => [t.id, t.name])), [licenseTypes]);
+
+  const filtered = useMemo(() => {
+    let list = soldiers;
+    if (onlyDrivers) list = list.filter((s) => s.licenses.length > 0);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((s) =>
+        s.fullName.toLowerCase().includes(q) ||
+        (s.companyName && s.companyName.toLowerCase().includes(q)) ||
+        (s.squadName && s.squadName.toLowerCase().includes(q)),
+      );
+    }
+    return list;
+  }, [soldiers, search, onlyDrivers]);
 
   function startEdit(s: Soldier) {
     setEditingSoldier(s.id);
@@ -76,121 +84,90 @@ export default function LicenseEditor({
 
   return (
     <div>
-      <input
-        type="text"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="🔍 חיפוש חייל..."
-        className="w-full border rounded-lg px-3 py-2 text-sm mb-3"
-      />
-      <div className="overflow-x-auto bg-white rounded-xl border border-slate-200">
-        <table className="min-w-full text-sm border-collapse">
-          <thead>
-            <tr className="bg-slate-50">
-              <th className="sticky right-0 z-10 bg-slate-50 px-3 py-2 text-right font-medium text-slate-600 border-b min-w-[160px]">חייל</th>
-              <th className="px-3 py-2 text-right font-medium text-slate-600 border-b">פלוגה</th>
-              {licenseTypes.map((lt) => (
-                <th key={lt.id} className="px-2 py-2 text-center font-medium text-slate-600 border-b min-w-[80px]">{lt.name}</th>
-              ))}
-              <th className="px-2 py-2 text-center font-medium text-slate-600 border-b min-w-[120px]">ריענון נהיגה</th>
-              {canEdit && <th className="px-2 py-2 border-b" />}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((s) => {
-              const isEditing = editingSoldier === s.id;
-              const licenseSet = new Set(s.licenses.map((l) => l.licenseTypeId));
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="🔍 חיפוש חייל / פלוגה..."
+          className="flex-1 min-w-[180px] border border-slate-300 rounded-lg px-3 py-2 text-sm"
+        />
+        <label className="flex items-center gap-1.5 text-sm text-slate-600 select-none">
+          <input type="checkbox" checked={onlyDrivers} onChange={(e) => setOnlyDrivers(e.target.checked)} className="rounded" />
+          רק בעלי הרשאה
+        </label>
+      </div>
 
-              return (
-                <tr key={s.id} className={isEditing ? "bg-blue-50/50" : "hover:bg-slate-50"}>
-                  <td className="sticky right-0 z-10 bg-white px-3 py-2 border-b font-medium text-slate-700 whitespace-nowrap">
-                    {s.fullName}
-                  </td>
-                  <td className="px-3 py-2 border-b text-xs text-slate-500 whitespace-nowrap">
-                    {s.companyName}{s.squadName ? ` / ${s.squadName}` : ""}
-                  </td>
-                  {licenseTypes.map((lt) => {
-                    if (isEditing) {
-                      return (
-                        <td key={lt.id} className="px-2 py-2 border-b text-center">
-                          <input
-                            type="checkbox"
-                            checked={selected.has(lt.id)}
-                            onChange={() => {
-                              setSelected((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(lt.id)) next.delete(lt.id);
-                                else next.add(lt.id);
-                                return next;
-                              });
-                            }}
-                            className="rounded"
-                          />
-                        </td>
-                      );
-                    }
-                    const has = licenseSet.has(lt.id);
-                    return (
-                      <td key={lt.id} className="px-2 py-2 border-b text-center">
-                        {has ? <span className="text-green-600 font-bold">✓</span> : <span className="text-slate-200">-</span>}
-                      </td>
-                    );
-                  })}
-                  <td className="px-2 py-2 border-b text-center">
-                    {isEditing ? (
-                      <input
-                        type="date"
-                        value={refresherDate}
-                        onChange={(e) => setRefresherDate(e.target.value)}
-                        className="border rounded px-2 py-1 text-xs w-32"
-                      />
-                    ) : (() => {
-                      const hasLicenses = s.licenses.length > 0;
-                      const status = hasLicenses ? getRefreshStatus(s.drivingRefresherDate, drivingRefreshDays) : "ok";
-                      if (!hasLicenses) return <span className="text-slate-200 text-xs">-</span>;
-                      if (status === "missing") return <span className="text-xs text-rose-600 font-medium">לא בוצע</span>;
-                      if (status === "expired") return <span className="text-xs text-rose-600 font-medium">{new Date(s.drivingRefresherDate!).toLocaleDateString("he-IL")} (פג)</span>;
-                      if (status === "warning") return <span className="text-xs text-amber-600 font-medium">{new Date(s.drivingRefresherDate!).toLocaleDateString("he-IL")} (עומד לפוג)</span>;
-                      return (
-                        <span className="text-xs text-slate-600">
-                          {new Date(s.drivingRefresherDate!).toLocaleDateString("he-IL")}
-                        </span>
-                      );
-                    })()}
-                  </td>
-                  {canEdit && (
-                    <td className="px-2 py-2 border-b text-center">
-                      {isEditing ? (
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => handleSave(s.id)}
-                            disabled={pending}
-                            className="px-2 py-1 bg-blue-600 text-white rounded text-xs disabled:opacity-50"
-                          >
-                            {pending ? "..." : "שמור"}
-                          </button>
-                          <button
-                            onClick={() => setEditingSoldier(null)}
-                            className="px-2 py-1 bg-slate-200 rounded text-xs"
-                          >
-                            ביטול
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => startEdit(s)}
-                          className="text-xs text-blue-600 hover:underline"
-                        >
-                          עריכה
-                        </button>
-                      )}
-                    </td>
+      <div className="space-y-2">
+        {filtered.map((s) => {
+          const isEditing = editingSoldier === s.id;
+          const status = s.licenses.length > 0 ? getRefreshStatus(s.drivingRefresherDate, drivingRefreshDays) : null;
+          return (
+            <div key={s.id} className={`bg-white border rounded-xl p-3 ${isEditing ? "border-blue-300 ring-1 ring-blue-200" : "border-slate-200"}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-medium text-slate-800">{s.fullName}</div>
+                  <div className="text-xs text-slate-500">{s.companyName}{s.squadName ? ` · ${s.squadName}` : ""}</div>
+                </div>
+                {canEdit && !isEditing && (
+                  <button onClick={() => startEdit(s)} className="shrink-0 text-xs bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-lg px-3 py-1.5">
+                    ✏️ עריכה
+                  </button>
+                )}
+              </div>
+
+              {!isEditing && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {s.licenses.length === 0 ? (
+                    <span className="text-xs text-slate-300">אין הרשאות נהיגה</span>
+                  ) : (
+                    <>
+                      {s.licenses.map((l) => (
+                        <span key={l.licenseTypeId} className="text-[11px] bg-slate-100 text-slate-700 rounded px-2 py-0.5">🪪 {typeName.get(l.licenseTypeId)}</span>
+                      ))}
+                      {status === "missing" && <span className="text-[11px] font-bold bg-rose-100 text-rose-700 rounded px-2 py-0.5">ריענון לא בוצע</span>}
+                      {status === "expired" && <span className="text-[11px] font-bold bg-rose-100 text-rose-700 rounded px-2 py-0.5">ריענון פג ({new Date(s.drivingRefresherDate!).toLocaleDateString("he-IL")})</span>}
+                      {status === "warning" && <span className="text-[11px] font-bold bg-amber-100 text-amber-700 rounded px-2 py-0.5">עומד לפוג ({new Date(s.drivingRefresherDate!).toLocaleDateString("he-IL")})</span>}
+                      {status === "ok" && <span className="text-[11px] text-emerald-600">✓ ריענון {new Date(s.drivingRefresherDate!).toLocaleDateString("he-IL")}</span>}
+                    </>
                   )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                </div>
+              )}
+
+              {isEditing && (
+                <div className="mt-3 border-t border-slate-100 pt-3 space-y-3">
+                  <div>
+                    <div className="text-xs font-medium text-slate-500 mb-1.5">הרשאות נהיגה:</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {licenseTypes.map((lt) => {
+                        const on = selected.has(lt.id);
+                        return (
+                          <button key={lt.id} type="button"
+                            onClick={() => setSelected((prev) => { const n = new Set(prev); if (n.has(lt.id)) n.delete(lt.id); else n.add(lt.id); return n; })}
+                            className={`text-sm rounded-lg border px-3 py-2 text-right transition ${on ? "bg-emerald-50 border-emerald-400 text-emerald-800 font-medium" : "bg-white border-slate-200 text-slate-600 hover:border-slate-400"}`}>
+                            {on ? "✓ " : ""}{lt.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <span className="text-slate-500">תאריך ריענון אחרון:</span>
+                    <input type="date" value={refresherDate} onChange={(e) => setRefresherDate(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
+                  </label>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleSave(s.id)} disabled={pending}
+                      className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-1.5 text-sm font-medium disabled:opacity-50">
+                      {pending ? "שומר..." : "שמור"}
+                    </button>
+                    <button onClick={() => setEditingSoldier(null)} className="rounded-lg border border-slate-300 px-4 py-1.5 text-sm">ביטול</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {filtered.length === 0 && <div className="text-sm text-slate-400 p-4 text-center">לא נמצאו חיילים</div>}
       </div>
       <div className="text-xs text-slate-400 mt-2">{filtered.length} חיילים</div>
     </div>

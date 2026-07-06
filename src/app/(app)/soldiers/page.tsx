@@ -1,25 +1,20 @@
 import { requireCapability } from "@/lib/guard";
+import { canEdit } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge } from "@/components/ui";
 import CrudSection from "@/components/CrudSection";
 import ImportExcel from "@/components/ImportExcel";
-import { saveSoldier, toggleSoldier, saveCompanyRole, toggleCompanyRole, saveSquad, toggleSquad } from "./actions";
+import { saveCompanyRole, toggleCompanyRole, saveSquad, toggleSquad } from "./actions";
 import { importSoldiers } from "./import-actions";
-import SoldierEquipmentButton from "./SoldierEquipmentButton";
-import CompanyFilter from "./CompanyFilter";
 import AttachmentRequestSection from "./AttachmentRequestSection";
 import PeopleTabs from "@/components/PeopleTabs";
+import SoldiersTable, { type SoldierRow } from "./SoldiersTable";
 
 export const dynamic = "force-dynamic";
 
-export default async function SoldiersPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ companyId?: string }>;
-}) {
+export default async function SoldiersPage() {
   const user = await requireCapability("company.manage");
   const bId = user.battalionId!;
-  const sp = await searchParams;
 
   const companies = await prisma.holder.findMany({
     where: { battalionId: bId, kind: "COMPANY", active: true },
@@ -30,16 +25,13 @@ export default async function SoldiersPage({
   // נבדוק אם ה-holderId הוא באמת פלוגה
   const isCompanyHolder = user.holderId ? companies.some((c) => c.id === user.holderId) : false;
 
-  // מפ"ר רואה רק את הפלוגה שלו; מפ"מ/קצין מחסן בוחרים פלוגה מ-dropdown
-  // קצין מחסן עם squadIds — לא מסננים לפי פלוגה, רק לפי מחלקה
-  const effectiveCompanyId = isCompanyHolder
-    ? user.holderId
-    : (user.squadIds.length > 0
-      ? null
-      : (sp.companyId && companies.some((c) => c.id === sp.companyId) ? sp.companyId : companies[0]?.id));
+  // מפ"ר רואה רק את הפלוגה שלו; מפ"מ/אדמין רואים את כל הפלוגות ומסננים בטבלה (client).
+  // קצין מחסן עם squadIds — מסונן למחלקות שלו בלבד.
+  const scopeCompanyId = isCompanyHolder ? user.holderId : null;
+  const showCompany = !isCompanyHolder;
 
   const squadFilter = user.squadIds.length > 0 ? { squadId: { in: user.squadIds } } : {};
-  const companyFilter = effectiveCompanyId ? { companyId: effectiveCompanyId } : {};
+  const companyFilter = scopeCompanyId ? { companyId: scopeCompanyId } : {};
   const where = { battalionId: bId, ...companyFilter, ...squadFilter };
 
   const battalion = await prisma.battalion.findUnique({
@@ -48,7 +40,7 @@ export default async function SoldiersPage({
   });
   const drivingRefreshDays = battalion?.drivingRefreshDays ?? 180;
 
-  const [soldiers, squads, companyRoles, attachmentRequests] = await Promise.all([
+  const [soldiers, squads, companyRoles, certTypes, attachmentRequests] = await Promise.all([
     prisma.soldier.findMany({
       where,
       orderBy: [{ squad: { sortOrder: "asc" } }, { fullName: "asc" }],
@@ -60,13 +52,14 @@ export default async function SoldiersPage({
         squad: true,
         companyRole: true,
         drivingLicenses: { include: { licenseType: { select: { name: true } } } },
+        certifications: { select: { certificationTypeId: true } },
         _count: { select: { signedSerialUnits: true, signedKitInstances: true } },
       },
     }),
     prisma.squad.findMany({
       where: {
         battalionId: bId,
-        ...(effectiveCompanyId ? { companyId: effectiveCompanyId } : {}),
+        ...(scopeCompanyId ? { companyId: scopeCompanyId } : {}),
         ...(user.squadIds.length > 0 ? { id: { in: user.squadIds } } : {}),
       },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -76,10 +69,15 @@ export default async function SoldiersPage({
       where: {
         battalionId: bId,
         active: true,
-        ...(effectiveCompanyId ? { companyId: effectiveCompanyId } : {}),
+        ...(scopeCompanyId ? { companyId: scopeCompanyId } : {}),
       },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       include: { company: { select: { name: true } } },
+    }),
+    prisma.certificationType.findMany({
+      where: { battalionId: bId, active: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true },
     }),
     prisma.attachmentRequest.findMany({
       where: { battalionId: bId },
@@ -205,41 +203,49 @@ export default async function SoldiersPage({
     kitsBySoldier.set(k.assignedSoldierId, arr);
   }
 
-  const fields = [
-    { name: "fullName", label: "שם מלא" },
-    { name: "personalNumber", label: "מספר אישי" },
-    { name: "phone", label: "טלפון" },
-    ...(squads.length > 0
-      ? [{
-          name: "squadId",
-          label: "מחלקה",
-          type: "select" as const,
-          options: squads.map((sq) => ({
-            value: sq.id,
-            label: user.holderId ? sq.name : `${sq.name} (${sq.company.name})`,
-          })),
-        }]
-      : [{ name: "platoon", label: "מחלקה" }]),
-    ...(companyRoles.length > 0
-      ? [{
-          name: "companyRoleId",
-          label: "תפקיד",
-          type: "select" as const,
-          options: companyRoles.map((r) => ({
-            value: r.id,
-            label: r.isCommander ? `${r.name} ⭐` : r.name,
-          })),
-        }]
-      : []),
-    ...(user.holderId
-      ? []
-      : [{
-          name: "companyId",
-          label: "פלוגה",
-          type: "select" as const,
-          options: companies.map((c) => ({ value: c.id, label: c.name })),
-        }]),
-  ];
+  function drivingStatus(hasLicenses: boolean, rd: Date | null): SoldierRow["drivingStatus"] {
+    if (!hasLicenses) return "none";
+    if (!rd) return "missing";
+    const expiry = new Date(rd);
+    expiry.setDate(expiry.getDate() + drivingRefreshDays);
+    const daysLeft = Math.ceil((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (daysLeft < 0) return "expired";
+    if (daysLeft <= 30) return "warning";
+    return "ok";
+  }
+
+  const rows: SoldierRow[] = soldiers.map((s) => {
+    const serials = serialsBySoldier.get(s.id) ?? [];
+    const qtyMap = qtyBySoldier.get(s.id);
+    const qty = qtyMap ? Array.from(qtyMap.values()).filter((q) => q.quantity > 0) : [];
+    return {
+      id: s.id,
+      fullName: s.fullName,
+      personalNumber: s.personalNumber ?? "",
+      phone: s.phone ?? "",
+      companyId: s.companyId ?? "",
+      companyName: s.company?.name ?? null,
+      squadId: s.squadId ?? "",
+      squadName: s.squad?.name ?? s.platoon ?? null,
+      companyRoleId: s.companyRoleId ?? "",
+      roleName: s.companyRole?.name ?? null,
+      isCommander: s.companyRole?.isCommander ?? false,
+      certIds: s.certifications.map((c) => c.certificationTypeId),
+      drivingNames: s.drivingLicenses.map((dl) => dl.licenseType.name),
+      drivingStatus: drivingStatus(s.drivingLicenses.length > 0, s.drivingRefresherDate),
+      drivingRefresherDate: s.drivingRefresherDate ? s.drivingRefresherDate.toISOString().slice(0, 10) : null,
+      telegramLinked: !!s.telegramChatId,
+      inactive: s.status === "DISCHARGED" || s.status === "INACTIVE",
+      signedSerials: serials,
+      signedQty: qty,
+      issuedKits: kitsBySoldier.get(s.id) ?? [],
+    };
+  });
+
+  // הצמדת הסמכות לחייל נעשית ע"י מי שמנהל את החיילים (מפ/מפמ/אדמין) — הרשאת עריכה על מסך חיילים.
+  const canEditCerts = canEdit(user, "soldiers");
+  const squadOpts = squads.map((sq) => ({ id: sq.id, name: showCompany ? `${sq.name} · ${sq.company.name}` : sq.name, companyId: sq.companyId }));
+  const roleOpts = companyRoles.map((r) => ({ id: r.id, name: r.name, companyId: r.companyId ?? null, isCommander: r.isCommander }));
 
   return (
     <div>
@@ -250,9 +256,6 @@ export default async function SoldiersPage({
         action={<ImportExcel action={importSoldiers} templateHref="/soldiers/template" label="ייבוא חיילים" />}
       />
       <PeopleTabs active="soldiers" />
-      {!isCompanyHolder && user.squadIds.length === 0 && companies.length > 0 && effectiveCompanyId && (
-        <CompanyFilter companies={companies} selectedId={effectiveCompanyId} />
-      )}
 
       <AttachmentRequestSection
         companies={companies.map((c) => ({ id: c.id, name: c.name }))}
@@ -277,58 +280,17 @@ export default async function SoldiersPage({
         }))}
       />
 
-      <CrudSection
-        title="רשימת חיילים"
-        addLabel="חייל"
-        fields={fields}
-        saveAction={saveSoldier}
-        deleteAction={toggleSoldier}
-        rows={soldiers.map((s) => {
-          const serials = serialsBySoldier.get(s.id) ?? [];
-          const qtyMap = qtyBySoldier.get(s.id);
-          const qty = qtyMap ? Array.from(qtyMap.values()).filter((q) => q.quantity > 0) : [];
-          return {
-            id: s.id,
-            values: {
-              fullName: s.fullName,
-              personalNumber: s.personalNumber ?? "",
-              phone: s.phone ?? "",
-              squadId: s.squadId ?? "",
-              platoon: s.platoon ?? "",
-              companyRoleId: s.companyRoleId ?? "",
-              companyId: s.companyId ?? "",
-            },
-            display: (
-              <span className="flex items-center gap-2 flex-wrap">
-                <span className="font-medium">{s.fullName}</span>
-                <span className="font-mono text-xs text-slate-400">{s.personalNumber}</span>
-                {(s.squad?.name || s.platoon) && <Badge className="bg-indigo-100 text-indigo-700">{s.squad?.name ?? s.platoon}</Badge>}
-                {s.companyRole && <Badge className={s.companyRole.isCommander ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}>{s.companyRole.name}{s.companyRole.isCommander ? " ⭐" : ""}</Badge>}
-                {s.company && <Badge>{s.company.name}</Badge>}
-                {s.telegramChatId && <Badge className="bg-sky-100 text-sky-700">📱 בוט</Badge>}
-                {s.drivingLicenses.length > 0 && (
-                  <Badge className="bg-green-100 text-green-700">🪪 {s.drivingLicenses.map((dl) => dl.licenseType.name).join(", ")}</Badge>
-                )}
-                {s.drivingLicenses.length > 0 && (() => {
-                  const rd = s.drivingRefresherDate;
-                  if (!rd) return <Badge className="bg-rose-100 text-rose-700">ריענון נהיגה</Badge>;
-                  const expiry = new Date(rd);
-                  expiry.setDate(expiry.getDate() + drivingRefreshDays);
-                  const daysLeft = Math.ceil((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-                  if (daysLeft <= 30) return <Badge className={daysLeft < 0 ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}>ריענון נהיגה</Badge>;
-                  return null;
-                })()}
-                <SoldierEquipmentButton
-                  soldierId={s.id} soldierName={s.fullName}
-                  signedSerials={serials} signedQty={qty}
-                  issuedKits={kitsBySoldier.get(s.id) ?? []}
-                />
-                {(s.status === "DISCHARGED" || s.status === "INACTIVE") && <Badge className="bg-rose-100 text-rose-700">לא פעיל</Badge>}
-              </span>
-            ),
-          };
-        })}
+      <SoldiersTable
+        soldiers={rows}
+        certTypes={certTypes}
+        companyRoles={roleOpts}
+        squads={squadOpts}
+        companies={companies.map((c) => ({ id: c.id, name: c.name }))}
+        showCompany={showCompany}
+        canEditCerts={canEditCerts}
       />
+
+      <div className="mt-6" />
 
       <CrudSection
         title="מחלקות"

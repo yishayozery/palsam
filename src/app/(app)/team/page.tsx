@@ -42,7 +42,10 @@ export default async function TeamPage() {
         }),
         prisma.soldier.findMany({
           where: { battalionId: bId!, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
-          select: { id: true, fullName: true, companyId: true, squadId: true, telegramChatId: true },
+          select: {
+            id: true, fullName: true, companyId: true, squadId: true, telegramChatId: true,
+            companyRole: { select: { name: true, isCommander: true, sortOrder: true } },
+          },
           orderBy: { fullName: "asc" },
         }),
         prisma.appUser.findMany({ where: { soldierId: { not: null } }, select: { soldierId: true } }),
@@ -58,18 +61,44 @@ export default async function TeamPage() {
   type U = { id: string; username: string; fullName: string; phone: string | null; holderId: string | null; passwordSet: boolean; inviteToken: string | null; systemRole: { name: string } | null; soldier: { telegramChatId: string | null } | null };
   const allUsers = subUsers as U[];
 
+  type SoldierLite = { id: string; fullName: string; companyId: string | null; squadId: string | null; telegramChatId: string | null; companyRole: { name: string; isCommander: boolean; sortOrder: number } | null };
+  const allSoldiers = soldiers as SoldierLite[];
+
   const data = holders.map((h) => {
     const hUsers = allUsers.filter((u) => u.holderId === h.id);
     const squadCmds = hUsers.filter((u) => cmdSquadByUser.has(u.id));
     const squadCmdIds = new Set(squadCmds.map((u) => u.id));
     const reps = hUsers.filter((u) => !squadCmdIds.has(u.id));
     const takenSquadIds = new Set(squadCmds.map((u) => cmdSquadByUser.get(u.id)!));
+
+    // מבנה פיקוד (רק לפלוגות) — נבנה מתפקידי החיילים: מפקד ללא מחלקה = מפ/ס.מפ; מפקד עם מחלקה = מ"מ.
+    const compSoldiers = allSoldiers.filter((s) => s.companyId === h.id);
+    const commanders = compSoldiers
+      .filter((s) => s.companyRole?.isCommander && !s.squadId)
+      .sort((a, b) => (a.companyRole!.sortOrder - b.companyRole!.sortOrder))
+      .map((s) => ({ name: s.fullName, role: s.companyRole!.name }));
+    const squadStruct = (squads as { id: string; name: string; companyId: string }[])
+      .filter((sq) => sq.companyId === h.id)
+      .map((sq) => {
+        const members = compSoldiers.filter((s) => s.squadId === sq.id);
+        const leader = members.find((s) => s.companyRole?.isCommander);
+        return {
+          name: sq.name,
+          leader: leader ? { name: leader.fullName, role: leader.companyRole!.name } : null,
+          memberCount: members.length,
+        };
+      });
+    const hierarchy = h.kind === "COMPANY"
+      ? { commanders, squads: squadStruct, total: compSoldiers.length }
+      : null;
+
     return {
       id: h.id,
       kind: h.kind,
       name: h.name,
       cap: h.delegateCap ?? defaultCap,
       capIsDefault: h.delegateCap == null,
+      hierarchy,
       subUsers: reps.map((u) => ({
         id: u.id, username: u.username, fullName: u.fullName, phone: u.phone,
         passwordSet: u.passwordSet, inviteToken: u.inviteToken, telegramLinked: !!u.soldier?.telegramChatId,
@@ -95,8 +124,8 @@ export default async function TeamPage() {
     <div>
       <PageHeader
         helpKey="team"
-        title="🧑‍🤝‍🧑 הצוות שלי"
-        subtitle={isAdmin ? "מבנה ארגוני — רספ״ים, סגנים ומפקדי מחלקות מול תקרה" : "מינוי רספ״ים, סגנים ומפקדי מחלקות — עם הזמנה בטלגרם"}
+        title="🎖️ מטה ומפל״ג"
+        subtitle={isAdmin ? "מבנה הפיקוד — מפ, ס.מפ, מ״מים ורספ״ים לפי מחלקות" : "מבנה הפיקוד והאצלת הרשאות — עם הזמנה בטלגרם"}
       />
       <PeopleTabs active="team" />
       {data.length === 0 ? (

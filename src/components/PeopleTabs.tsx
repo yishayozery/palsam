@@ -7,8 +7,8 @@ export default function PeopleTabs({ active }: { active: "soldiers" | "team" | "
       active={active}
       tabs={[
         { key: "soldiers", label: "👤 חיילי הפלוגה", href: "/soldiers" },
-        { key: "team", label: "🧑‍🤝‍🧑 הצוות שלי", href: "/team" },
-        { key: "certifications", label: "🎖️ הסמכות", href: "/certifications" },
+        { key: "team", label: "🎖️ מטה ומפל״ג", href: "/team" },
+        { key: "certifications", label: "🏅 סוגי הסמכות", href: "/certifications" },
       ]}
     />
   );
