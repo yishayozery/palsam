@@ -16,10 +16,11 @@ export default function HelpButton({ helpKey }: { helpKey?: string }) {
     <>
       <button
         onClick={() => setOpen(true)}
-        title="מה המסך הזה עושה?"
-        className="shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-sm font-bold hover:bg-blue-200 transition"
+        title="עזרה — מה המסך הזה עושה?"
+        aria-label="עזרה"
+        className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full hover:bg-slate-100 transition text-base leading-none"
       >
-        ?
+        ℹ️
       </button>
       {open && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setOpen(false)}>

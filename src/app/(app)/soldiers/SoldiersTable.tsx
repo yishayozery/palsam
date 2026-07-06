@@ -91,13 +91,45 @@ export default function SoldiersTable({
   const squadOpts = fCompany ? squads.filter((s) => s.companyId === fCompany) : squads;
   const roleOpts = fCompany ? companyRoles.filter((r) => r.companyId === fCompany) : companyRoles;
 
+  // ספירת חיילים פר-אפשרות סינון (facet counts) — לפי הסקופ הנוכחי, למעט הפילטר שנספר
+  const counts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const base = (exclude: "company" | "squad" | "role" | "cert") => {
+      let list = soldiers;
+      if (exclude !== "company" && fCompany) list = list.filter((s) => s.companyId === fCompany);
+      if (exclude !== "squad" && fSquad) list = list.filter((s) => s.squadId === fSquad);
+      if (exclude !== "role" && fRole) list = list.filter((s) => s.companyRoleId === fRole);
+      if (exclude !== "cert" && fCert) list = list.filter((s) => s.certIds.includes(fCert));
+      if (q) list = list.filter((s) => s.fullName.toLowerCase().includes(q) || s.personalNumber.includes(q) || (s.squadName || "").toLowerCase().includes(q) || (s.roleName || "").toLowerCase().includes(q));
+      return list;
+    };
+    const single = (list: SoldierRow[], key: (s: SoldierRow) => string) => {
+      const m = new Map<string, number>();
+      for (const s of list) { const v = key(s); if (v) m.set(v, (m.get(v) ?? 0) + 1); }
+      return m;
+    };
+    const multi = (list: SoldierRow[], key: (s: SoldierRow) => string[]) => {
+      const m = new Map<string, number>();
+      for (const s of list) for (const v of key(s)) m.set(v, (m.get(v) ?? 0) + 1);
+      return m;
+    };
+    return {
+      company: single(base("company"), (s) => s.companyId),
+      squad: single(base("squad"), (s) => s.squadId),
+      role: single(base("role"), (s) => s.companyRoleId),
+      cert: multi(base("cert"), (s) => s.certIds),
+    };
+  }, [soldiers, fCompany, fSquad, fRole, fCert, search]);
+
   // ---- Cert popup ----
   const [certSoldier, setCertSoldier] = useState<SoldierRow | null>(null);
   const [certSel, setCertSel] = useState<Set<string>>(new Set());
+  const [certEdit, setCertEdit] = useState(false);
   function openCerts(s: SoldierRow) {
-    if (!canEditCerts) { setCertSoldier(s); setCertSel(new Set(s.certIds)); return; }
-    setCertSoldier(s); setCertSel(new Set(s.certIds));
+    setCertSoldier(s); setCertSel(new Set(s.certIds)); setCertEdit(false);
   }
+  // ---- Driving popup (תצוגה בלבד — מנוהל ע"י קצין הרכב) ----
+  const [drivingSoldier, setDrivingSoldier] = useState<SoldierRow | null>(null);
   function saveCerts() {
     if (!certSoldier) return;
     const fd = new FormData();
@@ -146,24 +178,24 @@ export default function SoldiersTable({
           <select value={fCompany} onChange={(e) => { setFCompany(e.target.value); setFSquad(""); setFRole(""); }}
             className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
             <option value="">כל הפלוגות</option>
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {companies.map((c) => <option key={c.id} value={c.id}>{c.name} ({counts.company.get(c.id) ?? 0})</option>)}
           </select>
         )}
         <select value={fSquad} onChange={(e) => setFSquad(e.target.value)}
           className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
           <option value="">כל המחלקות</option>
-          {squadOpts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          {squadOpts.map((s) => <option key={s.id} value={s.id}>{s.name} ({counts.squad.get(s.id) ?? 0})</option>)}
         </select>
         <select value={fRole} onChange={(e) => setFRole(e.target.value)}
           className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
           <option value="">כל התפקידים</option>
-          {roleOpts.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          {roleOpts.map((r) => <option key={r.id} value={r.id}>{r.name} ({counts.role.get(r.id) ?? 0})</option>)}
         </select>
         {certTypes.length > 0 && (
           <select value={fCert} onChange={(e) => setFCert(e.target.value)}
             className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
             <option value="">כל ההסמכות</option>
-            {certTypes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {certTypes.map((c) => <option key={c.id} value={c.id}>{c.name} ({counts.cert.get(c.id) ?? 0})</option>)}
           </select>
         )}
         {anyFilter && (
@@ -181,27 +213,28 @@ export default function SoldiersTable({
         <table className="min-w-full text-sm border-collapse">
           <thead>
             <tr className="bg-slate-50 text-slate-600">
-              <th className="sticky right-0 z-10 bg-slate-50 px-3 py-2 text-right font-medium border-b min-w-[170px]">חייל</th>
-              <th className="px-2 py-2 text-right font-medium border-b">מ.א</th>
+              <th className="sticky right-0 z-20 bg-slate-50 px-3 py-2 text-right font-medium border-b min-w-[150px] shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.1)]">חייל / מ.א</th>
               {showCompany && <th className="px-2 py-2 text-right font-medium border-b">פלוגה</th>}
               <th className="px-2 py-2 text-right font-medium border-b">מחלקה</th>
               <th className="px-2 py-2 text-right font-medium border-b">תפקיד</th>
               <th className="px-2 py-2 text-center font-medium border-b">הסמכות</th>
               <th className="px-2 py-2 text-center font-medium border-b">ציוד חתום</th>
-              <th className="px-2 py-2 text-center font-medium border-b min-w-[110px]">נהיגה</th>
+              <th className="px-2 py-2 text-center font-medium border-b">נהיגה</th>
               <th className="px-2 py-2 border-b" />
             </tr>
           </thead>
           <tbody>
             {filtered.map((s) => (
               <tr key={s.id} className={`border-b last:border-0 ${s.inactive ? "opacity-50" : "hover:bg-slate-50"}`}>
-                <td className="sticky right-0 z-10 bg-white px-3 py-2 font-medium text-slate-800 whitespace-nowrap">
-                  {s.isCommander && <span title="מפקד">⭐ </span>}
-                  {s.fullName}
-                  {s.telegramLinked && <span className="text-[10px] text-sky-600 mr-1" title="מחובר לבוט">📲</span>}
-                  {s.inactive && <span className="text-[10px] text-rose-500 mr-1">(לא פעיל)</span>}
+                <td className={`sticky right-0 z-10 px-3 py-2 whitespace-nowrap shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.1)] ${s.inactive ? "bg-slate-50" : "bg-white"}`}>
+                  <div className="font-medium text-slate-800">
+                    {s.isCommander && <span title="מפקד">⭐ </span>}
+                    {s.fullName}
+                    {s.telegramLinked && <span className="text-[10px] text-sky-600 mr-1" title="מחובר לבוט">📲</span>}
+                    {s.inactive && <span className="text-[10px] text-rose-500 mr-1">(לא פעיל)</span>}
+                  </div>
+                  <div className="font-mono text-[11px] text-slate-400">{s.personalNumber}</div>
                 </td>
-                <td className="px-2 py-2 font-mono text-xs text-slate-500 whitespace-nowrap">{s.personalNumber}</td>
                 {showCompany && <td className="px-2 py-2 text-xs text-slate-600 whitespace-nowrap">{s.companyName || "—"}</td>}
                 <td className="px-2 py-2 whitespace-nowrap">
                   {s.squadName ? <Badge className="bg-indigo-100 text-indigo-700">{s.squadName}</Badge> : <span className="text-slate-300">—</span>}
@@ -227,15 +260,15 @@ export default function SoldiersTable({
                   {s.drivingStatus === "none" ? (
                     <span className="text-slate-300">—</span>
                   ) : (
-                    <div className="flex flex-col items-center gap-0.5">
-                      <span className="text-[11px] text-slate-600">🪪 {s.drivingNames.join(", ")}</span>
-                      {(s.drivingStatus === "expired" || s.drivingStatus === "missing") && (
-                        <span className="text-[10px] font-bold bg-rose-100 text-rose-700 rounded px-1.5">ריענון פג</span>
-                      )}
-                      {s.drivingStatus === "warning" && (
-                        <span className="text-[10px] font-bold bg-amber-100 text-amber-700 rounded px-1.5">ריענון עומד לפוג</span>
-                      )}
-                    </div>
+                    <button onClick={() => setDrivingSoldier(s)}
+                      className={`text-[11px] rounded px-2 py-0.5 border inline-flex items-center gap-1 ${
+                        s.drivingStatus === "expired" || s.drivingStatus === "missing" ? "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100"
+                          : s.drivingStatus === "warning" ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                            : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"}`}>
+                      🪪 {s.drivingNames.length}
+                      {(s.drivingStatus === "expired" || s.drivingStatus === "missing") && <span className="w-1.5 h-1.5 rounded-full bg-rose-500" title="ריענון פג" />}
+                      {s.drivingStatus === "warning" && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title="ריענון עומד לפוג" />}
+                    </button>
                   )}
                 </td>
                 <td className="px-2 py-2 text-center whitespace-nowrap">
@@ -244,7 +277,7 @@ export default function SoldiersTable({
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={9} className="px-3 py-6 text-center text-sm text-slate-400">לא נמצאו חיילים</td></tr>
+              <tr><td colSpan={showCompany ? 8 : 7} className="px-3 py-6 text-center text-sm text-slate-400">לא נמצאו חיילים</td></tr>
             )}
           </tbody>
         </table>
@@ -262,30 +295,79 @@ export default function SoldiersTable({
             <div className="flex-1 overflow-y-auto p-4">
               {certTypes.length === 0 ? (
                 <p className="text-sm text-slate-500">לא הוגדרו סוגי הסמכות. הגדר במסך ״סוגי הסמכות״.</p>
+              ) : certEdit ? (
+                // ---- מצב עריכה: בחירת הסמכות להוספה/הסרה ----
+                <div>
+                  <div className="text-xs text-slate-500 mb-2">סמן/בטל סימון להוספה או הסרה של הסמכה:</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {certTypes.map((c) => {
+                      const on = certSel.has(c.id);
+                      return (
+                        <button key={c.id} type="button"
+                          onClick={() => setCertSel((prev) => { const n = new Set(prev); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n; })}
+                          className={`text-sm rounded-lg border px-3 py-2 text-right transition hover:border-slate-400 ${on ? "bg-emerald-50 border-emerald-400 text-emerald-800 font-medium" : "bg-white border-slate-200 text-slate-600"}`}>
+                          {on ? "✓ " : "＋ "}{c.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {certTypes.map((c) => {
-                    const on = certSel.has(c.id);
-                    return (
-                      <button key={c.id} type="button" disabled={!canEditCerts}
-                        onClick={() => setCertSel((prev) => { const n = new Set(prev); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n; })}
-                        className={`text-sm rounded-lg border px-3 py-2 text-right transition ${on ? "bg-emerald-50 border-emerald-400 text-emerald-800 font-medium" : "bg-white border-slate-200 text-slate-600"} ${canEditCerts ? "hover:border-slate-400" : "cursor-default"}`}>
-                        {on ? "✓ " : ""}{c.name}
-                      </button>
-                    );
-                  })}
+                // ---- מצב תצוגה: הסמכות החייל ----
+                <div className="flex flex-wrap gap-2">
+                  {certSel.size === 0 ? (
+                    <p className="text-sm text-slate-400">אין הסמכות לחייל זה.</p>
+                  ) : (
+                    Array.from(certSel).map((id) => (
+                      <Badge key={id} className="bg-emerald-50 text-emerald-700 text-sm">🏅 {certTypes.find((c) => c.id === id)?.name ?? "—"}</Badge>
+                    ))
+                  )}
                 </div>
               )}
             </div>
-            {canEditCerts && (
-              <div className="border-t border-slate-200 p-3 flex gap-2">
-                <button onClick={saveCerts} disabled={pending}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-50">
-                  {pending ? "שומר..." : "שמור הסמכות"}
-                </button>
-                <button onClick={() => setCertSoldier(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
+            <div className="border-t border-slate-200 p-3 flex gap-2">
+              {certEdit ? (
+                <>
+                  <button onClick={saveCerts} disabled={pending}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-50">
+                    {pending ? "שומר..." : "שמור הסמכות"}
+                  </button>
+                  <button onClick={() => { setCertSel(new Set(certSoldier.certIds)); setCertEdit(false); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>
+                </>
+              ) : (
+                <>
+                  {canEditCerts && certTypes.length > 0 && (
+                    <button onClick={() => setCertEdit(true)} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium">✏️ עריכה — הוסף / הסר הסמכה</button>
+                  )}
+                  <button onClick={() => setCertSoldier(null)} className={`rounded-lg border border-slate-300 px-4 py-2 text-sm ${canEditCerts ? "" : "flex-1"}`}>סגור</button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Driving popup (תצוגה בלבד — מנוהל ע"י קצין הרכב) ---- */}
+      {drivingSoldier && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setDrivingSoldier(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="font-bold text-slate-800">🪪 נהיגה — {drivingSoldier.fullName}</h3>
+              <button onClick={() => setDrivingSoldier(null)} className="text-slate-400 hover:text-slate-700 text-xl">✕</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div className="flex flex-wrap gap-1.5">
+                {drivingSoldier.drivingNames.map((n, i) => <Badge key={i} className="bg-slate-100 text-slate-700 text-sm">🪪 {n}</Badge>)}
               </div>
-            )}
+              {(() => {
+                const d = drivingSoldier.drivingRefresherDate ? new Date(drivingSoldier.drivingRefresherDate).toLocaleDateString("he-IL") : null;
+                if (drivingSoldier.drivingStatus === "missing") return <div className="text-sm font-medium text-rose-600 bg-rose-50 rounded-lg px-3 py-2">⚠️ לא בוצע ריענון נהיגה</div>;
+                if (drivingSoldier.drivingStatus === "expired") return <div className="text-sm font-medium text-rose-600 bg-rose-50 rounded-lg px-3 py-2">⚠️ ריענון נהיגה פג ({d})</div>;
+                if (drivingSoldier.drivingStatus === "warning") return <div className="text-sm font-medium text-amber-600 bg-amber-50 rounded-lg px-3 py-2">ריענון נהיגה עומד לפוג ({d})</div>;
+                return <div className="text-sm text-emerald-600">✓ ריענון בתוקף{d ? ` (${d})` : ""}</div>;
+              })()}
+              <p className="text-[11px] text-slate-400">הרשאות הנהיגה והריענון מנוהלים ע״י קצין הרכב (מסך ״קצין רכב״).</p>
+            </div>
           </div>
         </div>
       )}
