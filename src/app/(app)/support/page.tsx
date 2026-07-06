@@ -22,8 +22,9 @@ export default async function SupportPage() {
     }),
   ]);
 
-  // מספר הגדוד גובר; אם ריק — נופל להגדרה הגלובלית. נוכחות מספר = הכפתור מופיע.
-  const waNumber = battalion?.supportWhatsapp || config?.supportWhatsappNumber || null;
+  // רק לפי מספר הגדוד. wa.me דורש בינ"ל — ממירים 05X→9725X.
+  const rawWa = battalion?.supportWhatsapp || null;
+  const waNumber = rawWa ? (rawWa.startsWith("0") ? "972" + rawWa.slice(1) : rawWa) : null;
   const waLink = waNumber
     ? `https://wa.me/${waNumber}?text=${encodeURIComponent(config?.supportMessage || "שלום, אני צריך עזרה במערכת PALMY")}`
     : null;

@@ -68,9 +68,8 @@ export default async function AppLayout({
   const battalion = user.battalionId
     ? await prisma.battalion.findUnique({ where: { id: user.battalionId }, select: { name: true, logoData: true, motto: true, supportWhatsapp: true } })
     : null;
-  // ווטסאפ תמיכה: מספר הגדוד גובר, אחרת הגלובלי. הכפתור צף בכל המסכים.
-  const globalWa = await prisma.appConfig.findUnique({ where: { id: "singleton" }, select: { supportWhatsappNumber: true } });
-  const supportWa = battalion?.supportWhatsapp || globalWa?.supportWhatsappNumber || null;
+  // ווטסאפ תמיכה: רק אם מוגדר מספר לגדוד הזה. הכפתור צף בכל המסכים.
+  const supportWa = battalion?.supportWhatsapp || null;
   // סמל הפלוגה / מחסן של המשתמש (אם יש)
   const userHolder = user.holderId
     ? await prisma.holder.findUnique({ where: { id: user.holderId }, select: { name: true, logoData: true, kind: true } })

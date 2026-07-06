@@ -18,7 +18,7 @@ export function PageHeader({
       <div className="min-w-0">
         <h1 className="text-xl md:text-2xl font-bold text-slate-800 leading-tight flex items-center gap-2">
           {title}
-          {helpKey && <HelpButton helpKey={helpKey} />}
+          <HelpButton helpKey={helpKey} />
         </h1>
         {subtitle && <p className="text-xs md:text-sm text-slate-500 mt-1">{subtitle}</p>}
       </div>
