@@ -27,6 +27,7 @@ export const NAV: NavItem[] = [
   { href: "/handover", label: "העברת משמרת", icon: "🔄", group: "מבצעי", screen: "attendance" },
   { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "מבצעי", screen: "dispatch" },
   { href: "/driving-licenses", label: "קצין רכב", icon: "🪪", group: "מבצעי", screen: "driving_licenses" },
+  { href: "/trainings", label: "הדרכות וקורסים", icon: "🎓", group: "מבצעי", screen: "trainings" },
   { href: "/maintenance", label: "סטטוס רכבים (טנ\"א)", icon: "🔧", group: "מבצעי", screen: "maintenance" },
   { href: "/vacation", label: "ניהול לוז", icon: "📅", group: "מבצעי" },
   { href: "/armory-allocations", label: "הקצאות לפלוגה", icon: "📦", group: "מבצעי", screen: "armory_allocations" },

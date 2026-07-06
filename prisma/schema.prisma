@@ -391,6 +391,8 @@ model Holder {
   companyItemBaselines CompanyItemBaseline[] @relation("HolderBaselines")
   shiftHandovers       ShiftHandover[]       @relation("HolderShiftHandovers")
   companyAllocations   CompanyAllocation[]  @relation("HolderAllocations")
+  courseAllocations    CourseAllocation[]   @relation("HolderCourseAllocations")
+  courseRequests       CourseRequest[]      @relation("HolderCourseRequests")
   squads               Squad[]
   companyRoles         CompanyRole[]
   dispatchAssignments  VehicleAssignment[] @relation("CompanyDispatch")
@@ -610,6 +612,8 @@ model Soldier {
   dispatchTemplates   DispatchTemplateSoldier[] @relation("SoldierDispatchTemplate")
   drivingLicenses     SoldierDrivingLicense[]   @relation("SoldierDrivingLicenses")
   certifications      SoldierCertification[]    @relation("SoldierCertifications")
+  courseEnrollments   CourseEnrollment[]        @relation("SoldierCourseEnrollments")
+  courseRequests      CourseRequest[]           @relation("SoldierCourseRequests")
   attendancePlans    AttendancePlan[]
   attendanceRecords  AttendanceRecord[]
   callupPeriods      CallupPeriod[]
@@ -1595,6 +1599,7 @@ model DrivingLicenseType {
 
   soldierLicenses    SoldierDrivingLicense[]
   vehicleTypeLicenses VehicleTypeLicense[] @relation("LicenseTypeVehicleTypes")
+  courseQuals         CourseTypeQualification[]
 
   @@unique([battalionId, name])
   @@index([battalionId])
@@ -1631,6 +1636,7 @@ model CertificationType {
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   soldiers    SoldierCertification[]
+  courseQuals CourseTypeQualification[]
 
   @@unique([battalionId, name])
   @@index([battalionId])
@@ -1645,6 +1651,144 @@ model SoldierCertification {
 
   @@unique([soldierId, certificationTypeId])
   @@index([soldierId])
+}
+
+// ===================== הדרכות וקורסים (Trainings & Courses) =====================
+
+enum CourseQualRole {
+  PREREQ   // תנאי-קדם — נדרש כדי להתאים לקורס
+  GRANT    // הקורס מקנה בסיום
+}
+
+enum CourseInstanceStatus {
+  OPEN     // פתוח לשיבוץ
+  CLOSED   // סגור לשיבוץ
+  DONE     // הסתיים
+}
+
+enum CourseEnrollmentStatus {
+  ENROLLED
+  COMPLETED
+  DROPPED
+}
+
+enum CourseRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SCHEDULED
+}
+
+// קטלוג סוגי קורס — מנוהל ע"י קה"ד
+model CourseType {
+  id          String   @id @default(cuid())
+  battalionId String
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  quals       CourseTypeQualification[]
+  instances   CourseInstance[]
+  requests    CourseRequest[]
+
+  @@unique([battalionId, name])
+  @@index([battalionId])
+}
+
+// תנאי-קדם / הקניה — הסמכה או רישיון נהיגה
+model CourseTypeQualification {
+  id                   String @id @default(cuid())
+  courseTypeId         String
+  courseType           CourseType @relation(fields: [courseTypeId], references: [id], onDelete: Cascade)
+  role                 CourseQualRole
+  certificationTypeId  String?
+  certificationType    CertificationType? @relation(fields: [certificationTypeId], references: [id], onDelete: Cascade)
+  drivingLicenseTypeId String?
+  drivingLicenseType   DrivingLicenseType? @relation(fields: [drivingLicenseTypeId], references: [id], onDelete: Cascade)
+
+  @@index([courseTypeId])
+}
+
+// מופע קורס — אירוע מתוזמן עם תאריך/מיקום/מכסות
+model CourseInstance {
+  id           String @id @default(cuid())
+  battalionId  String
+  courseTypeId String
+  courseType   CourseType @relation(fields: [courseTypeId], references: [id], onDelete: Cascade)
+  location     String?
+  startDate    DateTime?
+  hours        String?     // טקסט חופשי, למשל "08:00-16:00"
+  bringItems   String?     // מה החייל צריך להביא
+  contactName  String?
+  contactPhone String?
+  totalSlots   Int?        // סה"כ מקומות
+  notes        String?
+  status       CourseInstanceStatus @default(OPEN)
+  active       Boolean @default(true)
+  createdById  String?
+  createdAt    DateTime @default(now())
+
+  allocations  CourseAllocation[]
+  enrollments  CourseEnrollment[]
+  requests     CourseRequest[]
+
+  @@index([battalionId])
+  @@index([courseTypeId])
+}
+
+// מכסה פר-פלוגה למופע
+model CourseAllocation {
+  id               String @id @default(cuid())
+  courseInstanceId String
+  courseInstance   CourseInstance @relation(fields: [courseInstanceId], references: [id], onDelete: Cascade)
+  companyId        String
+  company          Holder @relation("HolderCourseAllocations", fields: [companyId], references: [id], onDelete: Cascade)
+  slots            Int @default(0)
+
+  @@unique([courseInstanceId, companyId])
+  @@index([courseInstanceId])
+}
+
+// שיבוץ חייל למופע
+model CourseEnrollment {
+  id               String @id @default(cuid())
+  battalionId      String
+  courseInstanceId String
+  courseInstance   CourseInstance @relation(fields: [courseInstanceId], references: [id], onDelete: Cascade)
+  soldierId        String
+  soldier          Soldier @relation("SoldierCourseEnrollments", fields: [soldierId], references: [id], onDelete: Cascade)
+  status           CourseEnrollmentStatus @default(ENROLLED)
+  enrolledById     String?
+  enrolledAt       DateTime @default(now())
+  completedAt      DateTime?
+
+  @@unique([courseInstanceId, soldierId])
+  @@index([courseInstanceId])
+  @@index([soldierId])
+  @@index([battalionId])
+}
+
+// בקשה לקורס — פר חייל, נכנסת לפול הממתינים
+model CourseRequest {
+  id               String @id @default(cuid())
+  battalionId      String
+  courseTypeId     String
+  courseType       CourseType @relation(fields: [courseTypeId], references: [id], onDelete: Cascade)
+  companyId        String?
+  company          Holder? @relation("HolderCourseRequests", fields: [companyId], references: [id], onDelete: SetNull)
+  soldierId        String?
+  soldier          Soldier? @relation("SoldierCourseRequests", fields: [soldierId], references: [id], onDelete: SetNull)
+  courseInstanceId String?
+  courseInstance   CourseInstance? @relation(fields: [courseInstanceId], references: [id], onDelete: SetNull)
+  note             String?
+  status           CourseRequestStatus @default(PENDING)
+  requestedById    String?
+  requestedAt      DateTime @default(now())
+
+  @@index([battalionId])
+  @@index([courseTypeId])
 }
 
 // ===================== ניהול לוז =====================

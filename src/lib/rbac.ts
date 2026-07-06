@@ -11,6 +11,7 @@ export const SCREENS = {
   dispatch: "שבצ\"ק",
   driving_licenses: "הרשאות נהיגה",
   certifications: "הסמכות",
+  trainings: "הדרכות וקורסים",
   stock: "מלאי",
   signatures: "החתמות/זיכוי",
   counts: "ספירות",
@@ -54,7 +55,7 @@ export const SCREEN_CATEGORIES: Record<ScreenCategory, { label: string; icon: st
     label: "כללי",
     icon: "📋",
     color: "slate",
-    screens: ["dashboard", "dispatch", "vacation", "armory", "armory_reports", "reports", "history", "audit", "certifications"],
+    screens: ["dashboard", "dispatch", "vacation", "armory", "armory_reports", "reports", "history", "audit", "certifications", "trainings"],
   },
   admin: {
     label: "ניהול",
@@ -291,6 +292,7 @@ export const PRESET_ROLES: {
       { screen: "stock", level: "VIEW" }, { screen: "gaps", level: "VIEW" },
       { screen: "reports", level: "VIEW" }, { screen: "armory_allocations", level: "VIEW" },
       { screen: "maintenance", level: "VIEW" }, { screen: "ymach", level: "EDIT" },
+      { screen: "trainings", level: "VIEW" },
     ],
   },
   {
@@ -298,7 +300,7 @@ export const PRESET_ROLES: {
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "VIEW" },
       { screen: "attendance", level: "EDIT" }, { screen: "dispatch", level: "VIEW" }, { screen: "certifications", level: "VIEW" },
-      { screen: "vacation", level: "VIEW" },
+      { screen: "vacation", level: "VIEW" }, { screen: "trainings", level: "VIEW" },
     ],
   },
   {
@@ -353,6 +355,15 @@ export const PRESET_ROLES: {
       { screen: "signatures", level: "EDIT" }, { screen: "counts", level: "EDIT" },
       { screen: "gaps", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
       { screen: "reports", level: "VIEW" }, { screen: "armory_reports", level: "VIEW" },
+    ],
+  },
+  {
+    // קה"ד — קצין הדרכה: מקים קורסים, מקצה לפלוגות, מנהל הדרכות
+    name: 'קה"ד', isAdmin: false, isCommander: false, sortOrder: 10,
+    permissions: [
+      { screen: "dashboard", level: "VIEW" }, { screen: "trainings", level: "EDIT" },
+      { screen: "soldiers", level: "VIEW" }, { screen: "certifications", level: "VIEW" },
+      { screen: "driving_licenses", level: "VIEW" }, { screen: "reports", level: "VIEW" },
     ],
   },
   {
