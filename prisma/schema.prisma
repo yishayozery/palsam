@@ -213,6 +213,7 @@ model AppUser {
   inviteToken  String?    @unique
   magicToken    String?   @unique // לינק כניסה חד-פעמי מהבוט (קצר-מועד)
   magicTokenExp DateTime? // תפוגת ה-magicToken
+  loginCode     String?   // קוד כניסה נוסף (נבדק בשדה "מספר גדוד") — למשל לאדמין-על שאין לו גדוד
   battalionId  String? // null עבור SUPER_ADMIN
   battalion    Battalion? @relation(fields: [battalionId], references: [id])
   // המחזיק הראשי: פלוגה (COMPANY_REP) או מחסן ראשי (WAREHOUSE_MANAGER)

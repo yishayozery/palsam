@@ -158,8 +158,12 @@ export async function authenticate(
   if (!user || !user.active || !user.passwordSet) return { kind: "fail" };
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) return { kind: "fail" };
-  // ⚠️ ולידציית גדוד: אדמין-על פטור (אין לו גדוד); כל השאר חייבים להזין את הקוד שלהם.
-  if (user.role !== "SUPER_ADMIN") {
+  // ⚠️ ולידציית שדה "מספר גדוד":
+  if (user.role === "SUPER_ADMIN") {
+    // אדמין-על: אם הוגדר קוד כניסה נוסף (loginCode) — חייב להזין אותו בשדה "מספר גדוד".
+    if (user.loginCode && (battalionCode ?? "").trim() !== user.loginCode.trim()) return { kind: "fail" };
+  } else {
+    // כל השאר: חייבים להזין את קוד/חטיבה/שם הגדוד שלהם.
     const code = (battalionCode ?? "").trim().toLowerCase();
     if (!code) return { kind: "fail" };
     const accepted = [
