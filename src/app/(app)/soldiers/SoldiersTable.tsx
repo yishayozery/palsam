@@ -67,13 +67,11 @@ export default function SoldiersTable({
   const [fCert, setFCert] = useState("");
   const [fRound, setFRound] = useState(""); // "", "1".."3", "none"
 
-  const certName = useMemo(() => new Map(certTypes.map((c) => [c.id, c.name])), [certTypes]);
-
   const filtered = useMemo(() => {
     let list = soldiers;
-    if (fCompany) list = list.filter((s) => s.companyId === fCompany);
-    if (fSquad) list = list.filter((s) => s.squadId === fSquad);
-    if (fRole) list = list.filter((s) => s.companyRoleId === fRole);
+    if (fCompany) list = list.filter((s) => (fCompany === "none" ? !s.companyId : s.companyId === fCompany));
+    if (fSquad) list = list.filter((s) => (fSquad === "none" ? !s.squadId : s.squadId === fSquad));
+    if (fRole) list = list.filter((s) => (fRole === "none" ? !s.companyRoleId : s.companyRoleId === fRole));
     if (fCert) list = list.filter((s) => s.certIds.includes(fCert));
     if (fRound) list = list.filter((s) => (fRound === "none" ? s.dutyRound == null : String(s.dutyRound) === fRound));
     if (search.trim()) {
@@ -99,9 +97,9 @@ export default function SoldiersTable({
     const q = search.trim().toLowerCase();
     const base = (exclude: "company" | "squad" | "role" | "cert" | "round") => {
       let list = soldiers;
-      if (exclude !== "company" && fCompany) list = list.filter((s) => s.companyId === fCompany);
-      if (exclude !== "squad" && fSquad) list = list.filter((s) => s.squadId === fSquad);
-      if (exclude !== "role" && fRole) list = list.filter((s) => s.companyRoleId === fRole);
+      if (exclude !== "company" && fCompany) list = list.filter((s) => (fCompany === "none" ? !s.companyId : s.companyId === fCompany));
+      if (exclude !== "squad" && fSquad) list = list.filter((s) => (fSquad === "none" ? !s.squadId : s.squadId === fSquad));
+      if (exclude !== "role" && fRole) list = list.filter((s) => (fRole === "none" ? !s.companyRoleId : s.companyRoleId === fRole));
       if (exclude !== "cert" && fCert) list = list.filter((s) => s.certIds.includes(fCert));
       if (exclude !== "round" && fRound) list = list.filter((s) => (fRound === "none" ? s.dutyRound == null : String(s.dutyRound) === fRound));
       if (q) list = list.filter((s) => s.fullName.toLowerCase().includes(q) || s.personalNumber.includes(q) || (s.squadName || "").toLowerCase().includes(q) || (s.roleName || "").toLowerCase().includes(q));
@@ -109,7 +107,7 @@ export default function SoldiersTable({
     };
     const single = (list: SoldierRow[], key: (s: SoldierRow) => string) => {
       const m = new Map<string, number>();
-      for (const s of list) { const v = key(s); if (v) m.set(v, (m.get(v) ?? 0) + 1); }
+      for (const s of list) { const v = key(s) || "none"; m.set(v, (m.get(v) ?? 0) + 1); }
       return m;
     };
     const multi = (list: SoldierRow[], key: (s: SoldierRow) => string[]) => {
@@ -184,17 +182,20 @@ export default function SoldiersTable({
             className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
             <option value="">כל הפלוגות</option>
             {companies.map((c) => <option key={c.id} value={c.id}>{c.name} ({counts.company.get(c.id) ?? 0})</option>)}
+            {(counts.company.get("none") ?? 0) > 0 && <option value="none">(ללא פלוגה) ({counts.company.get("none")})</option>}
           </select>
         )}
         <select value={fSquad} onChange={(e) => setFSquad(e.target.value)}
           className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
           <option value="">כל המחלקות</option>
           {squadOpts.map((s) => <option key={s.id} value={s.id}>{s.name} ({counts.squad.get(s.id) ?? 0})</option>)}
+          {(counts.squad.get("none") ?? 0) > 0 && <option value="none">(ללא מחלקה) ({counts.squad.get("none")})</option>}
         </select>
         <select value={fRole} onChange={(e) => setFRole(e.target.value)}
           className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
           <option value="">כל התפקידים</option>
           {roleOpts.map((r) => <option key={r.id} value={r.id}>{r.name} ({counts.role.get(r.id) ?? 0})</option>)}
+          {(counts.role.get("none") ?? 0) > 0 && <option value="none">(ללא תפקיד) ({counts.role.get("none")})</option>}
         </select>
         {certTypes.length > 0 && (
           <select value={fCert} onChange={(e) => setFCert(e.target.value)}

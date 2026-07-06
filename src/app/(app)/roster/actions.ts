@@ -54,7 +54,7 @@ export async function setSoldierRound(formData: FormData) {
   const user = await requireCapability("soldiers.roster");
   const id = String(formData.get("id") || "");
   const raw = String(formData.get("dutyRound") || "").trim();
-  const dutyRound = raw ? (Math.max(1, parseInt(raw, 10)) || null) : null;
+  const dutyRound = raw ? (Math.min(3, Math.max(1, parseInt(raw, 10))) || null) : null;
   const s = await prisma.soldier.findUnique({ where: { id }, select: { battalionId: true } });
   if (!s || s.battalionId !== user.battalionId) return;
   await prisma.soldier.update({ where: { id }, data: { dutyRound } });
@@ -73,7 +73,7 @@ export async function updateSoldier(formData: FormData) {
   const personalNumber = String(formData.get("personalNumber") || "").replace(/\D/g, "").trim() || null;
   const attached = formData.get("attached") === "on";
   const roundRaw = String(formData.get("dutyRound") || "").trim();
-  const dutyRound = roundRaw ? (Math.max(1, parseInt(roundRaw, 10)) || null) : null;
+  const dutyRound = roundRaw ? (Math.min(3, Math.max(1, parseInt(roundRaw, 10))) || null) : null;
   if (!firstName || !lastName) throw new Error("שם פרטי + שם משפחה חובה");
 
   const s = await prisma.soldier.findUnique({ where: { id } });

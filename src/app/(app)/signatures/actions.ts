@@ -272,41 +272,45 @@ export async function createSignout(formData: FormData): Promise<{ error: string
         select: { id: true, name: true, maxPerSoldier: true, category: { select: { id: true, name: true, maxPerSoldier: true } } },
       });
 
-      // כמה כבר חתום על החייל מסוג מסוים (סריאלי + כמותי נטו)
-      const currentCache = new Map<string, number>();
-      async function currentSignedForType(itemTypeId: string): Promise<number> {
-        const cached = currentCache.get(itemTypeId);
-        if (cached != null) return cached;
-        const serialCount = await prisma.serialUnit.count({ where: { battalionId: bId, signedSoldierId: soldierId, itemTypeId } });
-        const lines = await prisma.transferLine.findMany({
-          where: { serialUnitId: null, itemTypeId, transfer: { battalionId: bId, status: "COMPLETED", type: { in: ["SIGNOUT", "CHECKIN"] }, toSoldierId: soldierId } },
-          select: { quantity: true, transfer: { select: { type: true } } },
-        });
-        let net = 0;
-        for (const l of lines) net += (l.transfer.type === "SIGNOUT" ? 1 : -1) * l.quantity;
-        const total = serialCount + Math.max(0, net);
-        currentCache.set(itemTypeId, total);
-        return total;
-      }
+      // קטגוריות עם מגבלה + כל סוגי הפריט שבהן (לחישוב סה"כ פר-קטגוריה)
+      const cats = new Map<string, { name: string; max: number }>();
+      for (const t of types) if (t.category?.maxPerSoldier != null) cats.set(t.category.id, { name: t.category.name, max: t.category.maxPerSoldier });
+      const catMembers = cats.size > 0
+        ? await prisma.itemType.findMany({ where: { battalionId: bId, categoryId: { in: [...cats.keys()] } }, select: { id: true, categoryId: true } })
+        : [];
+
+      // כמה כבר חתום על החייל — מחושב בבת אחת לכל הסוגים הרלוונטיים (2 שאילתות, ללא N+1)
+      const allTypeIds = [...new Set([...typeIds, ...catMembers.map((m) => m.id)])];
+      const [serialGroups, qtyLines] = await Promise.all([
+        prisma.serialUnit.groupBy({ by: ["itemTypeId"], where: { battalionId: bId, signedSoldierId: soldierId, itemTypeId: { in: allTypeIds } }, _count: { _all: true } }),
+        prisma.transferLine.findMany({
+          where: { serialUnitId: null, itemTypeId: { in: allTypeIds }, transfer: { battalionId: bId, status: "COMPLETED", type: { in: ["SIGNOUT", "CHECKIN"] }, toSoldierId: soldierId } },
+          select: { itemTypeId: true, quantity: true, transfer: { select: { type: true } } },
+        }),
+      ]);
+      const current = new Map<string, number>();
+      for (const g of serialGroups) current.set(g.itemTypeId, g._count._all);
+      const netByType = new Map<string, number>();
+      for (const l of qtyLines) { if (!l.itemTypeId) continue; netByType.set(l.itemTypeId, (netByType.get(l.itemTypeId) ?? 0) + (l.transfer.type === "SIGNOUT" ? 1 : -1) * l.quantity); }
+      for (const [tid, net] of netByType) current.set(tid, (current.get(tid) ?? 0) + Math.max(0, net));
+      const curOf = (id: string) => current.get(id) ?? 0;
 
       // בדיקה פר סוג-פריט
       for (const t of types) {
         if (t.maxPerSoldier == null) continue;
-        const cur = await currentSignedForType(t.id);
+        const cur = curOf(t.id);
         if (cur + (addByType.get(t.id) ?? 0) > t.maxPerSoldier) {
           return { error: `🚫 חייל יכול להיות חתום על מקסימום ${t.maxPerSoldier} × ${t.name}. כבר חתום ${cur}, מנסה להוסיף ${addByType.get(t.id) ?? 0}.` };
         }
       }
 
       // בדיקה פר קטגוריה (סה"כ מכל הסוגים בקטגוריה)
-      const cats = new Map<string, { name: string; max: number }>();
-      for (const t of types) if (t.category?.maxPerSoldier != null) cats.set(t.category.id, { name: t.category.name, max: t.category.maxPerSoldier });
       for (const [catId, cat] of cats) {
-        const catTypes = await prisma.itemType.findMany({ where: { categoryId: catId, battalionId: bId }, select: { id: true } });
+        const memberIds = new Set(catMembers.filter((m) => m.categoryId === catId).map((m) => m.id));
         let curTotal = 0;
-        for (const ct of catTypes) curTotal += await currentSignedForType(ct.id);
+        for (const id of memberIds) curTotal += curOf(id);
         let addTotal = 0;
-        for (const [tid, n] of addByType) if (catTypes.some((ct) => ct.id === tid)) addTotal += n;
+        for (const [tid, n] of addByType) if (memberIds.has(tid)) addTotal += n;
         if (curTotal + addTotal > cat.max) {
           return { error: `🚫 חייל יכול להיות חתום על מקסימום ${cat.max} מקטגוריית "${cat.name}" (מכל הסוגים). כבר חתום ${curTotal}, מנסה להוסיף ${addTotal}.` };
         }

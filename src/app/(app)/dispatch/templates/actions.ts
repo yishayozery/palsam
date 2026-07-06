@@ -21,7 +21,9 @@ export async function saveTemplate(formData: FormData): Promise<{ ok?: boolean; 
     const vehicleItemTypeId = String(formData.get("vehicleItemTypeId") || "").trim() || null;
     const vehicleSerialUnitId = String(formData.get("vehicleSerialUnitId") || "").trim() || null;
     const roundStr = String(formData.get("round") || "").trim();
-    const round = roundStr ? parseInt(roundStr, 10) || null : null;
+    const roundParsed = roundStr ? parseInt(roundStr, 10) || null : null;
+    // סבבים אוחדו ל-1..3 — נרמול הגנתי כדי שלא יישמר ערך מחוץ לטווח
+    const round = roundParsed != null ? Math.min(3, Math.max(1, roundParsed)) : null;
     const companyId = String(formData.get("companyId") || "").trim() || null;
     let slots: SlotAssignment[] = [];
     try { slots = JSON.parse(String(formData.get("slots") || "[]")); } catch { return { error: "פורמט שגוי" }; }

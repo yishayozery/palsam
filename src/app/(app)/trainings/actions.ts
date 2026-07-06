@@ -221,7 +221,7 @@ export async function enrollSoldier(formData: FormData): Promise<string | undefi
   if (!instanceId || !soldierId) return "חסרים נתונים";
 
   const [inst, soldier] = await Promise.all([
-    prisma.courseInstance.findUnique({ where: { id: instanceId }, include: { allocations: true, _count: { select: { enrollments: true } } } }),
+    prisma.courseInstance.findUnique({ where: { id: instanceId }, include: { allocations: true, _count: { select: { enrollments: { where: { status: "ENROLLED" } } } } } }),
     prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true, companyId: true, fullName: true } }),
   ]);
   if (!inst || inst.battalionId !== bId) return "מופע לא נמצא";
@@ -245,7 +245,7 @@ export async function enrollSoldier(formData: FormData): Promise<string | undefi
   const alloc = inst.allocations.find((a) => a.companyId === soldier.companyId);
   if (alloc) {
     const compEnrolled = await prisma.courseEnrollment.count({
-      where: { courseInstanceId: instanceId, soldier: { companyId: soldier.companyId } },
+      where: { courseInstanceId: instanceId, status: "ENROLLED", soldier: { companyId: soldier.companyId } },
     });
     if (compEnrolled >= alloc.slots) return `הפלוגה מיצתה את המכסה (${alloc.slots})`;
   }
@@ -284,6 +284,7 @@ export async function completeEnrollment(formData: FormData): Promise<string | u
     include: { courseInstance: { include: { courseType: { include: { quals: true } } } } },
   });
   if (!en || en.battalionId !== bId) return "שיבוץ לא נמצא";
+  if (en.status !== "ENROLLED") return en.status === "COMPLETED" ? "החייל כבר סומן כמסיים" : "לא ניתן לסמן סיום לשיבוץ שבוטל";
 
   const grants = en.courseInstance.courseType.quals.filter((q) => q.role === "GRANT");
   const now = new Date();
