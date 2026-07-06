@@ -728,6 +728,7 @@ model Category {
   name          String
   active        Boolean       @default(true)
   sortOrder     Int           @default(0)
+  maxPerSoldier Int?          // מקס' יחידות מהקטגוריה (סה"כ מכל הסוגים) לחייל (null = ללא הגבלה)
   itemTypes     ItemType[]
 
   @@unique([battalionId, name])
@@ -801,6 +802,7 @@ model ItemType {
   // תרומה / ציוד לא-צבאי (נגזר מ-association לתאימות)
   isDonated      Boolean          @default(false)
   signable       Boolean          @default(true) // האם ניתן להחתים חיילים על הפריט
+  maxPerSoldier  Int?             // מקס' יחידות מסוג זה שחייל יכול להיות חתום עליהן (null = ללא הגבלה)
   ownerHolderId  String? // הבעלים של מלאי התרומה (פלוגה); null = רמת גדוד
   ownerHolder    Holder?          @relation("ItemOwnerHolder", fields: [ownerHolderId], references: [id])
   imageData      String?

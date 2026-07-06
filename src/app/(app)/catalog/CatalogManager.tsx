@@ -18,6 +18,7 @@ export type EditData = {
   homeLocationId?: string | null;
   trackExpiry?: boolean;
   expiryAlertDays?: number | null;
+  maxPerSoldier?: number | null;
 };
 
 function compressImage(file: File): Promise<string> {
@@ -125,6 +126,13 @@ export default function CatalogManager({ categories, locations = [], edit }: { c
                     <option value="SOLDIER">חייל ישירות (נשק)</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">מקס׳ לחייל</label>
+                <input type="number" name="maxPerSoldier" min={1} defaultValue={edit?.maxPerSoldier ?? ""} placeholder="ריק = ללא הגבלה"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <p className="text-[11px] text-slate-500 mt-0.5">מקסימום יחידות מסוג זה שחייל יכול להיות חתום עליהן (למשל נשק/אמל״ר = 1). ריק = ללא הגבלה. חוסם החתמה בחריגה.</p>
               </div>
 
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">

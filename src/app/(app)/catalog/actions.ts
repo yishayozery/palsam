@@ -24,6 +24,8 @@ export async function saveItemType(formData: FormData) {
   const trackExpiry = formData.get("trackExpiry") === "on";
   const alertDaysRaw = parseInt(String(formData.get("expiryAlertDays") || ""), 10);
   const expiryAlertDays = trackExpiry && alertDaysRaw > 0 ? alertDaysRaw : null;
+  const maxRaw = parseInt(String(formData.get("maxPerSoldier") || ""), 10);
+  const maxPerSoldier = maxRaw > 0 ? maxRaw : null;
   // תמונת מוצר (data-URL, אופציונלי). "__CLEAR__" = הסרת תמונה קיימת.
   const rawImage = String(formData.get("imageData") || "");
   const imageData =
@@ -31,7 +33,7 @@ export async function saveItemType(formData: FormData) {
 
   if (!name) return;
 
-  const base = { sku, name, categoryId, trackingMethod, unit, association, signMode, isDonated, homeLocationId, trackExpiry, expiryAlertDays };
+  const base = { sku, name, categoryId, trackingMethod, unit, association, signMode, isDonated, homeLocationId, trackExpiry, expiryAlertDays, maxPerSoldier };
   const data = imageData !== undefined ? { ...base, imageData } : base;
   if (id) {
     await prisma.itemType.update({ where: { id }, data });

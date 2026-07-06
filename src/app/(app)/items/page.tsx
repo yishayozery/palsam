@@ -153,7 +153,7 @@ export default async function ItemsPage({
                         <CatalogManager
                           categories={categories.map((c) => ({ id: c.id, name: c.name }))}
                           locations={locOptions}
-                          edit={{ id: i.id, sku: i.sku ?? "", name: i.name, categoryId: i.categoryId ?? "", trackingMethod: i.trackingMethod, unit: i.unit, association: i.association, signMode: i.signMode, imageData: i.imageData, homeLocationId: i.homeLocationId, trackExpiry: i.trackExpiry, expiryAlertDays: i.expiryAlertDays }}
+                          edit={{ id: i.id, sku: i.sku ?? "", name: i.name, categoryId: i.categoryId ?? "", trackingMethod: i.trackingMethod, unit: i.unit, association: i.association, signMode: i.signMode, imageData: i.imageData, homeLocationId: i.homeLocationId, trackExpiry: i.trackExpiry, expiryAlertDays: i.expiryAlertDays, maxPerSoldier: i.maxPerSoldier }}
                         />
                         {i.active ? (
                           <form action={archiveItemType}>
@@ -186,11 +186,11 @@ export default async function ItemsPage({
         <CategoriesFilters initialQ={catQ} initialWarehouse={catWh} />
         <CrudSection
           title="קטגוריות ציוד (לפי מחסן)" addLabel="קטגוריה"
-          fields={[{ name: "name", label: "שם הקטגוריה" }, { name: "warehouseType", label: "מחסן", type: "select", default: "EQUIPMENT", options: whOptions }]}
+          fields={[{ name: "name", label: "שם הקטגוריה" }, { name: "warehouseType", label: "מחסן", type: "select", default: "EQUIPMENT", options: whOptions }, { name: "maxPerSoldier", label: "מקס׳ לחייל בקטגוריה (ריק=ללא)", type: "number" }]}
           saveAction={saveCategory} deleteAction={deleteCategory}
           rows={categories.map((c) => ({
-            id: c.id, values: { name: c.name, warehouseType: c.warehouseType }, locked: c._count.itemTypes > 0,
-            display: (<span className="flex items-center gap-1.5">{c.name}<Badge className="bg-slate-100 text-slate-600">{WAREHOUSE_TYPE_SHORT[c.warehouseType]}</Badge>{c._count.itemTypes > 0 && <Badge>{c._count.itemTypes} מק״טים</Badge>}</span>),
+            id: c.id, values: { name: c.name, warehouseType: c.warehouseType, maxPerSoldier: c.maxPerSoldier != null ? String(c.maxPerSoldier) : "" }, locked: c._count.itemTypes > 0,
+            display: (<span className="flex items-center gap-1.5">{c.name}<Badge className="bg-slate-100 text-slate-600">{WAREHOUSE_TYPE_SHORT[c.warehouseType]}</Badge>{c._count.itemTypes > 0 && <Badge>{c._count.itemTypes} מק״טים</Badge>}{c.maxPerSoldier != null && <Badge className="bg-purple-100 text-purple-700">מקס׳ {c.maxPerSoldier}/חייל</Badge>}</span>),
           }))}
         />
         </>

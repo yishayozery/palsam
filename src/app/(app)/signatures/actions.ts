@@ -251,6 +251,69 @@ export async function createSignout(formData: FormData): Promise<{ error: string
     ? await prisma.signableKitLine.findMany({ where: { kitId }, include: { itemType: true } })
     : [];
 
+  // 🔒 מגבלת מקס' לחייל — פר סוג-פריט ופר קטגוריה (חסימה קשיחה)
+  {
+    // כמות חדשה שמתווספת פר סוג-פריט (סריאלי=1 ליחידה, כמותי=כמות, ערכה=כמות)
+    const addByType = new Map<string, number>();
+    if (serialIds.length > 0) {
+      const units = await prisma.serialUnit.findMany({ where: { id: { in: serialIds } }, select: { itemTypeId: true } });
+      for (const u of units) addByType.set(u.itemTypeId, (addByType.get(u.itemTypeId) ?? 0) + 1);
+    }
+    for (let i = 0; i < qtyItems.length; i++) {
+      const it = qtyItems[i]; const q = qtyValues[i];
+      if (it && q > 0) addByType.set(it, (addByType.get(it) ?? 0) + q);
+    }
+    for (const kl of kitLines) addByType.set(kl.itemTypeId, (addByType.get(kl.itemTypeId) ?? 0) + kl.quantity);
+
+    if (addByType.size > 0) {
+      const typeIds = [...addByType.keys()];
+      const types = await prisma.itemType.findMany({
+        where: { id: { in: typeIds } },
+        select: { id: true, name: true, maxPerSoldier: true, category: { select: { id: true, name: true, maxPerSoldier: true } } },
+      });
+
+      // כמה כבר חתום על החייל מסוג מסוים (סריאלי + כמותי נטו)
+      const currentCache = new Map<string, number>();
+      async function currentSignedForType(itemTypeId: string): Promise<number> {
+        const cached = currentCache.get(itemTypeId);
+        if (cached != null) return cached;
+        const serialCount = await prisma.serialUnit.count({ where: { battalionId: bId, signedSoldierId: soldierId, itemTypeId } });
+        const lines = await prisma.transferLine.findMany({
+          where: { serialUnitId: null, itemTypeId, transfer: { battalionId: bId, status: "COMPLETED", type: { in: ["SIGNOUT", "CHECKIN"] }, toSoldierId: soldierId } },
+          select: { quantity: true, transfer: { select: { type: true } } },
+        });
+        let net = 0;
+        for (const l of lines) net += (l.transfer.type === "SIGNOUT" ? 1 : -1) * l.quantity;
+        const total = serialCount + Math.max(0, net);
+        currentCache.set(itemTypeId, total);
+        return total;
+      }
+
+      // בדיקה פר סוג-פריט
+      for (const t of types) {
+        if (t.maxPerSoldier == null) continue;
+        const cur = await currentSignedForType(t.id);
+        if (cur + (addByType.get(t.id) ?? 0) > t.maxPerSoldier) {
+          return { error: `🚫 חייל יכול להיות חתום על מקסימום ${t.maxPerSoldier} × ${t.name}. כבר חתום ${cur}, מנסה להוסיף ${addByType.get(t.id) ?? 0}.` };
+        }
+      }
+
+      // בדיקה פר קטגוריה (סה"כ מכל הסוגים בקטגוריה)
+      const cats = new Map<string, { name: string; max: number }>();
+      for (const t of types) if (t.category?.maxPerSoldier != null) cats.set(t.category.id, { name: t.category.name, max: t.category.maxPerSoldier });
+      for (const [catId, cat] of cats) {
+        const catTypes = await prisma.itemType.findMany({ where: { categoryId: catId, battalionId: bId }, select: { id: true } });
+        let curTotal = 0;
+        for (const ct of catTypes) curTotal += await currentSignedForType(ct.id);
+        let addTotal = 0;
+        for (const [tid, n] of addByType) if (catTypes.some((ct) => ct.id === tid)) addTotal += n;
+        if (curTotal + addTotal > cat.max) {
+          return { error: `🚫 חייל יכול להיות חתום על מקסימום ${cat.max} מקטגוריית "${cat.name}" (מכל הסוגים). כבר חתום ${curTotal}, מנסה להוסיף ${addTotal}.` };
+        }
+      }
+    }
+  }
+
   // 🛡️ ולידציה: לא ניתן להחתים יותר ממה שיש במלאי (פריטים כמותיים שהמשתמש בחר ידנית)
   if (user.holderId && qtyItems.length > 0) {
     for (let i = 0; i < qtyItems.length; i++) {

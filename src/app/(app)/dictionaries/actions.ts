@@ -17,11 +17,13 @@ export async function saveCategory(formData: FormData) {
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
   const warehouseType = String(formData.get("warehouseType") || "EQUIPMENT") as WarehouseType;
+  const maxRaw = parseInt(String(formData.get("maxPerSoldier") || ""), 10);
+  const maxPerSoldier = maxRaw > 0 ? maxRaw : null;
   if (!name) return;
   if (id) {
-    await prisma.category.update({ where: { id }, data: { name, warehouseType } });
+    await prisma.category.update({ where: { id }, data: { name, warehouseType, maxPerSoldier } });
   } else {
-    await prisma.category.create({ data: { battalionId: bId, name, warehouseType } });
+    await prisma.category.create({ data: { battalionId: bId, name, warehouseType, maxPerSoldier } });
   }
   await audit(user.id, id ? "UPDATE" : "CREATE", "Category", id || name);
   revalidatePath("/dictionaries");
