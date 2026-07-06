@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card, Table, Th, Td, EmptyState } from "@/components/ui";
 import InviteLink from "@/components/InviteLink";
 import BattalionForm from "./BattalionForm";
-import { toggleBattalion, resetUserPassword } from "./actions";
+import { toggleBattalion, resetUserPassword, setBattalionSupportWhatsapp } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,7 @@ export default async function BattalionsPage() {
         ) : (
           <Table>
             <thead>
-              <tr><Th>גדוד</Th><Th>קוד</Th><Th>מנהלי מערכת</Th><Th>משתמשים</Th><Th>חיילים</Th><Th>מק״טים</Th><Th>סטטוס</Th><Th></Th></tr>
+              <tr><Th>גדוד</Th><Th>קוד</Th><Th>מנהלי מערכת</Th><Th>ווטסאפ תמיכה</Th><Th>משתמשים</Th><Th>חיילים</Th><Th>מק״טים</Th><Th>סטטוס</Th><Th></Th></tr>
             </thead>
             <tbody>
               {battalions.map((b) => (
@@ -55,6 +55,14 @@ export default async function BattalionsPage() {
                     ))}
                     {b.users.length === 0 && "—"}
                     <div className="text-[10px] text-slate-400 mt-1">מנהלים נוספים — בניהול משתמשים בתוך הגדוד</div>
+                  </Td>
+                  <Td className="text-xs">
+                    <form action={setBattalionSupportWhatsapp} className="flex items-center gap-1">
+                      <input type="hidden" name="id" value={b.id} />
+                      <input name="supportWhatsapp" defaultValue={b.supportWhatsapp ?? ""} placeholder="972501234567"
+                        className="w-28 rounded border border-slate-300 px-2 py-0.5 text-xs font-mono" />
+                      <button className="text-[11px] text-blue-600 hover:underline">שמור</button>
+                    </form>
                   </Td>
                   <Td className="text-center">{b._count.users}</Td>
                   <Td className="text-center">{b._count.soldiers}</Td>

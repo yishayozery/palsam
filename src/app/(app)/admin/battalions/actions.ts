@@ -107,3 +107,13 @@ export async function toggleBattalion(formData: FormData) {
   await audit(admin.id, "UPDATE", "Battalion", id, { active: !b.active });
   revalidatePath("/admin/battalions");
 }
+
+/** אדמין-על: מספר ווטסאפ תמיכה לגדוד (ריק = נופל להגדרה הגלובלית). */
+export async function setBattalionSupportWhatsapp(formData: FormData) {
+  const admin = await requireSuperAdmin();
+  const id = String(formData.get("id") || "");
+  const number = String(formData.get("supportWhatsapp") || "").replace(/\D/g, "") || null;
+  await prisma.battalion.update({ where: { id }, data: { supportWhatsapp: number } });
+  await audit(admin.id, "SET_SUPPORT_WHATSAPP", "Battalion", id, { number });
+  revalidatePath("/admin/battalions");
+}

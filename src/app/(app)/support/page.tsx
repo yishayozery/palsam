@@ -11,8 +11,9 @@ export default async function SupportPage() {
   const bId = user.battalionId!;
   const isAdmin = can(user, "battalion.profile") || user.isSuperAdmin;
 
-  const [config, questions] = await Promise.all([
+  const [config, battalion, questions] = await Promise.all([
     prisma.appConfig.findUnique({ where: { id: "singleton" }, select: { supportWhatsappEnabled: true, supportWhatsappNumber: true, supportMessage: true } }),
+    prisma.battalion.findUnique({ where: { id: bId }, select: { supportWhatsapp: true } }),
     prisma.supportQuestion.findMany({
       where: { battalionId: bId, ...(isAdmin ? {} : { askedById: user.id }) },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
@@ -21,9 +22,10 @@ export default async function SupportPage() {
     }),
   ]);
 
-  // נוכחות מספר = הכפתור מופיע (אין מספר → אין תמיכה בווטסאפ)
-  const waLink = config?.supportWhatsappNumber
-    ? `https://wa.me/${config.supportWhatsappNumber}?text=${encodeURIComponent(config.supportMessage || "שלום, אני צריך עזרה במערכת PALMY")}`
+  // מספר הגדוד גובר; אם ריק — נופל להגדרה הגלובלית. נוכחות מספר = הכפתור מופיע.
+  const waNumber = battalion?.supportWhatsapp || config?.supportWhatsappNumber || null;
+  const waLink = waNumber
+    ? `https://wa.me/${waNumber}?text=${encodeURIComponent(config?.supportMessage || "שלום, אני צריך עזרה במערכת PALMY")}`
     : null;
 
   return (
