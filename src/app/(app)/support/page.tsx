@@ -21,7 +21,8 @@ export default async function SupportPage() {
     }),
   ]);
 
-  const waLink = config?.supportWhatsappEnabled && config.supportWhatsappNumber
+  // נוכחות מספר = הכפתור מופיע (אין מספר → אין תמיכה בווטסאפ)
+  const waLink = config?.supportWhatsappNumber
     ? `https://wa.me/${config.supportWhatsappNumber}?text=${encodeURIComponent(config.supportMessage || "שלום, אני צריך עזרה במערכת PALMY")}`
     : null;
 
