@@ -36,7 +36,7 @@ export const NAV: NavItem[] = [
 
   // ===== לוגיסטי =====
   { href: "/permanent-items", label: "ציוד קבוע לפלוגה", icon: "📌", group: "לוגיסטי", screen: "allocations" },
-  { href: "/warehouses", label: "מחסנים", icon: "🏪", group: "לוגיסטי", screen: "warehouses" },
+  { href: "/warehouses", label: "ניהול מחסנים", icon: "🏪", group: "לוגיסטי", screen: "warehouses" },
   { href: "/items", label: "הגדרות פריטים", icon: "🏷️", group: "לוגיסטי", screen: "catalog" },
   { href: "/stock", label: "מלאי מחסן גדודי", icon: "📋", group: "לוגיסטי", screen: "stock" },
   { href: "/stock/brigade", label: "החתמות חטיבה", icon: "🤝", group: "לוגיסטי", screen: "stock" },
