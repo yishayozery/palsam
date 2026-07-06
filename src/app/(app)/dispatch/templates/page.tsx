@@ -50,6 +50,7 @@ export default async function DispatchTemplatesPage() {
         companyId: true,
         companyRoleId: true,
         drivingRefresherDate: true,
+        dutyRound: true,
         company: { select: { name: true } },
         companyRole: { select: { name: true } },
         drivingLicenses: { include: { licenseType: { select: { id: true, name: true } } } },
@@ -134,6 +135,7 @@ export default async function DispatchTemplatesPage() {
           licenseIds: s.drivingLicenses.map((dl) => dl.licenseType.id),
           licenseNames: s.drivingLicenses.map((dl) => dl.licenseType.name),
           drivingRefresherDate: s.drivingRefresherDate ? s.drivingRefresherDate.toISOString().slice(0, 10) : null,
+          dutyRound: s.dutyRound,
         }))}
         companies={companies.map((c) => ({ id: c.id, name: c.name }))}
         drivingRefreshDays={drivingRefreshDays}

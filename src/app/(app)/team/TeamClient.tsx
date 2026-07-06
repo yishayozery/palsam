@@ -209,31 +209,56 @@ function HolderCard({ holder, baseUrl, isAdmin }: { holder: Holder; baseUrl: str
 export default function TeamClient({ holders, baseUrl, isAdmin, defaultCap }: { holders: Holder[]; baseUrl: string; isAdmin: boolean; defaultCap: number }) {
   const companies = holders.filter((h) => h.kind === "COMPANY");
   const warehouses = holders.filter((h) => h.kind === "WAREHOUSE");
+  const [selectedId, setSelectedId] = useState<string>(companies[0]?.id ?? holders[0]?.id ?? "");
+
+  // מנהל יחידה (לא אדמין) — רואה רק את היחידות שלו (בד"כ אחת), ללא בורר.
+  if (!isAdmin) {
+    return (
+      <div className="space-y-4">
+        {holders.map((h) => <HolderCard key={h.id} holder={h} baseUrl={baseUrl} isAdmin={false} />)}
+      </div>
+    );
+  }
+
+  // אדמין — בורר יחידה אחת בכל פעם (במקום ערימה של כל הפלוגות).
+  const selected = holders.find((h) => h.id === selectedId) ?? holders[0];
   return (
     <div className="space-y-4">
-      {isAdmin && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900 space-y-2">
-          <div>💡 תמונת-על: כל היחידות בגדוד עם רספ״ים/סגנים/מפקדי מחלקות מול התקרה. אדום = הגעה לתקרה.</div>
-          <form action={setDefaultDelegateCap} className="flex items-center gap-2 border-t border-blue-200 pt-2">
-            <span className="font-medium">תקרת ברירת מחדל לגדוד:</span>
-            <input name="cap" type="number" min={0} max={20} defaultValue={defaultCap} className="w-16 rounded border border-blue-300 px-2 py-0.5 text-xs" />
-            <button className="text-blue-700 font-medium hover:underline">שמור</button>
-            <span className="text-blue-500">חלה על יחידות ללא תקרה משלהן. אפשר לשנות פר-יחידה בכל כרטיס.</span>
-          </form>
-        </div>
-      )}
-      {companies.length > 0 && (
-        <div className="space-y-3">
-          {isAdmin && <h3 className="text-sm font-bold text-slate-600">🪖 פלוגות</h3>}
-          {companies.map((h) => <HolderCard key={h.id} holder={h} baseUrl={baseUrl} isAdmin={isAdmin} />)}
-        </div>
-      )}
-      {warehouses.length > 0 && (
-        <div className="space-y-3">
-          {isAdmin && <h3 className="text-sm font-bold text-slate-600">🏪 מחסנים</h3>}
-          {warehouses.map((h) => <HolderCard key={h.id} holder={h} baseUrl={baseUrl} isAdmin={isAdmin} />)}
-        </div>
-      )}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900">
+        <form action={setDefaultDelegateCap} className="flex flex-wrap items-center gap-2">
+          <span className="font-medium">תקרת ברירת מחדל לגדוד:</span>
+          <input name="cap" type="number" min={0} max={20} defaultValue={defaultCap} className="w-16 rounded border border-blue-300 px-2 py-0.5 text-xs" />
+          <button className="text-blue-700 font-medium hover:underline">שמור</button>
+          <span className="text-blue-500">חלה על יחידות ללא תקרה משלהן. אפשר לשנות פר-יחידה בכרטיס.</span>
+        </form>
+      </div>
+
+      {/* בורר יחידה */}
+      <div className="flex flex-wrap gap-1.5">
+        {companies.map((h) => {
+          const atCap = h.subUsers.length >= h.cap;
+          const on = h.id === selectedId;
+          return (
+            <button key={h.id} onClick={() => setSelectedId(h.id)}
+              className={`text-sm rounded-full px-3 py-1.5 border transition flex items-center gap-1.5 ${on ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"}`}>
+              🪖 {h.name}
+              <span className={`text-[10px] rounded-full px-1.5 ${on ? "bg-white/20" : atCap ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-500"}`}>{h.subUsers.length}/{h.cap}</span>
+            </button>
+          );
+        })}
+        {warehouses.length > 0 && <span className="w-px bg-slate-200 mx-1 self-stretch" />}
+        {warehouses.map((h) => {
+          const on = h.id === selectedId;
+          return (
+            <button key={h.id} onClick={() => setSelectedId(h.id)}
+              className={`text-sm rounded-full px-3 py-1.5 border transition ${on ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"}`}>
+              🏪 {h.name}
+            </button>
+          );
+        })}
+      </div>
+
+      {selected && <HolderCard key={selected.id} holder={selected} baseUrl={baseUrl} isAdmin={true} />}
     </div>
   );
 }

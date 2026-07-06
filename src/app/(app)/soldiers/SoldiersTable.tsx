@@ -30,6 +30,7 @@ export type SoldierRow = {
   companyRoleId: string;
   roleName: string | null;
   isCommander: boolean;
+  dutyRound: number | null;
   certIds: string[];
   drivingNames: string[];
   drivingStatus: "none" | "ok" | "warning" | "expired" | "missing";
@@ -64,6 +65,7 @@ export default function SoldiersTable({
   const [fSquad, setFSquad] = useState("");
   const [fRole, setFRole] = useState("");
   const [fCert, setFCert] = useState("");
+  const [fRound, setFRound] = useState(""); // "", "1".."3", "none"
 
   const certName = useMemo(() => new Map(certTypes.map((c) => [c.id, c.name])), [certTypes]);
 
@@ -73,6 +75,7 @@ export default function SoldiersTable({
     if (fSquad) list = list.filter((s) => s.squadId === fSquad);
     if (fRole) list = list.filter((s) => s.companyRoleId === fRole);
     if (fCert) list = list.filter((s) => s.certIds.includes(fCert));
+    if (fRound) list = list.filter((s) => (fRound === "none" ? s.dutyRound == null : String(s.dutyRound) === fRound));
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter((s) =>
@@ -83,9 +86,9 @@ export default function SoldiersTable({
       );
     }
     return list;
-  }, [soldiers, fCompany, fSquad, fRole, fCert, search]);
+  }, [soldiers, fCompany, fSquad, fRole, fCert, fRound, search]);
 
-  const anyFilter = fCompany || fSquad || fRole || fCert || search.trim();
+  const anyFilter = fCompany || fSquad || fRole || fCert || fRound || search.trim();
 
   // squads/roles filtered for the current filter-company (nicer dropdowns)
   const squadOpts = fCompany ? squads.filter((s) => s.companyId === fCompany) : squads;
@@ -94,12 +97,13 @@ export default function SoldiersTable({
   // ספירת חיילים פר-אפשרות סינון (facet counts) — לפי הסקופ הנוכחי, למעט הפילטר שנספר
   const counts = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const base = (exclude: "company" | "squad" | "role" | "cert") => {
+    const base = (exclude: "company" | "squad" | "role" | "cert" | "round") => {
       let list = soldiers;
       if (exclude !== "company" && fCompany) list = list.filter((s) => s.companyId === fCompany);
       if (exclude !== "squad" && fSquad) list = list.filter((s) => s.squadId === fSquad);
       if (exclude !== "role" && fRole) list = list.filter((s) => s.companyRoleId === fRole);
       if (exclude !== "cert" && fCert) list = list.filter((s) => s.certIds.includes(fCert));
+      if (exclude !== "round" && fRound) list = list.filter((s) => (fRound === "none" ? s.dutyRound == null : String(s.dutyRound) === fRound));
       if (q) list = list.filter((s) => s.fullName.toLowerCase().includes(q) || s.personalNumber.includes(q) || (s.squadName || "").toLowerCase().includes(q) || (s.roleName || "").toLowerCase().includes(q));
       return list;
     };
@@ -118,8 +122,9 @@ export default function SoldiersTable({
       squad: single(base("squad"), (s) => s.squadId),
       role: single(base("role"), (s) => s.companyRoleId),
       cert: multi(base("cert"), (s) => s.certIds),
+      round: single(base("round"), (s) => (s.dutyRound != null ? String(s.dutyRound) : "none")),
     };
-  }, [soldiers, fCompany, fSquad, fRole, fCert, search]);
+  }, [soldiers, fCompany, fSquad, fRole, fCert, fRound, search]);
 
   // ---- Cert popup ----
   const [certSoldier, setCertSoldier] = useState<SoldierRow | null>(null);
@@ -198,8 +203,14 @@ export default function SoldiersTable({
             {certTypes.map((c) => <option key={c.id} value={c.id}>{c.name} ({counts.cert.get(c.id) ?? 0})</option>)}
           </select>
         )}
+        <select value={fRound} onChange={(e) => setFRound(e.target.value)}
+          className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
+          <option value="">כל הסבבים</option>
+          {[1, 2, 3].map((r) => <option key={r} value={String(r)}>🔄 סבב {r} ({counts.round.get(String(r)) ?? 0})</option>)}
+          <option value="none">ללא סבב ({counts.round.get("none") ?? 0})</option>
+        </select>
         {anyFilter && (
-          <button onClick={() => { setSearch(""); setFCompany(""); setFSquad(""); setFRole(""); setFCert(""); }}
+          <button onClick={() => { setSearch(""); setFCompany(""); setFSquad(""); setFRole(""); setFCert(""); setFRound(""); }}
             className="text-xs text-slate-500 hover:text-slate-700 underline">נקה</button>
         )}
         <button onClick={() => { setErr(null); setEditRow("new"); }}
@@ -217,6 +228,7 @@ export default function SoldiersTable({
               {showCompany && <th className="px-2 py-2 text-right font-medium border-b">פלוגה</th>}
               <th className="px-2 py-2 text-right font-medium border-b">מחלקה</th>
               <th className="px-2 py-2 text-right font-medium border-b">תפקיד</th>
+              <th className="px-2 py-2 text-center font-medium border-b">סבב</th>
               <th className="px-2 py-2 text-center font-medium border-b">הסמכות</th>
               <th className="px-2 py-2 text-center font-medium border-b">ציוד חתום</th>
               <th className="px-2 py-2 text-center font-medium border-b">נהיגה</th>
@@ -243,6 +255,9 @@ export default function SoldiersTable({
                   {s.roleName
                     ? <Badge className={s.isCommander ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}>{s.roleName}</Badge>
                     : <span className="text-slate-300">—</span>}
+                </td>
+                <td className="px-2 py-2 text-center whitespace-nowrap">
+                  {s.dutyRound != null ? <Badge className="bg-purple-100 text-purple-700">🔄 {s.dutyRound}</Badge> : <span className="text-slate-300">—</span>}
                 </td>
                 <td className="px-2 py-2 text-center whitespace-nowrap">
                   <button onClick={() => openCerts(s)}
@@ -277,7 +292,7 @@ export default function SoldiersTable({
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={showCompany ? 8 : 7} className="px-3 py-6 text-center text-sm text-slate-400">לא נמצאו חיילים</td></tr>
+              <tr><td colSpan={showCompany ? 9 : 8} className="px-3 py-6 text-center text-sm text-slate-400">לא נמצאו חיילים</td></tr>
             )}
           </tbody>
         </table>
@@ -431,6 +446,14 @@ function SoldierEditModal({
             <select name="companyRoleId" defaultValue={row?.companyRoleId || ""} className="inp">
               <option value="">— ללא —</option>
               {roleOpts.map((r) => <option key={r.id} value={r.id}>{r.name}{r.isCommander ? " ⭐" : ""}</option>)}
+            </select>
+          </Field>
+          <Field label="🔄 סבב תעסוקה">
+            <select name="dutyRound" defaultValue={row?.dutyRound != null ? String(row.dutyRound) : ""} className="inp">
+              <option value="">— ללא —</option>
+              <option value="1">סבב 1</option>
+              <option value="2">סבב 2</option>
+              <option value="3">סבב 3</option>
             </select>
           </Field>
           {err && <div className="text-sm text-rose-600 bg-rose-50 rounded-lg px-3 py-2">{err}</div>}

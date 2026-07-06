@@ -46,7 +46,7 @@ export default async function SoldiersPage() {
       orderBy: [{ squad: { sortOrder: "asc" } }, { fullName: "asc" }],
       select: {
         id: true, fullName: true, personalNumber: true, phone: true, platoon: true, status: true,
-        telegramChatId: true, drivingRefresherDate: true,
+        telegramChatId: true, drivingRefresherDate: true, dutyRound: true,
         companyId: true, squadId: true, companyRoleId: true,
         company: true,
         squad: true,
@@ -230,6 +230,7 @@ export default async function SoldiersPage() {
       companyRoleId: s.companyRoleId ?? "",
       roleName: s.companyRole?.name ?? null,
       isCommander: s.companyRole?.isCommander ?? false,
+      dutyRound: s.dutyRound ?? null,
       certIds: s.certifications.map((c) => c.certificationTypeId),
       drivingNames: s.drivingLicenses.map((dl) => dl.licenseType.name),
       drivingStatus: drivingStatus(s.drivingLicenses.length > 0, s.drivingRefresherDate),

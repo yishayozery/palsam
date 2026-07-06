@@ -25,6 +25,7 @@ type Soldier = {
   licenseIds: string[];
   licenseNames: string[];
   drivingRefresherDate: string | null;
+  dutyRound: number | null;
 };
 type CompanyRoleOption = { id: string; name: string };
 type DispatchRoleType = { id: string; name: string; icon: string; isDriver: boolean; companyRoleId: string | null; sortOrder: number };
@@ -101,6 +102,20 @@ export default function TemplatesClient({
   const [gapFilter, setGapFilter] = useState<string | null>(null);
   const [filterRound, setFilterRound] = useState("");
   const [filterCompany, setFilterCompany] = useState("");
+
+  // ⚠️ התנגשות סבב: חיילים משובצים שהסבב שלהם שונה מסבב התבנית
+  const roundConflicts = useMemo(() => {
+    const rn = round ? Number(round) : null;
+    if (!rn) return [] as Soldier[];
+    const seen = new Set<string>();
+    const out: Soldier[] = [];
+    for (const sl of slots) {
+      if (!sl.soldierId || seen.has(sl.soldierId)) continue;
+      const s = soldiers.find((x) => x.id === sl.soldierId);
+      if (s && s.dutyRound != null && s.dutyRound !== rn) { seen.add(s.id); out.push(s); }
+    }
+    return out;
+  }, [slots, round, soldiers]);
 
   const roleMap = useMemo(() => {
     const m: Record<string, DispatchRoleType> = {};
@@ -331,7 +346,6 @@ export default function TemplatesClient({
                 <option value="1">סבב 1</option>
                 <option value="2">סבב 2</option>
                 <option value="3">סבב 3</option>
-                <option value="4">סבב 4</option>
               </select>
             </div>
             <div>
@@ -342,6 +356,19 @@ export default function TemplatesClient({
               </select>
             </div>
           </div>
+
+          {/* ⚠️ התראת התנגשות סבב */}
+          {roundConflicts.length > 0 && (
+            <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-sm text-rose-800">
+              <div className="font-bold mb-1">⚠️ התנגשות סבב</div>
+              <div className="text-xs">התבנית מסומנת כ<b>סבב {round}</b>, אך החיילים הבאים משויכים לסבב אחר:</div>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {roundConflicts.map((s) => (
+                  <span key={s.id} className="text-[11px] bg-white border border-rose-200 rounded-full px-2 py-0.5">{s.fullName} <b className="text-rose-600">(סבב {s.dutyRound})</b></span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Slots */}
           <div>
@@ -520,7 +547,6 @@ export default function TemplatesClient({
               <option value="1">סבב 1</option>
               <option value="2">סבב 2</option>
               <option value="3">סבב 3</option>
-              <option value="4">סבב 4</option>
             </select>
             <select value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
               <option value="">כל הפלוגות</option>

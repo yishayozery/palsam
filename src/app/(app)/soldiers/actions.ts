@@ -76,6 +76,8 @@ export async function saveSoldier(formData: FormData): Promise<string | undefine
   const platoon = String(formData.get("platoon") || "").trim() || null;
   const squadId = String(formData.get("squadId") || "").trim() || null;
   const companyRoleId = String(formData.get("companyRoleId") || "").trim() || null;
+  const dutyRoundRaw = String(formData.get("dutyRound") || "").trim();
+  const dutyRound = dutyRoundRaw ? (Math.min(3, Math.max(1, parseInt(dutyRoundRaw, 10) || 0)) || null) : null;
   let companyId = String(formData.get("companyId") || "") || null;
   if (user.holderId && !companyId) companyId = user.holderId;
   if (!fullName || !personalNumber) return "שם ומספר אישי הם שדות חובה";
@@ -92,7 +94,7 @@ export async function saveSoldier(formData: FormData): Promise<string | undefine
 
   const cleanPhone = phone ? phone.replace(/-/g, "") : null;
 
-  const data = { fullName, personalNumber, phone: cleanPhone, platoon, companyId, squadId, companyRoleId };
+  const data = { fullName, personalNumber, phone: cleanPhone, platoon, companyId, squadId, companyRoleId, dutyRound };
   if (id) {
     await prisma.soldier.update({ where: { id }, data });
   } else {
