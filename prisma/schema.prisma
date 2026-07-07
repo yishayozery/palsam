@@ -140,6 +140,7 @@ model Battalion {
   attendanceReminderEnabled   Boolean @default(false) // תזכורת בוקר אוטומטית לדיווח נוכחות
   attendanceReminderText      String? // טקסט מותאם לתזכורת (אופציונלי)
   attendanceDeadline          String? // שעת גג לדיווח נוכחות (HH:mm) — תזכורת חוזרת חצי שעה לפני
+  tripLink                    String? // קישור "פתיחת משימת נסיעה" שנשלח לנהגים בבוט עם השיבוץ למשימה
   telegramBotToken            String? // טוקן בוט טלגרם לשליחת הודעות אוטומטיות
   telegramBotInfo             String? // מידע כללי שהבוט ישלח (ארוחות, תפילות, טלפונים)
   telegramBotUsername         String? // username של הבוט (מתעדכן אוטומטית ברישום webhook)
@@ -715,6 +716,8 @@ model VehicleAssignmentSoldier {
   assignment   VehicleAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   soldierId    String?
   soldier      Soldier? @relation("SoldierDispatch", fields: [soldierId], references: [id], onDelete: Cascade)
+  // 🆕 נהג הרכב — מקבל הודעת בוט "שובצת למשימה"
+  isDriver     Boolean  @default(false)
   // 🆕 חייל חוץ — לא במערכת, שם + מ.א ידניים
   externalName           String?
   externalPersonalNumber String?

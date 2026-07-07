@@ -146,9 +146,73 @@ export async function deleteAssignment(formData: FormData): Promise<{ ok?: boole
 
 // ===================== משימות רב-רכביות (Mission) =====================
 
+const DEFAULT_TRIP_LINK = "https://share.google/ynXRw9qVmG2TNOk7u";
+
+/** התראות ביצירת משימה: הודעת בוט לכל נהג משובץ + ידיעה לקצין רכב עם נהגים ורכבים. לא-חוסם. */
+async function notifyMissionCreated(missionId: string, bId: string): Promise<void> {
+  try {
+    const mission = await prisma.mission.findUnique({
+      where: { id: missionId },
+      include: {
+        battalion: { select: { telegramBotToken: true, tripLink: true } },
+        vehicles: {
+          include: {
+            vehicleSerialUnit: { select: { serialNumber: true, itemType: { select: { name: true } } } },
+            soldiers: { include: { soldier: { select: { fullName: true, telegramChatId: true } } } },
+          },
+        },
+      },
+    });
+    const token = mission?.battalion.telegramBotToken;
+    if (!mission || !token) return;
+    const link = mission.battalion.tripLink?.trim() || DEFAULT_TRIP_LINK;
+    const dateStr = mission.missionDate.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem", day: "2-digit", month: "2-digit", year: "numeric" });
+    const { sendTelegramMessage } = await import("@/lib/telegram");
+
+    const vehicleLabel = (v: (typeof mission.vehicles)[number]) =>
+      v.isExternal
+        ? `${v.externalVehicleTypeName || "רכב חוץ"} ${v.externalVehicleNumber || ""}`.trim()
+        : `${v.vehicleSerialUnit?.itemType.name || "רכב"} ${v.vehicleSerialUnit?.serialNumber || ""}`.trim();
+
+    // 1. הודעה לכל נהג משובץ + איסוף שורות סיכום לקצין רכב
+    const driverLines: string[] = [];
+    for (const v of mission.vehicles) {
+      const vName = vehicleLabel(v);
+      for (const s of v.soldiers) {
+        if (!s.isDriver) continue;
+        const name = s.soldier?.fullName || s.externalName || "נהג";
+        driverLines.push(`• ${vName} — ${name}`);
+        if (s.soldier?.telegramChatId) {
+          const text = `🚗 <b>שובצת למשימת נסיעה</b>\nתאריך: ${dateStr} · שעה: ${mission.departureTime}\nרכב: ${vName}\n\nיש לפתוח משימת נסיעה בקישור:\n${link}`;
+          await sendTelegramMessage(token, s.soldier.telegramChatId, text);
+        }
+      }
+    }
+
+    // 2. ידיעה לקצין הרכב (מנהל מחסן רכבים) — נהגים ורכבים
+    if (driverLines.length) {
+      const officers = await prisma.appUser.findMany({
+        where: {
+          battalionId: bId, active: true, soldier: { is: { telegramChatId: { not: null } } },
+          OR: [{ holder: { warehouseType: "VEHICLES" } }, { assignedHolders: { some: { holder: { warehouseType: "VEHICLES" } } } }],
+        },
+        select: { soldier: { select: { telegramChatId: true } } },
+      });
+      const summary = `🚚 <b>נפתחה משימת נסיעה</b>\nתאריך: ${dateStr} · שעה: ${mission.departureTime}${mission.title ? `\nמשימה: ${mission.title}` : ""}\n\n<b>רכבים ונהגים:</b>\n${driverLines.join("\n")}`;
+      const seen = new Set<string>();
+      for (const o of officers) {
+        const chatId = o.soldier?.telegramChatId;
+        if (chatId && !seen.has(chatId)) { seen.add(chatId); await sendTelegramMessage(token, chatId, summary); }
+      }
+    }
+  } catch (e) {
+    console.error("[notifyMissionCreated] failed (non-fatal):", e);
+  }
+}
+
 type MissionSoldierInput =
-  | { soldierId: string }
-  | { externalName: string; externalPersonalNumber?: string };
+  | { soldierId: string; isDriver?: boolean }
+  | { externalName: string; externalPersonalNumber?: string; isDriver?: boolean };
 
 type MissionVehicleInput = {
   vehicleSerialUnitId?: string | null; // רכב מהמערכת
@@ -228,8 +292,8 @@ export async function saveMission(formData: FormData): Promise<{ ok?: boolean; e
         externalVehicleTypeName: external ? (v.externalVehicleTypeName?.trim() || null) : null,
         soldiers: v.soldiers.map((s) =>
           "soldierId" in s && s.soldierId
-            ? { soldierId: s.soldierId }
-            : { soldierId: null, externalName: (s as { externalName: string }).externalName.trim(), externalPersonalNumber: (s as { externalPersonalNumber?: string }).externalPersonalNumber?.trim() || null }),
+            ? { soldierId: s.soldierId, isDriver: !!s.isDriver }
+            : { soldierId: null, isDriver: !!s.isDriver, externalName: (s as { externalName: string }).externalName.trim(), externalPersonalNumber: (s as { externalPersonalNumber?: string }).externalPersonalNumber?.trim() || null }),
       };
     });
 
@@ -261,6 +325,8 @@ export async function saveMission(formData: FormData): Promise<{ ok?: boolean; e
       });
       savedId = mission.id;
       await audit(user.id, "CREATE", "Mission", savedId, { vehicles: input.vehicles.length });
+      // התראות בוט — רק ביצירה (לא בעריכה, כדי לא להציף)
+      await notifyMissionCreated(savedId, bId);
     }
     revalidatePath("/dispatch");
     return { ok: true, id: savedId };
