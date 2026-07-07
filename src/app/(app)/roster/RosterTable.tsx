@@ -93,8 +93,8 @@ function AddForm({ companies, squads, onDone }: { companies: Company[]; squads: 
       <label className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg cursor-pointer">
         <input type="checkbox" name="enlistNow" className="mt-0.5" />
         <div>
-          <div className="font-medium text-sm text-emerald-800">✓ אשר גיוס מיידי</div>
-          <div className="text-xs text-emerald-700 mt-0.5">החייל יוכל לקבל ציוד מיד עם ההקמה. ניתן לבטל אישור בכל עת.</div>
+          <div className="font-medium text-sm text-emerald-800">✓ התחלת שמ״פ מיידית</div>
+          <div className="text-xs text-emerald-700 mt-0.5">החייל יוכל לקבל ציוד מיד עם ההקמה. ניתן לבטל בכל עת.</div>
         </div>
       </label>
       <div className="flex justify-end gap-2 pt-2">
@@ -635,13 +635,13 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
                     {s.status === "REGISTERED" && (
                       <button onClick={() => handleEnlist(s.id)}
                         className="text-xs bg-emerald-600 text-white rounded-md px-2.5 py-1 hover:bg-emerald-700">
-                        ✓ אישור גיוס
+                        ✓ התחלת שמ״פ
                       </button>
                     )}
                     {s.status === "ENLISTED" && (
                       <button onClick={() => handleDischarge(s.id)}
                         className="text-xs bg-rose-100 text-rose-700 rounded-md px-2.5 py-1 hover:bg-rose-200">
-                        סיום גיוס
+                        סגירת שמ״פ
                       </button>
                     )}
                     <button onClick={() => setEditId(s.id)}
