@@ -2,6 +2,7 @@ import { requireCapability } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import DispatchClient from "./DispatchClient";
+import MissionsSection from "./MissionsSection";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function DispatchPage() {
     effectiveCompanyId = sq?.companyId ?? null;
   }
 
-  const [battalion, vehicles, soldiers, assignments, templates, vehicleTypeLicenses] = await Promise.all([
+  const [battalion, vehicles, soldiers, assignments, templates, vehicleTypeLicenses, missions] = await Promise.all([
     prisma.battalion.findUnique({ where: { id: bId }, select: { name: true } }),
     // כל רכבי הגדוד התקינים
     prisma.serialUnit.findMany({
@@ -83,6 +84,20 @@ export default async function DispatchPage() {
       where: { itemType: { battalionId: bId } },
       select: { itemTypeId: true, licenseTypeId: true },
     }),
+    prisma.mission.findMany({
+      where: { battalionId: bId },
+      include: {
+        company: { select: { name: true } },
+        createdBy: { select: { fullName: true } },
+        vehicles: {
+          include: {
+            vehicleSerialUnit: { include: { itemType: { select: { name: true } } } },
+            soldiers: { include: { soldier: { select: { id: true, fullName: true, personalNumber: true } } } },
+          },
+        },
+      },
+      orderBy: [{ missionDate: "desc" }, { departureTime: "desc" }],
+    }),
   ]);
 
   const vtlMap: Record<string, string[]> = {};
@@ -90,12 +105,46 @@ export default async function DispatchPage() {
     (vtlMap[vl.itemTypeId] ??= []).push(vl.licenseTypeId);
   }
 
+  const missionsData = missions.map((m) => ({
+    id: m.id, title: m.title, companyId: m.companyId, companyName: m.company?.name ?? null,
+    missionDate: m.missionDate.toISOString().slice(0, 10), departureTime: m.departureTime, notes: m.notes,
+    completedAt: m.completedAt?.toISOString() ?? null, createdByName: m.createdBy.fullName,
+    vehicles: m.vehicles.map((v) => ({
+      isExternal: v.isExternal, vehicleSerialUnitId: v.vehicleSerialUnitId,
+      externalVehicleNumber: v.externalVehicleNumber, externalVehicleTypeName: v.externalVehicleTypeName,
+      label: v.isExternal
+        ? `${v.externalVehicleTypeName || "רכב חוץ"} ${v.externalVehicleNumber || ""}`.trim()
+        : `${v.vehicleSerialUnit?.itemType.name || "רכב"} · ${v.vehicleSerialUnit?.serialNumber || ""}`,
+      typeName: v.isExternal ? (v.externalVehicleTypeName || "רכב חוץ") : (v.vehicleSerialUnit?.itemType.name || "רכב"),
+      soldiers: v.soldiers.map((s) => ({
+        soldierId: s.soldierId, externalName: s.externalName, externalPersonalNumber: s.externalPersonalNumber, isDriver: s.isDriver,
+        name: s.soldier?.fullName || s.externalName || "—", pn: s.soldier?.personalNumber ?? s.externalPersonalNumber ?? null,
+      })),
+    })),
+  }));
+  const vehiclesForMission = vehicles.map((v) => ({ id: v.id, name: v.itemType.name, serial: v.serialNumber, typeName: v.itemType.name }));
+  const soldiersForMission = soldiers.map((s) => ({ id: s.id, fullName: s.fullName, personalNumber: s.personalNumber ?? "" }));
+  const templatesForMission = templates.filter((t) => t.vehicleSerialUnit).map((t) => ({
+    id: t.id, name: t.name, vehicleSerialUnitId: t.vehicleSerialUnitId!,
+    vehicleTypeName: t.vehicleSerialUnit!.itemType.name,
+    soldierIds: t.slots.filter((s) => s.soldier).map((s) => s.soldier!.id),
+  }));
+
   return (
     <div>
       <PageHeader
         helpKey="dispatch"
-        title="🚗 שבצ&quot;ק - שיבוץ רכבים"
-        subtitle="שיבוץ חיילים לרכב למשימה. ניתן לצפייה ועריכה ע&quot;י כל המשתמשים."
+        title="🚗 שבצ&quot;ק - משימות ורכבים"
+        subtitle="פתיחת משימה (שיירה) עם רכב אחד או יותר. ניתן לצפייה ועריכה ע&quot;י כל המשתמשים."
+      />
+
+      <MissionsSection
+        missions={missionsData}
+        companies={companies.map((c) => ({ id: c.id, name: c.name }))}
+        vehicles={vehiclesForMission}
+        soldiers={soldiersForMission}
+        templates={templatesForMission}
+        myCompanyId={effectiveCompanyId}
       />
 
       {assignments.length === 0 && vehicles.length === 0 ? (
