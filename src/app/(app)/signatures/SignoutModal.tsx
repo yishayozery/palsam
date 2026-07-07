@@ -48,6 +48,7 @@ export default function SignoutModal({
   const [vehicleId, setVehicleId] = useState("");
   const [equipmentLocationId, setEquipmentLocationId] = useState("");
   const [method, setMethod] = useState<"QR" | "LINK" | "ONSITE">("ONSITE");
+  const [retroactive, setRetroactive] = useState(false); // חתימה בדיעבד
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const submittingRef = useRef(false);
@@ -159,7 +160,7 @@ export default function SignoutModal({
 
   const reset = () => {
     setSoldierId(""); setCompanyFilter(lockCompanyId ?? ""); setSoldierSearch("");
-    setItemSearch(""); setCart([]); setKitId(""); setVehicleId(""); setMethod("ONSITE"); setError(null); setIncludedOpKitIds(new Set());
+    setItemSearch(""); setCart([]); setKitId(""); setVehicleId(""); setMethod("ONSITE"); setRetroactive(false); setError(null); setIncludedOpKitIds(new Set());
     setBusy(false); submittingRef.current = false; setPhoneInput(""); setPhoneError("");
   };
 
@@ -289,7 +290,8 @@ export default function SignoutModal({
 
     const fd = new FormData();
     fd.append("soldierId", soldierId);
-    fd.append("method", method);
+    fd.append("method", retroactive ? "LINK" : method);
+    fd.append("retroactive", retroactive ? "true" : "false");
     if (kitId) fd.append("kitId", kitId);
     if (vehicleId) fd.append("vehicleId", vehicleId);
     if (equipmentLocationId) fd.append("equipmentLocationId", equipmentLocationId);
@@ -590,16 +592,21 @@ export default function SignoutModal({
               )}
               <div>
                 <label className="block text-[11px] text-slate-600 mb-0.5">אופן חתימה</label>
-                <div className="flex gap-1.5 text-xs">
+                <div className="flex gap-1.5 text-xs flex-wrap">
                   {(["ONSITE", "QR", "LINK"] as const).map((m) => (
-                    <label key={m} className={`flex-1 text-center px-2 py-1.5 rounded-lg border-2 cursor-pointer transition ${method === m ? "border-slate-800 bg-slate-100" : "border-slate-200"}`}>
-                      <input type="radio" checked={method === m} onChange={() => setMethod(m)} className="hidden" />
+                    <label key={m} className={`flex-1 min-w-[5rem] text-center px-2 py-1.5 rounded-lg border-2 cursor-pointer transition ${!retroactive && method === m ? "border-slate-800 bg-slate-100" : "border-slate-200"}`}>
+                      <input type="radio" checked={!retroactive && method === m} onChange={() => { setRetroactive(false); setMethod(m); }} className="hidden" />
                       {m === "ONSITE" ? "✍️ שרבוט (כאן)" : m === "QR" ? "📱 QR" : "💬 WhatsApp"}
                     </label>
                   ))}
+                  <label className={`flex-1 min-w-[6rem] text-center px-2 py-1.5 rounded-lg border-2 cursor-pointer transition ${retroactive ? "border-amber-500 bg-amber-50 text-amber-800 font-medium" : "border-slate-200"}`}>
+                    <input type="radio" checked={retroactive} onChange={() => { setRetroactive(true); setMethod("LINK"); }} className="hidden" />
+                    🕓 חתימה בדיעבד
+                  </label>
                 </div>
                 <p className="text-[10px] text-slate-500 mt-1">
-                  {method === "ONSITE" ? "✍️ החייל יחתום ישירות במכשיר הזה" :
+                  {retroactive ? "🕓 הפריט יירשם על החייל ויירד מהמלאי מיד; תישלח לו בקשת חתימה בטלגרם. עד שיחתום — יופיע ב״ממתינים לחתימה״." :
+                   method === "ONSITE" ? "✍️ החייל יחתום ישירות במכשיר הזה" :
                    method === "QR" ? "📱 ייפתח QR שהחייל יסרוק במכשיר שלו" :
                    "💬 ייפתח לינק שתשלח לחייל בוואטסאפ"}
                 </p>

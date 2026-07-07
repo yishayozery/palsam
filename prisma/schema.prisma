@@ -1005,6 +1005,8 @@ model Transfer {
   battalion   Battalion      @relation(fields: [battalionId], references: [id])
   type        TransferType
   status      TransferStatus @default(PENDING)
+  // חתימה בדיעבד: הפריט כבר שויך לחייל וירד מהמלאי (status=COMPLETED), אך החייל טרם חתם דיגיטלית.
+  signaturePending Boolean    @default(false)
 
   fromHolderId String?
   fromHolder   Holder?  @relation("TransferFrom", fields: [fromHolderId], references: [id])

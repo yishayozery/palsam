@@ -450,14 +450,18 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                     ) : "—"}
                   </Td>
                   <Td><Badge>{SIGNATURE_METHOD[s.method]}</Badge></Td>
-                  <Td><Badge className="bg-amber-100 text-amber-800">{SIGNATURE_STATUS[s.status]}</Badge></Td>
+                  <Td>
+                    {s.transfer?.signaturePending
+                      ? <Badge className="bg-purple-100 text-purple-700">🕓 בדיעבד — במלאי החייל, ממתין לחתימה</Badge>
+                      : <Badge className="bg-amber-100 text-amber-800">{SIGNATURE_STATUS[s.status]}</Badge>}
+                  </Td>
                   <Td className="text-xs text-slate-500">{s.createdAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</Td>
                   <Td>
                     <div className="flex items-center gap-3">
                       <Link href={`/signatures/${s.token}`} className="text-xs text-blue-600 hover:underline">
                         קישור / QR
                       </Link>
-                      {canSign && (
+                      {canSign && !s.transfer?.signaturePending && (
                         <form action={cancelSignatureForm}>
                           <input type="hidden" name="signatureId" value={s.id} />
                           <button className="text-xs text-rose-500 hover:text-rose-700">✕ ביטול</button>

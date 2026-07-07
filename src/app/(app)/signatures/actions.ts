@@ -10,7 +10,59 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { requiresPersonalId } from "@/lib/handover";
 import { getSoldierEquipmentSummary, formatSoldierSummaryForWhatsApp, type SoldierEquipmentSummary } from "@/lib/soldier-summary";
-import type { SignatureMethod } from "@/generated/prisma";
+import type { SignatureMethod, Prisma } from "@/generated/prisma";
+
+/**
+ * שיוך שורות החתמה לחייל: סריאלי → signedSoldierId (עם פיצול אצווה חלקית), כמותי → גריעת מלאי.
+ * משותף לחתימה רגילה (completeSignature) ולחתימה בדיעבד (createSignout retroactive).
+ */
+async function assignSignoutLinesToSoldier(
+  tx: Prisma.TransactionClient,
+  lines: { itemTypeId: string; quantity: number; statusId: string | null; serialUnitId: string | null }[],
+  soldierId: string,
+  fromHolderId: string | null,
+  bId: string,
+) {
+  const { adjustQuantity, defaultStatusId } = await import("@/lib/inventory");
+  for (const line of lines) {
+    if (line.serialUnitId) {
+      const unit = await tx.serialUnit.findUnique({ where: { id: line.serialUnitId } });
+      if (!unit) continue;
+      const isLot = (unit.lotQuantity ?? 1) > 1;
+      const lineQty = line.quantity ?? 1;
+      if (isLot && lineQty < (unit.lotQuantity ?? 1)) {
+        let suffix = 1;
+        while (await tx.serialUnit.findFirst({ where: { itemTypeId: unit.itemTypeId, serialNumber: `${unit.serialNumber}/${suffix}` } })) suffix++;
+        await tx.serialUnit.create({
+          data: { battalionId: unit.battalionId, itemTypeId: unit.itemTypeId, serialNumber: `${unit.serialNumber}/${suffix}`, lotQuantity: lineQty, statusId: unit.statusId, signedSoldierId: soldierId, currentHolderId: unit.currentHolderId },
+        });
+        await tx.serialUnit.update({ where: { id: unit.id }, data: { lotQuantity: (unit.lotQuantity ?? 1) - lineQty } });
+      } else {
+        await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { signedSoldierId: soldierId } });
+      }
+    } else if (fromHolderId) {
+      const statusId = line.statusId || await defaultStatusId(tx, bId);
+      await adjustQuantity(tx, bId, line.itemTypeId, fromHolderId, statusId, -line.quantity);
+    }
+  }
+}
+
+/** שליחת בקשת חתימה לחייל בטלגרם (חתימה בדיעבד) — לינק ל-/sign/[token]. */
+async function notifySoldierSignRequest(soldierId: string, battalionId: string, token: string): Promise<boolean> {
+  try {
+    const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { telegramChatId: true, fullName: true } });
+    const battalion = await prisma.battalion.findUnique({ where: { id: battalionId }, select: { telegramBotToken: true } });
+    if (!soldier?.telegramChatId || !battalion?.telegramBotToken) return false;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+    const text = `✍️ <b>נדרשת חתימתך על תעודת ציוד</b>\nהציוד כבר רשום על שמך. נא לחתום דיגיטלית על התעודה:\n\n👉 <a href="${baseUrl}/sign/${token}">לחץ כאן לחתימה</a>`;
+    const { sendTelegramMessage } = await import("@/lib/telegram");
+    await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, text);
+    return true;
+  } catch (e) {
+    console.error("[notifySoldierSignRequest] failed (non-fatal):", e);
+    return false;
+  }
+}
 
 /** שליחת סיכום ציוד לחייל בטלגרם — מחזיר true אם נשלח בהצלחה */
 async function notifySoldierTelegram(soldierId: string, battalionId: string, transferId: string | null, action: "SIGN" | "CHECKIN"): Promise<boolean> {
@@ -152,6 +204,8 @@ export async function createSignout(formData: FormData): Promise<{ error: string
   const bId = user.battalionId!;
   const soldierId = String(formData.get("soldierId") || "");
   const method = String(formData.get("method") || "QR") as SignatureMethod;
+  // חתימה בדיעבד: הפריט יורד מהמלאי ומשויך מיד, החייל חותם אח"כ דרך לינק שנשלח בטלגרם.
+  const retroactive = formData.get("retroactive") === "true";
   const serialIds = formData.getAll("serial").map(String).filter(Boolean);
   console.log("[createSignout] START", { soldierId, method, serialIds, holderId: user.holderId, role: user.role });
   const vehicleId = String(formData.get("vehicleId") || "") || null;
@@ -412,10 +466,21 @@ export async function createSignout(formData: FormData): Promise<{ error: string
   }
 
   try {
-    await audit(user.id, "CREATE_SIGNOUT", "Transfer", transferId, { soldierId, method });
-    console.log("[createSignout] audit done, revalidating...");
+    await audit(user.id, "CREATE_SIGNOUT", "Transfer", transferId, { soldierId, method, retroactive });
+    // חתימה בדיעבד: משייכים את הפריטים ומורידים מהמלאי מיד, ושולחים לחייל בקשת חתימה בטלגרם.
+    if (retroactive) {
+      const tr = await prisma.transfer.findUnique({ where: { id: transferId }, include: { lines: true } });
+      if (tr) {
+        await prisma.$transaction(async (tx) => {
+          await assignSignoutLinesToSoldier(tx, tr.lines, soldierId, user.holderId ?? null, bId);
+          await tx.transfer.update({ where: { id: transferId }, data: { status: "COMPLETED", approvedAt: new Date(), signaturePending: true } });
+        });
+        await notifySoldierSignRequest(soldierId, bId, token);
+      }
+      revalidatePath("/signatures");
+      redirect(`/signatures?tab=pending`);
+    }
     revalidatePath("/signatures");
-    console.log("[createSignout] revalidate done, redirecting method=", method);
     if (method === "ONSITE") redirect(`/sign/${token}`);
     redirect(`/signatures/${token}`);
   } catch (postErr) {
@@ -440,45 +505,14 @@ export async function completeSignature(token: string, signatureData: string) {
   const soldierId = sig.soldierId;
   const fromHolderId = sig.transfer!.fromHolderId;
   const bId = sig.battalionId;
-  const { adjustQuantity, defaultStatusId } = await import("@/lib/inventory");
   try {
   await prisma.$transaction(async (tx) => {
-    for (const line of sig.transfer!.lines) {
-      if (line.serialUnitId) {
-        const unit = await tx.serialUnit.findUnique({ where: { id: line.serialUnitId } });
-        if (!unit) { console.warn("[completeSignature] serial unit not found:", line.serialUnitId); continue; }
-        const isLot = (unit.lotQuantity ?? 1) > 1;
-        const lineQty = line.quantity ?? 1;
-        if (isLot && lineQty < (unit.lotQuantity ?? 1)) {
-          let childSerial = unit.serialNumber;
-          let suffix = 1;
-          while (await tx.serialUnit.findFirst({ where: { itemTypeId: unit.itemTypeId, serialNumber: `${childSerial}/${suffix}` } })) {
-            suffix++;
-          }
-          const splitSerial = `${childSerial}/${suffix}`;
-          await tx.serialUnit.create({
-            data: {
-              battalionId: unit.battalionId, itemTypeId: unit.itemTypeId,
-              serialNumber: splitSerial, lotQuantity: lineQty,
-              statusId: unit.statusId, signedSoldierId: soldierId,
-              currentHolderId: unit.currentHolderId,
-            },
-          });
-          await tx.serialUnit.update({
-            where: { id: unit.id },
-            data: { lotQuantity: (unit.lotQuantity ?? 1) - lineQty },
-          });
-        } else {
-          await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { signedSoldierId: soldierId } });
-        }
-      } else if (fromHolderId) {
-        // כמותי: גריעה ע"י adjustQuantity (תומך גם בפריטי ערכה ללא statusId)
-        const statusId = line.statusId || await defaultStatusId(tx, bId);
-        await adjustQuantity(tx, bId, line.itemTypeId, fromHolderId, statusId, -line.quantity);
-      }
+    // חתימה בדיעבד: הפריטים כבר שויכו וירדו מהמלאי — לא לחזור על השיוך, רק לסמן חתום.
+    if (!sig.transfer!.signaturePending) {
+      await assignSignoutLinesToSoldier(tx, sig.transfer!.lines, soldierId, fromHolderId, bId);
     }
     await tx.signature.update({ where: { token }, data: { status: "SIGNED", signatureData, signedAt: new Date() } });
-    await tx.transfer.update({ where: { id: sig.transferId! }, data: { status: "COMPLETED", approvedAt: new Date() } });
+    await tx.transfer.update({ where: { id: sig.transferId! }, data: { status: "COMPLETED", approvedAt: new Date(), signaturePending: false } });
   });
   console.log("[completeSignature] transaction OK");
   } catch (txErr) {
