@@ -36,7 +36,6 @@ export type SoldierRow = {
   drivingStatus: "none" | "ok" | "warning" | "expired" | "missing";
   drivingRefresherDate: string | null;
   telegramLinked: boolean;
-  phone: string;
   inactive: boolean;
   signedSerials: SignedSerial[];
   signedQty: SignedQty[];

@@ -143,3 +143,167 @@ export async function deleteAssignment(formData: FormData): Promise<{ ok?: boole
     return { error: e instanceof Error ? e.message : "שגיאה" };
   }
 }
+
+// ===================== משימות רב-רכביות (Mission) =====================
+
+type MissionSoldierInput =
+  | { soldierId: string }
+  | { externalName: string; externalPersonalNumber?: string };
+
+type MissionVehicleInput = {
+  vehicleSerialUnitId?: string | null; // רכב מהמערכת
+  isExternal?: boolean;
+  externalVehicleNumber?: string | null;
+  externalVehicleTypeName?: string | null;
+  soldiers: MissionSoldierInput[];
+};
+
+type MissionInput = {
+  id?: string;
+  title?: string | null;
+  companyId?: string | null;
+  missionDate: string; // YYYY-MM-DD
+  departureTime: string; // HH:mm
+  notes?: string | null;
+  vehicles: MissionVehicleInput[];
+};
+
+/** יצירה/עדכון של משימה רב-רכבית (שיירה). כולל רכבי-חוץ וחיילי-חוץ. */
+export async function saveMission(formData: FormData): Promise<{ ok?: boolean; error?: string; id?: string }> {
+  try {
+    const user = await requireCapability("dispatch.manage");
+    if (!user.battalionId) return { error: "אינך משויך לגדוד" };
+    const bId = user.battalionId;
+
+    let input: MissionInput;
+    try { input = JSON.parse(String(formData.get("payload") || "")); } catch { return { error: "פורמט נתונים שגוי" }; }
+
+    if (!input.missionDate) return { error: "בחר תאריך משימה" };
+    if (!input.departureTime || !/^\d{2}:\d{2}$/.test(input.departureTime)) return { error: "הזן שעת יציאה בפורמט HH:mm" };
+    if (!Array.isArray(input.vehicles) || input.vehicles.length === 0) return { error: "הוסף לפחות רכב אחד" };
+
+    // ולידציה של כל רכב
+    for (const v of input.vehicles) {
+      const external = v.isExternal || !v.vehicleSerialUnitId;
+      if (external) {
+        if (!v.externalVehicleNumber?.trim()) return { error: "רכב חוץ — חסר מספר רכב" };
+      } else {
+        const veh = await prisma.serialUnit.findUnique({
+          where: { id: v.vehicleSerialUnitId! },
+          select: { battalionId: true, itemType: { select: { category: { select: { warehouseType: true } } } } },
+        });
+        if (!veh || veh.battalionId !== bId) return { error: "רכב לא נמצא בגדוד" };
+        if (veh.itemType.category?.warehouseType !== "VEHICLES") return { error: "הפריט אינו רכב" };
+      }
+      if (!Array.isArray(v.soldiers) || v.soldiers.length === 0) return { error: "כל רכב חייב לפחות חייל אחד" };
+      // ולידציה של חיילי מערכת
+      const sysIds = v.soldiers.filter((s): s is { soldierId: string } => "soldierId" in s && !!s.soldierId).map((s) => s.soldierId);
+      if (sysIds.length) {
+        const cnt = await prisma.soldier.count({ where: { id: { in: sysIds }, battalionId: bId } });
+        if (cnt !== sysIds.length) return { error: "חלק מהחיילים לא נמצאו בגדוד" };
+      }
+      // חיילי חוץ חייבים שם
+      for (const s of v.soldiers) {
+        if (!("soldierId" in s && s.soldierId) && !("externalName" in s && s.externalName?.trim())) {
+          return { error: "חייל חוץ — חסר שם" };
+        }
+      }
+    }
+
+    const missionDateObj = new Date(input.missionDate + "T00:00:00.000Z");
+    if (isNaN(missionDateObj.getTime())) return { error: "תאריך שגוי" };
+    const companyId = input.companyId?.trim() || null;
+    const title = input.title?.trim() || null;
+    const notes = input.notes?.trim() || null;
+
+    const buildVehicleData = (missionId: string) => input.vehicles.map((v) => {
+      const external = v.isExternal || !v.vehicleSerialUnitId;
+      return {
+        battalionId: bId, companyId, missionId,
+        missionDate: missionDateObj, departureTime: input.departureTime,
+        createdById: user.id,
+        vehicleSerialUnitId: external ? null : v.vehicleSerialUnitId!,
+        isExternal: external,
+        externalVehicleNumber: external ? (v.externalVehicleNumber?.trim() || null) : null,
+        externalVehicleTypeName: external ? (v.externalVehicleTypeName?.trim() || null) : null,
+        soldiers: v.soldiers.map((s) =>
+          "soldierId" in s && s.soldierId
+            ? { soldierId: s.soldierId }
+            : { soldierId: null, externalName: (s as { externalName: string }).externalName.trim(), externalPersonalNumber: (s as { externalPersonalNumber?: string }).externalPersonalNumber?.trim() || null }),
+      };
+    });
+
+    let savedId: string;
+    if (input.id) {
+      const existing = await prisma.mission.findUnique({ where: { id: input.id }, select: { battalionId: true } });
+      if (!existing || existing.battalionId !== bId) return { error: "משימה לא נמצאה" };
+      await prisma.$transaction(async (tx) => {
+        await tx.mission.update({ where: { id: input.id! }, data: { title, companyId, missionDate: missionDateObj, departureTime: input.departureTime, notes } });
+        // מוחקים ובונים מחדש את הרכבים (פשוט ואמין)
+        await tx.vehicleAssignment.deleteMany({ where: { missionId: input.id! } });
+        for (const vd of buildVehicleData(input.id!)) {
+          const { soldiers, ...va } = vd;
+          const created = await tx.vehicleAssignment.create({ data: va });
+          for (const s of soldiers) await tx.vehicleAssignmentSoldier.create({ data: { assignmentId: created.id, ...s } });
+        }
+      });
+      savedId = input.id;
+      await audit(user.id, "UPDATE", "Mission", savedId, { vehicles: input.vehicles.length });
+    } else {
+      const mission = await prisma.$transaction(async (tx) => {
+        const m = await tx.mission.create({ data: { battalionId: bId, title, companyId, missionDate: missionDateObj, departureTime: input.departureTime, notes, createdById: user.id } });
+        for (const vd of buildVehicleData(m.id)) {
+          const { soldiers, ...va } = vd;
+          const created = await tx.vehicleAssignment.create({ data: va });
+          for (const s of soldiers) await tx.vehicleAssignmentSoldier.create({ data: { assignmentId: created.id, ...s } });
+        }
+        return m;
+      });
+      savedId = mission.id;
+      await audit(user.id, "CREATE", "Mission", savedId, { vehicles: input.vehicles.length });
+    }
+    revalidatePath("/dispatch");
+    return { ok: true, id: savedId };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** סימון/ביטול סיום משימה שלמה. */
+export async function toggleMissionComplete(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireCapability("dispatch.manage");
+    const id = String(formData.get("id") || "");
+    const setCompleted = String(formData.get("completed") || "true") === "true";
+    if (!id) return { error: "חסר מזהה" };
+    const m = await prisma.mission.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!m || m.battalionId !== user.battalionId) return { error: "משימה לא נמצאה" };
+    const completedAt = setCompleted ? new Date() : null;
+    await prisma.$transaction([
+      prisma.mission.update({ where: { id }, data: { completedAt, completedById: setCompleted ? user.id : null } }),
+      prisma.vehicleAssignment.updateMany({ where: { missionId: id }, data: { completedAt, completedById: setCompleted ? user.id : null } }),
+    ]);
+    await audit(user.id, setCompleted ? "MISSION_COMPLETE" : "MISSION_REOPEN", "Mission", id);
+    revalidatePath("/dispatch");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** מחיקת משימה (כולל כל הרכבים שלה — cascade). */
+export async function deleteMission(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireCapability("dispatch.manage");
+    const id = String(formData.get("id") || "");
+    if (!id) return { error: "חסר מזהה" };
+    const m = await prisma.mission.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!m || m.battalionId !== user.battalionId) return { error: "משימה לא נמצאה" };
+    await prisma.mission.delete({ where: { id } });
+    await audit(user.id, "DELETE", "Mission", id);
+    revalidatePath("/dispatch");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}

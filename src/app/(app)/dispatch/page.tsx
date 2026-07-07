@@ -139,13 +139,13 @@ export default async function DispatchPage() {
             roleName: s.companyRole?.name ?? null,
             licenseIds: s.drivingLicenses.map((dl) => dl.licenseType.id),
           }))}
-          assignments={assignments.map((a) => ({
+          assignments={assignments.filter((a) => a.vehicleSerialUnit).map((a) => ({
             id: a.id,
-            vehicleSerialUnitId: a.vehicleSerialUnitId,
-            vehicleName: a.vehicleSerialUnit.itemType.name,
-            vehicleSerial: a.vehicleSerialUnit.serialNumber,
-            vehicleCompanyName: a.vehicleSerialUnit.currentHolder?.kind === "COMPANY"
-              ? a.vehicleSerialUnit.currentHolder.name : null,
+            vehicleSerialUnitId: a.vehicleSerialUnitId!,
+            vehicleName: a.vehicleSerialUnit!.itemType.name,
+            vehicleSerial: a.vehicleSerialUnit!.serialNumber,
+            vehicleCompanyName: a.vehicleSerialUnit!.currentHolder?.kind === "COMPANY"
+              ? a.vehicleSerialUnit!.currentHolder.name : null,
             companyName: a.company?.name ?? null,
             missionDate: a.missionDate.toISOString().slice(0, 10),
             departureTime: a.departureTime,
@@ -153,10 +153,10 @@ export default async function DispatchPage() {
             createdAt: a.createdAt.toISOString(),
             completedAt: a.completedAt?.toISOString() ?? null,
             soldiers: a.soldiers.filter((s) => s.soldier).map((s) => ({
-              id: s.soldier.id,
-              fullName: s.soldier.fullName,
-              personalNumber: s.soldier.personalNumber,
-              companyName: s.soldier.company?.name ?? null,
+              id: s.soldier!.id,
+              fullName: s.soldier!.fullName,
+              personalNumber: s.soldier!.personalNumber,
+              companyName: s.soldier!.company?.name ?? null,
             })),
           }))}
         />
