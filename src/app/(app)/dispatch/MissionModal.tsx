@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import ConvoyView from "./ConvoyView";
 import { saveMission } from "./actions";
 
-export type MVehicle = { id: string; name: string; serial: string; typeName: string };
-export type MSoldier = { id: string; fullName: string; personalNumber: string };
+export type MVehicle = { id: string; name: string; serial: string; typeName: string; requiredLicenseIds?: string[] };
+export type MSoldier = { id: string; fullName: string; personalNumber: string; licenseIds?: string[]; procValid?: boolean; refreshValid?: boolean };
 export type MTemplate = { id: string; name: string; vehicleSerialUnitId: string; vehicleTypeName: string; soldierIds: string[] };
 
 type VehSoldier = { key: string; soldierId: string | null; externalName: string; externalPersonalNumber: string; isDriver: boolean };
@@ -54,6 +54,22 @@ export default function MissionModal({
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [driverWarning, setDriverWarning] = useState<{ reasons: string[]; name: string; onConfirm: () => void } | null>(null);
+
+  // בדיקת הסמכת נהג (רק לרכב מערכת) — רישיון לסוג הרכב + נוהל נהיגה + ריענון
+  function driverReasons(soldierId: string | null, row: VehRow): string[] {
+    if (!soldierId || row.source === "external") return [];
+    const s = soldiers.find((x) => x.id === soldierId);
+    if (!s) return [];
+    const veh = vehicles.find((v) => v.id === row.vehicleSerialUnitId);
+    const req = veh?.requiredLicenseIds ?? [];
+    const has = new Set(s.licenseIds ?? []);
+    const reasons: string[] = [];
+    if (req.some((id) => !has.has(id))) reasons.push("חסר רישיון/היתר לסוג הרכב");
+    if (s.procValid === false) reasons.push("לא חתם על נוהל נהיגה (בתוקף)");
+    if (s.refreshValid === false) reasons.push("ריענון נהיגה לא בתוקף");
+    return reasons;
+  }
 
   const [title, setTitle] = useState(edit?.title ?? "");
   const [commanderSoldierId, setCommanderSoldierId] = useState(edit?.commanderSoldierId ?? "");
@@ -119,7 +135,12 @@ export default function MissionModal({
     setRows((r) => r.map((x) => x.key === rowKey ? { ...x, soldiers: x.soldiers.filter((s) => s.key !== sKey) } : x));
   }
   function setDriver(rowKey: string, sKey: string) {
-    setRows((r) => r.map((x) => x.key === rowKey ? { ...x, soldiers: x.soldiers.map((s) => ({ ...s, isDriver: s.key === sKey })) } : x));
+    const row = rows.find((r) => r.key === rowKey);
+    const sol = row?.soldiers.find((s) => s.key === sKey);
+    const apply = () => setRows((r) => r.map((x) => x.key === rowKey ? { ...x, soldiers: x.soldiers.map((s) => ({ ...s, isDriver: s.key === sKey })) } : x));
+    const reasons = row ? driverReasons(sol?.soldierId ?? null, row) : [];
+    if (reasons.length) setDriverWarning({ reasons, name: sol?.soldierId ? soldierName(sol.soldierId) : "נהג", onConfirm: apply });
+    else apply();
   }
   function patchSoldier(rowKey: string, sKey: string, patch: Partial<VehSoldier>) {
     setRows((r) => r.map((x) => x.key === rowKey ? { ...x, soldiers: x.soldiers.map((s) => s.key === sKey ? { ...s, ...patch } : s) } : x));
@@ -257,6 +278,7 @@ export default function MissionModal({
                         </div>
                       )}
                       {s.isDriver && <span className="text-[10px] text-sky-600">נהג</span>}
+                      {s.isDriver && (() => { const rz = driverReasons(s.soldierId, row); return rz.length ? <span title={rz.join(" · ")} className="text-[10px] bg-rose-600 text-white rounded px-1.5 py-0.5 font-bold">🔴 לא מוסמך</span> : null; })()}
                       <button onClick={() => removeSoldier(row.key, s.key)} className="text-xs text-rose-400 hover:text-rose-600">✕</button>
                     </div>
                   ))}
@@ -303,6 +325,26 @@ export default function MissionModal({
           </button>
         </div>
       </div>
+
+      {/* פופ-אפ אזהרה: נהג לא מוסמך */}
+      {driverWarning && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={() => setDriverWarning(null)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="text-lg font-bold text-rose-600 mb-2">🔴 נהג לא מוסמך</div>
+            <div className="text-sm text-slate-700 mb-3">
+              <span className="font-medium">{driverWarning.name}</span> אינו מוסמך לנהיגה ברכב זה:
+            </div>
+            <ul className="text-sm text-rose-700 list-disc pr-5 space-y-1 mb-4">
+              {driverWarning.reasons.map((r, i) => <li key={i}>{r}</li>)}
+            </ul>
+            <div className="flex items-center justify-end gap-2">
+              <button onClick={() => setDriverWarning(null)} className="text-sm text-slate-600 px-4 py-2 hover:bg-slate-50 rounded-lg">ביטול</button>
+              <button onClick={() => { driverWarning.onConfirm(); setDriverWarning(null); }}
+                className="text-sm bg-rose-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-rose-700">שבץ בכל זאת</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
