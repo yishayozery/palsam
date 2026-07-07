@@ -29,6 +29,7 @@ export default async function WarehouseReportPage({ searchParams }: { searchPara
     select: {
       serialNumber: true,
       physicalLocation: true,
+      expiryDate: true,
       itemType: { select: { name: true } },
       status: { select: { name: true } },
       equipmentLocation: { select: { name: true } },
@@ -51,7 +52,7 @@ export default async function WarehouseReportPage({ searchParams }: { searchPara
   const ironBy = new Map(indexes.map((i) => [i.soldierId, i.number]));
 
   // קיבוץ: פלוגה → חייל → פריטים
-  type Item = { name: string; serial: string | null; status: string | null; qty?: number; location?: string | null };
+  type Item = { name: string; serial: string | null; status: string | null; qty?: number; location?: string | null; expiry?: string | null };
   const bySoldier = new Map<string, { name: string; pn: string | null; company: string; iron: number | null; items: Item[] }>();
   const ensure = (id: string, name: string, pn: string | null, company: string) => {
     if (!bySoldier.has(id)) bySoldier.set(id, { name, pn, company, iron: ironBy.get(id) ?? null, items: [] });
@@ -60,7 +61,7 @@ export default async function WarehouseReportPage({ searchParams }: { searchPara
   for (const u of units) {
     if (!u.signedSoldier) continue;
     ensure(u.signedSoldier.id, u.signedSoldier.fullName, u.signedSoldier.personalNumber, u.signedSoldier.company?.name ?? "— ללא פלוגה —")
-      .items.push({ name: u.itemType.name, serial: u.serialNumber, status: u.status?.name ?? null, location: u.equipmentLocation?.name || u.physicalLocation || null });
+      .items.push({ name: u.itemType.name, serial: u.serialNumber, status: u.status?.name ?? null, location: u.equipmentLocation?.name || u.physicalLocation || null, expiry: u.expiryDate ? u.expiryDate.toISOString().slice(0, 10) : null });
   }
   // qty net per (soldier, itemName)
   const qtyNet = new Map<string, number>();
