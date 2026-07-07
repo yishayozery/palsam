@@ -36,6 +36,7 @@ export type SoldierRow = {
   drivingStatus: "none" | "ok" | "warning" | "expired" | "missing";
   drivingRefresherDate: string | null;
   telegramLinked: boolean;
+  phone: string;
   inactive: boolean;
   signedSerials: SignedSerial[];
   signedQty: SignedQty[];
@@ -44,9 +45,24 @@ export type SoldierRow = {
 
 type Opt = { id: string; name: string; companyId?: string | null };
 
+/** לינק וואטסאפ להזמנת חייל להתחבר לבוט הטלגרם. אם יש botUsername — קישור deep-link שמתחבר בקליק. */
+function waInviteLink(phone: string, fullName: string, personalNumber: string, botUsername: string | null): string {
+  const clean = phone.replace(/[-\s]/g, "");
+  const intl = clean.startsWith("0") ? "972" + clean.slice(1) : clean.replace(/^\+/, "");
+  const botLink = botUsername ? `https://t.me/${botUsername}?start=${personalNumber}` : "";
+  const lines = [
+    `היי ${fullName}, כדי להתחבר למערכת PALMY של הגדוד (התראות, ציוד חתום, נוכחות ועוד):`,
+    botLink
+      ? `👈 לחץ/י על הקישור ואשר/י START: ${botLink}`
+      : "פתח/י את בוט הגדוד בטלגרם ושלח/י את המספר האישי שלך.",
+    `המספר האישי שלך: ${personalNumber}`,
+  ];
+  return `https://wa.me/${intl}?text=${encodeURIComponent(lines.join("\n"))}`;
+}
+
 export default function SoldiersTable({
   soldiers, certTypes, companyRoles, squads, companies,
-  showCompany, canEditCerts,
+  showCompany, canEditCerts, botUsername,
 }: {
   soldiers: SoldierRow[];
   certTypes: Opt[];
@@ -55,6 +71,7 @@ export default function SoldiersTable({
   companies: Opt[];
   showCompany: boolean;
   canEditCerts: boolean;
+  botUsername: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -243,10 +260,23 @@ export default function SoldiersTable({
                   <div className="font-medium text-slate-800">
                     {s.isCommander && <span title="מפקד">⭐ </span>}
                     {s.fullName}
-                    {s.telegramLinked && <span className="text-[10px] text-sky-600 mr-1" title="מחובר לבוט">📲</span>}
+                    {s.telegramLinked
+                      ? <span className="text-[10px] text-sky-600 mr-1" title="מחובר לבוט טלגרם">📲</span>
+                      : <span className="text-[10px] text-slate-300 mr-1" title="לא מחובר לטלגרם">📵</span>}
                     {s.inactive && <span className="text-[10px] text-rose-500 mr-1">(לא פעיל)</span>}
                   </div>
-                  <div className="font-mono text-[11px] text-slate-400">{s.personalNumber}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[11px] text-slate-400">{s.personalNumber}</span>
+                    {!s.telegramLinked && s.phone && (
+                      <a
+                        href={waInviteLink(s.phone, s.fullName, s.personalNumber, botUsername)}
+                        target="_blank" rel="noreferrer"
+                        className="text-[10px] text-emerald-600 hover:text-emerald-800 hover:underline whitespace-nowrap"
+                        title="שלח לחייל הזמנה בוואטסאפ להתחבר לבוט">
+                        💬 הזמן לבוט
+                      </a>
+                    )}
+                  </div>
                 </td>
                 {showCompany && <td className="px-2 py-2 text-xs text-slate-600 whitespace-nowrap">{s.companyName || "—"}</td>}
                 <td className="px-2 py-2 whitespace-nowrap">

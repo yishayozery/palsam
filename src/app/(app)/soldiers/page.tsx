@@ -36,7 +36,7 @@ export default async function SoldiersPage() {
 
   const battalion = await prisma.battalion.findUnique({
     where: { id: bId },
-    select: { drivingRefreshDays: true },
+    select: { drivingRefreshDays: true, telegramBotUsername: true },
   });
   const drivingRefreshDays = battalion?.drivingRefreshDays ?? 180;
 
@@ -289,6 +289,7 @@ export default async function SoldiersPage() {
         companies={companies.map((c) => ({ id: c.id, name: c.name }))}
         showCompany={showCompany}
         canEditCerts={canEditCerts}
+        botUsername={battalion?.telegramBotUsername ?? null}
       />
 
       <div className="mt-6" />

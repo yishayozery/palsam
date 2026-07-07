@@ -81,8 +81,27 @@ export async function POST(
     };
     const cmd = CMD_MAP[text] || text;
 
-    // /start — registration
-    if (cmd === "/start") {
+    // /start — registration (תומך ב-deep-link "/start <מספר אישי>" מהזמנת וואטסאפ — חיבור בקליק)
+    if (cmd === "/start" || text.startsWith("/start ")) {
+      const startParam = text.includes(" ") ? text.slice(text.indexOf(" ") + 1).trim().replace(/\D/g, "") : "";
+      if (startParam.length >= 5) {
+        const target = await prisma.soldier.findFirst({
+          where: { battalionId, personalNumber: startParam },
+          select: { id: true, fullName: true, telegramChatId: true },
+        });
+        if (target) {
+          if (target.telegramChatId !== chatId) {
+            await prisma.soldier.update({ where: { id: target.id }, data: { telegramChatId: chatId } });
+          }
+          await sendTelegramMessage(
+            token, chatId,
+            `מעולה, ${target.fullName}! ✅\nהתחברת בהצלחה למערכת PALMY.\n\n${HELP_TEXT}`,
+            MAIN_KEYBOARD,
+          );
+          return NextResponse.json({ ok: true });
+        }
+        // מספר לא נמצא — ממשיך להודעת הרישום הרגילה
+      }
       await sendTelegramMessage(
         token,
         chatId,
