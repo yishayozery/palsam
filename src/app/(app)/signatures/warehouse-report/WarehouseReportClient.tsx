@@ -3,18 +3,20 @@
 import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
-import { setSoldierIronNumber } from "../actions";
+import { setSoldierIronNumber, updateSignedItemLocation } from "../actions";
 
-type Item = { name: string; serial: string | null; status: string | null; qty?: number; location?: string | null; expiry?: string | null };
-type Soldier = { id: string; name: string; pn: string | null; iron: number | null; items: Item[] };
+type Loc = { id: string; name: string; isVehicle: boolean };
+type Item = { name: string; serial: string | null; status: string | null; qty?: number; location?: string | null; expiry?: string | null; serialUnitId?: string | null; locId?: string | null };
+type Soldier = { id: string; name: string; pn: string | null; companyId?: string | null; iron: number | null; items: Item[] };
 type Company = { name: string; soldiers: Soldier[] };
 
 export default function WarehouseReportClient({
-  warehouses, selectedId, selectedName, canEditIron, companies,
+  warehouses, selectedId, selectedName, canEditIron, companies, locationsByCompanyId = {},
 }: {
   warehouses: { id: string; name: string }[];
   selectedId: string; selectedName: string; canEditIron: boolean;
   companies: Company[];
+  locationsByCompanyId?: Record<string, Loc[]>;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -173,7 +175,11 @@ export default function WarehouseReportClient({
                     <td className="px-2 py-1.5 font-mono text-[11px]">{it.serial ?? "—"}</td>
                     <td className="px-2 py-1.5 text-center">{it.qty ?? (it.serial ? 1 : "—")}</td>
                     <td className="px-2 py-1.5 text-amber-700 whitespace-nowrap">{it.expiry ?? "—"}</td>
-                    <td className="px-2 py-1.5 text-slate-500 whitespace-nowrap">{it.location ?? "—"}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">
+                      {it.serialUnitId
+                        ? <LocationCell serialUnitId={it.serialUnitId} value={it.location} locId={it.locId ?? ""} locations={locationsByCompanyId[s.companyId ?? ""] ?? []} canEdit={canEditIron} />
+                        : <span className="text-slate-500">{it.location ?? "—"}</span>}
+                    </td>
                     <td className="px-2 py-1.5">{it.status && it.status !== "תקין" ? <span className="text-rose-600">{it.status}</span> : it.status ?? "—"}</td>
                   </tr>
                 ))))}
@@ -264,5 +270,21 @@ function IronCell({ holderId, soldierId, value, canEdit }: { holderId: string; s
       </div>
       {err && <span className="text-[10px] text-rose-600">{err}</span>}
     </div>
+  );
+}
+
+function LocationCell({ serialUnitId, value, locId, locations, canEdit }: { serialUnitId: string; value: string | null | undefined; locId: string; locations: Loc[]; canEdit: boolean }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [pending, start] = useTransition();
+  if (!canEdit || locations.length === 0) return <span className="text-slate-500">{value ?? "—"}</span>;
+  if (!editing) return <button onClick={() => setEditing(true)} className="text-slate-600 hover:underline">{value || "＋ מיקום"}</button>;
+  return (
+    <select autoFocus disabled={pending} defaultValue={locId} className="border border-slate-300 rounded px-1 py-0.5 text-xs bg-white"
+      onChange={(e) => { const v = e.target.value; const fd = new FormData(); fd.set("serialUnitId", serialUnitId); if (v) fd.set("equipmentLocationId", v); start(async () => { await updateSignedItemLocation(fd); setEditing(false); router.refresh(); }); }}
+      onBlur={() => setEditing(false)}>
+      <option value="">— ללא —</option>
+      {locations.map((l) => <option key={l.id} value={l.id}>{l.isVehicle ? "🚗 " : "📍 "}{l.name}</option>)}
+    </select>
   );
 }

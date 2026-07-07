@@ -27,15 +27,26 @@ export default async function WarehouseReportPage({ searchParams }: { searchPara
   const units = selectedId ? await prisma.serialUnit.findMany({
     where: { battalionId: bId, currentHolderId: selectedId, signedSoldierId: { not: null } },
     select: {
+      id: true,
       serialNumber: true,
       physicalLocation: true,
       expiryDate: true,
+      equipmentLocationId: true,
       itemType: { select: { name: true } },
       status: { select: { name: true } },
       equipmentLocation: { select: { name: true } },
-      signedSoldier: { select: { id: true, fullName: true, personalNumber: true, company: { select: { name: true } } } },
+      signedSoldier: { select: { id: true, fullName: true, personalNumber: true, companyId: true, company: { select: { name: true } } } },
     },
   }) : [];
+
+  // מיקומי ציוד לעריכה — פר פלוגה (holder), כולל רכבים
+  const eqLocations = await prisma.equipmentLocation.findMany({
+    where: { battalionId: bId, active: true },
+    select: { id: true, name: true, holderId: true, vehicleSerialUnitId: true },
+    orderBy: { name: "asc" },
+  });
+  const locationsByCompanyId: Record<string, { id: string; name: string; isVehicle: boolean }[]> = {};
+  for (const l of eqLocations) (locationsByCompanyId[l.holderId] ??= []).push({ id: l.id, name: l.name, isVehicle: !!l.vehicleSerialUnitId });
 
   // פריטים כמותיים חתומים (נטו SIGNOUT-CHECKIN) מהמחסן — לחיילים
   const qtyLines = selectedId ? await prisma.transferLine.findMany({
@@ -52,16 +63,16 @@ export default async function WarehouseReportPage({ searchParams }: { searchPara
   const ironBy = new Map(indexes.map((i) => [i.soldierId, i.number]));
 
   // קיבוץ: פלוגה → חייל → פריטים
-  type Item = { name: string; serial: string | null; status: string | null; qty?: number; location?: string | null; expiry?: string | null };
-  const bySoldier = new Map<string, { name: string; pn: string | null; company: string; iron: number | null; items: Item[] }>();
-  const ensure = (id: string, name: string, pn: string | null, company: string) => {
-    if (!bySoldier.has(id)) bySoldier.set(id, { name, pn, company, iron: ironBy.get(id) ?? null, items: [] });
+  type Item = { name: string; serial: string | null; status: string | null; qty?: number; location?: string | null; expiry?: string | null; serialUnitId?: string | null; locId?: string | null };
+  const bySoldier = new Map<string, { name: string; pn: string | null; company: string; companyId: string | null; iron: number | null; items: Item[] }>();
+  const ensure = (id: string, name: string, pn: string | null, company: string, companyId: string | null) => {
+    if (!bySoldier.has(id)) bySoldier.set(id, { name, pn, company, companyId, iron: ironBy.get(id) ?? null, items: [] });
     return bySoldier.get(id)!;
   };
   for (const u of units) {
     if (!u.signedSoldier) continue;
-    ensure(u.signedSoldier.id, u.signedSoldier.fullName, u.signedSoldier.personalNumber, u.signedSoldier.company?.name ?? "— ללא פלוגה —")
-      .items.push({ name: u.itemType.name, serial: u.serialNumber, status: u.status?.name ?? null, location: u.equipmentLocation?.name || u.physicalLocation || null, expiry: u.expiryDate ? u.expiryDate.toISOString().slice(0, 10) : null });
+    ensure(u.signedSoldier.id, u.signedSoldier.fullName, u.signedSoldier.personalNumber, u.signedSoldier.company?.name ?? "— ללא פלוגה —", u.signedSoldier.companyId ?? null)
+      .items.push({ name: u.itemType.name, serial: u.serialNumber, serialUnitId: u.id, locId: u.equipmentLocationId, status: u.status?.name ?? null, location: u.equipmentLocation?.name || u.physicalLocation || null, expiry: u.expiryDate ? u.expiryDate.toISOString().slice(0, 10) : null });
   }
   // qty net per (soldier, itemName)
   const qtyNet = new Map<string, number>();
@@ -80,10 +91,10 @@ export default async function WarehouseReportPage({ searchParams }: { searchPara
   }
 
   // קיבוץ לפי פלוגה
-  const byCompany = new Map<string, { id: string; name: string; pn: string | null; iron: number | null; items: Item[] }[]>();
+  const byCompany = new Map<string, { id: string; name: string; pn: string | null; companyId: string | null; iron: number | null; items: Item[] }[]>();
   for (const [id, s] of bySoldier) {
     if (!byCompany.has(s.company)) byCompany.set(s.company, []);
-    byCompany.get(s.company)!.push({ id, name: s.name, pn: s.pn, iron: s.iron, items: s.items });
+    byCompany.get(s.company)!.push({ id, name: s.name, pn: s.pn, companyId: s.companyId, iron: s.iron, items: s.items });
   }
   const companies = [...byCompany.entries()]
     .map(([name, soldiers]) => ({ name, soldiers: soldiers.sort((a, b) => (a.iron ?? 9e9) - (b.iron ?? 9e9) || a.name.localeCompare(b.name)) }))
@@ -104,6 +115,7 @@ export default async function WarehouseReportPage({ searchParams }: { searchPara
         selectedName={selectedName}
         canEditIron={can(user, "signatures.manage")}
         companies={companies}
+        locationsByCompanyId={locationsByCompanyId}
       />
     </div>
   );

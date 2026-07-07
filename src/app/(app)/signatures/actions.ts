@@ -79,6 +79,26 @@ export async function resendSignRequest(formData: FormData): Promise<void> {
   revalidatePath("/signatures");
 }
 
+/** עדכון מיקום של פריט סריאלי חתום (מהדוח) — בוחר EquipmentLocation של הפלוגה/רכב. */
+export async function updateSignedItemLocation(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  const user = await requireUser();
+  if (!can(user, "signatures.manage")) return { error: "אין הרשאה" };
+  const bId = user.battalionId!;
+  const serialUnitId = String(formData.get("serialUnitId") || "");
+  const equipmentLocationId = String(formData.get("equipmentLocationId") || "") || null;
+  if (!serialUnitId) return { error: "חסר פריט" };
+  const unit = await prisma.serialUnit.findUnique({ where: { id: serialUnitId }, select: { battalionId: true } });
+  if (!unit || unit.battalionId !== bId) return { error: "פריט לא נמצא" };
+  if (equipmentLocationId) {
+    const loc = await prisma.equipmentLocation.findUnique({ where: { id: equipmentLocationId }, select: { battalionId: true } });
+    if (!loc || loc.battalionId !== bId) return { error: "מיקום לא נמצא" };
+  }
+  await prisma.serialUnit.update({ where: { id: serialUnitId }, data: { equipmentLocationId } });
+  await audit(user.id, "UPDATE_LOCATION", "SerialUnit", serialUnitId, { equipmentLocationId });
+  revalidatePath("/signatures/warehouse-report");
+  return { ok: true };
+}
+
 /** קביעת מספר ברזל (מיספור פנימי) לחייל במחסן — ייחודי בתוך המחסן. מחזיר שגיאה אם תפוס. */
 export async function setSoldierIronNumber(formData: FormData): Promise<{ ok?: boolean; error?: string; next?: number }> {
   const user = await requireUser();
