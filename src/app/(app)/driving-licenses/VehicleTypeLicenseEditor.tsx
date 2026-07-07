@@ -23,16 +23,27 @@ export default function VehicleTypeLicenseEditor({
   const [pending, startTransition] = useTransition();
   const [editingVehicle, setEditingVehicle] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
 
-  const existingMap = new Map<string, Set<string>>();
+  const licenseById = new Map(licenseTypes.map((lt) => [lt.id, lt]));
+  const existingMap = new Map<string, string[]>();
   for (const e of existing) {
-    if (!existingMap.has(e.itemTypeId)) existingMap.set(e.itemTypeId, new Set());
-    existingMap.get(e.itemTypeId)!.add(e.licenseTypeId);
+    const arr = existingMap.get(e.itemTypeId) ?? [];
+    arr.push(e.licenseTypeId);
+    existingMap.set(e.itemTypeId, arr);
   }
 
   function startEdit(vehicleTypeId: string) {
     setEditingVehicle(vehicleTypeId);
-    setSelected(new Set(existingMap.get(vehicleTypeId) || []));
+    setSelected(new Set(existingMap.get(vehicleTypeId) ?? []));
+  }
+
+  function toggle(ltId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(ltId)) next.delete(ltId); else next.add(ltId);
+      return next;
+    });
   }
 
   function handleSave(vehicleTypeId: string) {
@@ -47,115 +58,74 @@ export default function VehicleTypeLicenseEditor({
   }
 
   if (vehicleTypes.length === 0) {
-    return (
-      <div className="text-sm text-slate-500 p-4 bg-white rounded-xl border border-slate-200">
-        לא נמצאו סוגי רכב במערכת. הגדר סוגי רכב בקטלוג.
-      </div>
-    );
+    return <div className="text-sm text-slate-500 p-4 bg-white rounded-xl border border-slate-200">לא נמצאו סוגי רכב במערכת. הגדר סוגי רכב בקטלוג.</div>;
+  }
+  if (licenseTypes.length === 0) {
+    return <div className="text-sm text-slate-500 p-4 bg-white rounded-xl border border-slate-200">לא הוגדרו סוגי הרשאות נהיגה. עבור לטאב &quot;סוגי הרשאות&quot; והוסף סוגים.</div>;
   }
 
-  if (licenseTypes.length === 0) {
-    return (
-      <div className="text-sm text-slate-500 p-4 bg-white rounded-xl border border-slate-200">
-        לא הוגדרו סוגי הרשאות נהיגה. עבור לטאב &quot;סוגי הרשאות&quot; והוסף סוגים.
-      </div>
-    );
-  }
+  const shown = search.trim()
+    ? vehicleTypes.filter((vt) => vt.name.includes(search.trim()))
+    : vehicleTypes;
 
   return (
     <div>
       <p className="text-sm text-slate-500 mb-3">
-        שיוך סוגי הרשאות נהיגה לסוגי רכב — הגדרה זו קובעת איזו הרשאה נדרשת לנהיגה בסוג רכב מסוים.
+        לכל סוג רכב — אילו הרשאות נהיגה נדרשות כדי לנהוג בו. נהג יסומן כ&quot;מוסמך&quot; רק אם ברשותו כל ההרשאות שמסומנות כאן.
       </p>
-      <div className="overflow-x-auto bg-white rounded-xl border border-slate-200">
-        <table className="min-w-full text-sm border-collapse">
-          <thead>
-            <tr className="bg-slate-50">
-              <th className="sticky right-0 z-10 bg-slate-50 px-3 py-2 text-right font-medium text-slate-600 border-b min-w-[160px]">
-                סוג רכב
-              </th>
-              {licenseTypes.map((lt) => (
-                <th key={lt.id} className="px-3 py-2 text-center font-medium text-slate-600 border-b min-w-[90px]">
-                  {lt.name}
-                </th>
-              ))}
-              {canEdit && <th className="px-2 py-2 border-b" />}
-            </tr>
-          </thead>
-          <tbody>
-            {vehicleTypes.map((vt) => {
-              const isEditing = editingVehicle === vt.id;
-              const currentLicenses = existingMap.get(vt.id) || new Set();
+      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 חיפוש סוג רכב..."
+        className="w-full sm:max-w-xs border border-slate-300 rounded-lg px-3 py-2 text-sm mb-3" />
 
-              return (
-                <tr key={vt.id} className={isEditing ? "bg-blue-50/50" : "hover:bg-slate-50"}>
-                  <td className="sticky right-0 z-10 bg-white px-3 py-2 border-b font-medium text-slate-700 whitespace-nowrap">
-                    {vt.name}
-                  </td>
-                  {licenseTypes.map((lt) => {
-                    if (isEditing) {
+      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        {shown.map((vt) => {
+          const isEditing = editingVehicle === vt.id;
+          const reqIds = existingMap.get(vt.id) ?? [];
+          const reqNames = reqIds.map((id) => licenseById.get(id)?.name).filter(Boolean) as string[];
+
+          return (
+            <div key={vt.id} className={`rounded-xl border p-3 ${isEditing ? "border-blue-300 bg-blue-50/40" : "border-slate-200 bg-white"}`}>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="font-bold text-sm text-slate-800 flex items-center gap-1.5">🚗 {vt.name}</div>
+                {canEdit && !isEditing && (
+                  <button onClick={() => startEdit(vt.id)} className="text-xs text-blue-600 hover:underline shrink-0">✏️ עריכה</button>
+                )}
+              </div>
+
+              {isEditing ? (
+                <>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {licenseTypes.map((lt) => {
+                      const on = selected.has(lt.id);
                       return (
-                        <td key={lt.id} className="px-3 py-2 border-b text-center">
-                          <input
-                            type="checkbox"
-                            checked={selected.has(lt.id)}
-                            onChange={() => {
-                              setSelected((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(lt.id)) next.delete(lt.id);
-                                else next.add(lt.id);
-                                return next;
-                              });
-                            }}
-                            className="rounded"
-                          />
-                        </td>
-                      );
-                    }
-                    return (
-                      <td key={lt.id} className="px-3 py-2 border-b text-center">
-                        {currentLicenses.has(lt.id) ? (
-                          <span className="text-green-600 font-bold">✓</span>
-                        ) : (
-                          <span className="text-slate-200">-</span>
-                        )}
-                      </td>
-                    );
-                  })}
-                  {canEdit && (
-                    <td className="px-2 py-2 border-b text-center">
-                      {isEditing ? (
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => handleSave(vt.id)}
-                            disabled={pending}
-                            className="px-2 py-1 bg-blue-600 text-white rounded text-xs disabled:opacity-50"
-                          >
-                            {pending ? "..." : "שמור"}
-                          </button>
-                          <button
-                            onClick={() => setEditingVehicle(null)}
-                            className="px-2 py-1 bg-slate-200 rounded text-xs"
-                          >
-                            ביטול
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => startEdit(vt.id)}
-                          className="text-xs text-blue-600 hover:underline"
-                        >
-                          עריכה
+                        <button key={lt.id} onClick={() => toggle(lt.id)} type="button"
+                          className={`text-xs rounded-full px-2.5 py-1 border transition-colors ${on ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-500 border-slate-300 hover:border-slate-400"}`}>
+                          {on ? "✓ " : ""}{lt.name}
                         </button>
-                      )}
-                    </td>
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button onClick={() => handleSave(vt.id)} disabled={pending}
+                      className="px-3 py-1 bg-blue-600 text-white rounded-lg text-xs font-medium disabled:opacity-50">{pending ? "..." : "💾 שמור"}</button>
+                    <button onClick={() => setEditingVehicle(null)} className="px-3 py-1 bg-slate-200 rounded-lg text-xs">ביטול</button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {reqNames.length > 0 ? (
+                    reqNames.map((n, i) => (
+                      <span key={i} className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2.5 py-0.5">{n}</span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-slate-400">— לא הוגדרה הרשאה נדרשת —</span>
                   )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
+      {shown.length === 0 && <div className="text-sm text-slate-400 p-4 text-center">לא נמצאו סוגי רכב תואמים לחיפוש.</div>}
     </div>
   );
 }
