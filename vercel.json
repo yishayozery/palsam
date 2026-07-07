@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/attendance",
-      "schedule": "*/30 * * * *"
+      "schedule": "5 4 * * *"
     }
   ]
 }
