@@ -155,8 +155,9 @@ const ROLE_SCREENS: Record<string, string> = {
 
 function buildOnboardingMsg(user: User, battalionName: string, battalionCode: string, baseUrl: string): string {
   const screens = ROLE_SCREENS[user.roleLabel] ?? ROLE_SCREENS['רב'] ?? '';
-  const link = user.inviteToken ? `${baseUrl}/invite/${user.inviteToken}` : `${baseUrl}/login`;
-  const loginInfo = user.inviteToken
+  const pending = !user.passwordSet && user.inviteToken;
+  const link = pending ? `${baseUrl}/invite/${user.inviteToken}` : `${baseUrl}/login`;
+  const loginInfo = pending
     ? `🔗 קישור להגדרת סיסמה: ${link}\n⚠️ הקישור חד-פעמי — פעיל עד הגדרת סיסמה.`
     : `🔗 כניסה: ${baseUrl}/login?b=${battalionCode}`;
   const allHolders = [user.holderName, ...user.extraHolders].filter(Boolean);

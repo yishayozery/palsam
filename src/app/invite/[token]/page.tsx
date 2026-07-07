@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { redirect } from "next/navigation";
 import { ROLE_LABELS } from "@/lib/rbac";
 import SetPasswordForm from "./SetPasswordForm";
 
@@ -14,6 +15,11 @@ export default async function InvitePage({
     where: { inviteToken: token },
     include: { battalion: true, holder: true, systemRole: true },
   });
+
+  // אם כבר הוגדרה סיסמה — אין להשתמש שוב בקישור ההקמה; מפנים ללוגין.
+  if (user && user.active && user.passwordSet) {
+    redirect("/login");
+  }
 
   if (!user || !user.active) {
     return (

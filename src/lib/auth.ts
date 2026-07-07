@@ -213,10 +213,14 @@ export async function setPasswordByInvite(
 ): Promise<SessionUser | null> {
   const user = await prisma.appUser.findUnique({ where: { inviteToken: token } });
   if (!user || !user.active) return null;
+  // אם כבר הוגדרה סיסמה — הקישור מנוטרל; אין לאפשר איפוס סיסמה דרכו.
+  if (user.passwordSet) return null;
   const hash = await hashPassword(password);
+  // שומרים את ה-inviteToken כדי שדף ההזמנה יזהה "כבר הוגדרה סיסמה" ויפנה ללוגין
+  // (במקום להציג "קישור לא תקין"). הקישור מנוטרל ע"י בדיקת passwordSet לעיל.
   const updated = await prisma.appUser.update({
     where: { id: user.id },
-    data: { passwordHash: hash, passwordSet: true, inviteToken: null },
+    data: { passwordHash: hash, passwordSet: true },
     include: { customRole: true, systemRole: { include: { permissions: true } }, assignedHolders: true, assignedSquads: true },
   });
   return toSession(updated);
