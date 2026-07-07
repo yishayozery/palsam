@@ -14,6 +14,8 @@ type MVehicleFull = {
 };
 export type MissionFull = {
   id: string; title: string | null; companyId: string | null; companyName: string | null;
+  commanderName: string | null; commanderSoldierId?: string | null; commanderNameRaw?: string | null;
+  hasExternal: boolean; hasUnqualifiedDriver: boolean;
   missionDate: string; departureTime: string; notes: string | null; completedAt: string | null; createdByName: string;
   vehicles: MVehicleFull[];
 };
@@ -31,11 +33,25 @@ export default function MissionsSection({
   const router = useRouter();
   const [, start] = useTransition();
   const [modal, setModal] = useState<{ open: boolean; edit: EditMission | null }>({ open: false, edit: null });
+  const [tab, setTab] = useState<"active" | "done">("active");
+  const shown = missions.filter((m) => (tab === "active" ? !m.completedAt : !!m.completedAt));
+
+  function missionText(m: MissionFull): string {
+    const lines = [`🚚 ${m.title || "משימה"} — ${new Date(m.missionDate).toLocaleDateString("he-IL")} · ${m.departureTime}`];
+    if (m.commanderName) lines.push(`מפקד משימה: ${m.commanderName}`);
+    if (m.companyName) lines.push(`פלוגה: ${m.companyName}`);
+    for (const v of m.vehicles) {
+      lines.push(`\n${v.isExternal ? "🔶" : "🚗"} ${v.label}`);
+      for (const s of v.soldiers) lines.push(`  ${s.isDriver ? "🚗 נהג: " : "• "}${s.name}${s.pn ? ` (${s.pn})` : ""}`);
+    }
+    return lines.join("\n");
+  }
 
   function openNew() { setModal({ open: true, edit: null }); }
   function openEdit(m: MissionFull) {
     setModal({ open: true, edit: {
       id: m.id, title: m.title, companyId: m.companyId, missionDate: m.missionDate, departureTime: m.departureTime, notes: m.notes,
+      commanderSoldierId: m.commanderSoldierId ?? null, commanderName: m.commanderNameRaw ?? null,
       vehicles: m.vehicles.map((v) => ({
         isExternal: v.isExternal, vehicleSerialUnitId: v.vehicleSerialUnitId,
         externalVehicleNumber: v.externalVehicleNumber, externalVehicleTypeName: v.externalVehicleTypeName,
@@ -56,11 +72,17 @@ export default function MissionsSection({
         <button onClick={openNew} className="text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 font-medium">+ משימה חדשה</button>
       </div>
 
-      {missions.length === 0 ? (
-        <Card className="p-5 text-center text-slate-400 text-sm">אין משימות. לחץ &quot;+ משימה חדשה&quot; כדי לפתוח שיירה עם רכב אחד או יותר.</Card>
+      {/* טאבים: בפעילות / הסתיימו */}
+      <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden text-sm mb-3">
+        <button onClick={() => setTab("active")} className={`px-4 py-1.5 font-medium ${tab === "active" ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>בפעילות ({missions.filter((m) => !m.completedAt).length})</button>
+        <button onClick={() => setTab("done")} className={`px-4 py-1.5 font-medium ${tab === "done" ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>הסתיימו ({missions.filter((m) => !!m.completedAt).length})</button>
+      </div>
+
+      {shown.length === 0 ? (
+        <Card className="p-5 text-center text-slate-400 text-sm">{tab === "active" ? "אין משימות פעילות. לחץ \"+ משימה חדשה\"." : "אין משימות שהסתיימו."}</Card>
       ) : (
         <div className="space-y-3">
-          {missions.map((m) => {
+          {shown.map((m) => {
             const totalSoldiers = m.vehicles.reduce((n, v) => n + v.soldiers.length, 0);
             return (
               <Card key={m.id} className={`overflow-hidden ${m.completedAt ? "opacity-60" : ""}`}>
@@ -68,13 +90,18 @@ export default function MissionsSection({
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-slate-800">{m.title || "משימה"}</span>
                     <span className="text-xs text-slate-500">{new Date(m.missionDate).toLocaleDateString("he-IL")} · {m.departureTime}</span>
+                    {m.commanderName && <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5">👤 {m.commanderName}</span>}
                     {m.companyName && <span className="text-xs bg-white border border-slate-200 rounded px-2 py-0.5">{m.companyName}</span>}
+                    {m.hasExternal && <span title="כולל רכב חוץ" className="text-sm">🔶</span>}
+                    {m.hasUnqualifiedDriver && <span title="נהג לא מוסמך במשימה!" className="text-xs bg-rose-600 text-white font-bold rounded px-2 py-0.5">🔴 נהג לא מוסמך</span>}
                     {m.completedAt && <span className="text-[11px] text-emerald-700 bg-emerald-50 rounded px-2 py-0.5">✓ הסתיימה</span>}
                   </div>
                   <div className="flex items-center gap-2">
+                    <a href={`https://wa.me/?text=${encodeURIComponent(missionText(m))}`} target="_blank" rel="noreferrer" title="שלח בוואטסאפ" className="text-xs text-emerald-600 hover:underline">💬</a>
+                    <a href={`https://t.me/share/url?url=${encodeURIComponent("https://www.palmy.co.il")}&text=${encodeURIComponent(missionText(m))}`} target="_blank" rel="noreferrer" title="שלח בטלגרם" className="text-xs text-sky-600 hover:underline">📲</a>
                     <button onClick={() => openEdit(m)} className="text-xs text-slate-600 hover:underline">✏️ עריכה</button>
                     <button onClick={() => act(toggleMissionComplete, m.id, { completed: m.completedAt ? "false" : "true" })}
-                      className="text-xs text-emerald-700 hover:underline">{m.completedAt ? "↩︎ פתח מחדש" : "✓ סיים"}</button>
+                      className="text-xs text-emerald-700 hover:underline">{m.completedAt ? "↩︎ פתח מחדש" : "✓ סיים משימה"}</button>
                     <button onClick={() => { if (confirm("למחוק את המשימה?")) act(deleteMission, m.id); }}
                       className="text-xs text-rose-500 hover:underline">🗑️ מחק</button>
                   </div>

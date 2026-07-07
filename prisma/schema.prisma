@@ -622,6 +622,7 @@ model Soldier {
   signatures         Signature[]
   itemLocations      SoldierItemLocation[] @relation("SoldierItemLocations")
   dispatchAssignments VehicleAssignmentSoldier[] @relation("SoldierDispatch")
+  commandedMissions   Mission[]                  @relation("MissionCommander")
   dispatchTemplates   DispatchTemplateSoldier[] @relation("SoldierDispatchTemplate")
   drivingLicenses     SoldierDrivingLicense[]   @relation("SoldierDrivingLicenses")
   certifications      SoldierCertification[]    @relation("SoldierCertifications")
@@ -664,6 +665,10 @@ model Mission {
   companyId     String?
   company       Holder?  @relation("CompanyMissions", fields: [companyId], references: [id], onDelete: SetNull)
   title         String?
+  // מפקד משימה — חייל מהרוסטר (יכול לקבל בבוט + לסגור משימה) או שם חופשי
+  commanderSoldierId String?
+  commanderSoldier   Soldier? @relation("MissionCommander", fields: [commanderSoldierId], references: [id], onDelete: SetNull)
+  commanderName String?
   missionDate   DateTime
   departureTime String
   notes         String?

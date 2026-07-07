@@ -226,6 +226,8 @@ type MissionInput = {
   id?: string;
   title?: string | null;
   companyId?: string | null;
+  commanderSoldierId?: string | null;
+  commanderName?: string | null;
   missionDate: string; // YYYY-MM-DD
   departureTime: string; // HH:mm
   notes?: string | null;
@@ -279,6 +281,9 @@ export async function saveMission(formData: FormData): Promise<{ ok?: boolean; e
     const companyId = input.companyId?.trim() || null;
     const title = input.title?.trim() || null;
     const notes = input.notes?.trim() || null;
+    const commanderSoldierId = input.commanderSoldierId?.trim() || null;
+    const commanderName = input.commanderName?.trim() || null;
+    const commanderData = { commanderSoldierId, commanderName };
 
     const buildVehicleData = (missionId: string) => input.vehicles.map((v) => {
       const external = v.isExternal || !v.vehicleSerialUnitId;
@@ -302,7 +307,7 @@ export async function saveMission(formData: FormData): Promise<{ ok?: boolean; e
       const existing = await prisma.mission.findUnique({ where: { id: input.id }, select: { battalionId: true } });
       if (!existing || existing.battalionId !== bId) return { error: "משימה לא נמצאה" };
       await prisma.$transaction(async (tx) => {
-        await tx.mission.update({ where: { id: input.id! }, data: { title, companyId, missionDate: missionDateObj, departureTime: input.departureTime, notes } });
+        await tx.mission.update({ where: { id: input.id! }, data: { title, companyId, ...commanderData, missionDate: missionDateObj, departureTime: input.departureTime, notes } });
         // מוחקים ובונים מחדש את הרכבים (פשוט ואמין)
         await tx.vehicleAssignment.deleteMany({ where: { missionId: input.id! } });
         for (const vd of buildVehicleData(input.id!)) {
@@ -315,7 +320,7 @@ export async function saveMission(formData: FormData): Promise<{ ok?: boolean; e
       await audit(user.id, "UPDATE", "Mission", savedId, { vehicles: input.vehicles.length });
     } else {
       const mission = await prisma.$transaction(async (tx) => {
-        const m = await tx.mission.create({ data: { battalionId: bId, title, companyId, missionDate: missionDateObj, departureTime: input.departureTime, notes, createdById: user.id } });
+        const m = await tx.mission.create({ data: { battalionId: bId, title, companyId, ...commanderData, missionDate: missionDateObj, departureTime: input.departureTime, notes, createdById: user.id } });
         for (const vd of buildVehicleData(m.id)) {
           const { soldiers, ...va } = vd;
           const created = await tx.vehicleAssignment.create({ data: va });

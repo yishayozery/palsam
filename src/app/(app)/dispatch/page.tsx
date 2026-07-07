@@ -89,9 +89,10 @@ export default async function DispatchPage() {
       include: {
         company: { select: { name: true } },
         createdBy: { select: { fullName: true } },
+        commanderSoldier: { select: { fullName: true } },
         vehicles: {
           include: {
-            vehicleSerialUnit: { include: { itemType: { select: { name: true } } } },
+            vehicleSerialUnit: { include: { itemType: { select: { id: true, name: true } } } },
             soldiers: { include: { soldier: { select: { id: true, fullName: true, personalNumber: true } } } },
           },
         },
@@ -105,8 +106,36 @@ export default async function DispatchPage() {
     (vtlMap[vl.itemTypeId] ??= []).push(vl.licenseTypeId);
   }
 
+  // הסמכת נהג — רישיון לסוג הרכב + נוהל נהיגה בתוקף + ריענון בתוקף
+  const driverIds = [...new Set(missions.flatMap((m) => m.vehicles.flatMap((v) => v.soldiers.filter((s) => s.isDriver && s.soldierId).map((s) => s.soldierId!))))];
+  const [battDriving, driverQualData] = await Promise.all([
+    prisma.battalion.findUnique({ where: { id: bId }, select: { drivingRefreshDays: true, drivingProcedureUpdatedAt: true } }),
+    driverIds.length ? prisma.soldier.findMany({ where: { id: { in: driverIds } }, select: { id: true, drivingRefresherDate: true, drivingProcedureSignedAt: true, drivingLicenses: { select: { licenseTypeId: true } } } }) : [],
+  ]);
+  const qualById = new Map(driverQualData.map((s) => [s.id, s]));
+  const refreshDays = battDriving?.drivingRefreshDays ?? 180;
+  const procUpdated = battDriving?.drivingProcedureUpdatedAt ?? null;
+  const driverQualified = (soldierId: string, itemTypeId: string | null): boolean => {
+    const s = qualById.get(soldierId);
+    if (!s) return false;
+    const req = itemTypeId ? (vtlMap[itemTypeId] ?? []) : [];
+    const has = new Set(s.drivingLicenses.map((l) => l.licenseTypeId));
+    if (req.some((id) => !has.has(id))) return false;
+    if (!s.drivingProcedureSignedAt) return false;
+    if (procUpdated && s.drivingProcedureSignedAt < procUpdated) return false;
+    if (!s.drivingRefresherDate) return false;
+    const exp = new Date(s.drivingRefresherDate); exp.setDate(exp.getDate() + refreshDays);
+    if (exp.getTime() < Date.now()) return false;
+    return true;
+  };
+
   const missionsData = missions.map((m) => ({
     id: m.id, title: m.title, companyId: m.companyId, companyName: m.company?.name ?? null,
+    commanderName: m.commanderSoldier?.fullName || m.commanderName || null,
+    commanderSoldierId: m.commanderSoldierId,
+    commanderNameRaw: m.commanderName,
+    hasExternal: m.vehicles.some((v) => v.isExternal),
+    hasUnqualifiedDriver: m.vehicles.some((v) => !v.isExternal && v.soldiers.some((s) => s.isDriver && s.soldierId && !driverQualified(s.soldierId, v.vehicleSerialUnit?.itemType.id ?? null))),
     missionDate: m.missionDate.toISOString().slice(0, 10), departureTime: m.departureTime, notes: m.notes,
     completedAt: m.completedAt?.toISOString() ?? null, createdByName: m.createdBy.fullName,
     vehicles: m.vehicles.map((v) => ({

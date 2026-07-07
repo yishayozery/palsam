@@ -25,7 +25,7 @@ export const NAV: NavItem[] = [
   // "הצוות שלי" ו"הסמכות" עברו לטאבים בתוך "חיילי הפלוגה" (PeopleTabs) — הוסרו מהתפריט הראשי
   { href: "/attendance", label: "נוכחות בתעסוקה", icon: "📋", group: "מבצעי", screen: "attendance" },
   { href: "/handover", label: "העברת משמרת", icon: "🔄", group: "מבצעי", screen: "attendance" },
-  { href: "/dispatch", label: 'שבצ"ק', icon: "🚗", group: "מבצעי", screen: "dispatch" },
+  { href: "/dispatch", label: 'משימות (שבצ"ק)', icon: "🚗", group: "מבצעי", screen: "dispatch" },
   { href: "/driving-licenses", label: "קצין רכב", icon: "🪪", group: "מבצעי", screen: "driving_licenses" },
   { href: "/trainings", label: "הדרכות וקורסים", icon: "🎓", group: "מבצעי", screen: "trainings" },
   { href: "/maintenance", label: "סטטוס רכבים (טנ\"א)", icon: "🔧", group: "מבצעי", screen: "maintenance" },
