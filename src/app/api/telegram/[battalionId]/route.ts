@@ -67,6 +67,7 @@ export async function POST(
       "📋 טפסים להחתמה": "/status",
       "📋 תהליך חתימת נשק": "/status",
       "📦 הציוד שלי": "/equipment",
+      "🚗 משימות ושבצ\"ק": "/dispatch",
       "🚗 שיבוץ לרכב": "/dispatch",
       "📊 ספירות מלאי": "/counts",
       "🗓️ דיווח נוכחות": "/attendance",
@@ -620,6 +621,31 @@ async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, 
   }
 
   await sendTelegramMessage(token, chatId, lines.join("\n"));
+
+  // נוהל נהיגה — חתימה עצמית בבוט (רק לחייל בעל רישיונות/היתרים, אם יש נוסח נוהל וטרם חתם על הגרסה בתוקף)
+  try {
+    const drv = await prisma.soldier.findUnique({
+      where: { id: soldier.id },
+      select: {
+        drivingProcedureSignedAt: true,
+        _count: { select: { drivingLicenses: true } },
+        battalion: { select: { drivingProcedureText: true, drivingProcedureUpdatedAt: true } },
+      },
+    });
+    const procText = drv?.battalion?.drivingProcedureText?.trim();
+    if (drv && drv._count.drivingLicenses > 0 && procText) {
+      const upd = drv.battalion!.drivingProcedureUpdatedAt;
+      const signed = drv.drivingProcedureSignedAt;
+      const valid = !!signed && (!upd || signed >= upd);
+      if (!valid) {
+        const head = signed ? "🚗 <b>נוהל נהיגה עודכן — נדרשת חתימה מחדש</b>" : "🚗 <b>נוהל נהיגה — נדרשת חתימה</b>";
+        const body = procText.length > 3500 ? procText.slice(0, 3500) + "…" : procText;
+        await sendTelegramMessage(token, chatId, `${head}\n\n${body}\n\nבלחיצה על הכפתור הינך מאשר/ת שקראת והבנת את הנוהל.`, {
+          inline_keyboard: [[{ text: "✍️ אני מאשר וחותם", callback_data: `signproc:${soldier.id}` }]],
+        });
+      }
+    }
+  } catch { /* non-fatal */ }
 }
 
 async function handleEquipment(token: string, chatId: string, soldier: SoldierCtx) {

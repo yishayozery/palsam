@@ -78,7 +78,7 @@ export async function editMessageText(
 export function buildMainKeyboard(canReportAttendance = false, canManageTeam = false) {
   const rows: { text: string }[][] = [
     [{ text: "📋 טפסים להחתמה" }, { text: "📦 הציוד שלי" }],
-    [{ text: "🚗 שיבוץ לרכב" }, { text: "📊 ספירות מלאי" }],
+    [{ text: "🚗 משימות ושבצ\"ק" }, { text: "📊 ספירות מלאי" }],
   ];
   const extra: { text: string }[] = [];
   if (canReportAttendance) extra.push({ text: "🗓️ דיווח נוכחות" });

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useTransition, Fragment } from "react";
 import { useRouter } from "next/navigation";
-import { saveSoldierLicenses, sendDrivingProcedureForSign, markProcedureSigned } from "./actions";
+import { saveSoldierLicenses, sendDrivingProcedureForSign } from "./actions";
 
 type LicenseType = { id: string; name: string; kind: string };
 type SoldierLicense = { licenseTypeId: string };
@@ -89,10 +89,6 @@ export default function LicenseEditor({
       setTimeout(() => setSendMsg(null), 3000);
     });
   }
-  function markSigned(soldierId: string) {
-    const fd = new FormData(); fd.set("soldierId", soldierId);
-    startTransition(async () => { await markProcedureSigned(fd); router.refresh(); });
-  }
 
   const names = (s: Soldier, kind: "LICENSE" | "PERMIT") =>
     s.licenses.map((l) => typeById.get(l.licenseTypeId)).filter((t): t is LicenseType => !!t && (kind === "LICENSE" ? t.kind === "LICENSE" : t.kind !== "LICENSE"));
@@ -161,9 +157,11 @@ export default function LicenseEditor({
                               ? <span className="text-[11px] text-amber-700" title={`חתם ${new Date(s.procedureSignedAt!).toLocaleDateString("he-IL")} — לפני עדכון הנוסח`}>🔄 עודכן — חתימה מחדש</span>
                               : <span className="text-[11px] text-slate-400">לא חתם</span>}
                             {canEdit && hasProcedureText && s.telegramLinked && (
-                              <button onClick={() => sendProcedure(s.id)} disabled={pending} className="text-[11px] text-sky-600 hover:underline">📲 שלח</button>
+                              <button onClick={() => sendProcedure(s.id)} disabled={pending} className="text-[11px] text-sky-600 hover:underline">📲 שלח לחתימה</button>
                             )}
-                            {canEdit && <button onClick={() => markSigned(s.id)} disabled={pending} className="text-[11px] text-slate-500 hover:underline">✍️ סמן</button>}
+                            {canEdit && hasProcedureText && !s.telegramLinked && (
+                              <span className="text-[10px] text-slate-300" title="החייל אינו מחובר לבוט — לא ניתן לשלוח לחתימה">📵 לא בבוט</span>
+                            )}
                           </div>
                         );
                       })()}

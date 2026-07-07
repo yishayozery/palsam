@@ -48,7 +48,7 @@ export async function sendEmail(opts: {
 /** רשימת אקשנים — מייל רק על תנועות מלאי (Transfer / Signature) */
 const NOTIFY_ACTIONS = new Set([
   "CREATE", "UPDATE", "DELETE",
-  "INTAKE", "ISSUE", "RETURN", "SIGNOUT", "CHECKIN", "CHECKIN_QTY",
+  "INTAKE", "ISSUE", "RETURN", "SIGNOUT", "CREATE_SIGNOUT", "CHECKIN", "CHECKIN_QTY",
   "SIGN", "CANCEL_SIGNATURE",
   "COMPANY_SIGN_OUT", "COMPANY_SIGN", "COMPANY_RETURN",
 ]);
