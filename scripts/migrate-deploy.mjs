@@ -54,26 +54,37 @@ function runMigrate() {
 }
 
 (async () => {
-  // 0. דילוג אם אין מיגרציות תלויות
-  if (!(await hasPendingMigrations())) {
-    console.log("✓ No pending migrations — skipping migrate deploy");
+  // ⚠️ שלב זה לעולם לא מפיל את ה-build: אנחנו עובדים עם `prisma db push`
+  // (הסכמה מסונכרנת ל-DB לפני כל deploy), ותלות-DB בזמן build שברירית
+  // (cold-start של Neon / פולר / משתני-סביבה חסרים). לכן כישלון = אזהרה בלבד.
+  try {
+    // 0. דילוג אם אין מיגרציות תלויות
+    if (!(await hasPendingMigrations())) {
+      console.log("✓ No pending migrations — skipping migrate deploy");
+      process.exit(0);
+    }
+
+    // 1. שחרור לוקים תקועים
+    const released = await releaseStuckLocks();
+    if (released > 0) console.log(`🔓 Released ${released} stuck connections holding advisory lock`);
+
+    // 2. ניסיון ראשון
+    let code = runMigrate();
+    if (code === 0) process.exit(0);
+
+    // 3. retry בכישלון
+    console.log("⚠️  First attempt failed. Releasing locks and retrying...");
+    const released2 = await releaseStuckLocks();
+    console.log(`🔓 Released ${released2} stuck connections (round 2)`);
+    await new Promise((r) => setTimeout(r, 2000));
+
+    code = runMigrate();
+    if (code !== 0) {
+      console.warn("⚠️  migrate deploy failed — continuing build anyway (schema managed via db push). Exit 0.");
+    }
+    process.exit(0); // תמיד ממשיכים ל-next build
+  } catch (e) {
+    console.warn("⚠️  migrate step threw — continuing build anyway:", e?.message ?? e);
     process.exit(0);
   }
-
-  // 1. שחרור לוקים תקועים
-  const released = await releaseStuckLocks();
-  if (released > 0) console.log(`🔓 Released ${released} stuck connections holding advisory lock`);
-
-  // 2. ניסיון ראשון
-  let code = runMigrate();
-  if (code === 0) process.exit(0);
-
-  // 3. retry בכישלון
-  console.log("⚠️  First attempt failed. Releasing locks and retrying...");
-  const released2 = await releaseStuckLocks();
-  console.log(`🔓 Released ${released2} stuck connections (round 2)`);
-  await new Promise((r) => setTimeout(r, 2000));
-
-  code = runMigrate();
-  process.exit(code);
 })();
