@@ -394,6 +394,7 @@ model Holder {
   companyAllocations   CompanyAllocation[]  @relation("HolderAllocations")
   courseAllocations    CourseAllocation[]   @relation("HolderCourseAllocations")
   courseRequests       CourseRequest[]      @relation("HolderCourseRequests")
+  soldierIndexes       WarehouseSoldierIndex[] @relation("HolderSoldierIndex")
   squads               Squad[]
   companyRoles         CompanyRole[]
   dispatchAssignments  VehicleAssignment[] @relation("CompanyDispatch")
@@ -615,6 +616,7 @@ model Soldier {
   certifications      SoldierCertification[]    @relation("SoldierCertifications")
   courseEnrollments   CourseEnrollment[]        @relation("SoldierCourseEnrollments")
   courseRequests      CourseRequest[]           @relation("SoldierCourseRequests")
+  warehouseIndexes    WarehouseSoldierIndex[]   @relation("SoldierWarehouseIndex")
   attendancePlans    AttendancePlan[]
   attendanceRecords  AttendanceRecord[]
   callupPeriods      CallupPeriod[]
@@ -1656,6 +1658,22 @@ model SoldierCertification {
 
   @@unique([soldierId, certificationTypeId])
   @@index([soldierId])
+}
+
+// מספר ברזל / מיספור פנימי של המחסן לחייל — ייחודי בתוך המחסן (לתיוק מהיר בקלסר)
+model WarehouseSoldierIndex {
+  id          String  @id @default(cuid())
+  battalionId String
+  holderId    String
+  holder      Holder  @relation("HolderSoldierIndex", fields: [holderId], references: [id], onDelete: Cascade)
+  soldierId   String
+  soldier     Soldier @relation("SoldierWarehouseIndex", fields: [soldierId], references: [id], onDelete: Cascade)
+  number      Int
+  createdAt   DateTime @default(now())
+
+  @@unique([holderId, soldierId]) // לחייל מספר אחד למחסן
+  @@unique([holderId, number])    // המספר ייחודי בתוך המחסן
+  @@index([battalionId])
 }
 
 // ===================== הדרכות וקורסים (Trainings & Courses) =====================
