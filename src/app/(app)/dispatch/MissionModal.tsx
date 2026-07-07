@@ -55,6 +55,7 @@ export default function MissionModal({
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [driverWarning, setDriverWarning] = useState<{ reasons: string[]; name: string; onConfirm: () => void } | null>(null);
+  const [activeVehKey, setActiveVehKey] = useState<string | null>(null);
 
   // בדיקת הסמכת נהג (רק לרכב מערכת) — רישיון לסוג הרכב + נוהל נהיגה + ריענון
   function driverReasons(soldierId: string | null, row: VehRow): string[] {
@@ -100,21 +101,33 @@ export default function MissionModal({
   const vehicleName = (id: string) => { const v = vehicles.find((x) => x.id === id); return v ? `${v.name} · ${v.serial}` : "—"; };
 
   function addSystemVehicle() {
-    setRows((r) => [...r, { key: nextKey(), source: "system", vehicleSerialUnitId: "", externalVehicleNumber: "", externalVehicleTypeName: "", soldiers: [] }]);
+    const k = nextKey();
+    setRows((r) => [...r, { key: k, source: "system", vehicleSerialUnitId: "", externalVehicleNumber: "", externalVehicleTypeName: "", soldiers: [] }]);
+    setActiveVehKey(k);
   }
   function addExternalVehicle() {
-    setRows((r) => [...r, { key: nextKey(), source: "external", vehicleSerialUnitId: "", externalVehicleNumber: "", externalVehicleTypeName: "", soldiers: [] }]);
+    const k = nextKey();
+    setRows((r) => [...r, { key: k, source: "external", vehicleSerialUnitId: "", externalVehicleNumber: "", externalVehicleTypeName: "", soldiers: [] }]);
+    setActiveVehKey(k);
   }
   function addFromTemplate(tid: string) {
     const t = templates.find((x) => x.id === tid);
     if (!t) return;
+    const k = nextKey();
     setRows((r) => [...r, {
-      key: nextKey(), source: "system", vehicleSerialUnitId: t.vehicleSerialUnitId,
+      key: k, source: "system", vehicleSerialUnitId: t.vehicleSerialUnitId,
       externalVehicleNumber: "", externalVehicleTypeName: "",
       soldiers: t.soldierIds.map((sid, i) => ({ key: nextKey(), soldierId: sid, externalName: "", externalPersonalNumber: "", isDriver: i === 0 })),
     }]);
+    setActiveVehKey(k);
   }
-  function removeRow(key: string) { setRows((r) => r.filter((x) => x.key !== key)); }
+  function removeRow(key: string) {
+    setRows((r) => {
+      const next = r.filter((x) => x.key !== key);
+      setActiveVehKey((cur) => (cur === key ? (next[next.length - 1]?.key ?? null) : cur));
+      return next;
+    });
+  }
   function patchRow(key: string, patch: Partial<VehRow>) { setRows((r) => r.map((x) => x.key === key ? { ...x, ...patch } : x)); }
 
   function addSoldier(rowKey: string, soldierId: string) {
@@ -236,66 +249,98 @@ export default function MissionModal({
             </div>
           )}
 
-          {/* רכבים */}
-          <div className="space-y-3">
-            {rows.map((row, ri) => (
-              <div key={row.key} className="border border-slate-200 rounded-xl p-3 bg-white">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-sm text-slate-700">רכב {ri + 1} {row.source === "external" && <span className="text-amber-600">· חוץ</span>}</span>
-                  <button onClick={() => removeRow(row.key)} className="text-xs text-rose-500 hover:text-rose-700">הסר רכב</button>
-                </div>
-                {row.source === "system" ? (
-                  <select value={row.vehicleSerialUnitId} onChange={(e) => patchRow(row.key, { vehicleSerialUnitId: e.target.value })}
-                    className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white mb-2">
-                    <option value="">— בחר רכב —</option>
-                    {vehicles.map((v) => <option key={v.id} value={v.id}>{v.name} · {v.serial}</option>)}
-                  </select>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    <input value={row.externalVehicleNumber} onChange={(e) => patchRow(row.key, { externalVehicleNumber: e.target.value })}
-                      placeholder="מספר רכב" className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
-                    <input value={row.externalVehicleTypeName} onChange={(e) => patchRow(row.key, { externalVehicleTypeName: e.target.value })}
-                      placeholder="סוג רכב (למשל האמר)" className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
+          {/* רכבים — טאב לכל רכב */}
+          {rows.length > 0 && (() => {
+            const activeRow = rows.find((r) => r.key === activeVehKey) ?? rows[0];
+            const totalSoldiers = rows.reduce((n, r) => n + r.soldiers.length, 0);
+            const rowUnqualified = (row: VehRow) => row.soldiers.some((s) => s.isDriver && driverReasons(s.soldierId, row).length > 0);
+            return (
+              <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
+                {/* סיכום + טאבים */}
+                <div className="bg-slate-50 border-b border-slate-200 px-3 py-2">
+                  <div className="text-xs text-slate-500 mb-1.5">{rows.length} רכבים · {totalSoldiers} חיילים משובצים</div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {rows.map((row, ri) => {
+                      const isActive = row.key === activeRow.key;
+                      const unq = rowUnqualified(row);
+                      return (
+                        <button key={row.key} onClick={() => setActiveVehKey(row.key)}
+                          className={`text-xs rounded-lg px-2.5 py-1 border flex items-center gap-1 ${isActive ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-100"}`}>
+                          {row.source === "external" ? "🔶" : "🚗"} רכב {ri + 1}
+                          <span className={`rounded-full px-1.5 text-[10px] ${isActive ? "bg-white/25" : "bg-slate-100"}`}>{row.soldiers.length}</span>
+                          {unq && <span title="נהג לא מוסמך">🔴</span>}
+                        </button>
+                      );
+                    })}
                   </div>
-                )}
+                </div>
 
-                {/* חיילים */}
-                <div className="space-y-1.5">
-                  {row.soldiers.map((s) => (
-                    <div key={s.key} className="flex items-center gap-2 flex-wrap bg-slate-50 rounded-lg px-2 py-1.5">
-                      <label className="flex items-center gap-1 text-xs" title="נהג — יקבל הודעת בוט">
-                        <input type="radio" name={`driver-${row.key}`} checked={s.isDriver} onChange={() => setDriver(row.key, s.key)} />
-                        🚗
-                      </label>
-                      {s.soldierId ? (
-                        <span className="text-sm flex-1">{soldierName(s.soldierId)}</span>
+                {/* פאנל הרכב הפעיל */}
+                {(() => {
+                  const row = activeRow;
+                  const ri = rows.findIndex((r) => r.key === row.key);
+                  return (
+                    <div className="p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-sm text-slate-700">רכב {ri + 1} {row.source === "external" && <span className="text-amber-600">· חוץ</span>}</span>
+                        <button onClick={() => removeRow(row.key)} className="text-xs text-rose-500 hover:text-rose-700">הסר רכב</button>
+                      </div>
+                      {row.source === "system" ? (
+                        <select value={row.vehicleSerialUnitId} onChange={(e) => patchRow(row.key, { vehicleSerialUnitId: e.target.value })}
+                          className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white mb-2">
+                          <option value="">— בחר רכב —</option>
+                          {vehicles.map((v) => <option key={v.id} value={v.id}>{v.name} · {v.serial}</option>)}
+                        </select>
                       ) : (
-                        <div className="flex gap-1 flex-1">
-                          <input value={s.externalName} onChange={(e) => patchSoldier(row.key, s.key, { externalName: e.target.value })}
-                            placeholder="שם חייל חוץ" className="border border-slate-300 rounded px-1.5 py-0.5 text-sm flex-1" />
-                          <input value={s.externalPersonalNumber} onChange={(e) => patchSoldier(row.key, s.key, { externalPersonalNumber: e.target.value })}
-                            placeholder="מ.א" className="border border-slate-300 rounded px-1.5 py-0.5 text-sm w-24" />
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                          <input value={row.externalVehicleNumber} onChange={(e) => patchRow(row.key, { externalVehicleNumber: e.target.value })}
+                            placeholder="מספר רכב" className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
+                          <input value={row.externalVehicleTypeName} onChange={(e) => patchRow(row.key, { externalVehicleTypeName: e.target.value })}
+                            placeholder="סוג רכב (למשל האמר)" className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
                         </div>
                       )}
-                      {s.isDriver && <span className="text-[10px] text-sky-600">נהג</span>}
-                      {s.isDriver && (() => { const rz = driverReasons(s.soldierId, row); return rz.length ? <span title={rz.join(" · ")} className="text-[10px] bg-rose-600 text-white rounded px-1.5 py-0.5 font-bold">🔴 לא מוסמך</span> : null; })()}
-                      <button onClick={() => removeSoldier(row.key, s.key)} className="text-xs text-rose-400 hover:text-rose-600">✕</button>
-                    </div>
-                  ))}
-                </div>
 
-                <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  <select value="" onChange={(e) => { addSoldier(row.key, e.target.value); e.target.value = ""; }}
-                    className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white">
-                    <option value="">+ הוסף חייל מהיחידה</option>
-                    {soldiers.filter((s) => !row.soldiers.some((rs) => rs.soldierId === s.id)).map((s) =>
-                      <option key={s.id} value={s.id}>{s.fullName}{s.personalNumber ? ` (${s.personalNumber})` : ""}</option>)}
-                  </select>
-                  <button onClick={() => addExternalSoldier(row.key)} className="text-xs text-amber-700 border border-amber-300 rounded-lg px-2 py-1 hover:bg-amber-50">+ חייל חוץ</button>
-                </div>
+                      {/* חיילים */}
+                      <div className="space-y-1.5">
+                        {row.soldiers.map((s) => (
+                          <div key={s.key} className="flex items-center gap-2 flex-wrap bg-slate-50 rounded-lg px-2 py-1.5">
+                            <label className="flex items-center gap-1 text-xs" title="נהג — יקבל הודעת בוט">
+                              <input type="radio" name={`driver-${row.key}`} checked={s.isDriver} onChange={() => setDriver(row.key, s.key)} />
+                              🚗
+                            </label>
+                            {s.soldierId ? (
+                              <span className="text-sm flex-1">{soldierName(s.soldierId)}</span>
+                            ) : (
+                              <div className="flex gap-1 flex-1">
+                                <input value={s.externalName} onChange={(e) => patchSoldier(row.key, s.key, { externalName: e.target.value })}
+                                  placeholder="שם חייל חוץ" className="border border-slate-300 rounded px-1.5 py-0.5 text-sm flex-1" />
+                                <input value={s.externalPersonalNumber} onChange={(e) => patchSoldier(row.key, s.key, { externalPersonalNumber: e.target.value })}
+                                  placeholder="מ.א" className="border border-slate-300 rounded px-1.5 py-0.5 text-sm w-24" />
+                              </div>
+                            )}
+                            {s.isDriver && <span className="text-[10px] text-sky-600">נהג</span>}
+                            {s.isDriver && (() => { const rz = driverReasons(s.soldierId, row); return rz.length ? <span title={rz.join(" · ")} className="text-[10px] bg-rose-600 text-white rounded px-1.5 py-0.5 font-bold">🔴 לא מוסמך</span> : null; })()}
+                            <button onClick={() => removeSoldier(row.key, s.key)} className="text-xs text-rose-400 hover:text-rose-600">✕</button>
+                          </div>
+                        ))}
+                        {row.soldiers.length === 0 && <div className="text-xs text-slate-300 px-1">אין חיילים משובצים ברכב זה</div>}
+                      </div>
+
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <select value="" onChange={(e) => { addSoldier(row.key, e.target.value); e.target.value = ""; }}
+                          className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white">
+                          <option value="">+ הוסף חייל מהיחידה</option>
+                          {soldiers.filter((s) => !row.soldiers.some((rs) => rs.soldierId === s.id)).map((s) =>
+                            <option key={s.id} value={s.id}>{s.fullName}{s.personalNumber ? ` (${s.personalNumber})` : ""}</option>)}
+                        </select>
+                        <button onClick={() => addExternalSoldier(row.key)} className="text-xs text-amber-700 border border-amber-300 rounded-lg px-2 py-1 hover:bg-amber-50">+ חייל חוץ</button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
-            ))}
-          </div>
+            );
+          })()}
 
           {/* הוספת רכבים */}
           <div className="flex items-center gap-2 flex-wrap">
