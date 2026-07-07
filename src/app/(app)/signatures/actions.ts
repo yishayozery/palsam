@@ -64,6 +64,45 @@ async function notifySoldierSignRequest(soldierId: string, battalionId: string, 
   }
 }
 
+/** שליחה חוזרת של בקשת חתימה בטלגרם (חתימה בדיעבד). */
+export async function resendSignRequest(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  if (!can(user, "signatures.manage")) return;
+  const transferId = String(formData.get("transferId") || "");
+  const tr = await prisma.transfer.findUnique({
+    where: { id: transferId },
+    select: { battalionId: true, toSoldierId: true, signatures: { where: { status: "PENDING" }, select: { token: true }, take: 1 } },
+  });
+  if (!tr || tr.battalionId !== user.battalionId || !tr.toSoldierId || !tr.signatures[0]) return;
+  const sent = await notifySoldierSignRequest(tr.toSoldierId, tr.battalionId, tr.signatures[0].token);
+  await audit(user.id, "RESEND_SIGN_REQUEST", "Transfer", transferId, { sent });
+  revalidatePath("/signatures");
+}
+
+/** ביטול חתימה בדיעבד — החזרת הפריטים למלאי (תנועת החזרה נרשמת) + ביטול התעודה. אז מקימים חדשה. */
+export async function cancelRetroactiveSignout(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  if (!can(user, "signatures.manage")) return;
+  const bId = user.battalionId!;
+  const transferId = String(formData.get("transferId") || "");
+  const tr = await prisma.transfer.findUnique({ where: { id: transferId }, include: { lines: true } });
+  if (!tr || tr.battalionId !== bId || !tr.signaturePending) return;
+  const { adjustQuantity } = await import("@/lib/inventory");
+  await prisma.$transaction(async (tx) => {
+    for (const line of tr.lines) {
+      if (line.serialUnitId) {
+        await tx.serialUnit.update({ where: { id: line.serialUnitId }, data: { signedSoldierId: null, ...(tr.fromHolderId ? { currentHolderId: tr.fromHolderId } : {}) } });
+      } else if (tr.fromHolderId && line.statusId) {
+        await adjustQuantity(tx, bId, line.itemTypeId, tr.fromHolderId, line.statusId, line.quantity);
+      }
+    }
+    await tx.signature.updateMany({ where: { transferId }, data: { status: "CANCELED" } });
+    await tx.transfer.update({ where: { id: transferId }, data: { status: "REJECTED", signaturePending: false } });
+  });
+  await audit(user.id, "CANCEL_RETRO_SIGNOUT", "Transfer", transferId, { returned: tr.lines.length });
+  revalidatePath("/signatures");
+}
+
 /** שליחת סיכום ציוד לחייל בטלגרם — מחזיר true אם נשלח בהצלחה */
 async function notifySoldierTelegram(soldierId: string, battalionId: string, transferId: string | null, action: "SIGN" | "CHECKIN"): Promise<boolean> {
   try {
