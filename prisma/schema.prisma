@@ -166,6 +166,7 @@ model Battalion {
   supportQuestions     SupportQuestion[]     @relation("BattalionSupport")
   companyAllocations   CompanyAllocation[]  @relation("BattalionAllocations")
   vehicleAssignments   VehicleAssignment[] @relation("BattalionDispatch")
+  missions             Mission[]           @relation("BattalionMissions")
   serialUnits   SerialUnit[]
   kitInstances  KitInstance[]
   transfers     Transfer[]
@@ -238,6 +239,7 @@ model AppUser {
   recipientTransfers Transfer[]        @relation("TransferToUser")
   signedAsUser      Signature[]        @relation("SignerUser")
   createdDispatches VehicleAssignment[] @relation("DispatchCreatedBy")
+  createdMissions   Mission[]           @relation("MissionCreatedBy")
   createdDispatchTemplates DispatchTemplate[] @relation("DispatchTemplateCreatedBy")
   startedCounts     CountSession[]     @relation("CountStartedBy")
   createdCountPlans CountPlan[]        @relation("CountPlanCreatedBy")
@@ -402,6 +404,7 @@ model Holder {
   squads               Squad[]
   companyRoles         CompanyRole[]
   dispatchAssignments  VehicleAssignment[] @relation("CompanyDispatch")
+  companyMissions      Mission[]           @relation("CompanyMissions")
   dispatchTemplates    DispatchTemplate[]  @relation("DispatchTemplateCompany")
   // קשרי מחסן↔פלוגה (איזה פלוגות המחסן עובד מולן)
   warehouseLinks   WarehouseCompany[] @relation("WarehouseSide")
@@ -649,14 +652,44 @@ model Soldier {
  * שבצ"ק - שיבוץ חיילים לרכב למשימה.
  * נראה לכולם, ניתן לעריכה ע"י כולם, מינימום שדות (ביטחון מידע).
  */
+// 🆕 משימה = שיירה של כמה רכבים (VehicleAssignment) תחת תאריך/שעה/פלוגה אחת
+model Mission {
+  id            String   @id @default(cuid())
+  battalionId   String
+  battalion     Battalion @relation("BattalionMissions", fields: [battalionId], references: [id], onDelete: Cascade)
+  companyId     String?
+  company       Holder?  @relation("CompanyMissions", fields: [companyId], references: [id], onDelete: SetNull)
+  title         String?
+  missionDate   DateTime
+  departureTime String
+  notes         String?
+  createdById   String
+  createdBy     AppUser  @relation("MissionCreatedBy", fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  completedAt   DateTime?
+  completedById String?
+  vehicles      VehicleAssignment[]
+
+  @@index([battalionId, missionDate])
+}
+
 model VehicleAssignment {
   id                  String   @id @default(cuid())
   battalionId         String
   battalion           Battalion @relation("BattalionDispatch", fields: [battalionId], references: [id], onDelete: Cascade)
   companyId           String?
   company             Holder?  @relation("CompanyDispatch", fields: [companyId], references: [id], onDelete: SetNull)
-  vehicleSerialUnitId String
-  vehicleSerialUnit   SerialUnit @relation("VehicleAssignmentVehicle", fields: [vehicleSerialUnitId], references: [id], onDelete: Cascade)
+  // 🆕 שיוך למשימה רב-רכבית (null = שיבוץ רכב-יחיד ישן, ממשיך לעבוד)
+  missionId           String?
+  mission             Mission? @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  // רכב מהמערכת (null עבור רכב חוץ)
+  vehicleSerialUnitId String?
+  vehicleSerialUnit   SerialUnit? @relation("VehicleAssignmentVehicle", fields: [vehicleSerialUnitId], references: [id], onDelete: Cascade)
+  // 🆕 רכב חוץ — מגיע מיחידה אחרת, לא במערכת
+  isExternal              Boolean @default(false)
+  externalVehicleNumber   String?
+  externalVehicleTypeName String?
   missionDate         DateTime // תאריך משימה (ביום הראשון של היום - שעה 00:00)
   departureTime       String   // שעת יציאה כ-string HH:mm (פשוט יותר משילוב בתאריך)
   createdById         String
@@ -673,14 +706,18 @@ model VehicleAssignment {
   @@index([battalionId, missionDate])
   @@index([battalionId, completedAt])
   @@index([vehicleSerialUnitId])
+  @@index([missionId])
 }
 
 model VehicleAssignmentSoldier {
   id           String   @id @default(cuid())
   assignmentId String
   assignment   VehicleAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  soldierId    String
-  soldier      Soldier  @relation("SoldierDispatch", fields: [soldierId], references: [id], onDelete: Cascade)
+  soldierId    String?
+  soldier      Soldier? @relation("SoldierDispatch", fields: [soldierId], references: [id], onDelete: Cascade)
+  // 🆕 חייל חוץ — לא במערכת, שם + מ.א ידניים
+  externalName           String?
+  externalPersonalNumber String?
   createdAt    DateTime @default(now())
 
   @@unique([assignmentId, soldierId])
