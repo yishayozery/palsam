@@ -34,6 +34,7 @@ export default function SignoutModal({
 }) {
   const [open, setOpen] = useState(!!reopenForSoldierId);
   const [soldierId, setSoldierId] = useState(reopenForSoldierId ?? "");
+  const [ironNumber, setIronNumber] = useState(""); // מספר ברזל / מיספור פנימי פר-מחסן
   const [companyFilter, setCompanyFilter] = useState(lockCompanyId ?? "");
   const [soldierSearch, setSoldierSearch] = useState("");
   const [itemSearch, setItemSearch] = useState("");
@@ -290,6 +291,7 @@ export default function SignoutModal({
 
     const fd = new FormData();
     fd.append("soldierId", soldierId);
+    if (ironNumber) fd.append("ironNumber", ironNumber);
     fd.append("method", retroactive ? "LINK" : method);
     fd.append("retroactive", retroactive ? "true" : "false");
     if (kitId) fd.append("kitId", kitId);
@@ -390,6 +392,14 @@ export default function SignoutModal({
                 </p>
               )}
             </div>
+            {selectedSoldier && (
+              <div className="min-w-28">
+                <label className="block text-[11px] text-slate-600 mb-0.5">🔢 מספר ברזל</label>
+                <input value={ironNumber} onChange={(e) => setIronNumber(e.target.value.replace(/\D/g, ""))}
+                  placeholder="מיספור פנימי" title="מיספור פנימי פר-מחסן לחייל (ספרות בלבד)"
+                  className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-mono" />
+              </div>
+            )}
           </div>
           {selectedSoldier && !selectedSoldier.phone && (
             <div className="mt-2 bg-amber-50 border-2 border-amber-300 rounded-lg p-2.5">

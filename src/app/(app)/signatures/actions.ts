@@ -300,6 +300,20 @@ export async function createSignout(formData: FormData): Promise<{ error: string
   const kitId = String(formData.get("kitId") || "") || null;
   const physicalLocation = String(formData.get("physicalLocation") || "").trim() || null;
   const equipmentLocationId = String(formData.get("equipmentLocationId") || "") || null;
+
+  // 🔢 מספר ברזל (מיספור פנימי פר-מחסן) — נשמר בזמן ההחתמה אם הוזן, ללא דריסת מספר תפוס
+  const ironRaw = String(formData.get("ironNumber") || "").replace(/\D/g, "");
+  if (ironRaw && soldierId && user.holderId) {
+    const number = parseInt(ironRaw, 10);
+    const taken = await prisma.warehouseSoldierIndex.findFirst({ where: { holderId: user.holderId, number, soldierId: { not: soldierId } } });
+    if (!taken) {
+      await prisma.warehouseSoldierIndex.upsert({
+        where: { holderId_soldierId: { holderId: user.holderId, soldierId } },
+        update: { number },
+        create: { battalionId: bId, holderId: user.holderId, soldierId, number },
+      }).catch((e) => console.error("[createSignout] iron save failed (non-fatal):", e));
+    }
+  }
   // פריטים כמותיים בעגלה (מקבילות: qtyItem[], qtyValue[], qtyStatus[])
   const qtyItems = formData.getAll("qtyItem").map(String);
   const qtyValues = formData.getAll("qtyValue").map((v) => parseInt(String(v), 10) || 0);
