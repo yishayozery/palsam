@@ -89,8 +89,14 @@ export async function saveDrivingProcedureText(formData: FormData) {
   if (!isAdmin && !isVehicleOfficer && !can(user, "dispatch.manage")) return;
   const bId = user.battalionId!;
   const text = String(formData.get("text") || "").trim() || null;
-  await prisma.battalion.update({ where: { id: bId }, data: { drivingProcedureText: text } });
-  await audit(user.id, "UPDATE", "Battalion", bId, { drivingProcedureText: !!text });
+  const current = await prisma.battalion.findUnique({ where: { id: bId }, select: { drivingProcedureText: true } });
+  const changed = (current?.drivingProcedureText ?? null) !== text;
+  await prisma.battalion.update({
+    where: { id: bId },
+    // עדכון הנוסח = גרסה חדשה → מרעננים את חותם-הזמן, וכל חתימה ישנה נחשבת לא-תקפה
+    data: { drivingProcedureText: text, ...(changed ? { drivingProcedureUpdatedAt: new Date() } : {}) },
+  });
+  await audit(user.id, "UPDATE", "Battalion", bId, { drivingProcedureText: !!text, versionBumped: changed });
   revalidatePath("/driving-licenses");
 }
 

@@ -142,6 +142,7 @@ model Battalion {
   attendanceDeadline          String? // שעת גג לדיווח נוכחות (HH:mm) — תזכורת חוזרת חצי שעה לפני
   tripLink                    String? // קישור "פתיחת משימת נסיעה" שנשלח לנהגים בבוט עם השיבוץ למשימה
   drivingProcedureText        String? // נוסח נוהל נהיגה לחתימת נהגים (מוצג בבוט + קצין רכב)
+  drivingProcedureUpdatedAt   DateTime? // מתי עודכן הנוסח — חתימה מלפני התאריך נחשבת לא-תקפה (גרסה חדשה → חתימה מחדש)
   telegramBotToken            String? // טוקן בוט טלגרם לשליחת הודעות אוטומטיות
   telegramBotInfo             String? // מידע כללי שהבוט ישלח (ארוחות, תפילות, טלפונים)
   telegramBotUsername         String? // username של הבוט (מתעדכן אוטומטית ברישום webhook)

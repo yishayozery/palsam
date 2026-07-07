@@ -29,14 +29,21 @@ function refreshInfo(refresherDate: string | null, refreshDays: number): { label
 }
 
 export default function LicenseEditor({
-  soldiers, licenseTypes, canEdit, drivingRefreshDays, hasProcedureText,
+  soldiers, licenseTypes, canEdit, drivingRefreshDays, hasProcedureText, procedureUpdatedAt,
 }: {
   soldiers: Soldier[];
   licenseTypes: LicenseType[];
   canEdit: boolean;
   drivingRefreshDays: number;
   hasProcedureText: boolean;
+  procedureUpdatedAt: string | null;
 }) {
+  // חתימה תקפה רק אם נחתמה אחרי העדכון האחרון של הנוסח (גרסה חדשה → נדרשת חתימה מחדש)
+  const procStatus = (signedAt: string | null): "signed" | "stale" | "none" => {
+    if (!signedAt) return "none";
+    if (procedureUpdatedAt && new Date(signedAt) < new Date(procedureUpdatedAt)) return "stale";
+    return "signed";
+  };
   const router = useRouter();
   const [editingSoldier, setEditingSoldier] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -145,17 +152,21 @@ export default function LicenseEditor({
                         : <span className="text-slate-300 text-xs">—</span>}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      {s.procedureSignedAt ? (
-                        <span className="text-[11px] text-emerald-700">✓ חתם {new Date(s.procedureSignedAt).toLocaleDateString("he-IL")}</span>
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] text-slate-400">לא חתם</span>
-                          {canEdit && hasProcedureText && s.telegramLinked && (
-                            <button onClick={() => sendProcedure(s.id)} disabled={pending} className="text-[11px] text-sky-600 hover:underline">📲 שלח</button>
-                          )}
-                          {canEdit && <button onClick={() => markSigned(s.id)} disabled={pending} className="text-[11px] text-slate-500 hover:underline">✍️ סמן</button>}
-                        </div>
-                      )}
+                      {(() => {
+                        const st = procStatus(s.procedureSignedAt);
+                        if (st === "signed") return <span className="text-[11px] text-emerald-700">✓ חתם {new Date(s.procedureSignedAt!).toLocaleDateString("he-IL")}</span>;
+                        return (
+                          <div className="flex items-center gap-1.5">
+                            {st === "stale"
+                              ? <span className="text-[11px] text-amber-700" title={`חתם ${new Date(s.procedureSignedAt!).toLocaleDateString("he-IL")} — לפני עדכון הנוסח`}>🔄 עודכן — חתימה מחדש</span>
+                              : <span className="text-[11px] text-slate-400">לא חתם</span>}
+                            {canEdit && hasProcedureText && s.telegramLinked && (
+                              <button onClick={() => sendProcedure(s.id)} disabled={pending} className="text-[11px] text-sky-600 hover:underline">📲 שלח</button>
+                            )}
+                            {canEdit && <button onClick={() => markSigned(s.id)} disabled={pending} className="text-[11px] text-slate-500 hover:underline">✍️ סמן</button>}
+                          </div>
+                        );
+                      })()}
                     </td>
                     {canEdit && (
                       <td className="px-3 py-2 whitespace-nowrap">

@@ -29,7 +29,7 @@ export default async function DrivingLicensesPage({
 
   const battalion = await prisma.battalion.findUnique({
     where: { id: bId },
-    select: { drivingRefreshDays: true, drivingProcedureText: true },
+    select: { drivingRefreshDays: true, drivingProcedureText: true, drivingProcedureUpdatedAt: true },
   });
   const drivingRefreshDays = battalion?.drivingRefreshDays ?? 180;
 
@@ -141,6 +141,7 @@ export default async function DrivingLicensesPage({
           canEdit={canEditLicenses}
           drivingRefreshDays={drivingRefreshDays}
           hasProcedureText={!!battalion?.drivingProcedureText}
+          procedureUpdatedAt={battalion?.drivingProcedureUpdatedAt ? battalion.drivingProcedureUpdatedAt.toISOString() : null}
         />
       )}
     </div>
