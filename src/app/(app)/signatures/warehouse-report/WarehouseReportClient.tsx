@@ -18,7 +18,7 @@ export default function WarehouseReportClient({
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
-  const [mode, setMode] = useState<"detailed" | "summary">("detailed");
+  const [mode, setMode] = useState<"detailed" | "summary" | "flat">("detailed");
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -84,6 +84,8 @@ export default function WarehouseReportClient({
         <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden text-sm">
           <button onClick={() => setMode("detailed")}
             className={`px-3 py-2 font-medium ${mode === "detailed" ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📋 מפורט</button>
+          <button onClick={() => setMode("flat")}
+            className={`px-3 py-2 font-medium ${mode === "flat" ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📄 טבלה</button>
           <button onClick={() => setMode("summary")}
             className={`px-3 py-2 font-medium ${mode === "summary" ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>📊 מצומצם (פלוגתי)</button>
         </div>
@@ -138,6 +140,44 @@ export default function WarehouseReportClient({
                   <td className="px-3 py-2" />
                 </tr>
               </tfoot>
+            </table>
+          </div>
+        </Card>
+      ) : mode === "flat" ? (
+        /* ===== תצוגת טבלה שטוחה — שורה לכל פריט ===== */
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-slate-100 text-slate-600 text-xs">
+                  <th className="px-2 py-2 text-center font-medium w-16">מס׳ ברזל</th>
+                  <th className="px-2 py-2 text-right font-medium">פלוגה</th>
+                  <th className="px-2 py-2 text-right font-medium">חייל</th>
+                  <th className="px-2 py-2 text-right font-medium">מ.א</th>
+                  <th className="px-2 py-2 text-right font-medium">פריט</th>
+                  <th className="px-2 py-2 text-right font-medium">סריאלי / אצווה</th>
+                  <th className="px-2 py-2 text-center font-medium w-14">כמות</th>
+                  <th className="px-2 py-2 text-right font-medium">תפוגה</th>
+                  <th className="px-2 py-2 text-right font-medium">מיקום</th>
+                  <th className="px-2 py-2 text-right font-medium">סטטוס</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.flatMap((c) => c.soldiers.flatMap((s) => s.items.map((it, i) => (
+                  <tr key={`${s.id}-${i}`} className="hover:bg-slate-50">
+                    <td className="px-2 py-1.5 text-center font-mono text-purple-700">{s.iron ?? "—"}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap text-slate-600">{c.name}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap font-medium text-slate-800">{s.name}</td>
+                    <td className="px-2 py-1.5 font-mono text-[11px] text-slate-500">{s.pn ?? "—"}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">{it.name}</td>
+                    <td className="px-2 py-1.5 font-mono text-[11px]">{it.serial ?? "—"}</td>
+                    <td className="px-2 py-1.5 text-center">{it.qty ?? (it.serial ? 1 : "—")}</td>
+                    <td className="px-2 py-1.5 text-amber-700 whitespace-nowrap">{it.expiry ?? "—"}</td>
+                    <td className="px-2 py-1.5 text-slate-500 whitespace-nowrap">{it.location ?? "—"}</td>
+                    <td className="px-2 py-1.5">{it.status && it.status !== "תקין" ? <span className="text-rose-600">{it.status}</span> : it.status ?? "—"}</td>
+                  </tr>
+                ))))}
+              </tbody>
             </table>
           </div>
         </Card>
