@@ -3,15 +3,21 @@ import { sendTelegramMessage } from "./telegram";
 
 /**
  * תזכורות דיווח נוכחות (ביצוע):
- *  - 07:00 — תזכורת פתיחה לכל המדווחים (מפ/רס"פ + מפקדי מחלקות).
+ *  - בוקר (מ-07:00) — תזכורת פתיחה לכל המדווחים (מפ/רס"פ + מפקדי מחלקות).
  *  - חצי שעה לפני "שעת הגג" (attendanceDeadline) — תזכורת חוזרת רק למי שטרם דיווח את הסקופ שלו.
  * מדווחי הפלוגה: מפ/רס"פ (COMPANY_REP). אם למחלקה יש מפקד — הוא מדווח על המחלקה שלו,
  * ושאר החיילים (ללא מפקד מחלקה) נשארים באחריות המפ/רס"פ.
- * מופעל מ-cron שרץ כל 30 דק' ומחשב שעה מקומית (Asia/Jerusalem).
+ *
+ * עמידות לתדירות ה-cron: כל שליחה מוגנת ב-"נשלח היום" (attendanceInitialSentOn /
+ * attendanceFollowupSentOn = תאריך ישראל YYYY-MM-DD). כך אין כפילות אם ה-endpoint נקרא
+ * מספר פעמים ביום (cron חיצוני כל 30 דק'), וגם ריצה יומית בודדת (Vercel Hobby) עדיין
+ * שולחת את תזכורת הבוקר בחלון הבוקר. התזכורת החוזרת דורשת קריאה בחלון שלפני-הגג.
  */
 
-const INITIAL_MIN = 7 * 60; // 07:00
-const slot = (min: number) => Math.floor(min / 30);
+// חלון הבוקר לתזכורת הפתיחה. מתחיל ב-06:00 כדי לתפוס גם את ריצת ה-cron היומית של
+// Vercel (04:05 UTC = 06:05 בחורף / 07:05 בקיץ IST), פעם ביום בזכות ה-guard.
+const MORNING_START = 6 * 60;      // 06:00
+const MORNING_END = 12 * 60;       // 12:00
 
 type Reporter = {
   chatId: string;
@@ -48,16 +54,18 @@ async function reportersFor(battalionId: string): Promise<Reporter[]> {
   return out;
 }
 
-/** תזכורת פתיחה (07:00) — לכל המדווחים. */
-export async function sendAttendanceInitial(): Promise<number> {
+/** תזכורת פתיחה (בוקר) — לכל המדווחים. מוגן ב-"נשלח היום" למניעת כפילות. */
+export async function sendAttendanceInitial(todayYmd: string): Promise<number> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
   const battalions = await prisma.battalion.findMany({
-    where: { attendanceReminderEnabled: true, telegramBotToken: { not: null } },
+    where: { attendanceReminderEnabled: true, telegramBotToken: { not: null }, NOT: { attendanceInitialSentOn: todayYmd } },
     select: { id: true, telegramBotToken: true, attendanceReminderText: true },
   });
   let sent = 0;
   for (const b of battalions) {
     const reporters = await reportersFor(b.id);
+    // סימון "נשלח היום" מיד — מונע כפילות גם אם אין מדווחים
+    await prisma.battalion.update({ where: { id: b.id }, data: { attendanceInitialSentOn: todayYmd } });
     for (const rep of reporters) {
       const scope = rep.kind === "squad" ? rep.label : (rep.label !== "הפלוגה" ? rep.label : "הפלוגה");
       const text = b.attendanceReminderText?.trim()
@@ -69,11 +77,17 @@ export async function sendAttendanceInitial(): Promise<number> {
   return sent;
 }
 
-/** תזכורת חוזרת — רק למי שטרם דיווח את הסקופ שלו. נקראת לכל גדוד שהזמן שלו = שעת-גג פחות 30 דק'. */
-export async function sendAttendanceFollowup(nowMin: number, today: Date): Promise<number> {
+/**
+ * תזכורת חוזרת — רק למי שטרם דיווח את הסקופ שלו.
+ * נשלחת פעם אחת ביום, בחלון [שעת-גג פחות 30 דק' , שעת-גג). מוגן ב-"נשלח היום".
+ */
+export async function sendAttendanceFollowup(nowMin: number, today: Date, todayYmd: string): Promise<number> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
   const battalions = await prisma.battalion.findMany({
-    where: { attendanceReminderEnabled: true, telegramBotToken: { not: null }, attendanceDeadline: { not: null } },
+    where: {
+      attendanceReminderEnabled: true, telegramBotToken: { not: null }, attendanceDeadline: { not: null },
+      NOT: { attendanceFollowupSentOn: todayYmd },
+    },
     select: { id: true, telegramBotToken: true, attendanceDeadline: true },
   });
 
@@ -83,7 +97,10 @@ export async function sendAttendanceFollowup(nowMin: number, today: Date): Promi
     if (!m) continue;
     const deadlineMin = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
     const targetMin = deadlineMin - 30;
-    if (slot(nowMin) !== slot(targetMin)) continue;
+    // חלון: מ-30 דק' לפני הגג ועד הגג עצמו
+    if (nowMin < targetMin || nowMin >= deadlineMin) continue;
+    // סימון "נשלח היום" מיד — מונע כפילות בקריאות תכופות
+    await prisma.battalion.update({ where: { id: b.id }, data: { attendanceFollowupSentOn: todayYmd } });
 
     const reporters = await reportersFor(b.id);
     if (reporters.length === 0) continue;
@@ -121,7 +138,9 @@ export async function processAttendanceReminders(): Promise<{ initial: number; f
   const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(now); // YYYY-MM-DD
   const today = new Date(`${ymd}T00:00:00.000Z`);
 
-  const initial = slot(nowMin) === slot(INITIAL_MIN) ? await sendAttendanceInitial().catch(() => 0) : 0;
-  const followup = await sendAttendanceFollowup(nowMin, today).catch(() => 0);
+  // תזכורת בוקר: פעם ביום, בחלון הבוקר (06:00–12:00). ריצת cron יומית בודדת עדיין נתפסת.
+  const inMorning = nowMin >= MORNING_START && nowMin < MORNING_END;
+  const initial = inMorning ? await sendAttendanceInitial(ymd).catch(() => 0) : 0;
+  const followup = await sendAttendanceFollowup(nowMin, today, ymd).catch(() => 0);
   return { initial, followup };
 }

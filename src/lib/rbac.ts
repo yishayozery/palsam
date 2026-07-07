@@ -304,11 +304,19 @@ export const PRESET_ROLES: {
     ],
   },
   {
-    // מפלג — רואה בלבד ברמת פלוגה
+    // מפלג — נצ"ל פלוגתי: מחתים ציוד, מדווח נוכחות, מנהל ספירות/מסירות בפלוגה
     name: "מפלג", isAdmin: false, isCommander: true, sortOrder: 6,
     permissions: [
-      { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "VIEW" },
-      { screen: "attendance", level: "VIEW" }, { screen: "dispatch", level: "VIEW" },
+      { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
+      { screen: "attendance", level: "EDIT" }, { screen: "employment", level: "VIEW" },
+      { screen: "dispatch", level: "EDIT" }, { screen: "certifications", level: "VIEW" },
+      { screen: "signatures", level: "EDIT" }, { screen: "transfers", level: "EDIT" },
+      { screen: "counts", level: "EDIT" }, { screen: "donations", level: "EDIT" },
+      { screen: "vacation", level: "EDIT" },
+      { screen: "stock", level: "VIEW" }, { screen: "gaps", level: "VIEW" },
+      { screen: "reports", level: "VIEW" }, { screen: "armory_allocations", level: "VIEW" },
+      { screen: "maintenance", level: "VIEW" }, { screen: "ymach", level: "EDIT" },
+      { screen: "trainings", level: "VIEW" },
     ],
   },
 
@@ -330,7 +338,7 @@ export const PRESET_ROLES: {
     name: "שליש", isAdmin: false, isCommander: false, sortOrder: 8,
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
-      { screen: "roster", level: "EDIT" },
+      { screen: "roster", level: "EDIT" }, { screen: "attendance", level: "EDIT" }, { screen: "employment", level: "VIEW" },
       { screen: "dispatch", level: "EDIT" }, { screen: "certifications", level: "EDIT" }, { screen: "reports", level: "VIEW" },
       { screen: "armory_reports", level: "VIEW" },
     ],

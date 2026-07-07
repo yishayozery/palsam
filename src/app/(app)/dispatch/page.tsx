@@ -50,6 +50,7 @@ export default async function DispatchPage() {
       where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
       select: {
         id: true, fullName: true, personalNumber: true, phone: true, companyId: true,
+        drivingProcedureSignedAt: true, drivingRefresherDate: true,
         company: { select: { name: true } },
         companyRole: { select: { name: true } },
         drivingLicenses: { include: { licenseType: { select: { id: true, name: true } } } },
@@ -151,8 +152,13 @@ export default async function DispatchPage() {
       })),
     })),
   }));
-  const vehiclesForMission = vehicles.map((v) => ({ id: v.id, name: v.itemType.name, serial: v.serialNumber, typeName: v.itemType.name }));
-  const soldiersForMission = soldiers.map((s) => ({ id: s.id, fullName: s.fullName, personalNumber: s.personalNumber ?? "" }));
+  const vehiclesForMission = vehicles.map((v) => ({ id: v.id, name: v.itemType.name, serial: v.serialNumber, typeName: v.itemType.name, requiredLicenseIds: vtlMap[v.itemTypeId] ?? [] }));
+  const soldiersForMission = soldiers.map((s) => {
+    const procValid = !!s.drivingProcedureSignedAt && (!procUpdated || s.drivingProcedureSignedAt >= procUpdated);
+    let refreshValid = false;
+    if (s.drivingRefresherDate) { const exp = new Date(s.drivingRefresherDate); exp.setDate(exp.getDate() + refreshDays); refreshValid = exp.getTime() >= Date.now(); }
+    return { id: s.id, fullName: s.fullName, personalNumber: s.personalNumber ?? "", licenseIds: s.drivingLicenses.map((dl) => dl.licenseType.id), procValid, refreshValid };
+  });
   const templatesForMission = templates.filter((t) => t.vehicleSerialUnit).map((t) => ({
     id: t.id, name: t.name, vehicleSerialUnitId: t.vehicleSerialUnitId!,
     vehicleTypeName: t.vehicleSerialUnit!.itemType.name,

@@ -140,6 +140,8 @@ model Battalion {
   attendanceReminderEnabled   Boolean @default(false) // תזכורת בוקר אוטומטית לדיווח נוכחות
   attendanceReminderText      String? // טקסט מותאם לתזכורת (אופציונלי)
   attendanceDeadline          String? // שעת גג לדיווח נוכחות (HH:mm) — תזכורת חוזרת חצי שעה לפני
+  attendanceInitialSentOn     String? // YYYY-MM-DD (שעון ישראל) — נשלחה תזכורת פתיחה היום (מונע כפילות)
+  attendanceFollowupSentOn    String? // YYYY-MM-DD — נשלחה תזכורת חוזרת היום (מונע כפילות)
   tripLink                    String? // קישור "פתיחת משימת נסיעה" שנשלח לנהגים בבוט עם השיבוץ למשימה
   drivingProcedureText        String? // נוסח נוהל נהיגה לחתימת נהגים (מוצג בבוט + קצין רכב)
   drivingProcedureUpdatedAt   DateTime? // מתי עודכן הנוסח — חתימה מלפני התאריך נחשבת לא-תקפה (גרסה חדשה → חתימה מחדש)

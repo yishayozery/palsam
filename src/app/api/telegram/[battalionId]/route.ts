@@ -626,7 +626,7 @@ async function handleEquipment(token: string, chatId: string, soldier: SoldierCt
   const [serialItems, qtyLines] = await Promise.all([
     prisma.serialUnit.findMany({
       where: { signedSoldierId: soldier.id },
-      select: { serialNumber: true, lotQuantity: true, itemType: { select: { name: true } } },
+      select: { id: true, serialNumber: true, lotQuantity: true, itemType: { select: { name: true } }, equipmentLocation: { select: { name: true } } },
       orderBy: { itemType: { name: "asc" } },
     }),
     prisma.transferLine.findMany({
@@ -660,7 +660,8 @@ async function handleEquipment(token: string, chatId: string, soldier: SoldierCt
     lines.push(`<b>🔫 סריאלי / אצוות (${serialItems.length})</b>`);
     for (const item of serialItems) {
       const lot = item.lotQuantity && item.lotQuantity > 1 ? ` (אצווה ×${item.lotQuantity})` : "";
-      lines.push(`• ${item.itemType.name} — <code>${item.serialNumber}</code>${lot}`);
+      const loc = item.equipmentLocation ? ` · 📍 ${item.equipmentLocation.name}` : "";
+      lines.push(`• ${item.itemType.name} — <code>${item.serialNumber}</code>${lot}${loc}`);
     }
   }
 

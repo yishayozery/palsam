@@ -56,6 +56,15 @@ export default function AttendanceClient({
   const [pendingChanges, setPendingChanges] = useState<Map<string, string | null>>(new Map());
   const [selectedSquadId, setSelectedSquadId] = useState<string>("");
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
+  const [onlyShmap, setOnlyShmap] = useState<boolean>(false);
+  const [copiedPn, setCopiedPn] = useState<string | null>(null);
+
+  function copyPn(pn: string) {
+    navigator.clipboard?.writeText(pn).then(() => {
+      setCopiedPn(pn);
+      setTimeout(() => setCopiedPn((cur) => (cur === pn ? null : cur)), 1200);
+    }).catch(() => {});
+  }
   const [showCallupModal, setShowCallupModal] = useState<{ soldierId: string; soldierName: string } | null>(null);
   const [callupDate, setCallupDate] = useState("");
   const [callupSaving, setCallupSaving] = useState(false);
@@ -149,8 +158,9 @@ export default function AttendanceClient({
     if (selectedRoleId === "__commander__") list = list.filter((s) => s.isCommander);
     else if (selectedRoleId === "__none__") list = list.filter((s) => !s.companyRoleId);
     else if (selectedRoleId) list = list.filter((s) => s.companyRoleId === selectedRoleId);
+    if (onlyShmap) list = list.filter((s) => !!getActiveCallup(s.id));
     return list;
-  }, [soldiers, selectedSquadId, selectedRoleId]);
+  }, [soldiers, selectedSquadId, selectedRoleId, onlyShmap, getActiveCallup]);
 
   // Group soldiers by company → squad
   const isAllCompanies = selectedCompanyId === "__all__";
@@ -641,6 +651,11 @@ export default function AttendanceClient({
             </div>
           )}
 
+          <label className={`flex items-center gap-1.5 text-sm font-medium rounded-lg border-2 px-3 py-1.5 cursor-pointer select-none ${onlyShmap ? "border-purple-400 bg-purple-50 text-purple-800" : "border-slate-300 text-slate-600 hover:bg-slate-50"}`}>
+            <input type="checkbox" checked={onlyShmap} onChange={(e) => setOnlyShmap(e.target.checked)} className="accent-purple-600" />
+            🟣 רק בשמ״פ
+          </label>
+
           <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-200">
             <button onClick={() => shiftDays(-7)} className="rounded bg-white border border-slate-200 px-2 py-1 text-xs hover:bg-slate-100 font-medium">◀ שבוע</button>
             <button onClick={() => shiftDays(-1)} className="rounded bg-white border border-slate-200 px-2 py-1 text-xs hover:bg-slate-100">◀ יום</button>
@@ -816,7 +831,13 @@ export default function AttendanceClient({
                         </div>
                         <div className="flex items-center gap-1">
                           {soldier.personalNumber && (
-                            <span className="text-[9px] font-mono text-slate-400">{soldier.personalNumber}</span>
+                            <button
+                              onClick={() => copyPn(soldier.personalNumber!)}
+                              title="העתק מספר אישי"
+                              className={`text-[9px] font-mono rounded px-1 flex items-center gap-0.5 transition-colors ${copiedPn === soldier.personalNumber ? "bg-emerald-100 text-emerald-700" : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"}`}
+                            >
+                              {copiedPn === soldier.personalNumber ? "✓ הועתק" : <>{soldier.personalNumber} 📋</>}
+                            </button>
                           )}
                           {canManage && !isDischarged && (
                             <button
