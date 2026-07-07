@@ -632,6 +632,14 @@ export async function completeSignature(token: string, signatureData: string) {
 
   const telegramSent = await notifySoldierTelegram(soldierId, bId, sig.transferId, "SIGN");
 
+  // 📧 מייל למחסן/פלוגה/גדוד: החייל חתם על התעודה (עם PDF התעודה מצורף)
+  try {
+    const { notifyTransactionEmail } = await import("@/lib/email");
+    void notifyTransactionEmail({ battalionId: bId, userId: null, action: "SIGN", entity: "Transfer", entityId: sig.transferId, holderId: fromHolderId, details: { soldierId } });
+  } catch (emailErr) {
+    console.error("[completeSignature] email failed (non-fatal):", emailErr);
+  }
+
   revalidatePath("/signatures");
   return { ok: true, telegramSent };
 }
