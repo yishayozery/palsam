@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui";
 import CrudSection from "@/components/CrudSection";
-import { saveLicenseType, toggleLicenseType, updateRefreshDays } from "./actions";
+import { saveLicenseType, toggleLicenseType, updateRefreshDays, saveDrivingProcedureText } from "./actions";
+import ProcedureTextForm from "./ProcedureTextForm";
 import LicenseEditor from "./LicenseEditor";
 import VehicleTypeLicenseEditor from "./VehicleTypeLicenseEditor";
 import RefreshDaysSettings from "./RefreshDaysSettings";
@@ -28,7 +29,7 @@ export default async function DrivingLicensesPage({
 
   const battalion = await prisma.battalion.findUnique({
     where: { id: bId },
-    select: { drivingRefreshDays: true },
+    select: { drivingRefreshDays: true, drivingProcedureText: true },
   });
   const drivingRefreshDays = battalion?.drivingRefreshDays ?? 180;
 
@@ -62,7 +63,8 @@ export default async function DrivingLicensesPage({
   ]);
 
   const TABS = [
-    { key: "soldiers", label: "הרשאות פר חייל" },
+    { key: "soldiers", label: "רשיונות והיתרים" },
+    { key: "procedure", label: "📝 נוהל נהיגה" },
     { key: "types", label: "סוגי הרשאות" },
     { key: "vehicles", label: "שיוך רכבים" },
   ] as const;
@@ -117,6 +119,10 @@ export default async function DrivingLicensesPage({
         />
       )}
 
+      {tab === "procedure" && (
+        <ProcedureTextForm current={battalion?.drivingProcedureText ?? ""} action={saveDrivingProcedureText} canEdit={canEditLicenses} />
+      )}
+
       {tab === "soldiers" && (
         <LicenseEditor
           soldiers={soldiers.map((s) => ({
@@ -127,13 +133,14 @@ export default async function DrivingLicensesPage({
             drivingRefresherDate: s.drivingRefresherDate
               ? s.drivingRefresherDate.toISOString().slice(0, 10)
               : null,
-            licenses: s.drivingLicenses.map((dl) => ({
-              licenseTypeId: dl.licenseTypeId,
-            })),
+            procedureSignedAt: s.drivingProcedureSignedAt ? s.drivingProcedureSignedAt.toISOString() : null,
+            telegramLinked: !!s.telegramChatId,
+            licenses: s.drivingLicenses.map((dl) => ({ licenseTypeId: dl.licenseTypeId })),
           }))}
-          licenseTypes={licenseTypes.map((lt) => ({ id: lt.id, name: lt.name }))}
+          licenseTypes={licenseTypes.map((lt) => ({ id: lt.id, name: lt.name, kind: lt.kind }))}
           canEdit={canEditLicenses}
           drivingRefreshDays={drivingRefreshDays}
+          hasProcedureText={!!battalion?.drivingProcedureText}
         />
       )}
     </div>

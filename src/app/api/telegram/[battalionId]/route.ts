@@ -293,6 +293,22 @@ async function handleCallback(
   const messageId = callback.message.message_id;
   const data = callback.data;
 
+  // חתימה על נוהל נהיגה: signproc:<soldierId> — רק החייל עצמו (התאמת chatId)
+  if (data.startsWith("signproc:")) {
+    const soldierId = data.split(":")[1];
+    const soldier = await prisma.soldier.findFirst({
+      where: { id: soldierId, battalionId, telegramChatId: chatId },
+      select: { id: true, fullName: true, drivingProcedureSignedAt: true },
+    });
+    if (!soldier) { await answerCallbackQuery(token, callback.id, "שגיאה"); return; }
+    if (!soldier.drivingProcedureSignedAt) {
+      await prisma.soldier.update({ where: { id: soldier.id }, data: { drivingProcedureSignedAt: new Date() } });
+    }
+    await answerCallbackQuery(token, callback.id, "נחתם! ✅");
+    await editMessageText(token, chatId, messageId, `✅ <b>חתמת על נוהל הנהיגה</b>\nתודה, ${soldier.fullName}.`);
+    return;
+  }
+
   // Format: verify:<itemId>:<found|denied>
   if (data.startsWith("verify:")) {
     const parts = data.split(":");
