@@ -155,6 +155,7 @@ async function notifyMissionCreated(missionId: string, bId: string): Promise<voi
       where: { id: missionId },
       include: {
         battalion: { select: { telegramBotToken: true, tripLink: true } },
+        commanderSoldier: { select: { fullName: true, telegramChatId: true } },
         vehicles: {
           include: {
             vehicleSerialUnit: { select: { serialNumber: true, itemType: { select: { name: true } } } },
@@ -204,6 +205,14 @@ async function notifyMissionCreated(missionId: string, bId: string): Promise<voi
         const chatId = o.soldier?.telegramChatId;
         if (chatId && !seen.has(chatId)) { seen.add(chatId); await sendTelegramMessage(token, chatId, summary); }
       }
+    }
+
+    // 3. הודעה למפקד המשימה — עם כפתור "סיים משימה" בבוט
+    if (mission.commanderSoldier?.telegramChatId) {
+      const cText = `👤 <b>הוגדרת כמפקד משימה</b>\nמשימה: ${mission.title || "נסיעה"}\nתאריך: ${dateStr} · שעה: ${mission.departureTime}\n\nבסיום המשימה — לחץ על הכפתור לסגירתה.`;
+      await sendTelegramMessage(token, mission.commanderSoldier.telegramChatId, cText, {
+        inline_keyboard: [[{ text: "✅ סיים משימה", callback_data: `mclose:${mission.id}` }]],
+      });
     }
   } catch (e) {
     console.error("[notifyMissionCreated] failed (non-fatal):", e);

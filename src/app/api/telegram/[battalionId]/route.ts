@@ -309,6 +309,25 @@ async function handleCallback(
     return;
   }
 
+  // סגירת משימה ע"י מפקד המשימה: mclose:<missionId> — רק המפקד שהוגדר (התאמת chatId)
+  if (data.startsWith("mclose:")) {
+    const missionId = data.split(":")[1];
+    const mission = await prisma.mission.findFirst({
+      where: { id: missionId, battalionId, commanderSoldier: { is: { telegramChatId: chatId } } },
+      select: { id: true, title: true, completedAt: true, commanderSoldierId: true },
+    });
+    if (!mission) { await answerCallbackQuery(token, callback.id, "לא נמצאה משימה / אינך המפקד"); return; }
+    if (mission.completedAt) {
+      await answerCallbackQuery(token, callback.id, "המשימה כבר הסתיימה");
+      await editMessageText(token, chatId, messageId, `✅ <b>${mission.title || "המשימה"}</b> — כבר סומנה כהסתיימה.`);
+      return;
+    }
+    await prisma.mission.update({ where: { id: mission.id }, data: { completedAt: new Date(), completedById: null } });
+    await answerCallbackQuery(token, callback.id, "המשימה הסתיימה ✅");
+    await editMessageText(token, chatId, messageId, `✅ <b>המשימה הסתיימה</b>\n${mission.title || "נסיעה"} — סומנה כהושלמה. תודה!`);
+    return;
+  }
+
   // Format: verify:<itemId>:<found|denied>
   if (data.startsWith("verify:")) {
     const parts = data.split(":");
