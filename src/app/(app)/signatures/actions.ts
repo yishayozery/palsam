@@ -79,6 +79,34 @@ export async function resendSignRequest(formData: FormData): Promise<void> {
   revalidatePath("/signatures");
 }
 
+/** קביעת מספר ברזל (מיספור פנימי) לחייל במחסן — ייחודי בתוך המחסן. מחזיר שגיאה אם תפוס. */
+export async function setSoldierIronNumber(formData: FormData): Promise<{ ok?: boolean; error?: string; next?: number }> {
+  const user = await requireUser();
+  if (!can(user, "signatures.manage")) return { error: "אין הרשאה" };
+  const bId = user.battalionId!;
+  const holderId = String(formData.get("holderId") || "");
+  const soldierId = String(formData.get("soldierId") || "");
+  const raw = String(formData.get("number") || "").replace(/\D/g, ""); // ספרות בלבד
+  if (!holderId || !soldierId) return { error: "חסרים נתונים" };
+  if (!raw) {
+    await prisma.warehouseSoldierIndex.deleteMany({ where: { holderId, soldierId } });
+    revalidatePath("/signatures/warehouse-report");
+    return { ok: true };
+  }
+  const number = parseInt(raw, 10);
+  const taken = await prisma.warehouseSoldierIndex.findFirst({ where: { holderId, number, soldierId: { not: soldierId } }, include: { soldier: { select: { fullName: true } } } });
+  if (taken) {
+    const max = await prisma.warehouseSoldierIndex.aggregate({ where: { holderId }, _max: { number: true } });
+    return { error: `המספר ${number} כבר משויך ל${taken.soldier.fullName}`, next: (max._max.number ?? 0) + 1 };
+  }
+  await prisma.warehouseSoldierIndex.upsert({
+    where: { holderId_soldierId: { holderId, soldierId } },
+    update: { number }, create: { battalionId: bId, holderId, soldierId, number },
+  });
+  revalidatePath("/signatures/warehouse-report");
+  return { ok: true };
+}
+
 /** שליחה מלאה — בקשת חתימה בטלגרם לכל הממתינים (בדיעבד) שטרם חתמו ומחוברים לבוט. */
 export async function sendAllPendingSignRequests(): Promise<void> {
   const user = await requireUser();
