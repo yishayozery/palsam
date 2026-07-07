@@ -473,36 +473,34 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                   <Td className="text-xs text-slate-500">{s.createdAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</Td>
                   <Td>
                     <div className="flex items-center gap-3 flex-wrap">
-                      <Link href={`/signatures/${s.token}`} className="text-xs text-blue-600 hover:underline">קישור / QR</Link>
-                      {s.transfer?.signaturePending ? (
-                        <>
-                          <Link href={`/transfers/${s.transferId}/document`} className="text-xs text-slate-600 hover:underline">📄 תעודה</Link>
-                          <Link href={`/sign/${s.token}`} className="text-xs text-indigo-600 hover:underline">✍️ החתם כאן</Link>
-                          {s.soldier?.telegramChatId && (
-                            <form action={resendSignRequest}>
-                              <input type="hidden" name="transferId" value={s.transferId ?? ""} />
-                              <button className="text-xs text-sky-600 hover:underline">📲 שלח שוב</button>
-                            </form>
-                          )}
-                          {s.soldier?.phone && (
-                            <a href={`https://wa.me/${s.soldier.phone.startsWith("0") ? "972" + s.soldier.phone.slice(1) : s.soldier.phone}?text=${encodeURIComponent(`נא לחתום על תעודת הציוד: ${baseUrl}/sign/${s.token}`)}`}
-                              target="_blank" rel="noreferrer" className="text-xs text-emerald-600 hover:underline">💬 וואטסאפ</a>
-                          )}
-                          {canSign && (
-                            <form action={cancelRetroactiveSignout}>
-                              <input type="hidden" name="transferId" value={s.transferId ?? ""} />
-                              <button className="text-xs text-rose-500 hover:text-rose-700">↩︎ בטל והחזר למלאי</button>
-                            </form>
-                          )}
-                        </>
-                      ) : (
-                        canSign && (
-                          <form action={cancelSignatureForm}>
-                            <input type="hidden" name="signatureId" value={s.id} />
-                            <button className="text-xs text-rose-500 hover:text-rose-700">✕ ביטול</button>
-                          </form>
-                        )
+                      <Link href={`/signatures/${s.token}`} className="text-xs text-blue-600 hover:underline">🔗 קישור / QR</Link>
+                      {s.transfer?.signaturePending && (
+                        <Link href={`/transfers/${s.transferId}/document`} className="text-xs text-slate-600 hover:underline">📄 תעודה</Link>
                       )}
+                      <Link href={`/sign/${s.token}`} className="text-xs text-indigo-600 hover:underline">✍️ החתם כאן</Link>
+                      {/* 📲 שליחת קישור החתימה בטלגרם — לכל שורה, אם החייל מחובר לבוט */}
+                      {s.soldier?.telegramChatId && s.transferId && (
+                        <form action={resendSignRequest}>
+                          <input type="hidden" name="transferId" value={s.transferId} />
+                          <button className="text-xs text-sky-600 hover:underline" title="שלח קישור חתימה בטלגרם">📲 טלגרם</button>
+                        </form>
+                      )}
+                      {/* 💬 שליחת קישור החתימה בוואטסאפ — לכל שורה, אם יש טלפון */}
+                      {s.soldier?.phone && (
+                        <a href={`https://wa.me/${s.soldier.phone.startsWith("0") ? "972" + s.soldier.phone.slice(1) : s.soldier.phone}?text=${encodeURIComponent(`נא לחתום על תעודת הציוד: ${baseUrl}/sign/${s.token}`)}`}
+                          target="_blank" rel="noreferrer" className="text-xs text-emerald-600 hover:underline" title="שלח קישור חתימה בוואטסאפ">💬 וואטסאפ</a>
+                      )}
+                      {canSign && (s.transfer?.signaturePending ? (
+                        <form action={cancelRetroactiveSignout}>
+                          <input type="hidden" name="transferId" value={s.transferId ?? ""} />
+                          <button className="text-xs text-rose-500 hover:text-rose-700" title="בטל והחזר למלאי">↩︎ בטל</button>
+                        </form>
+                      ) : (
+                        <form action={cancelSignatureForm}>
+                          <input type="hidden" name="signatureId" value={s.id} />
+                          <button className="text-xs text-rose-500 hover:text-rose-700">✕ ביטול</button>
+                        </form>
+                      ))}
                     </div>
                   </Td>
                 </tr>
