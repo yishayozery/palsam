@@ -411,6 +411,7 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
 }) {
   const [q, setQ] = useState(initialQ);
   const [company, setCompany] = useState(initialCompany);
+  const [squad, setSquad] = useState("");
   const [status, setStatus] = useState(initialStatus);
   const [round, setRound] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -467,6 +468,7 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
   const filtered = useMemo(() => {
     return soldiers.filter((s) => {
       if (company && s.companyId !== company) return false;
+      if (squad && s.squadId !== squad) return false;
       if (round && String(s.dutyRound ?? "") !== round) return false;
       if (status === "enlisted" && s.status !== "ENLISTED") return false;
       if (status === "pending" && s.status !== "REGISTERED") return false;
@@ -478,7 +480,7 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
       }
       return true;
     });
-  }, [soldiers, q, company, status, round]);
+  }, [soldiers, q, company, squad, status, round]);
 
   // סיכום סבבים (על התוצאה המסוננת, לפני פילטר הסבב) — כמה בכל סבב
   const roundCounts = useMemo(() => {
@@ -501,9 +503,16 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">פלוגה</label>
-            <select value={company} onChange={(e) => setCompany(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <select value={company} onChange={(e) => { setCompany(e.target.value); setSquad(""); }} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
               <option value="">כל הפלוגות</option>
               {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">🪖 מחלקה</label>
+            <select value={squad} onChange={(e) => setSquad(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              <option value="">כל המחלקות</option>
+              {squads.filter((sq) => !company || sq.companyId === company).map((sq) => <option key={sq.id} value={sq.id}>{sq.name}</option>)}
             </select>
           </div>
           <div>
