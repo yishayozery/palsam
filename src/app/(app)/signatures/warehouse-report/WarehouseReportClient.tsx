@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import { setSoldierIronNumber } from "../actions";
 
-type Item = { name: string; serial: string | null; status: string | null; qty?: number };
+type Item = { name: string; serial: string | null; status: string | null; qty?: number; location?: string | null };
 type Soldier = { id: string; name: string; pn: string | null; iron: number | null; items: Item[] };
 type Company = { name: string; soldiers: Soldier[] };
 
@@ -29,6 +29,20 @@ export default function WarehouseReportClient({
       .filter((c) => c.soldiers.length > 0);
   }, [companies, search]);
 
+  function exportCsv() {
+    const header = ["פלוגה", "מספר ברזל", "שם חייל", "מ.א", "פריט", "סריאל", "סטטוס", "כמות", "מיקום"];
+    const rows: (string | number)[][] = [header];
+    for (const c of filtered) for (const s of c.soldiers) for (const it of s.items) {
+      rows.push([c.name, s.iron ?? "", s.name, s.pn ?? "", it.name, it.serial ?? "", it.status ?? "", it.qty ?? "", it.location ?? ""]);
+    }
+    const csv = "﻿" + rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `ציוד-חתום-${selectedName}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-4 no-print">
@@ -40,6 +54,7 @@ export default function WarehouseReportClient({
         )}
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 חייל / מ.א / מספר ברזל / פריט..."
           className="flex-1 min-w-[200px] border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        <button onClick={exportCsv} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium">📥 הורד לאקסל</button>
         <button onClick={() => window.print()} className="bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-4 py-2 text-sm font-medium">🖨️ הדפסה</button>
       </div>
 
@@ -78,6 +93,7 @@ export default function WarehouseReportClient({
                               <span key={i} className="text-[11px] bg-slate-100 rounded px-2 py-0.5 whitespace-nowrap">
                                 {it.name}{it.serial ? <span className="font-mono text-slate-500"> · {it.serial}</span> : it.qty ? ` ×${it.qty}` : ""}
                                 {it.status && it.status !== "תקין" && <span className="text-rose-600"> ({it.status})</span>}
+                                {it.location && <span className="text-slate-400"> · 📍{it.location}</span>}
                               </span>
                             ))}
                           </div>
