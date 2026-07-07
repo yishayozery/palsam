@@ -79,6 +79,27 @@ export async function resendSignRequest(formData: FormData): Promise<void> {
   revalidatePath("/signatures");
 }
 
+/** שליחה מלאה — בקשת חתימה בטלגרם לכל הממתינים (בדיעבד) שטרם חתמו ומחוברים לבוט. */
+export async function sendAllPendingSignRequests(): Promise<void> {
+  const user = await requireUser();
+  if (!can(user, "signatures.manage")) return;
+  const bId = user.battalionId!;
+  const scope = user.holderIds.length > 0 ? { fromHolderId: { in: user.holderIds } } : {};
+  const transfers = await prisma.transfer.findMany({
+    where: { battalionId: bId, signaturePending: true, ...scope },
+    select: { toSoldierId: true, signatures: { where: { status: "PENDING" }, select: { token: true }, take: 1 } },
+  });
+  let sent = 0;
+  for (const t of transfers) {
+    if (t.toSoldierId && t.signatures[0]) {
+      const ok = await notifySoldierSignRequest(t.toSoldierId, bId, t.signatures[0].token);
+      if (ok) sent++;
+    }
+  }
+  await audit(user.id, "SEND_ALL_SIGN_REQUESTS", "Battalion", bId, { total: transfers.length, sent });
+  revalidatePath("/signatures");
+}
+
 /** ביטול חתימה בדיעבד — החזרת הפריטים למלאי (תנועת החזרה נרשמת) + ביטול התעודה. אז מקימים חדשה. */
 export async function cancelRetroactiveSignout(formData: FormData): Promise<void> {
   const user = await requireUser();

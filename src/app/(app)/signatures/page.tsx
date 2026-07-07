@@ -4,7 +4,7 @@ import { can } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card, Table, Th, Td, EmptyState } from "@/components/ui";
 import { SIGNATURE_METHOD, SIGNATURE_STATUS } from "@/lib/labels";
-import { cancelSignatureForm, resendSignRequest, cancelRetroactiveSignout } from "./actions";
+import { cancelSignatureForm, resendSignRequest, cancelRetroactiveSignout, sendAllPendingSignRequests } from "./actions";
 import SignoutModal from "./SignoutModal";
 import CompanySignModal from "./CompanySignModal";
 import CheckinModal from "./CheckinModal";
@@ -428,7 +428,16 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
       />
 
       {/* ממתינים לחתימת החייל */}
-      <h2 className="font-bold text-slate-700 mb-2">ממתינים לחתימה</h2>
+      <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+        <h2 className="font-bold text-slate-700">ממתינים לחתימה</h2>
+        {canSign && pending.some((s) => s.transfer?.signaturePending) && (
+          <form action={sendAllPendingSignRequests}>
+            <button className="text-xs bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-1.5 font-medium">
+              📤 שלח בקשת חתימה לכל המחוברים
+            </button>
+          </form>
+        )}
+      </div>
       <Card className="mb-6">
         {pending.length === 0 ? (
           <EmptyState>אין החתמות ממתינות</EmptyState>
@@ -440,7 +449,12 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
             <tbody>
               {pending.map((s) => (
                 <tr key={s.id}>
-                  <Td className="font-medium">{s.soldier?.fullName ?? s.signerUser?.fullName ?? ""}</Td>
+                  <Td className="font-medium">
+                    {s.soldier?.fullName ?? s.signerUser?.fullName ?? ""}
+                    {s.soldier && (s.soldier.telegramChatId
+                      ? <span className="text-[10px] text-emerald-600 mr-1" title="מחובר לבוט טלגרם">📲</span>
+                      : <span className="text-[10px] text-slate-400 mr-1" title="לא מחובר לטלגרם — שלח בוואטסאפ">📵</span>)}
+                  </Td>
                   <Td className="text-center">{s.transfer?.lines.length ?? 0}</Td>
                   <Td className="text-xs">
                     {s.transfer?.createdBy ? (
