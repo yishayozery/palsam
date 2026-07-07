@@ -141,6 +141,7 @@ model Battalion {
   attendanceReminderText      String? // טקסט מותאם לתזכורת (אופציונלי)
   attendanceDeadline          String? // שעת גג לדיווח נוכחות (HH:mm) — תזכורת חוזרת חצי שעה לפני
   tripLink                    String? // קישור "פתיחת משימת נסיעה" שנשלח לנהגים בבוט עם השיבוץ למשימה
+  drivingProcedureText        String? // נוסח נוהל נהיגה לחתימת נהגים (מוצג בבוט + קצין רכב)
   telegramBotToken            String? // טוקן בוט טלגרם לשליחת הודעות אוטומטיות
   telegramBotInfo             String? // מידע כללי שהבוט ישלח (ארוחות, תפילות, טלפונים)
   telegramBotUsername         String? // username של הבוט (מתעדכן אוטומטית ברישום webhook)
@@ -610,6 +611,7 @@ model Soldier {
   // גיוס
   telegramChatId String? // Telegram chat ID לשליחת הודעות מבוט
   drivingRefresherDate DateTime? @db.Date // ריענון נהיגה כללי
+  drivingProcedureSignedAt DateTime? // חתימה על נוהל נהיגה (דרך קצין רכב / בוט)
   callupClosedAt DateTime? // תאריך סגירת גיוס
   createdAt      DateTime  @default(now())
 
@@ -1644,6 +1646,7 @@ model DrivingLicenseType {
   battalionId String
   battalion   Battalion @relation("BattalionDrivingLicenseTypes", fields: [battalionId], references: [id], onDelete: Cascade)
   name        String
+  kind        String  @default("PERMIT") // LICENSE = רשיון נהיגה אזרחי · PERMIT = היתר נהיגה צבאי
   active      Boolean @default(true)
   sortOrder   Int     @default(0)
   createdAt   DateTime @default(now())
