@@ -39,15 +39,7 @@ export async function inviteHolderUser(formData: FormData) {
   // תפקיד נקבע אוטומטית לפי סוג ה-holder
   const role: Role = holder.kind === "WAREHOUSE" ? "WAREHOUSE_MANAGER" : "COMPANY_REP";
 
-  const battalion = await prisma.battalion.findUnique({ where: { id: bId } });
-  const holderSlug = (holder.name || "")
-    .replace(/[^֐-׿a-zA-Z0-9]+/g, "")
-    .toLowerCase()
-    .slice(0, 12) || (holder.kind === "WAREHOUSE" ? "wh" : "co");
-  const brigadeSlug = battalion?.brigade || battalion?.code || "";
-  const suffix = [holderSlug, brigadeSlug].filter(Boolean).join(".");
-
-  const username = await resolveUniqueUsername(enteredUsername, suffix);
+  const username = await resolveUniqueUsername(enteredUsername, bId);
   const inviteToken = nanoid(28);
   const randomHash = await hashPassword(nanoid(32));
 
@@ -100,13 +92,8 @@ export async function updateHolderUser(formData: FormData) {
     const first = fullName.trim().split(/\s+/)[0] ?? "";
     const slug = first.replace(/[^A-Za-z֐-׿0-9_.-]+/g, "").slice(0, 24);
     if (slug && slug !== target.username) {
-      // ייחודיות גלובלית עם סופיקס פלוגה.חטיבה אם תפוס
-      const holder = await prisma.holder.findUnique({ where: { id: target.holderId! } });
-      const battalion = await prisma.battalion.findUnique({ where: { id: admin.battalionId! } });
-      const holderSlug = (holder?.name || "").replace(/[^֐-׿a-zA-Z0-9]+/g, "").toLowerCase().slice(0, 12);
-      const brigadeSlug = battalion?.brigade || battalion?.code || "";
-      const suffix = [holderSlug, brigadeSlug].filter(Boolean).join(".");
-      newUsername = await resolveUniqueUsername(slug, suffix, userId);
+      // ייחודיות בתוך הגדוד (per-battalion)
+      newUsername = await resolveUniqueUsername(slug, admin.battalionId!, userId);
     }
   }
 

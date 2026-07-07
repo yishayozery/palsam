@@ -43,16 +43,8 @@ export async function inviteRep(formData: FormData) {
     throw new Error("REP_EXISTS: כבר קיים נציג לפלוגה זו במחסן. הסר את הקיים לפני הוספת חדש.");
   }
 
-  // ייחודיות שם משתמש: enteredUsername + סיומת פלוגה (לא רק חטיבה) כדי שיהיה ברור
-  const company = await prisma.holder.findUnique({ where: { id: companyId } });
-  const battalion = await prisma.battalion.findUnique({ where: { id: bId } });
-  const companySlug = (company?.name || "")
-    .replace(/[^֐-׿a-zA-Z0-9]+/g, "")
-    .toLowerCase()
-    .slice(0, 12) || "co";
-  const brigadeSlug = battalion?.brigade || battalion?.code || "";
-  const fullSuffix = [companySlug, brigadeSlug].filter(Boolean).join(".");
-  const username = await resolveUniqueUsername(enteredUsername, fullSuffix);
+  // ייחודיות שם משתמש בתוך הגדוד (per-battalion) — cross-gadud לא מתנגש
+  const username = await resolveUniqueUsername(enteredUsername, bId);
 
   const rep = await prisma.appUser.create({
     data: {
@@ -106,12 +98,7 @@ export async function updateRep(formData: FormData) {
     const first = fullName.trim().split(/\s+/)[0] ?? "";
     const slug = first.replace(/[^A-Za-z֐-׿0-9_.-]+/g, "").slice(0, 24);
     if (slug && slug !== target.username) {
-      const holder = await prisma.holder.findUnique({ where: { id: target.holderId! } });
-      const battalion = await prisma.battalion.findUnique({ where: { id: bId } });
-      const holderSlug = (holder?.name || "").replace(/[^֐-׿a-zA-Z0-9]+/g, "").toLowerCase().slice(0, 12);
-      const brigadeSlug = battalion?.brigade || battalion?.code || "";
-      const suffix = [holderSlug, brigadeSlug].filter(Boolean).join(".");
-      newUsername = await resolveUniqueUsername(slug, suffix, userId);
+      newUsername = await resolveUniqueUsername(slug, bId, userId);
     }
   }
 

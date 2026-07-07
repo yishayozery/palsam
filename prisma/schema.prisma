@@ -201,7 +201,7 @@ model Battalion {
 
 model AppUser {
   id           String     @id @default(cuid())
-  username     String     @unique
+  username     String
   passwordHash String
   fullName     String
   phone        String? // לשליחת הזמנה בוואטסאפ
@@ -253,6 +253,10 @@ model AppUser {
   scheduleApprovals ScheduleApprover[] @relation("ScheduleApproverUser")
   attachmentRequested   AttachmentRequest[]    @relation("AttachmentRequestedBy")
   attachmentStatusLogs  AttachmentStatusLog[]  @relation("AttachmentStatusChanged")
+
+  // שם משתמש ייחודי בתוך הגדוד (ולא גלובלית) — פלוגה בגדוד א' יכולה להיות עם אותו שם משתמש כמו בגדוד ב'
+  // אדמין-על (battalionId=null): Postgres מתייחס ל-null כשונה, לכן ייחודיות נאכפת ידנית עבורם
+  @@unique([battalionId, username])
 }
 
 // ===================== תפקידים =====================

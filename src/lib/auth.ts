@@ -145,8 +145,10 @@ export async function authenticate(
   password: string,
   battalionCode?: string,
 ): Promise<AuthResult> {
-  const user = await prisma.appUser.findFirst({
-    where: { username: { equals: username, mode: "insensitive" } },
+  // שם משתמש ייחודי פר-גדוד — ייתכנו כמה משתמשים באותו שם בגדודים שונים.
+  // לכן שולפים את כל המועמדים ובוחרים לפי שדה "מספר גדוד".
+  const candidates = await prisma.appUser.findMany({
+    where: { username: { equals: username, mode: "insensitive" }, active: true, passwordSet: true },
     include: {
       customRole: true,
       systemRole: { include: { permissions: true } },
@@ -155,29 +157,35 @@ export async function authenticate(
       battalion: { select: { code: true, brigade: true, name: true } },
     },
   });
-  if (!user || !user.active || !user.passwordSet) return { kind: "fail" };
-  const ok = await verifyPassword(password, user.passwordHash);
-  if (!ok) return { kind: "fail" };
-  // ⚠️ ולידציית שדה "מספר גדוד":
-  if (user.role === "SUPER_ADMIN") {
-    // אדמין-על: אם הוגדר קוד כניסה נוסף (loginCode) — חייב להזין אותו בשדה "מספר גדוד".
-    if (user.loginCode && (battalionCode ?? "").trim() !== user.loginCode.trim()) return { kind: "fail" };
-  } else {
-    // כל השאר: חייבים להזין את קוד/חטיבה/שם הגדוד שלהם.
-    const code = (battalionCode ?? "").trim().toLowerCase();
-    if (!code) return { kind: "fail" };
-    const accepted = [
-      user.battalion?.code?.trim().toLowerCase(),
-      user.battalion?.brigade?.trim().toLowerCase(),
-      user.battalion?.name?.trim().toLowerCase(),
-    ].filter(Boolean) as string[];
-    if (!accepted.includes(code)) return { kind: "fail" };
+  if (candidates.length === 0) return { kind: "fail" };
+
+  const code = (battalionCode ?? "").trim().toLowerCase();
+  for (const user of candidates) {
+    // ⚠️ ולידציית שדה "מספר גדוד":
+    let battalionOk: boolean;
+    if (user.role === "SUPER_ADMIN") {
+      // אדמין-על: אם הוגדר קוד כניסה נוסף (loginCode) — חייב להזין אותו בשדה "מספר גדוד".
+      battalionOk = !user.loginCode || (battalionCode ?? "").trim() === user.loginCode.trim();
+    } else {
+      // כל השאר: חייבים להזין את קוד/חטיבה/שם הגדוד שלהם.
+      if (!code) continue;
+      const accepted = [
+        user.battalion?.code?.trim().toLowerCase(),
+        user.battalion?.brigade?.trim().toLowerCase(),
+        user.battalion?.name?.trim().toLowerCase(),
+      ].filter(Boolean) as string[];
+      battalionOk = accepted.includes(code);
+    }
+    if (!battalionOk) continue;
+
+    const ok = await verifyPassword(password, user.passwordHash);
+    if (!ok) continue;
+
+    // 🔐 2FA — אם המשתמש הפעיל TOTP, נדרש קוד נוסף
+    if (user.totpSecret) return { kind: "totp_required", userId: user.id };
+    return { kind: "ok", user: toSession(user) };
   }
-  // 🔐 2FA — אם המשתמש הפעיל TOTP, נדרש קוד נוסף
-  if (user.totpSecret) {
-    return { kind: "totp_required", userId: user.id };
-  }
-  return { kind: "ok", user: toSession(user) };
+  return { kind: "fail" };
 }
 
 /** שלב 2 של 2FA — אימות קוד TOTP אחרי סיסמה תקינה */

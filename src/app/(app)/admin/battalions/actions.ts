@@ -38,10 +38,10 @@ export async function createBattalion(formData: FormData) {
   const exists = await prisma.battalion.findUnique({ where: { code } });
   if (exists) return;
 
-  const mafamUsername = await resolveUniqueUsername(mafamUser, brigade || code);
-
   await prisma.$transaction(async (tx) => {
     const bat = await tx.battalion.create({ data: { name, code, brigade, commander, motto } });
+    // שם משתמש ייחודי בתוך הגדוד החדש (גדוד ריק — לכן השם הנקי תמיד פנוי)
+    const mafamUsername = await resolveUniqueUsername(mafamUser, bat.id);
     // מפמ — באמצעות הזמנה (יגדיר סיסמה בכניסה ראשונה)
     await tx.appUser.create({
       data: {

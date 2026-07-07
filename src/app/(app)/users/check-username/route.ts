@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { resolveUniqueUsername } from "@/lib/usernames";
+import { resolveUniqueUsername, usernameTakenInBattalion } from "@/lib/usernames";
 
 /**
- * GET ?u=<desired>&companyId=<id>
- * - אם companyId מוגדר: מחזיר המלצה לשם משתמש ייחודי לפי השם, הפלוגה והחטיבה
- * - אחרת: בדיקת זמינות בלבד
+ * GET ?u=<desired>&battalionId=<id>
+ * בדיקת זמינות שם משתמש **בתוך הגדוד** + המלצה לחלופה אם תפוס.
+ * שם משתמש ייחודי פר-גדוד — cross-gadud לא מתנגש.
  */
 export async function GET(req: Request) {
   const user = await getSession();
@@ -14,31 +13,19 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const u = (url.searchParams.get("u") || "").trim().toLowerCase().replace(/[^\w.-]/g, "");
-  const companyId = (url.searchParams.get("companyId") || "").trim() || null;
   if (!u) return NextResponse.json({ available: false, recommended: null });
 
-  const exists = await prisma.appUser.findUnique({ where: { username: u } });
+  // אדמין-על יכול לבדוק עבור גדוד ספציפי; שאר המשתמשים — הגדוד שלהם בלבד
+  const battalionId =
+    user.role === "SUPER_ADMIN"
+      ? (url.searchParams.get("battalionId") || "").trim() || null
+      : user.battalionId;
 
-  // המלצה רק כשתפוס
-  if (!exists) {
+  const taken = await usernameTakenInBattalion(u, battalionId);
+  if (!taken) {
     return NextResponse.json({ available: true, recommended: u, taken: false });
   }
 
-  // בנה סיומת ייחודית לפי פלוגה+חטיבה
-  let suffix = "";
-  if (companyId && user.battalionId) {
-    const [company, battalion] = await Promise.all([
-      prisma.holder.findUnique({ where: { id: companyId }, select: { name: true } }),
-      prisma.battalion.findUnique({ where: { id: user.battalionId }, select: { brigade: true, code: true } }),
-    ]);
-    const companySlug = (company?.name || "")
-      .replace(/[^֐-׿a-zA-Z0-9]+/g, "")
-      .toLowerCase()
-      .slice(0, 12) || "co";
-    const brigadeSlug = battalion?.brigade || battalion?.code || "";
-    suffix = [companySlug, brigadeSlug].filter(Boolean).join(".");
-  }
-
-  const recommended = await resolveUniqueUsername(u, suffix || null);
+  const recommended = await resolveUniqueUsername(u, battalionId);
   return NextResponse.json({ available: false, taken: true, recommended });
 }

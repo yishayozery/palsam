@@ -147,9 +147,7 @@ export async function appointSubUser(formData: FormData) {
     inviteRole = "rep";
   }
 
-  const holderSlug = holder.name.replace(/[^֐-׿a-zA-Z0-9]+/g, "").toLowerCase().slice(0, 12) || "unit";
-  const suffix = [holderSlug, battalion?.brigade || battalion?.code || ""].filter(Boolean).join(".");
-  const username = await resolveUniqueUsername(enteredUsername, suffix);
+  const username = await resolveUniqueUsername(enteredUsername, bId);
   const inviteToken = nanoid(28);
 
   const created = await prisma.appUser.create({
