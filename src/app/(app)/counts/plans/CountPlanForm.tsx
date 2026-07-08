@@ -6,7 +6,7 @@ import type { WarehouseType } from "@/generated/prisma";
 import { createCountPlan } from "./actions";
 
 type Holder = { id: string; name: string; kind: string; warehouseType: WarehouseType | null };
-type Ref = { id: string; name: string; sku?: string | null };
+type Ref = { id: string; name: string; sku?: string | null; categoryId?: string | null };
 type Category = { id: string; name: string; warehouseType?: WarehouseType | string | null };
 type UserOption = { id: string; name: string; role: string; holderName: string | null };
 
@@ -88,6 +88,17 @@ export default function CountPlanForm({ holders, categories, items, users = [], 
 
   const warehouses = holders.filter((h) => h.kind === "WAREHOUSE");
   const companies = holders.filter((h) => h.kind === "COMPANY");
+
+  // סינון פריטים לפי המחסנים שנבחרו — בהרחבת פריטים מציגים רק פריטים של אותו מחסן
+  const _selWhTypes = new Set(
+    scopeHolderIds.length > 0
+      ? holders.filter((h) => scopeHolderIds.includes(h.id) && h.warehouseType).map((h) => h.warehouseType as string)
+      : []
+  );
+  const _visCatIds = new Set(
+    (_selWhTypes.size > 0 ? categories.filter((c) => c.warehouseType && _selWhTypes.has(c.warehouseType as string)) : categories).map((c) => c.id)
+  );
+  const visibleItems = _selWhTypes.size > 0 ? items.filter((i) => i.categoryId && _visCatIds.has(i.categoryId)) : items;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -230,7 +241,12 @@ export default function CountPlanForm({ holders, categories, items, users = [], 
               <details>
                 <summary className="text-xs font-semibold text-slate-600 cursor-pointer hover:text-slate-800">פריטים ספציפיים (אופציונלי) — לחץ להרחבה</summary>
                 <div className="mt-2 max-h-40 overflow-y-auto border border-slate-200 rounded p-2 bg-white space-y-1">
-                  {items.map((i) => (
+                  {_selWhTypes.size > 0 && (
+                    <p className="text-[10px] text-blue-600 mb-1">מוצג רק ציוד של המחסן/ים שנבחרו ({visibleItems.length})</p>
+                  )}
+                  {visibleItems.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">אין פריטים תואמים למחסן שנבחר</p>
+                  ) : visibleItems.map((i) => (
                     <label key={i.id} className="flex items-center gap-2 text-xs">
                       <input type="checkbox" name="scopeItemTypeIds" value={i.id}
                         checked={scopeItemTypeIds.includes(i.id)}

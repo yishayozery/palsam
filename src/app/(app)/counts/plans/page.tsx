@@ -50,7 +50,7 @@ export default async function CountPlansPage() {
       select: { id: true, name: true, kind: true, warehouseType: true },
     }),
     prisma.category.findMany({ where: { battalionId: bId }, orderBy: { name: "asc" }, select: { id: true, name: true, warehouseType: true } }),
-    prisma.itemType.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, sku: true } }),
+    prisma.itemType.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, sku: true, categoryId: true } }),
     // אחראים אפשריים: כל קציני המחסן, רס"פ פלוגה ומפ"מ
     prisma.appUser.findMany({
       where: { battalionId: bId, active: true, role: { in: ["BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP"] } },
@@ -72,7 +72,7 @@ export default async function CountPlansPage() {
           <CountPlanForm
             holders={holders.map((h) => ({ id: h.id, name: h.name, kind: h.kind, warehouseType: h.warehouseType }))}
             categories={categories}
-            items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku }))}
+            items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, categoryId: i.categoryId }))}
             users={eligibleUsers.map((u) => ({ id: u.id, name: u.fullName, role: u.role, holderName: u.holder?.name ?? null }))}
           />
         }
