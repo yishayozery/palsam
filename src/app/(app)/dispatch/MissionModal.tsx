@@ -42,22 +42,28 @@ let keySeq = 0;
 const nextKey = () => `k${++keySeq}_${Date.now()}`;
 
 export default function MissionModal({
-  companies, vehicles, soldiers, templates, dispatchRoles = [], myCompanyId, edit, onClose,
+  companies, vehicles, soldiers, templates, dispatchRoles = [], soldierRoleMap = {}, presentSoldierIds = [], myCompanyId, edit, reuse, onClose,
 }: {
   companies: { id: string; name: string }[];
   vehicles: MVehicle[];
   soldiers: MSoldier[];
   templates: MTemplate[];
   dispatchRoles?: MRole[];
+  soldierRoleMap?: Record<string, string[]>;
+  presentSoldierIds?: string[];
   myCompanyId: string | null;
   edit?: EditMission | null;
+  reuse?: boolean;
   onClose: () => void;
 }) {
+  const isEdit = !!edit && !reuse;
+  const presentSet = new Set(presentSoldierIds);
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [driverWarning, setDriverWarning] = useState<{ reasons: string[]; name: string; onConfirm: () => void } | null>(null);
   const [activeVehKey, setActiveVehKey] = useState<string | null>(null);
+  const [addRoleId, setAddRoleId] = useState(""); // תפקיד נבחר לתהליך "בחר תפקיד ואז חייל"
 
   // בדיקת הסמכת נהג (רק לרכב מערכת) — רישיון לסוג הרכב + נוהל נהיגה + ריענון
   function driverReasons(soldierId: string | null, row: VehRow): string[] {
@@ -77,7 +83,7 @@ export default function MissionModal({
   const [title, setTitle] = useState(edit?.title ?? "");
   const [commanderSoldierId, setCommanderSoldierId] = useState(edit?.commanderSoldierId ?? "");
   const [commanderName, setCommanderName] = useState(edit?.commanderName ?? "");
-  const [missionDate, setMissionDate] = useState(edit?.missionDate ?? new Date().toISOString().slice(0, 10));
+  const [missionDate, setMissionDate] = useState((isEdit ? edit?.missionDate : null) ?? new Date().toISOString().slice(0, 10));
   const [departureTime, setDepartureTime] = useState(edit?.departureTime ?? "08:00");
   const [notes, setNotes] = useState(edit?.notes ?? "");
 
@@ -134,14 +140,22 @@ export default function MissionModal({
   }
   function patchRow(key: string, patch: Partial<VehRow>) { setRows((r) => r.map((x) => x.key === key ? { ...x, ...patch } : x)); }
 
-  function addSoldier(rowKey: string, soldierId: string) {
+  function addSoldier(rowKey: string, soldierId: string, roleId: string | null = null) {
     if (!soldierId) return;
+    const role = roleId ? dispatchRoles.find((r) => r.id === roleId) : null;
     setRows((r) => r.map((x) => {
       if (x.key !== rowKey) return x;
       if (x.soldiers.some((s) => s.soldierId === soldierId)) return x;
-      const isFirst = x.soldiers.length === 0;
-      return { ...x, soldiers: [...x.soldiers, { key: nextKey(), soldierId, externalName: "", externalPersonalNumber: "", isDriver: isFirst, dispatchRoleId: null }] };
+      const isDriver = role ? role.isDriver : x.soldiers.length === 0;
+      const others = isDriver && role?.isDriver ? x.soldiers.map((s) => ({ ...s, isDriver: false })) : x.soldiers; // נהג יחיד
+      return { ...x, soldiers: [...others, { key: nextKey(), soldierId, externalName: "", externalPersonalNumber: "", isDriver, dispatchRoleId: roleId }] };
     }));
+  }
+  // מיון החיילים בבורר ההוספה: מותאמים-לתפקיד קודם, ואז נוכחים קודם (התראה בלבד — כולם נבחרים)
+  function soldiersForAdd(row: VehRow, roleId: string) {
+    const avail = soldiers.filter((s) => !row.soldiers.some((rs) => rs.soldierId === s.id));
+    const score = (s: MSoldier) => (roleId && soldierRoleMap[s.id]?.includes(roleId) ? 0 : 1) * 2 + (presentSet.has(s.id) ? 0 : 1);
+    return [...avail].sort((a, b) => score(a) - score(b) || a.fullName.localeCompare(b.fullName, "he"));
   }
   function addExternalSoldier(rowKey: string) {
     setRows((r) => r.map((x) => x.key === rowKey
@@ -163,9 +177,9 @@ export default function MissionModal({
     const role = dispatchRoles.find((r) => r.id === roleId);
     setRows((r) => r.map((x) => x.key !== rowKey ? x : {
       ...x,
-      // אם נבחר תפקיד נהג — הופך אותו לנהג הרכב (יחיד); אחרת שומר isDriver קיים
+      // תפקיד נהג → נהג הרכב (יחיד); תפקיד אחר → מבטל נהג (וכך גם התראת אי-כשירות); ריק → משאיר קיים
       soldiers: x.soldiers.map((s) => {
-        if (s.key === sKey) return { ...s, dispatchRoleId: roleId || null, isDriver: role?.isDriver ? true : s.isDriver };
+        if (s.key === sKey) return { ...s, dispatchRoleId: roleId || null, isDriver: role ? role.isDriver : s.isDriver };
         return role?.isDriver ? { ...s, isDriver: false } : s; // נהג אחד לרכב
       }),
     }));
@@ -184,7 +198,7 @@ export default function MissionModal({
     setError(null);
     if (rows.length === 0) { setError("הוסף לפחות רכב אחד"); return; }
     const payload = {
-      id: edit?.id,
+      id: isEdit ? edit?.id : undefined,
       title: title.trim() || null,
       companyId: null,
       commanderSoldierId: commanderSoldierId || null,
@@ -215,7 +229,7 @@ export default function MissionModal({
     <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center overflow-y-auto p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl my-4">
         <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white rounded-t-2xl z-10">
-          <h3 className="font-bold text-lg">🚗 {edit ? "עריכת משימה" : "משימה חדשה"}</h3>
+          <h3 className="font-bold text-lg">🚗 {isEdit ? "עריכת משימה" : reuse ? "שיבוץ מחדש" : "משימה חדשה"}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-xl">✕</button>
         </div>
 
@@ -330,7 +344,10 @@ export default function MissionModal({
                               🚗
                             </label>
                             {s.soldierId ? (
-                              <span className="text-sm flex-1">{soldierName(s.soldierId)}</span>
+                              <span className="text-sm flex-1 flex items-center gap-1">
+                                {soldierName(s.soldierId)}
+                                {!presentSet.has(s.soldierId) && <span title="לא נוכח היום — התראה בלבד" className="text-[9px] bg-amber-100 text-amber-700 border border-amber-300 rounded px-1 whitespace-nowrap">⚠️ לא נוכח</span>}
+                              </span>
                             ) : (
                               <div className="flex gap-1 flex-1">
                                 <input value={s.externalName} onChange={(e) => patchSoldier(row.key, s.key, { externalName: e.target.value })}
@@ -354,14 +371,29 @@ export default function MissionModal({
                         {row.soldiers.length === 0 && <div className="text-xs text-slate-300 px-1">אין חיילים משובצים ברכב זה</div>}
                       </div>
 
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        <select value="" onChange={(e) => { addSoldier(row.key, e.target.value); e.target.value = ""; }}
-                          className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white">
-                          <option value="">+ הוסף חייל מהיחידה</option>
-                          {soldiers.filter((s) => !row.soldiers.some((rs) => rs.soldierId === s.id)).map((s) =>
-                            <option key={s.id} value={s.id}>{s.fullName}{s.personalNumber ? ` (${s.personalNumber})` : ""}</option>)}
-                        </select>
-                        <button onClick={() => addExternalSoldier(row.key)} className="text-xs text-amber-700 border border-amber-300 rounded-lg px-2 py-1 hover:bg-amber-50">+ חייל חוץ</button>
+                      {/* הוספת חייל — קודם בוחרים תפקיד, ואז חייל (מותאמים לתפקיד + נוכחים קודם) */}
+                      <div className="mt-2 rounded-lg bg-slate-50 border border-slate-200 p-2">
+                        <div className="text-[11px] text-slate-500 mb-1">הוספת חייל — בחר תפקיד ואז חייל:</div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {dispatchRoles.length > 0 && (
+                            <select value={addRoleId} onChange={(e) => setAddRoleId(e.target.value)}
+                              className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white" title="1. בחר תפקיד">
+                              <option value="">כל התפקידים</option>
+                              {dispatchRoles.map((role) => <option key={role.id} value={role.id}>{role.icon} {role.name}</option>)}
+                            </select>
+                          )}
+                          <select value="" onChange={(e) => { addSoldier(row.key, e.target.value, addRoleId || null); e.target.value = ""; }}
+                            className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white" title="2. בחר חייל">
+                            <option value="">+ הוסף חייל{addRoleId ? ` (${dispatchRoles.find((r) => r.id === addRoleId)?.name})` : ""}</option>
+                            {soldiersForAdd(row, addRoleId).map((s) => {
+                              const present = presentSet.has(s.id);
+                              const matched = addRoleId ? (soldierRoleMap[s.id]?.includes(addRoleId) ?? false) : true;
+                              return <option key={s.id} value={s.id}>{present ? "" : "⚠️ "}{matched ? "" : "○ "}{s.fullName}{s.personalNumber ? ` (${s.personalNumber})` : ""}{present ? "" : " — לא נוכח"}</option>;
+                            })}
+                          </select>
+                          <button onClick={() => addExternalSoldier(row.key)} className="text-xs text-amber-700 border border-amber-300 rounded-lg px-2 py-1 hover:bg-amber-50">+ חייל חוץ</button>
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-1">⚠️ = לא נוכח היום · ○ = לא משובץ לתפקיד זה בשבצ״ק קבוע (התראה בלבד — ניתן לשבץ)</div>
                       </div>
                     </div>
                   );
@@ -381,7 +413,7 @@ export default function MissionModal({
         <div className="flex items-center justify-end gap-2 p-4 border-t sticky bottom-0 bg-white rounded-b-2xl">
           <button onClick={onClose} className="text-sm text-slate-600 px-4 py-2 hover:bg-slate-50 rounded-lg">ביטול</button>
           <button onClick={submit} disabled={pending} className="text-sm bg-emerald-600 text-white rounded-lg px-5 py-2 font-medium hover:bg-emerald-700 disabled:opacity-50">
-            {pending ? "שומר…" : edit ? "עדכן משימה" : "צור משימה"}
+            {pending ? "שומר…" : isEdit ? "עדכן משימה" : "צור משימה"}
           </button>
         </div>
       </div>

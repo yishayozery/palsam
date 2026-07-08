@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
-import ConvoyView from "./ConvoyView";
+import ConvoyView, { vehicleIcon } from "./ConvoyView";
 import MissionModal, { type MVehicle, type MSoldier, type MTemplate, type MRole, type EditMission } from "./MissionModal";
 import { toggleMissionComplete, deleteMission, startMission, toggleTripConfirmed } from "./actions";
 
@@ -21,7 +21,7 @@ export type MissionFull = {
 };
 
 export default function MissionsSection({
-  missions, companies, vehicles, soldiers, templates, dispatchRoles = [], myCompanyId,
+  missions, companies, vehicles, soldiers, templates, dispatchRoles = [], soldierRoleMap = {}, presentSoldierIds = [], myCompanyId,
 }: {
   missions: MissionFull[];
   companies: { id: string; name: string }[];
@@ -29,11 +29,14 @@ export default function MissionsSection({
   soldiers: MSoldier[];
   templates: MTemplate[];
   dispatchRoles?: MRole[];
+  soldierRoleMap?: Record<string, string[]>;
+  presentSoldierIds?: string[];
   myCompanyId: string | null;
 }) {
   const router = useRouter();
   const [, start] = useTransition();
-  const [modal, setModal] = useState<{ open: boolean; edit: EditMission | null }>({ open: false, edit: null });
+  const [modal, setModal] = useState<{ open: boolean; edit: EditMission | null; reuse?: boolean }>({ open: false, edit: null });
+  const roleIcon = (id: string | null | undefined) => (id ? dispatchRoles.find((r) => r.id === id)?.icon ?? "" : "");
   const [tab, setTab] = useState<"active" | "done">("active");
   const shown = missions.filter((m) => (tab === "active" ? !m.completedAt : !!m.completedAt));
 
@@ -48,8 +51,8 @@ export default function MissionsSection({
   }
 
   function openNew() { setModal({ open: true, edit: null }); }
-  function openEdit(m: MissionFull) {
-    setModal({ open: true, edit: {
+  function toEditMission(m: MissionFull): EditMission {
+    return {
       id: m.id, title: m.title, companyId: m.companyId, missionDate: m.missionDate, departureTime: m.departureTime, notes: m.notes,
       commanderSoldierId: m.commanderSoldierId ?? null, commanderName: m.commanderNameRaw ?? null,
       vehicles: m.vehicles.map((v) => ({
@@ -57,8 +60,11 @@ export default function MissionsSection({
         externalVehicleNumber: v.externalVehicleNumber, externalVehicleTypeName: v.externalVehicleTypeName,
         soldiers: v.soldiers.map((s) => ({ soldierId: s.soldierId, externalName: s.externalName, externalPersonalNumber: s.externalPersonalNumber, isDriver: s.isDriver, dispatchRoleId: s.dispatchRoleId ?? null })),
       })),
-    } });
+    };
   }
+  function openEdit(m: MissionFull) { setModal({ open: true, edit: toEditMission(m) }); }
+  // שבץ מחדש — פותח משימה חדשה עם כל הרכבים/החיילים המשובצים (שכפול משימה שהסתיימה)
+  function openReuse(m: MissionFull) { setModal({ open: true, edit: toEditMission(m), reuse: true }); }
   function act(fn: (fd: FormData) => Promise<{ ok?: boolean; error?: string }>, id: string, extra?: Record<string, string>) {
     const fd = new FormData(); fd.set("id", id);
     if (extra) for (const [k, v] of Object.entries(extra)) fd.set(k, v);
@@ -123,6 +129,10 @@ export default function MissionsSection({
                     {!m.completedAt && !m.startedAt && (
                       <button onClick={() => startMissionAct(m.id)} className="text-xs text-blue-700 hover:underline font-medium">▶️ התחל משימה</button>
                     )}
+                    {m.completedAt && (
+                      <button onClick={() => openReuse(m)} title="פתח משימה חדשה עם אותם רכבים וחיילים"
+                        className="text-xs text-blue-700 hover:underline font-medium">🔁 שבץ מחדש</button>
+                    )}
                     <button onClick={() => act(toggleMissionComplete, m.id, { completed: m.completedAt ? "false" : "true" })}
                       className="text-xs text-emerald-700 hover:underline">{m.completedAt ? "↩︎ פתח מחדש" : "✓ סיים משימה"}</button>
                     <button onClick={() => { if (confirm("למחוק את המשימה?")) act(deleteMission, m.id); }}
@@ -136,12 +146,12 @@ export default function MissionsSection({
                     {m.vehicles.map((v, vi) => (
                       <div key={vi} className="border border-slate-200 rounded-lg p-2">
                         <div className="font-medium text-sm text-slate-700 mb-1">
-                          {v.isExternal ? "🔶 " : "🚗 "}{v.label}
+                          {v.isExternal ? "🔶 " : `${vehicleIcon(v.typeName)} `}{v.label}
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {v.soldiers.map((s, si) => (
                             <span key={si} className={`text-[11px] rounded px-2 py-0.5 inline-flex items-center gap-1 ${s.isDriver ? "bg-sky-100 text-sky-800 font-medium" : "bg-slate-100 text-slate-600"}`}>
-                              {s.isDriver && "🚗 "}{s.name}{s.externalName ? " (חוץ)" : ""}
+                              {s.isDriver ? "🚗 " : (roleIcon(s.dispatchRoleId) ? `${roleIcon(s.dispatchRoleId)} ` : "")}{s.name}{s.externalName ? " (חוץ)" : ""}
                               {s.isDriver && !v.isExternal && s.soldierId && (
                                 <button
                                   onClick={() => confirmTrip(s.vasId, !s.tripConfirmedAt)}
@@ -168,8 +178,9 @@ export default function MissionsSection({
 
       {modal.open && (
         <MissionModal
-          companies={companies} vehicles={vehicles} soldiers={soldiers} templates={templates} dispatchRoles={dispatchRoles} myCompanyId={myCompanyId}
-          edit={modal.edit} onClose={() => setModal({ open: false, edit: null })}
+          companies={companies} vehicles={vehicles} soldiers={soldiers} templates={templates} dispatchRoles={dispatchRoles}
+          soldierRoleMap={soldierRoleMap} presentSoldierIds={presentSoldierIds} myCompanyId={myCompanyId}
+          edit={modal.edit} reuse={modal.reuse} onClose={() => setModal({ open: false, edit: null })}
         />
       )}
     </div>

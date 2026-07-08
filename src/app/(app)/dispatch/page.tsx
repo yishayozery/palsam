@@ -92,6 +92,14 @@ export default async function DispatchPage() {
     select: { id: true, name: true, icon: true, isDriver: true },
   });
 
+  // חיילים נוכחים היום — לוולידציית התראה (לא חסימה) בשיבוץ למשימה
+  const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
+  const presentRecords = await prisma.attendanceRecord.findMany({
+    where: { date: new Date(todayStr + "T00:00:00Z"), soldier: { battalionId: bId }, status: { isPresent: true } },
+    select: { soldierId: true },
+  });
+  const presentSoldierIds = presentRecords.map((r) => r.soldierId);
+
   const vtlMap: Record<string, string[]> = {};
   for (const vl of vehicleTypeLicenses) {
     (vtlMap[vl.itemTypeId] ??= []).push(vl.licenseTypeId);
@@ -158,6 +166,11 @@ export default async function DispatchPage() {
     soldierIds: t.slots.filter((s) => s.soldier).map((s) => s.soldier!.id),
     soldiers: t.slots.filter((s) => s.soldier).map((s) => ({ soldierId: s.soldier!.id, dispatchRoleId: s.dispatchRoleId, isDriver: s.dispatchRole?.isDriver ?? false })),
   }));
+  // מיפוי חייל → תפקידי שבצ"ק שהוא מוגדר בהם (מהשבצ"ק הקבוע) — "מותאמים לתפקיד"
+  const soldierRoleMap: Record<string, string[]> = {};
+  for (const t of templates) for (const slot of t.slots) {
+    if (slot.soldier && slot.dispatchRole?.id) (soldierRoleMap[slot.soldier.id] ??= []).push(slot.dispatchRole.id);
+  }
 
   return (
     <div>
@@ -175,6 +188,8 @@ export default async function DispatchPage() {
         soldiers={soldiersForMission}
         templates={templatesForMission}
         dispatchRoles={dispatchRoles}
+        soldierRoleMap={soldierRoleMap}
+        presentSoldierIds={presentSoldierIds}
         myCompanyId={effectiveCompanyId}
       />
 
