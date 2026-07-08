@@ -33,7 +33,7 @@ export default async function BrigadePage() {
       orderBy: { name: "asc" },
       include: {
         stockBalances: { include: { status: true, holder: { select: { id: true, kind: true } } } },
-        serialUnits: { include: { status: true } },
+        serialUnits: { include: { status: true, currentHolder: { select: { id: true, kind: true } } } },
       },
     }),
     prisma.itemStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" } }),
@@ -154,10 +154,16 @@ export default async function BrigadePage() {
                 unit: i.unit, trackExpiry: i.trackExpiry,
               }))}
               statuses={statuses.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault }))}
-              stocks={items.flatMap((i) => i.stockBalances.map((b) => ({
-                itemTypeId: i.id, statusId: b.statusId, statusName: b.status.name, quantity: b.quantity,
-              })))}
-              units={items.flatMap((i) => i.serialUnits.filter((u) => u.currentHolderId && !u.signedSoldierId).map((u) => ({
+              stocks={items.flatMap((i) => i.stockBalances
+                // רק מלאי שנמצא פיזית במחסן — לא ציוד שמופץ לפלוגות (holder kind=COMPANY).
+                // אחרת המערכת הציעה לזכות לחטיבה גם 20 קסדות שנמצאות בפלוגות ולא ברשות המחסן.
+                .filter((b) => b.holder?.kind === "WAREHOUSE" && (!isScoped || user.holderIds.includes(b.holder.id)))
+                .map((b) => ({
+                  itemTypeId: i.id, statusId: b.statusId, statusName: b.status.name, quantity: b.quantity,
+                })))}
+              units={items.flatMap((i) => i.serialUnits.filter((u) => u.currentHolderId && !u.signedSoldierId
+                // רק יחידות שנמצאות פיזית במחסן — לא יחידות שמופצות לפלוגות
+                && u.currentHolder?.kind === "WAREHOUSE" && (!isScoped || user.holderIds.includes(u.currentHolderId))).map((u) => ({
                 id: u.id, itemTypeId: i.id, serialNumber: u.serialNumber,
                 lotQuantity: u.lotQuantity, statusId: u.statusId, statusName: u.status.name,
               })))}
