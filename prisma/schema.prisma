@@ -186,6 +186,7 @@ model Battalion {
   squads             Squad[]
   companyRoles       CompanyRole[]
   attendanceStatuses AttendanceStatus[]
+  attendanceLocks    AttendanceLock[] @relation("BattalionAttendanceLocks")
   vacationBoards     VacationBoard[]
   vacationStatuses   VacationStatus[]
   dispatchRoles      DispatchRole[] @relation("BattalionDispatchRoles")
@@ -413,6 +414,7 @@ model Holder {
   dispatchAssignments  VehicleAssignment[] @relation("CompanyDispatch")
   companyMissions      Mission[]           @relation("CompanyMissions")
   dispatchTemplates    DispatchTemplate[]  @relation("DispatchTemplateCompany")
+  attendanceLocks      AttendanceLock[]    @relation("CompanyAttendanceLocks")
   // קשרי מחסן↔פלוגה (איזה פלוגות המחסן עובד מולן)
   warehouseLinks   WarehouseCompany[] @relation("WarehouseSide")
   companyLinks     WarehouseCompany[] @relation("CompanySide")
@@ -1452,6 +1454,24 @@ model AttendanceRecord {
   @@unique([soldierId, date])
   @@index([soldierId])
   @@index([date])
+}
+
+/**
+ * נעילת נוכחות פר-פלוגה ליום — השלישות "נועלת" את יכולת העדכון של פלוגה.
+ * כשקיימת נעילה, נציג פלוגה חסום מלערוך נוכחות ליום זה; שלישות/אדמין עדיין יכולים.
+ */
+model AttendanceLock {
+  id          String   @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation("BattalionAttendanceLocks", fields: [battalionId], references: [id], onDelete: Cascade)
+  companyId   String   // holder מסוג COMPANY
+  company     Holder   @relation("CompanyAttendanceLocks", fields: [companyId], references: [id], onDelete: Cascade)
+  date        DateTime @db.Date
+  lockedById  String
+  lockedAt    DateTime @default(now())
+
+  @@unique([companyId, date])
+  @@index([battalionId, date])
 }
 
 // ===================== שמ"פ (שירות מילואים פעיל) =====================

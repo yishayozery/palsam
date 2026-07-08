@@ -48,6 +48,21 @@ export async function saveAttendance(
     const canView = can(user, "attendance.view");
     if (!canManage && !canView) return { error: "אין הרשאה" };
 
+    // 🔒 נעילת שלישות: נציג פלוגה חסום מלערוך נוכחות ליום נעול. שלישות/אדמין עוקפים.
+    const isRoster = can(user, "soldiers.roster") || user.isAdmin;
+    if (!isRoster && entries.length > 0) {
+      const soldierIds = [...new Set(entries.map((e) => e.soldierId))];
+      const sList = await prisma.soldier.findMany({ where: { id: { in: soldierIds } }, select: { id: true, companyId: true } });
+      const compBy = new Map(sList.map((s) => [s.id, s.companyId]));
+      const dates = [...new Set(entries.map((e) => e.date))].map((d) => new Date(d + "T00:00:00Z"));
+      const compIds = sList.map((s) => s.companyId).filter((c): c is string => !!c);
+      const locks = compIds.length ? await prisma.attendanceLock.findMany({ where: { companyId: { in: compIds }, date: { in: dates } }, select: { companyId: true, date: true } }) : [];
+      const lockedSet = new Set(locks.map((l) => `${l.companyId}|${l.date.toISOString().slice(0, 10)}`));
+      const isBlocked = (e: (typeof entries)[number]) => { const c = compBy.get(e.soldierId); return !!c && lockedSet.has(`${c}|${e.date}`); };
+      if (entries.every(isBlocked)) return { error: "🔒 הנוכחות נעולה ע\"י השלישות — לא ניתן לעדכן" };
+      entries = entries.filter((e) => !isBlocked(e));
+    }
+
     const departureAlerts: { soldierId: string; statusName: string }[] = [];
 
     for (const entry of entries) {
@@ -191,6 +206,34 @@ export async function assignSquad(
       where: { id: soldierId },
       data: { squadId },
     });
+    revalidatePath("/attendance");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** נעילה/פתיחה של עדכון נוכחות לפלוגה ליום — ע"י השלישות (roster). */
+export async function toggleCompanyLock(
+  companyId: string,
+  date: string,
+  lock: boolean,
+): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireUser();
+    if (!can(user, "soldiers.roster") && !user.isAdmin) return { error: "רק השלישות יכולה לנעול" };
+    const bId = user.battalionId!;
+    const dateObj = new Date(date + "T00:00:00Z");
+    if (lock) {
+      await prisma.attendanceLock.upsert({
+        where: { companyId_date: { companyId, date: dateObj } },
+        update: { lockedById: user.id, lockedAt: new Date() },
+        create: { battalionId: bId, companyId, date: dateObj, lockedById: user.id },
+      });
+    } else {
+      await prisma.attendanceLock.deleteMany({ where: { companyId, date: dateObj } });
+    }
+    revalidatePath("/roster/control");
     revalidatePath("/attendance");
     return { ok: true };
   } catch (e) {

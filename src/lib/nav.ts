@@ -20,6 +20,7 @@ export const NAV: NavItem[] = [
   // ===== מבצעי =====
   { href: "/dashboard", label: "דשבורד", icon: "📊", group: "מבצעי", screen: "dashboard" },
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "מבצעי", screen: "roster" },
+  { href: "/roster/control", label: "מסך שליטה שלישות", icon: "🎛️", group: "מבצעי", screen: "roster" },
   { href: "/roster?tab=attachments", label: "בקשות סיפוח", icon: "📌", group: "מבצעי", screen: "roster" },
   { href: "/soldiers", label: "חיילי הפלוגה", icon: "👤", group: "מבצעי", screen: "soldiers" },
   // "הצוות שלי" ו"הסמכות" עברו לטאבים בתוך "חיילי הפלוגה" (PeopleTabs) — הוסרו מהתפריט הראשי
