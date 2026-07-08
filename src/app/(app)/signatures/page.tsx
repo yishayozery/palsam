@@ -8,6 +8,7 @@ import { cancelSignatureForm, resendSignRequest, cancelRetroactiveSignout, sendA
 import SignoutModal from "./SignoutModal";
 import CompanySignModal from "./CompanySignModal";
 import CheckinModal from "./CheckinModal";
+import SoldierTransferModal from "./SoldierTransferModal";
 
 import CompanyCheckinModal from "./CompanyCheckinModal";
 import { ROLE_LABELS } from "@/lib/rbac";
@@ -379,6 +380,15 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                   soldierName: k.assignedSoldier!.fullName,
                   items: k.items.map((i) => ({ itemTypeId: i.itemTypeId, itemName: i.itemType.name, sku: i.itemType.sku, quantity: i.quantity })),
                 }))}
+              />
+              <SoldierTransferModal
+                signedUnits={signedUnits.filter((u) => u.signedSoldier).map((u) => ({
+                  id: u.id, serial: u.serialNumber, itemName: u.itemType.name,
+                  soldierId: u.signedSoldierId!, soldierName: u.signedSoldier!.fullName, soldierPN: u.signedSoldier!.personalNumber,
+                  statusName: u.status.name, lotQuantity: u.lotQuantity,
+                }))}
+                soldiers={soldiers.map((s) => ({ id: s.id, name: s.fullName, pn: s.personalNumber }))}
+                equipmentLocations={allCompanyLocations.map((l) => ({ id: l.id, name: l.name }))}
               />
               <SignoutModal
                 reopenForSoldierId={reopenFor}
