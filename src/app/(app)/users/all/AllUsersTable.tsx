@@ -340,8 +340,11 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, soldi
   const warehouses = holders.filter((h) => h.kind === "WAREHOUSE");
   const companies = holders.filter((h) => h.kind === "COMPANY");
 
-  const showWarehousePicker = effectiveTemplate === "WAREHOUSE_MANAGER" || effectiveTemplate === "DUAL";
-  const showCompanyPicker = effectiveTemplate === "COMPANY_REP" || effectiveTemplate === "DUAL" || effectiveTemplate === "VIEWER";
+  // שיוך גמיש: כל תפקיד (למעט אדמין, שרואה הכל) יכול לקבל גם מחסנים וגם פלוגה/מחלקות בכל שילוב —
+  // כך שאפשר לסמן למפלג/רס"פ/שליש כמה מחסנים בדיוק כמו לקצין מחסן.
+  const isAdminTemplate = effectiveTemplate === "BATTALION_ADMIN";
+  const showWarehousePicker = !isAdminTemplate;
+  const showCompanyPicker = !isAdminTemplate;
 
   const relevantSquads = selectedCompanyId
     ? squads.filter((s) => s.companyId === selectedCompanyId)
