@@ -86,7 +86,10 @@ export default function MissionsSection({
     <div className="mb-6">
       <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
         <h2 className="font-bold text-slate-700">🚚 משימות (שיירות)</h2>
-        <button onClick={openNew} className="text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 font-medium">+ משימה חדשה</button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={openNew} className="text-sm bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-4 py-2 font-medium">+ משימה חדשה</button>
+          <a href="/dispatch/templates" className="text-sm bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-lg px-4 py-2 font-medium">📋 שבצ&quot;ק קבוע</a>
+        </div>
       </div>
 
       {/* טאבים: בפעילות / הסתיימו */}

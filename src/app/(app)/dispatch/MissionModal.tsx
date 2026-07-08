@@ -249,6 +249,19 @@ export default function MissionModal({
             )}
           </div>
 
+          {/* הוספת רכבים — למעלה, כדי למעט גלילה */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={addSystemVehicle} className="text-sm bg-slate-800 text-white rounded-lg px-3 py-1.5 hover:bg-slate-900">+ רכב מהמערכת</button>
+            <button onClick={addExternalVehicle} className="text-sm bg-amber-600 text-white rounded-lg px-3 py-1.5 hover:bg-amber-700">+ רכב חוץ</button>
+            {templates.length > 0 && (
+              <select value="" onChange={(e) => { addFromTemplate(e.target.value); e.target.value = ""; }}
+                className="text-sm border border-slate-300 rounded-lg px-2 py-1.5 bg-white">
+                <option value="">+ מרשימת שבצ&quot;ק קבוע</option>
+                {templates.map((t) => <option key={t.id} value={t.id}>{t.name} · {t.vehicleTypeName}</option>)}
+              </select>
+            )}
+          </div>
+
           {/* תצוגת שיירה */}
           {convoyPreview.length > 0 && (
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
@@ -356,19 +369,6 @@ export default function MissionModal({
               </div>
             );
           })()}
-
-          {/* הוספת רכבים */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={addSystemVehicle} className="text-sm bg-slate-800 text-white rounded-lg px-3 py-1.5 hover:bg-slate-900">+ רכב מהמערכת</button>
-            <button onClick={addExternalVehicle} className="text-sm bg-amber-600 text-white rounded-lg px-3 py-1.5 hover:bg-amber-700">+ רכב חוץ</button>
-            {templates.length > 0 && (
-              <select value="" onChange={(e) => { addFromTemplate(e.target.value); e.target.value = ""; }}
-                className="text-sm border border-slate-300 rounded-lg px-2 py-1.5 bg-white">
-                <option value="">+ מרשימת שבצ&quot;ק קבוע</option>
-                {templates.map((t) => <option key={t.id} value={t.id}>{t.name} · {t.vehicleTypeName}</option>)}
-              </select>
-            )}
-          </div>
 
           <label className="text-sm block">הערות
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}

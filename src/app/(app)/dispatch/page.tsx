@@ -2,7 +2,6 @@ import { requireCapability } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import MissionsSection from "./MissionsSection";
-import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -168,14 +167,6 @@ export default async function DispatchPage() {
         subtitle="פתיחת משימה (שיירה) עם רכב אחד או יותר. ניתן לצפייה ועריכה ע&quot;י כל המשתמשים."
       />
 
-      {/* שבצ"ק קבוע — תבניות שיירה קבועות, בראש הדף */}
-      <div className="mb-4">
-        <Link href="/dispatch/templates"
-          className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
-          📋 שבצ&quot;ק קבוע
-          <span className="text-xs opacity-80">(תבניות שיירה קבועות)</span>
-        </Link>
-      </div>
 
       <MissionsSection
         missions={missionsData}
