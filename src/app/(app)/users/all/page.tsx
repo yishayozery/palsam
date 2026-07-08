@@ -96,6 +96,7 @@ export default async function AllUsersPage({
           active: u.active,
           passwordSet: u.passwordSet,
           inviteToken: u.inviteToken,
+          canApproveWeapons: u.canApproveWeapons,
           createdAt: u.createdAt.toISOString(),
         }))}
       />

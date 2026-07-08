@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/guard";
+import { requireUser, canApproveWeapons } from "@/lib/guard";
 import { can, ROLE_LABELS } from "@/lib/rbac";
 import { NAV, GROUP_CONTEXT } from "@/lib/nav";
 import { prisma } from "@/lib/prisma";
@@ -30,6 +30,8 @@ export default async function AppLayout({
   const filtered = NAV.filter((n) => {
     if (n.superAdminOnly) return user.isSuperAdmin;
     if (user.isSuperAdmin) return n.superAdminOnly;
+    // אישור חיילים לנשק — הרשאה פר-משתמש (לא לפי תפקיד)
+    if (n.href === "/armory-approvals") return canApproveWeapons(user);
     if (n.adminOnly && !user.isAdmin) return false;
     if (n.screen && !can(user, n.screen)) return false;
     if (n.cap && !can(user, n.cap)) return false;

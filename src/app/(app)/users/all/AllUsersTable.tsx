@@ -38,6 +38,7 @@ type User = {
   active: boolean;
   passwordSet: boolean;
   inviteToken: string | null;
+  canApproveWeapons?: boolean;
   createdAt: string;
 };
 type Holder = { id: string; name: string; kind: string };
@@ -458,6 +459,13 @@ function UserFormDialog({ user, holders, squads, customRoles, systemRoles, soldi
               )}
             </div>
           </div>
+
+          {/* 🔫 הרשאה פר-משתמש: אישור חיילים לנשק */}
+          <input type="hidden" name="canApproveWeaponsField" value="1" />
+          <label className="flex items-center gap-2 text-sm bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 cursor-pointer">
+            <input type="checkbox" name="canApproveWeapons" defaultChecked={!!user?.canApproveWeapons} className="w-4 h-4 accent-rose-600" />
+            <span>🔫 <b>יכול לאשר חיילים לנשק</b> — רק אם מסומן, המשתמש יראה את המסך ויוכל לאשר.</span>
+          </label>
 
           <div>
             <label className="block text-xs text-slate-500 mb-1">🔗 קישור לחייל (אופציונלי)</label>

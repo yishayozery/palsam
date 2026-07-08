@@ -218,6 +218,8 @@ model AppUser {
   customRoleId String?
   customRole   CustomRole? @relation(fields: [customRoleId], references: [id])
   passwordSet  Boolean    @default(true) // false עד הגדרת סיסמה דרך קישור ההזמנה
+  // 🔫 הרשאה פר-משתמש לאשר חיילים לנשק (לא לפי תפקיד) — נקבע בהקמת/עריכת משתמש
+  canApproveWeapons Boolean @default(false)
   inviteToken  String?    @unique
   magicToken    String?   @unique // לינק כניסה חד-פעמי מהבוט (קצר-מועד)
   magicTokenExp DateTime? // תפוגת ה-magicToken

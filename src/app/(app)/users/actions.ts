@@ -59,6 +59,9 @@ export async function saveUser(formData: FormData) {
     : (companyHolderId || warehouseIds[0] || null);
 
   const squadIds = formData.getAll("squadId").map(String).filter(Boolean);
+  // עדכון הדגל רק אם הטופס כלל אותו (מונע דריסה מטפסי עריכה שאין בהם את הצ׳קבוקס)
+  const flagPresent = formData.has("canApproveWeaponsField");
+  const canApproveWeapons = formData.get("canApproveWeapons") === "on" || formData.get("canApproveWeapons") === "true";
 
   if (!enteredUsername || !fullName) return;
 
@@ -87,7 +90,7 @@ export async function saveUser(formData: FormData) {
       const username = await resolveUniqueUsername(enteredUsername, battalionId, id);
       await prisma.appUser.update({
         where: { id },
-        data: { username, fullName, phone, title, role, customRoleId, systemRoleId, holderId, soldierId },
+        data: { username, fullName, phone, title, role, customRoleId, systemRoleId, holderId, soldierId, ...(flagPresent ? { canApproveWeapons } : {}) },
       });
       await syncHolders(id);
       await syncSquads(id);
@@ -97,7 +100,7 @@ export async function saveUser(formData: FormData) {
       const inviteToken = nanoid(28);
       const randomHash = await hashPassword(nanoid(32));
       const created = await prisma.appUser.create({
-        data: { username, fullName, phone, title, role, customRoleId, systemRoleId, holderId, battalionId, passwordHash: randomHash, passwordSet: false, inviteToken, ...(soldierId ? { soldierId } : {}) },
+        data: { username, fullName, phone, title, role, customRoleId, systemRoleId, holderId, battalionId, canApproveWeapons: flagPresent ? canApproveWeapons : false, passwordHash: randomHash, passwordSet: false, inviteToken, ...(soldierId ? { soldierId } : {}) },
       });
       await syncHolders(created.id);
       await syncSquads(created.id);

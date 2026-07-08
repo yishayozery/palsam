@@ -30,6 +30,7 @@ export type SessionUser = {
   permissions: UserPermissions;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  canApproveWeapons: boolean; // הרשאה פר-משתמש לאשר חיילים לנשק
 } & PermissionHolder;
 
 
@@ -80,6 +81,10 @@ export async function getSession(): Promise<SessionUser | null> {
       permissions,
       isAdmin,
       isSuperAdmin,
+      // חדש: ברירת-מחדל לסשנים ישנים — fallback לפי הרשאת armory קיימת (המשכיות עד re-login)
+      canApproveWeapons: typeof payload.canApproveWeapons === "boolean"
+        ? payload.canApproveWeapons
+        : (isAdmin || permissions?.["armory" as keyof UserPermissions] === "EDIT"),
     };
   } catch {
     return null;
@@ -92,6 +97,7 @@ function toSession(user: {
   systemRole?: { name: string; isAdmin: boolean; isPreset: boolean; permissions: { screen: string; level: PermissionLevel }[] } | null;
   assignedHolders?: { holderId: string }[];
   assignedSquads?: { squadId: string }[];
+  canApproveWeapons?: boolean;
 }): SessionUser {
   const ids = new Set<string>();
   for (const a of user.assignedHolders ?? []) ids.add(a.holderId);
@@ -130,6 +136,7 @@ function toSession(user: {
     permissions,
     isAdmin,
     isSuperAdmin,
+    canApproveWeapons: !!user.canApproveWeapons,
   };
 }
 

@@ -17,6 +17,18 @@ export async function requireCapability(cap: Capability): Promise<SessionUser> {
   return user;
 }
 
+/** הרשאה פר-משתמש לאשר חיילים לנשק (canApproveWeapons) — אדמין תמיד מורשה. */
+export function canApproveWeapons(user: SessionUser): boolean {
+  return user.isSuperAdmin || user.isAdmin || user.canApproveWeapons;
+}
+
+/** דורש הרשאת אישור חיילים לנשק (פר-משתמש, לא לפי תפקיד). */
+export async function requireWeaponsApprover(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!canApproveWeapons(user)) redirect("/");
+  return user;
+}
+
 /** דורש גישת צפייה למסך */
 export async function requireScreen(screen: Screen): Promise<SessionUser> {
   const user = await requireUser();

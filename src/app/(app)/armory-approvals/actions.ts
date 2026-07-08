@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireCapability } from "@/lib/guard";
+import { requireWeaponsApprover } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 
 /** 🔫 מג"ד/סמג"ד מאשר חייל לחימוש (דגל #2). */
@@ -10,7 +10,7 @@ export async function approveSoldierForWeapons(
   formData: FormData,
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireCapability("weapons.approve");
+    const user = await requireWeaponsApprover();
     const soldierId = String(formData.get("soldierId") || "");
     const signatureData = String(formData.get("signatureData") || "");
     if (!soldierId) return { error: "חסר מזהה חייל" };
@@ -41,7 +41,7 @@ export async function bulkApproveForWeapons(
   formData: FormData,
 ): Promise<{ ok?: boolean; count?: number; error?: string }> {
   try {
-    const user = await requireCapability("weapons.approve");
+    const user = await requireWeaponsApprover();
     const bId = user.battalionId!;
     const signatureData = String(formData.get("signatureData") || "");
     if (!signatureData.startsWith("data:image/")) return { error: "חתימה חסרה — נא לחתום בתיבה" };
@@ -74,7 +74,7 @@ export async function revokeSoldierWeaponsApproval(
   formData: FormData,
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireCapability("weapons.approve");
+    const user = await requireWeaponsApprover();
     const soldierId = String(formData.get("soldierId") || "");
     if (!soldierId) return { error: "חסר מזהה חייל" };
 

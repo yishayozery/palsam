@@ -165,6 +165,13 @@ export default function UsersManager({ users, holders, squads, customRoles, base
                   </div>
                 </div>
               )}
+              {/* 🔫 הרשאה פר-משתמש: אישור חיילים לנשק */}
+              <input type="hidden" name="canApproveWeaponsField" value="1" />
+              <label className="flex items-center gap-2 text-sm bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 cursor-pointer">
+                <input type="checkbox" name="canApproveWeapons" className="w-4 h-4 accent-rose-600" />
+                <span>🔫 <b>יכול לאשר חיילים לנשק</b> — רק אם מסומן, המשתמש יראה את מסך "אישור חיילים לנשק" ויוכל לאשר.</span>
+              </label>
+
               <p className="text-xs text-slate-400">ייווצר קישור הזמנה — שלח אותו למשתמש; הוא יגדיר סיסמה בכניסה הראשונה.</p>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">ביטול</button>

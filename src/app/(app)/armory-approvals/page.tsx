@@ -1,4 +1,4 @@
-import { requireCapability } from "@/lib/guard";
+import { requireWeaponsApprover } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import ApprovalsClient from "./ApprovalsClient";
@@ -6,7 +6,7 @@ import ApprovalsClient from "./ApprovalsClient";
 export const dynamic = "force-dynamic";
 
 export default async function ArmoryApprovalsPage() {
-  const user = await requireCapability("weapons.approve");
+  const user = await requireWeaponsApprover();
   const bId = user.battalionId!;
 
   const soldiers = await prisma.soldier.findMany({
