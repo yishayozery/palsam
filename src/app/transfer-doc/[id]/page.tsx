@@ -79,12 +79,14 @@ export default async function PublicTransferDocPage({
           ) : (
             <>
               <div>
-                <span className="text-slate-500">מאת:</span>{" "}
-                <span className="font-medium">{t.fromHolder?.name ?? "חטיבה (גורם חיצוני)"}</span>
+                <span className="text-slate-500">שם המוסר:</span>{" "}
+                <span className="font-medium">{t.createdBy.fullName}</span>
+                {t.fromHolder?.name && <span className="text-slate-400 mr-1 text-xs">({t.fromHolder.name})</span>}
               </div>
               <div>
-                <span className="text-slate-500">אל:</span>{" "}
+                <span className="text-slate-500">שם המקבל:</span>{" "}
                 <span className="font-medium">{t.toSoldier?.fullName ?? t.toHolder?.name ?? "חטיבה (גורם חיצוני)"}</span>
+                {t.toSoldier?.personalNumber && <span className="text-slate-400 mr-1 text-xs">({t.toSoldier.personalNumber})</span>}
               </div>
             </>
           )}
