@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { checkinBatch } from "./actions";
 import { returnKitWithCheck, type KitReturnItem } from "../ymach/actions";
 import { useEscClose } from "@/lib/useEscClose";
+import SigPadInline from "./SigPadInline";
 
 type Unit = {
   id: string; serial: string; itemName: string;
@@ -52,6 +53,8 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
   const [targetHolderId, setTargetHolderId] = useState(defaultToHolderId ?? "");
   // מסך הצלחה אחרי זיכוי
   const [doneData, setDoneData] = useState<{ transferId: string; soldierName: string; soldierPhone: string | null } | null>(null);
+  // חתימת המחסנאי המקבל (המקבל חותם על הזיכוי)
+  const [receiverSig, setReceiverSig] = useState("");
 
   useEscClose(open && !lotPicker, () => { reset(); setOpen(false); });
 
@@ -93,7 +96,7 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
   const reset = () => {
     setSoldierId(""); setSoldierSearch(""); setSelectedUnits(new Set());
     setPartialLotQty(new Map()); setQtyReturn(new Map()); setNewStatusId(""); setError(null);
-    setOpKitReturned({}); setOpKitReason({}); setDoneData(null); setTargetHolderId(defaultToHolderId ?? "");
+    setOpKitReturned({}); setOpKitReason({}); setDoneData(null); setTargetHolderId(defaultToHolderId ?? ""); setReceiverSig("");
   };
 
   // לחיצה על יחידה — אם זו אצווה, פתח דיאלוג; אחרת סמן/בטל
@@ -153,6 +156,7 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
       }
 
       if (serialUnitIds.length > 0 || qtyItems.length > 0) {
+        if (!receiverSig) { setError("נדרשת חתימת המחסנאי המקבל לפני אישור הזיכוי"); setBusy(false); return; }
         const res = await checkinBatch({
           soldierId,
           serialUnitIds,
@@ -160,6 +164,7 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
           statusId: newStatusId,
           qtyItems,
           toHolderId: targetHolderId || defaultToHolderId || "",
+          receiverSignature: receiverSig,
         });
         if (!res.ok) { setError(res.error); setBusy(false); return; }
         setDoneData(res);
@@ -402,6 +407,10 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
                   {s.name}
                 </label>
               ))}
+            </div>
+            {/* חתימת המחסנאי המקבל — המקבל חותם על הזיכוי */}
+            <div className="mt-3 pt-3 border-t border-slate-200">
+              <SigPadInline onChange={setReceiverSig} label="חתימת המחסנאי המקבל" />
             </div>
           </div>
         )}

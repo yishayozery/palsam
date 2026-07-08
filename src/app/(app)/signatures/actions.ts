@@ -1010,11 +1010,12 @@ export async function checkinBatch(payload: {
   statusId: string;
   qtyItems: { itemTypeId: string; statusId: string; quantity: number }[];
   toHolderId: string;
+  receiverSignature?: string; // חתימת המחסנאי המקבל (base64)
 }): Promise<{ ok: true; transferId: string; soldierName: string; soldierPhone: string | null } | { ok: false; error: string }> {
   const user = await requireUser();
   if (!can(user, "signatures.manage")) return { ok: false, error: "אין הרשאה" };
   const bId = user.battalionId!;
-  const { soldierId, serialUnitIds, partialLotQtys, statusId, qtyItems, toHolderId } = payload;
+  const { soldierId, serialUnitIds, partialLotQtys, statusId, qtyItems, toHolderId, receiverSignature } = payload;
 
   if (!soldierId || (serialUnitIds.length === 0 && qtyItems.length === 0)) {
     return { ok: false, error: "חסרים נתונים" };
@@ -1116,6 +1117,12 @@ export async function checkinBatch(payload: {
           lines: { create: lines },
         },
       });
+      // חתימת המחסנאי המקבל (המקבל חותם על הזיכוי)
+      if (receiverSignature) {
+        await tx.signature.create({
+          data: { battalionId: bId, transferId: transfer.id, signerUserId: user.id, method: "ONSITE", status: "SIGNED", signatureData: receiverSignature, signedAt: new Date(), token: nanoid(24) },
+        });
+      }
       return transfer.id;
     });
 

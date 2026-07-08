@@ -146,13 +146,23 @@ export default async function PublicTransferDocPage({
                 </div>
               </div>
               <div className="border-t border-slate-400 pt-2">
-                <div className="text-slate-500">מקבל במחסן / מאשר</div>
+                <div className="text-slate-500">מקבל במחסן / מאשר (חותם)</div>
                 <div className="font-medium mt-1">
-                  {t.approvedBy?.fullName ?? t.createdBy.fullName}
+                  {t.signatures[0]?.signerUser?.fullName ?? t.approvedBy?.fullName ?? t.createdBy.fullName}
                   {t.approvedAt && (
                     <span className="text-slate-400"> · {t.approvedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</span>
                   )}
                 </div>
+                {t.signatures[0]?.signatureData && (
+                  <div className="mt-3 border border-slate-200 rounded-lg p-2 bg-slate-50">
+                    <div className="text-[10px] text-slate-500 mb-1">חתימה דיגיטלית:</div>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={t.signatures[0].signatureData} alt="חתימה" className="max-h-24 object-contain" />
+                    {t.signatures[0].signedAt && (
+                      <div className="text-[10px] text-slate-400 mt-1">נחתם: {t.signatures[0].signedAt.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}</div>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           ) : (
