@@ -52,15 +52,8 @@ export default function UsersManager({ users, holders, squads, customRoles, base
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<string>("BATTALION_ADMIN");
 
-  // התבנית האפקטיבית של הבחירה (הרשאות מותאם → תבנית הבסיס שלו)
-  const effectiveTemplate = role.startsWith("custom:")
-    ? customRoles.find((c) => c.id === role.slice(7))?.template ?? "VIEWER"
-    : role;
-
   const warehouses = holders.filter((h) => h.kind === "WAREHOUSE");
   const companies = holders.filter((h) => h.kind === "COMPANY");
-  const holderOpts = effectiveTemplate === "WAREHOUSE_MANAGER" ? warehouses : companies;
-  const holderLabel = effectiveTemplate === "WAREHOUSE_MANAGER" ? "מחסן" : effectiveTemplate === "COMPANY_REP" ? "פלוגה" : "פלוגה (לצופה פלוגתי — אופציונלי)";
 
   return (
     <div>
@@ -124,7 +117,7 @@ export default function UsersManager({ users, holders, squads, customRoles, base
                   <input name="personalNumber" placeholder="1234567" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">הרשאות</label>
                   <select name="role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
@@ -139,27 +132,30 @@ export default function UsersManager({ users, holders, squads, customRoles, base
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">{holderLabel}</label>
-                  {effectiveTemplate === "WAREHOUSE_MANAGER" ? (
-                    <div className="rounded-lg border border-slate-300 p-2 space-y-1 max-h-32 overflow-y-auto">
-                      {holderOpts.map((h) => (
-                        <label key={h.id} className="flex items-center gap-2 text-sm">
-                          <input type="checkbox" name="holderId" value={h.id} className="w-4 h-4" /> {h.name}
-                        </label>
-                      ))}
-                      <p className="text-[11px] text-slate-400">ניתן לבחור כמה מחסנים</p>
-                    </div>
-                  ) : (
-                    <select name="holderId" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                      {effectiveTemplate === "VIEWER" && <option value="">כל הגדוד</option>}
-                      {holderOpts.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-                    </select>
-                  )}
+                  <label className="block text-xs text-slate-500 mb-1">פלוגה (אופציונלי)</label>
+                  <select name="companyHolderId" defaultValue="" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <option value="">— ללא —</option>
+                    {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
                 </div>
               </div>
-              {squads.length > 0 && (effectiveTemplate === "COMPANY_REP" || effectiveTemplate === "VIEWER") && (
+
+              {/* שיוך גמיש — הרשאות כפולות: מחסנים + פלוגה + מחלקות בכל שילוב */}
+              {warehouses.length > 0 && (
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">מחלקות (ריק = רואה הכל בפלוגה)</label>
+                  <label className="block text-xs text-slate-500 mb-1">מחסנים (אופציונלי — ניתן לבחור כמה)</label>
+                  <div className="rounded-lg border border-slate-300 p-2 grid grid-cols-2 sm:grid-cols-3 gap-1 max-h-32 overflow-y-auto">
+                    {warehouses.map((h) => (
+                      <label key={h.id} className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" name="holderId" value={h.id} className="w-4 h-4" /> {h.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {squads.length > 0 && (
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">מחלקות (אופציונלי — ריק = כל הפלוגה)</label>
                   <div className="rounded-lg border border-slate-300 p-2 space-y-1 max-h-32 overflow-y-auto">
                     {squads.map((sq) => (
                       <label key={sq.id} className="flex items-center gap-2 text-sm">
