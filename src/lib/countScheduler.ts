@@ -92,7 +92,8 @@ export async function generatePendingTasks(now: Date = new Date()): Promise<numb
         where: { planId: plan.id, holderId: hId, scheduledAt: nextTime },
       });
       if (exists) continue;
-      const assigneeId = await pickAssignee(hId);
+      // "אחראי ספירה" (responsibleUserId) קובע מי מקבל את המשימה בבוט; אם לא הוגדר — המשתמש הראשון על ההולדר
+      const assigneeId = plan.responsibleUserId ?? await pickAssignee(hId);
       const newTask = await prisma.countTask.create({
         data: {
           battalionId: plan.battalionId, planId: plan.id, holderId: hId,
