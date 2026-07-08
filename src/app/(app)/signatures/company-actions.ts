@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { notifyIssuerTelegram } from "@/lib/notify";
 import { adjustQuantity, defaultStatusId } from "@/lib/inventory";
 import { requiresPersonalId } from "@/lib/handover";
 import type { SignatureMethod } from "@/generated/prisma";
@@ -222,6 +223,8 @@ export async function completeCompanySignature(token: string, signatureData: str
   });
 
   await audit(null, "COMPANY_SIGN", "Signature", sig.id);
+  // בבוט גם למחתים (יוצר התעודה) — אישור שהפלוגה חתמה
+  await notifyIssuerTelegram(sig.transfer.createdById, sig.battalionId, sig.transferId, "signed");
   revalidatePath("/signatures");
   return { ok: true };
 }

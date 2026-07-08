@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { notifyIssuerTelegram } from "@/lib/notify";
 import { requiresPersonalId } from "@/lib/handover";
 import { getSoldierEquipmentSummary, formatSoldierSummaryForWhatsApp, type SoldierEquipmentSummary } from "@/lib/soldier-summary";
 import type { SignatureMethod, Prisma } from "@/generated/prisma";
@@ -598,6 +599,7 @@ export async function createSignout(formData: FormData): Promise<{ error: string
           await tx.transfer.update({ where: { id: transferId }, data: { status: "COMPLETED", approvedAt: new Date(), signaturePending: true } });
         });
         await notifySoldierSignRequest(soldierId, bId, token);
+        await notifyIssuerTelegram(user.id, bId, transferId, "signout");
       }
       revalidatePath("/signatures");
       redirect(`/signatures?tab=pending`);
@@ -665,6 +667,8 @@ export async function completeSignature(token: string, signatureData: string) {
   }
 
   const telegramSent = await notifySoldierTelegram(soldierId, bId, sig.transferId, "SIGN");
+  // בבוט גם למחתים (יוצר התעודה) — אישור שהמקבל חתם
+  await notifyIssuerTelegram(sig.transfer!.createdById, bId, sig.transferId, "signed");
 
   // 📧 מייל למחסן/פלוגה/גדוד: החייל חתם על התעודה (עם PDF התעודה מצורף)
   try {
@@ -1206,6 +1210,7 @@ export async function createSoldierTransfer(formData: FormData): Promise<{ ok?: 
 
   await audit(user.id, "SOLDIER_TRANSFER", "Transfer", transferId, { fromSoldierId, toSoldierId, count: units.length });
   await notifySoldierSignRequest(toSoldierId, bId, token);
+  await notifyIssuerTelegram(user.id, bId, transferId, "signout");
   try {
     const { notifyTransactionEmail } = await import("@/lib/email");
     await notifyTransactionEmail({ battalionId: bId, userId: user.id, action: "SIGNOUT", entity: "Transfer", entityId: transferId, holderId: user.holderId, details: { fromSoldierId, toSoldierId } });
