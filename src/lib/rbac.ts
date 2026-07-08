@@ -338,7 +338,7 @@ export const PRESET_ROLES: {
     name: "שליש", isAdmin: false, isCommander: false, sortOrder: 8,
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "EDIT" },
-      { screen: "roster", level: "EDIT" }, { screen: "attendance", level: "EDIT" }, { screen: "employment", level: "VIEW" },
+      { screen: "roster", level: "EDIT" }, { screen: "attendance", level: "EDIT" }, { screen: "employment", level: "EDIT" },
       { screen: "dispatch", level: "EDIT" }, { screen: "certifications", level: "EDIT" }, { screen: "reports", level: "VIEW" },
       { screen: "armory_reports", level: "VIEW" },
     ],

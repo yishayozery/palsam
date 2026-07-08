@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/guard";
-import { can } from "@/lib/rbac";
+import { can, canEdit } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui";
@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 
 export default async function EmploymentPage() {
   const user = await requireUser();
-  const canManage = can(user, "attendance.manage");
+  // עריכה — שלישות בלבד (employment EDIT). אחרים רואים לקריאה.
+  const canManage = canEdit(user, "employment");
   const canView = can(user, "attendance.view") || can(user, "employment");
   if (!canManage && !canView) redirect("/dashboard");
   const bId = user.battalionId!;

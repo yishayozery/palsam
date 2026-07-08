@@ -47,7 +47,7 @@ export default function HandoverClient({ companies, handovers }: { companies: Co
                 <input name="title" placeholder="למשל: החלפת סבב יולי" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               </div>
             </div>
-            <p className="text-xs text-slate-500">הרשימה תיבנה אוטומטית: ציוד חתום לכל חייל (העברת חתימות), פערים פתוחים, משימות ספירה, ושבצ״קים.</p>
+            <p className="text-xs text-slate-500">ייווצר צ'ק ליסט ריק — הוסיפו את משימות ההעברה ידנית בכרטיס שייפתח.</p>
             <div className="flex gap-2">
               <button className="bg-emerald-600 text-white rounded-lg px-5 py-2 text-sm font-medium hover:bg-emerald-700">צור צ'ק ליסט</button>
               <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-slate-300 px-5 py-2 text-sm">ביטול</button>

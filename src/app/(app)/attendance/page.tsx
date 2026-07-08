@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/guard";
-import { can } from "@/lib/rbac";
+import { can, canEdit } from "@/lib/rbac";
 import { resolveHolderKinds } from "@/lib/scope";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -17,6 +17,8 @@ export default async function AttendancePage({
   const user = await requireUser();
   const canManage = can(user, "attendance.manage");
   const canView = can(user, "attendance.view") || can(user, "employment");
+  // ניהול תעסוקות / תקני פלוגות — שלישות בלבד (employment EDIT). מ"פ/מפלג רואים לקריאה בלבד.
+  const canManageEmployment = canEdit(user, "employment");
   if (!canManage && !canView) redirect("/dashboard");
   const bId = user.battalionId!;
   const sp = await searchParams;
@@ -286,6 +288,7 @@ export default async function AttendancePage({
         records={recordData}
         mode={mode}
         canManage={canManage}
+        canManageEmployment={canManageEmployment}
         startDate={startStr}
         employments={employmentsForClient}
         selectedEmployment={selectedEmployment}

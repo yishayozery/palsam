@@ -32,7 +32,7 @@ export default async function HandoverPage() {
     <div>
       <PageHeader
         title="🔄 העברת משמרת"
-        subtitle="צ'ק ליסט להעברת משמרת בין סבבים — בדגש על העברת חתימות וציוד. הרשימה נבנית אוטומטית ממצב הפלוגה."
+        subtitle="צ'ק ליסט להעברת משמרת בין סבבים — משימות שאתם מגדירים ידנית."
       />
       <HandoverClient
         companies={companies}

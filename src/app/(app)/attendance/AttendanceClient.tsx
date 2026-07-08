@@ -32,7 +32,7 @@ type SelectedEmployment = EmploymentOption & {
 type CallupPeriod = { id: string; soldierId: string; startDate: string; endDate: string | null };
 
 export default function AttendanceClient({
-  companies, selectedCompanyId, soldiers, squads, companyRoles, statuses, days, plans, records, mode, canManage, startDate,
+  companies, selectedCompanyId, soldiers, squads, companyRoles, statuses, days, plans, records, mode, canManage, canManageEmployment, startDate,
   employments, selectedEmployment, callupPeriods,
 }: {
   companies: { id: string; name: string }[];
@@ -46,6 +46,7 @@ export default function AttendanceClient({
   records: AttEntry[];
   mode: "plan" | "record";
   canManage: boolean;
+  canManageEmployment: boolean;
   startDate: string;
   employments: EmploymentOption[];
   selectedEmployment: SelectedEmployment | null;
@@ -445,7 +446,8 @@ export default function AttendanceClient({
               ))}
             </select>
           </div>
-          {canManage && (
+          {/* ניהול תעסוקות + עריכת תקני פלוגות — שלישות בלבד */}
+          {canManageEmployment && (
             <div className="flex items-center gap-3">
               <a href="/employment" className="text-xs text-blue-600 hover:text-blue-800 underline">
                 ניהול תעסוקות
@@ -457,7 +459,7 @@ export default function AttendanceClient({
               )}
             </div>
           )}
-          {!canManage && selectedEmployment && (
+          {!canManageEmployment && selectedEmployment && (
             <a href={`/employment/${selectedEmployment.id}`} className="text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-2 py-1 rounded-lg font-medium">
               📋 תקני פלוגות
             </a>
