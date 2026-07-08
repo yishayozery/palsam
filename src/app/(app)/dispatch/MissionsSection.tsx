@@ -4,10 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import ConvoyView from "./ConvoyView";
-import MissionModal, { type MVehicle, type MSoldier, type MTemplate, type EditMission } from "./MissionModal";
+import MissionModal, { type MVehicle, type MSoldier, type MTemplate, type MRole, type EditMission } from "./MissionModal";
 import { toggleMissionComplete, deleteMission, startMission, toggleTripConfirmed } from "./actions";
 
-type MSoldierFull = { vasId: string; soldierId: string | null; externalName: string | null; externalPersonalNumber: string | null; isDriver: boolean; name: string; pn: string | null; tripConfirmedAt: string | null };
+type MSoldierFull = { vasId: string; soldierId: string | null; externalName: string | null; externalPersonalNumber: string | null; isDriver: boolean; name: string; pn: string | null; tripConfirmedAt: string | null; dispatchRoleId?: string | null };
 type MVehicleFull = {
   isExternal: boolean; vehicleSerialUnitId: string | null; externalVehicleNumber: string | null; externalVehicleTypeName: string | null;
   label: string; typeName: string; soldiers: MSoldierFull[];
@@ -21,13 +21,14 @@ export type MissionFull = {
 };
 
 export default function MissionsSection({
-  missions, companies, vehicles, soldiers, templates, myCompanyId,
+  missions, companies, vehicles, soldiers, templates, dispatchRoles = [], myCompanyId,
 }: {
   missions: MissionFull[];
   companies: { id: string; name: string }[];
   vehicles: MVehicle[];
   soldiers: MSoldier[];
   templates: MTemplate[];
+  dispatchRoles?: MRole[];
   myCompanyId: string | null;
 }) {
   const router = useRouter();
@@ -54,7 +55,7 @@ export default function MissionsSection({
       vehicles: m.vehicles.map((v) => ({
         isExternal: v.isExternal, vehicleSerialUnitId: v.vehicleSerialUnitId,
         externalVehicleNumber: v.externalVehicleNumber, externalVehicleTypeName: v.externalVehicleTypeName,
-        soldiers: v.soldiers.map((s) => ({ soldierId: s.soldierId, externalName: s.externalName, externalPersonalNumber: s.externalPersonalNumber, isDriver: s.isDriver })),
+        soldiers: v.soldiers.map((s) => ({ soldierId: s.soldierId, externalName: s.externalName, externalPersonalNumber: s.externalPersonalNumber, isDriver: s.isDriver, dispatchRoleId: s.dispatchRoleId ?? null })),
       })),
     } });
   }
@@ -164,7 +165,7 @@ export default function MissionsSection({
 
       {modal.open && (
         <MissionModal
-          companies={companies} vehicles={vehicles} soldiers={soldiers} templates={templates} myCompanyId={myCompanyId}
+          companies={companies} vehicles={vehicles} soldiers={soldiers} templates={templates} dispatchRoles={dispatchRoles} myCompanyId={myCompanyId}
           edit={modal.edit} onClose={() => setModal({ open: false, edit: null })}
         />
       )}

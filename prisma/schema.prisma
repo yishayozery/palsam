@@ -736,6 +736,9 @@ model VehicleAssignmentSoldier {
   // 🆕 חייל חוץ — לא במערכת, שם + מ.א ידניים
   externalName           String?
   externalPersonalNumber String?
+  // 🆕 תפקיד בשבצ"ק (נהג / מפקד רכב / לוחם) — כמו בתבנית שבצ"ק קבוע
+  dispatchRoleId         String?
+  dispatchRole           DispatchRole? @relation("VehicleAssignmentSoldierRole", fields: [dispatchRoleId], references: [id], onDelete: SetNull)
   // 🆕 חיווי נהג שהקים הרשאת/לינק נסיעה. מדווח ע"י הנהג בבוט או ע"י קצין הרכב.
   tripConfirmedAt        DateTime?
   tripConfirmedVia       String?  // "נהג (בוט)" / שם קצין הרכב / "ידני"
@@ -1610,6 +1613,7 @@ model DispatchRole {
   createdAt     DateTime @default(now())
 
   templateSlots DispatchTemplateSoldier[]
+  vehicleAssignmentSoldiers VehicleAssignmentSoldier[] @relation("VehicleAssignmentSoldierRole")
 
   @@unique([battalionId, name])
   @@index([battalionId])

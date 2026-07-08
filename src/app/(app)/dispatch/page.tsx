@@ -61,7 +61,8 @@ export default async function DispatchPage() {
       where: { battalionId: bId, active: true },
       include: {
         vehicleSerialUnit: { include: { itemType: { select: { name: true } } } },
-        slots: { include: { soldier: { select: { id: true, fullName: true } } } },
+        vehicleItemType: { select: { name: true } },
+        slots: { include: { soldier: { select: { id: true, fullName: true } }, dispatchRole: { select: { id: true, isDriver: true } } } },
       },
       orderBy: { name: "asc" },
     }),
@@ -85,6 +86,12 @@ export default async function DispatchPage() {
       orderBy: [{ missionDate: "desc" }, { departureTime: "desc" }],
     }),
   ]);
+
+  const dispatchRoles = await prisma.dispatchRole.findMany({
+    where: { battalionId: bId, active: true },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, name: true, icon: true, isDriver: true },
+  });
 
   const vtlMap: Record<string, string[]> = {};
   for (const vl of vehicleTypeLicenses) {
@@ -133,7 +140,7 @@ export default async function DispatchPage() {
       soldiers: v.soldiers.map((s) => ({
         vasId: s.id, soldierId: s.soldierId, externalName: s.externalName, externalPersonalNumber: s.externalPersonalNumber, isDriver: s.isDriver,
         name: s.soldier?.fullName || s.externalName || "—", pn: s.soldier?.personalNumber ?? s.externalPersonalNumber ?? null,
-        tripConfirmedAt: s.tripConfirmedAt?.toISOString() ?? null,
+        tripConfirmedAt: s.tripConfirmedAt?.toISOString() ?? null, dispatchRoleId: s.dispatchRoleId ?? null,
       })),
     })),
   }));
@@ -144,10 +151,13 @@ export default async function DispatchPage() {
     if (s.drivingRefresherDate) { const exp = new Date(s.drivingRefresherDate); exp.setDate(exp.getDate() + refreshDays); refreshValid = exp.getTime() >= Date.now(); }
     return { id: s.id, fullName: s.fullName, personalNumber: s.personalNumber ?? "", licenseIds: s.drivingLicenses.map((dl) => dl.licenseType.id), procValid, refreshValid };
   });
-  const templatesForMission = templates.filter((t) => t.vehicleSerialUnit).map((t) => ({
-    id: t.id, name: t.name, vehicleSerialUnitId: t.vehicleSerialUnitId!,
-    vehicleTypeName: t.vehicleSerialUnit!.itemType.name,
+  // כל תבנית פעילה — עם רכב ספציפי או רק סוג רכב (בוחרים את המספר בהמשך)
+  const templatesForMission = templates.map((t) => ({
+    id: t.id, name: t.name,
+    vehicleSerialUnitId: t.vehicleSerialUnitId ?? "",
+    vehicleTypeName: t.vehicleSerialUnit?.itemType.name ?? t.vehicleItemType?.name ?? "רכב",
     soldierIds: t.slots.filter((s) => s.soldier).map((s) => s.soldier!.id),
+    soldiers: t.slots.filter((s) => s.soldier).map((s) => ({ soldierId: s.soldier!.id, dispatchRoleId: s.dispatchRoleId, isDriver: s.dispatchRole?.isDriver ?? false })),
   }));
 
   return (
@@ -173,6 +183,7 @@ export default async function DispatchPage() {
         vehicles={vehiclesForMission}
         soldiers={soldiersForMission}
         templates={templatesForMission}
+        dispatchRoles={dispatchRoles}
         myCompanyId={effectiveCompanyId}
       />
 

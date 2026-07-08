@@ -7,9 +7,10 @@ import { saveMission } from "./actions";
 
 export type MVehicle = { id: string; name: string; serial: string; typeName: string; requiredLicenseIds?: string[] };
 export type MSoldier = { id: string; fullName: string; personalNumber: string; licenseIds?: string[]; procValid?: boolean; refreshValid?: boolean };
-export type MTemplate = { id: string; name: string; vehicleSerialUnitId: string; vehicleTypeName: string; soldierIds: string[] };
+export type MTemplate = { id: string; name: string; vehicleSerialUnitId: string; vehicleTypeName: string; soldierIds: string[]; soldiers?: { soldierId: string; dispatchRoleId: string; isDriver: boolean }[] };
+export type MRole = { id: string; name: string; icon: string; isDriver: boolean };
 
-type VehSoldier = { key: string; soldierId: string | null; externalName: string; externalPersonalNumber: string; isDriver: boolean };
+type VehSoldier = { key: string; soldierId: string | null; externalName: string; externalPersonalNumber: string; isDriver: boolean; dispatchRoleId: string | null };
 type VehRow = {
   key: string;
   source: "system" | "external";
@@ -33,7 +34,7 @@ export type EditMission = {
     vehicleSerialUnitId: string | null;
     externalVehicleNumber: string | null;
     externalVehicleTypeName: string | null;
-    soldiers: { soldierId: string | null; externalName: string | null; externalPersonalNumber: string | null; isDriver: boolean }[];
+    soldiers: { soldierId: string | null; externalName: string | null; externalPersonalNumber: string | null; isDriver: boolean; dispatchRoleId?: string | null }[];
   }[];
 };
 
@@ -41,12 +42,13 @@ let keySeq = 0;
 const nextKey = () => `k${++keySeq}_${Date.now()}`;
 
 export default function MissionModal({
-  companies, vehicles, soldiers, templates, myCompanyId, edit, onClose,
+  companies, vehicles, soldiers, templates, dispatchRoles = [], myCompanyId, edit, onClose,
 }: {
   companies: { id: string; name: string }[];
   vehicles: MVehicle[];
   soldiers: MSoldier[];
   templates: MTemplate[];
+  dispatchRoles?: MRole[];
   myCompanyId: string | null;
   edit?: EditMission | null;
   onClose: () => void;
@@ -89,7 +91,7 @@ export default function MissionModal({
         externalVehicleTypeName: v.externalVehicleTypeName ?? "",
         soldiers: v.soldiers.map((s) => ({
           key: nextKey(), soldierId: s.soldierId, externalName: s.externalName ?? "",
-          externalPersonalNumber: s.externalPersonalNumber ?? "", isDriver: s.isDriver,
+          externalPersonalNumber: s.externalPersonalNumber ?? "", isDriver: s.isDriver, dispatchRoleId: s.dispatchRoleId ?? null,
         })),
       }));
     }
@@ -113,10 +115,13 @@ export default function MissionModal({
     const t = templates.find((x) => x.id === tid);
     if (!t) return;
     const k = nextKey();
+    const crew = t.soldiers && t.soldiers.length > 0
+      ? t.soldiers.map((s) => ({ key: nextKey(), soldierId: s.soldierId, externalName: "", externalPersonalNumber: "", isDriver: s.isDriver, dispatchRoleId: s.dispatchRoleId }))
+      : t.soldierIds.map((sid, i) => ({ key: nextKey(), soldierId: sid, externalName: "", externalPersonalNumber: "", isDriver: i === 0, dispatchRoleId: null as string | null }));
     setRows((r) => [...r, {
       key: k, source: "system", vehicleSerialUnitId: t.vehicleSerialUnitId,
       externalVehicleNumber: "", externalVehicleTypeName: "",
-      soldiers: t.soldierIds.map((sid, i) => ({ key: nextKey(), soldierId: sid, externalName: "", externalPersonalNumber: "", isDriver: i === 0 })),
+      soldiers: crew,
     }]);
     setActiveVehKey(k);
   }
@@ -135,12 +140,12 @@ export default function MissionModal({
       if (x.key !== rowKey) return x;
       if (x.soldiers.some((s) => s.soldierId === soldierId)) return x;
       const isFirst = x.soldiers.length === 0;
-      return { ...x, soldiers: [...x.soldiers, { key: nextKey(), soldierId, externalName: "", externalPersonalNumber: "", isDriver: isFirst }] };
+      return { ...x, soldiers: [...x.soldiers, { key: nextKey(), soldierId, externalName: "", externalPersonalNumber: "", isDriver: isFirst, dispatchRoleId: null }] };
     }));
   }
   function addExternalSoldier(rowKey: string) {
     setRows((r) => r.map((x) => x.key === rowKey
-      ? { ...x, soldiers: [...x.soldiers, { key: nextKey(), soldierId: null, externalName: "", externalPersonalNumber: "", isDriver: x.soldiers.length === 0 }] }
+      ? { ...x, soldiers: [...x.soldiers, { key: nextKey(), soldierId: null, externalName: "", externalPersonalNumber: "", isDriver: x.soldiers.length === 0, dispatchRoleId: null }] }
       : x));
   }
   function removeSoldier(rowKey: string, sKey: string) {
@@ -153,6 +158,17 @@ export default function MissionModal({
     const reasons = row ? driverReasons(sol?.soldierId ?? null, row) : [];
     if (reasons.length) setDriverWarning({ reasons, name: sol?.soldierId ? soldierName(sol.soldierId) : "נהג", onConfirm: apply });
     else apply();
+  }
+  function setRole(rowKey: string, sKey: string, roleId: string) {
+    const role = dispatchRoles.find((r) => r.id === roleId);
+    setRows((r) => r.map((x) => x.key !== rowKey ? x : {
+      ...x,
+      // אם נבחר תפקיד נהג — הופך אותו לנהג הרכב (יחיד); אחרת שומר isDriver קיים
+      soldiers: x.soldiers.map((s) => {
+        if (s.key === sKey) return { ...s, dispatchRoleId: roleId || null, isDriver: role?.isDriver ? true : s.isDriver };
+        return role?.isDriver ? { ...s, isDriver: false } : s; // נהג אחד לרכב
+      }),
+    }));
   }
   function patchSoldier(rowKey: string, sKey: string, patch: Partial<VehSoldier>) {
     setRows((r) => r.map((x) => x.key === rowKey ? { ...x, soldiers: x.soldiers.map((s) => s.key === sKey ? { ...s, ...patch } : s) } : x));
@@ -181,8 +197,8 @@ export default function MissionModal({
         externalVehicleNumber: row.source === "external" ? row.externalVehicleNumber.trim() : null,
         externalVehicleTypeName: row.source === "external" ? row.externalVehicleTypeName.trim() : null,
         soldiers: row.soldiers.map((s) => s.soldierId
-          ? { soldierId: s.soldierId, isDriver: s.isDriver }
-          : { externalName: s.externalName.trim(), externalPersonalNumber: s.externalPersonalNumber.trim(), isDriver: s.isDriver }),
+          ? { soldierId: s.soldierId, isDriver: s.isDriver, dispatchRoleId: s.dispatchRoleId }
+          : { externalName: s.externalName.trim(), externalPersonalNumber: s.externalPersonalNumber.trim(), isDriver: s.isDriver, dispatchRoleId: s.dispatchRoleId }),
       })),
     };
     const fd = new FormData();
@@ -309,6 +325,13 @@ export default function MissionModal({
                                 <input value={s.externalPersonalNumber} onChange={(e) => patchSoldier(row.key, s.key, { externalPersonalNumber: e.target.value })}
                                   placeholder="מ.א" className="border border-slate-300 rounded px-1.5 py-0.5 text-sm w-24" />
                               </div>
+                            )}
+                            {dispatchRoles.length > 0 && (
+                              <select value={s.dispatchRoleId ?? ""} onChange={(e) => setRole(row.key, s.key, e.target.value)}
+                                className="border border-slate-300 rounded px-1.5 py-0.5 text-xs bg-white" title="תפקיד בשבצ״ק">
+                                <option value="">תפקיד…</option>
+                                {dispatchRoles.map((role) => <option key={role.id} value={role.id}>{role.icon} {role.name}</option>)}
+                              </select>
                             )}
                             {s.isDriver && <span className="text-[10px] text-sky-600">נהג</span>}
                             {s.isDriver && (() => { const rz = driverReasons(s.soldierId, row); return rz.length ? <span title={rz.join(" · ")} className="text-[10px] bg-rose-600 text-white rounded px-1.5 py-0.5 font-bold">🔴 לא מוסמך</span> : null; })()}

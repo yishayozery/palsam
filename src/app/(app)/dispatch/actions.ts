@@ -228,8 +228,8 @@ async function notifyMissionCreated(missionId: string, bId: string): Promise<voi
 }
 
 type MissionSoldierInput =
-  | { soldierId: string; isDriver?: boolean }
-  | { externalName: string; externalPersonalNumber?: string; isDriver?: boolean };
+  | { soldierId: string; isDriver?: boolean; dispatchRoleId?: string | null }
+  | { externalName: string; externalPersonalNumber?: string; isDriver?: boolean; dispatchRoleId?: string | null };
 
 type MissionVehicleInput = {
   vehicleSerialUnitId?: string | null; // רכב מהמערכת
@@ -314,8 +314,8 @@ export async function saveMission(formData: FormData): Promise<{ ok?: boolean; e
         externalVehicleTypeName: external ? (v.externalVehicleTypeName?.trim() || null) : null,
         soldiers: v.soldiers.map((s) =>
           "soldierId" in s && s.soldierId
-            ? { soldierId: s.soldierId, isDriver: !!s.isDriver }
-            : { soldierId: null, isDriver: !!s.isDriver, externalName: (s as { externalName: string }).externalName.trim(), externalPersonalNumber: (s as { externalPersonalNumber?: string }).externalPersonalNumber?.trim() || null }),
+            ? { soldierId: s.soldierId, isDriver: !!s.isDriver, dispatchRoleId: s.dispatchRoleId ?? null }
+            : { soldierId: null, isDriver: !!s.isDriver, dispatchRoleId: s.dispatchRoleId ?? null, externalName: (s as { externalName: string }).externalName.trim(), externalPersonalNumber: (s as { externalPersonalNumber?: string }).externalPersonalNumber?.trim() || null }),
       };
     });
 
