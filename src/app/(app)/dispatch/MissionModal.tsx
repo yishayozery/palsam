@@ -75,7 +75,6 @@ export default function MissionModal({
   const [title, setTitle] = useState(edit?.title ?? "");
   const [commanderSoldierId, setCommanderSoldierId] = useState(edit?.commanderSoldierId ?? "");
   const [commanderName, setCommanderName] = useState(edit?.commanderName ?? "");
-  const [companyId, setCompanyId] = useState(edit?.companyId ?? myCompanyId ?? "");
   const [missionDate, setMissionDate] = useState(edit?.missionDate ?? new Date().toISOString().slice(0, 10));
   const [departureTime, setDepartureTime] = useState(edit?.departureTime ?? "08:00");
   const [notes, setNotes] = useState(edit?.notes ?? "");
@@ -171,7 +170,7 @@ export default function MissionModal({
     const payload = {
       id: edit?.id,
       title: title.trim() || null,
-      companyId: companyId || null,
+      companyId: null,
       commanderSoldierId: commanderSoldierId || null,
       commanderName: commanderSoldierId ? null : (commanderName.trim() || null),
       missionDate, departureTime,
@@ -215,18 +214,11 @@ export default function MissionModal({
               <input type="time" value={departureTime} onChange={(e) => setDepartureTime(e.target.value)}
                 className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
             </label>
-            <label className="text-sm">כותרת (אופציונלי)
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="למשל: פינוי בוקר"
+            <label className="text-sm">שם המשימה
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="למשל: פינוי בוקר / ליווי שיירה"
                 className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
             </label>
-            <label className="text-sm">פלוגה
-              <select value={companyId} onChange={(e) => setCompanyId(e.target.value)}
-                className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white">
-                <option value="">— ללא —</option>
-                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </label>
-            <label className="text-sm">מפקד משימה
+            <label className="text-sm">מפקד אחראי
               <select value={commanderSoldierId} onChange={(e) => { setCommanderSoldierId(e.target.value); if (e.target.value) setCommanderName(""); }}
                 className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white">
                 <option value="">— בחר חייל —</option>

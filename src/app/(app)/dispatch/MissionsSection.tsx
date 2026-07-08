@@ -39,7 +39,6 @@ export default function MissionsSection({
   function missionText(m: MissionFull): string {
     const lines = [`🚚 ${m.title || "משימה"} — ${new Date(m.missionDate).toLocaleDateString("he-IL")} · ${m.departureTime}`];
     if (m.commanderName) lines.push(`מפקד משימה: ${m.commanderName}`);
-    if (m.companyName) lines.push(`פלוגה: ${m.companyName}`);
     for (const v of m.vehicles) {
       lines.push(`\n${v.isExternal ? "🔶" : "🚗"} ${v.label}`);
       for (const s of v.soldiers) lines.push(`  ${s.isDriver ? "🚗 נהג: " : "• "}${s.name}${s.pn ? ` (${s.pn})` : ""}`);
@@ -108,7 +107,6 @@ export default function MissionsSection({
                     <span className="font-bold text-slate-800">{m.title || "משימה"}</span>
                     <span className="text-xs text-slate-500">{new Date(m.missionDate).toLocaleDateString("he-IL")} · {m.departureTime}</span>
                     {m.commanderName && <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5">👤 {m.commanderName}</span>}
-                    {m.companyName && <span className="text-xs bg-white border border-slate-200 rounded px-2 py-0.5">{m.companyName}</span>}
                     {m.hasExternal && <span title="כולל רכב חוץ" className="text-sm">🔶</span>}
                     {m.hasUnqualifiedDriver && <span title="נהג לא מוסמך במשימה!" className="text-xs bg-rose-600 text-white font-bold rounded px-2 py-0.5">🔴 נהג לא מוסמך</span>}
                     {m.startedAt && !m.completedAt && <span title="המשימה יצאה לדרך" className="text-[11px] text-blue-700 bg-blue-50 rounded px-2 py-0.5">▶️ יצאה</span>}
