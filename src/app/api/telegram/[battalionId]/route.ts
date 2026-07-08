@@ -359,6 +359,37 @@ async function handleCallback(
     return;
   }
 
+  // פתיחת שמ"פ ע"י השלישות: openshmap:<soldierId>:<offsetDays> — רק בעל הרשאת roster
+  if (data.startsWith("openshmap:")) {
+    const parts = data.split(":");
+    const soldierId = parts[1];
+    const offset = parseInt(parts[2] || "0", 10) || 0;
+    const approver = await prisma.appUser.findFirst({
+      where: {
+        battalionId, active: true, soldier: { is: { telegramChatId: chatId } },
+        OR: [{ systemRole: { permissions: { some: { screen: "roster", level: "EDIT" } } } }, { role: { in: ["SHALISH", "BATTALION_ADMIN"] } }],
+      },
+      select: { id: true, fullName: true },
+    });
+    if (!approver) { await answerCallbackQuery(token, callback.id, "אין הרשאה לפתיחת שמ\"פ"); return; }
+    const soldier = await prisma.soldier.findFirst({ where: { id: soldierId, battalionId }, select: { id: true, fullName: true } });
+    if (!soldier) { await answerCallbackQuery(token, callback.id, "חייל לא נמצא"); return; }
+    const existing = await prisma.callupPeriod.findFirst({ where: { soldierId, endDate: null }, select: { id: true } });
+    if (existing) {
+      await answerCallbackQuery(token, callback.id, "כבר יש שמ\"פ פתוח");
+      await editMessageText(token, chatId, messageId, `ℹ️ ל<b>${soldier.fullName}</b> כבר יש שמ"פ פתוח.`);
+      return;
+    }
+    // תאריך התחלה = היום (שעון ישראל) פחות offset ימים, כחצות UTC
+    const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
+    const start = new Date(ymd + "T00:00:00.000Z");
+    start.setUTCDate(start.getUTCDate() - offset);
+    await prisma.callupPeriod.create({ data: { soldierId, startDate: start, createdById: approver.id } });
+    await answerCallbackQuery(token, callback.id, "שמ\"פ נפתח ✅");
+    await editMessageText(token, chatId, messageId, `✅ <b>שמ"פ נפתח</b>\n${soldier.fullName} — מתאריך ${start.toISOString().slice(0, 10)}.\nאושר ע"י: ${approver.fullName}.`);
+    return;
+  }
+
   // Format: verify:<itemId>:<found|denied>
   if (data.startsWith("verify:")) {
     const parts = data.split(":");

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
 import SoldierEquipmentButton from "./SoldierEquipmentButton";
 import { saveSoldierCertifications } from "../certifications/actions";
-import { saveSoldier, toggleSoldier } from "./actions";
+import { saveSoldier, toggleSoldier, requestOpenCallup } from "./actions";
 
 type SignedSerial = {
   id: string; itemName: string; sku: string | null; serialNumber: string; lotQuantity: number | null;
@@ -37,6 +37,7 @@ export type SoldierRow = {
   drivingRefresherDate: string | null;
   telegramLinked: boolean;
   inactive: boolean;
+  hasOpenCallup: boolean;
   signedSerials: SignedSerial[];
   signedQty: SignedQty[];
   issuedKits: IssuedKit[];
@@ -146,6 +147,18 @@ export default function SoldiersTable({
   const [certEdit, setCertEdit] = useState(false);
   function openCerts(s: SoldierRow) {
     setCertSoldier(s); setCertSel(new Set(s.certIds)); setCertEdit(false);
+  }
+  // ---- בקשת פתיחת שמ"פ מהשלישות (דרך הבוט) ----
+  const [shmapMsg, setShmapMsg] = useState<{ id: string; text: string; ok: boolean } | null>(null);
+  function requestShmap(s: SoldierRow) {
+    if (!confirm(`לשלוח לשלישות בקשה לפתיחת שמ"פ עבור ${s.fullName}?`)) return;
+    const fd = new FormData(); fd.set("soldierId", s.id);
+    startTransition(async () => {
+      const r = await requestOpenCallup(fd);
+      setShmapMsg({ id: s.id, text: r.error ? r.error : `✓ נשלח לשלישות (${r.sent} נמענים)`, ok: !r.error });
+      setTimeout(() => setShmapMsg((m) => (m?.id === s.id ? null : m)), 4000);
+      router.refresh();
+    });
   }
   // ---- Driving popup (תצוגה בלבד — מנוהל ע"י קצין הרכב) ----
   const [drivingSoldier, setDrivingSoldier] = useState<SoldierRow | null>(null);
@@ -300,6 +313,16 @@ export default function SoldiersTable({
                     soldierId={s.id} soldierName={s.fullName}
                     signedSerials={s.signedSerials} signedQty={s.signedQty} issuedKits={s.issuedKits}
                   />
+                  {!s.inactive && (
+                    s.hasOpenCallup
+                      ? <div className="mt-1"><Badge className="bg-purple-100 text-purple-700 text-[10px]">🟣 בשמ״פ</Badge></div>
+                      : <div className="mt-1">
+                          <button onClick={() => requestShmap(s)} disabled={pending}
+                            className="text-[10px] rounded px-2 py-0.5 border border-purple-300 text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+                            title="שלח לשלישות בקשה לפתיחת שמ״פ (דרך הבוט)">🪖 בקש שמ״פ</button>
+                          {shmapMsg?.id === s.id && <div className={`text-[10px] mt-0.5 ${shmapMsg.ok ? "text-emerald-600" : "text-rose-600"}`}>{shmapMsg.text}</div>}
+                        </div>
+                  )}
                 </td>
                 <td className="px-2 py-2 text-center whitespace-nowrap">
                   {s.drivingStatus === "none" ? (
