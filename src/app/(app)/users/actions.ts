@@ -48,23 +48,15 @@ export async function saveUser(formData: FormData) {
   const warehouseIds = formData.getAll("holderId").map(String).filter(Boolean);
   const companyHolderId = String(formData.get("companyHolderId") || "").trim() || null;
 
-  // Combine: warehouses + optional company
-  let holderIds: string[] = [];
-  if (role === "WAREHOUSE_MANAGER") {
-    holderIds = [...warehouseIds];
-    if (companyHolderId) holderIds.push(companyHolderId);
-  } else if (role === "COMPANY_REP" || role === "VIEWER") {
-    if (companyHolderId) holderIds = [companyHolderId];
-  }
+  // הרשאות כפולות: כל תפקיד יכול להחזיק שילוב — מחסן/מחסנים + פלוגה + מחלקות.
+  // האיחוד קובע לאילו נתונים המשתמש מוסמך; ה-scope בכל מסך נגזר מסוג ה-holder.
+  const holderIds: string[] = [...warehouseIds];
+  if (companyHolderId) holderIds.push(companyHolderId);
 
-  // Primary holderId: warehouse managers use their first warehouse as primary;
-  // company reps use company. This determines sidebar context (warehouse vs company nav).
-  let holderId: string | null;
-  if (role === "WAREHOUSE_MANAGER") {
-    holderId = warehouseIds[0] || companyHolderId || null;
-  } else {
-    holderId = companyHolderId || warehouseIds[0] || null;
-  }
+  // Primary holderId — קובע את הקשר סרגל הצד (מחסן מול פלוגה).
+  const holderId: string | null = role === "WAREHOUSE_MANAGER"
+    ? (warehouseIds[0] || companyHolderId || null)
+    : (companyHolderId || warehouseIds[0] || null);
 
   const squadIds = formData.getAll("squadId").map(String).filter(Boolean);
 

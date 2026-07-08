@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
+import { resolveHolderKinds } from "@/lib/scope";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
@@ -35,10 +36,12 @@ export default async function AttendancePage({
     );
   }
 
-  // COMPANY_REP sees only their company; squad-scoped users see only relevant companies
+  // סקופ פלוגתי לפי סוג ה-holders (הרשאות כפולות): מי שמשויך לפלוגה/ות רואה אותן;
+  // מי שמשויך למחלקות בלבד — לפי המחלקות. אדמין/מטה — כל הפלוגות.
+  const { companyHolderIds } = await resolveHolderKinds(user);
   let availableCompanies = companies;
-  if (user.role === "COMPANY_REP" && user.holderId) {
-    availableCompanies = companies.filter((c) => c.id === user.holderId);
+  if (companyHolderIds.length > 0) {
+    availableCompanies = companies.filter((c) => companyHolderIds.includes(c.id));
   } else if (user.squadIds.length > 0) {
     const squadCompanyIds = await prisma.squad.findMany({
       where: { id: { in: user.squadIds } },

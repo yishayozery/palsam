@@ -1,4 +1,27 @@
 import type { SessionUser } from "./auth";
+import { prisma } from "./prisma";
+
+/**
+ * הרשאות כפולות: מפצל את ה-holders של המשתמש לפי סוג (מחסן/פלוגה).
+ * כך משתמש אחד יכול להיות מוסמך גם למחסן/מחסנים וגם לפלוגות/מחלקות,
+ * וכל מסך מסתנן ל-holders הרלוונטיים לו (מחסן↔מחסנים, פלוגה↔פלוגות).
+ * אדמין/אדמין-על → מערכים ריקים (רואים הכל, ללא סינון holder).
+ */
+export async function resolveHolderKinds(
+  user: SessionUser,
+): Promise<{ warehouseHolderIds: string[]; companyHolderIds: string[] }> {
+  if (user.isSuperAdmin || user.isAdmin || user.holderIds.length === 0) {
+    return { warehouseHolderIds: [], companyHolderIds: [] };
+  }
+  const holders = await prisma.holder.findMany({
+    where: { id: { in: user.holderIds } },
+    select: { id: true, kind: true },
+  });
+  return {
+    warehouseHolderIds: holders.filter((h) => h.kind === "WAREHOUSE").map((h) => h.id),
+    companyHolderIds: holders.filter((h) => h.kind === "COMPANY").map((h) => h.id),
+  };
+}
 
 /**
  * בידוד רב-דיירים: כל שאילתה מסוננת לפי הגדוד של המשתמש.

@@ -1,6 +1,7 @@
 import { requireCapability } from "@/lib/guard";
 import { canEdit } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
+import { resolveHolderKinds } from "@/lib/scope";
 import { PageHeader, Badge } from "@/components/ui";
 import CrudSection from "@/components/CrudSection";
 import ImportExcel from "@/components/ImportExcel";
@@ -21,18 +22,15 @@ export default async function SoldiersPage() {
     orderBy: { name: "asc" },
   });
 
-  // holderId = פלוגה (COMPANY_REP) או מחסן (WAREHOUSE_MANAGER)
-  // נבדוק אם ה-holderId הוא באמת פלוגה
-  const isCompanyHolder = user.holderId ? companies.some((c) => c.id === user.holderId) : false;
-
-  // מפ"ר רואה רק את הפלוגה שלו; מפ"מ/אדמין רואים את כל הפלוגות ומסננים בטבלה (client).
-  // קצין מחסן עם squadIds — מסונן למחלקות שלו בלבד.
-  const scopeCompanyId = isCompanyHolder ? user.holderId : null;
-  const showCompany = !isCompanyHolder;
+  // סקופ פלוגתי לפי סוג ה-holders (הרשאות כפולות): משתמש מוסמך לפלוגה/ות רואה אותן,
+  // בין אם הוא נציג פלוגה ובין אם מנהל מחסן שמשויך גם לפלוגה. מטה/אדמין — כל הפלוגות.
+  const { companyHolderIds } = await resolveHolderKinds(user);
+  const scopeCompanyIds = companyHolderIds;
+  const showCompany = scopeCompanyIds.length !== 1; // עמודת פלוגה מוצגת אם לא מוגבל לפלוגה אחת
+  const companyInWhere = scopeCompanyIds.length > 0 ? { companyId: { in: scopeCompanyIds } } : {};
 
   const squadFilter = user.squadIds.length > 0 ? { squadId: { in: user.squadIds } } : {};
-  const companyFilter = scopeCompanyId ? { companyId: scopeCompanyId } : {};
-  const where = { battalionId: bId, ...companyFilter, ...squadFilter };
+  const where = { battalionId: bId, ...companyInWhere, ...squadFilter };
 
   const battalion = await prisma.battalion.findUnique({
     where: { id: bId },
@@ -59,7 +57,7 @@ export default async function SoldiersPage() {
     prisma.squad.findMany({
       where: {
         battalionId: bId,
-        ...(scopeCompanyId ? { companyId: scopeCompanyId } : {}),
+        ...(scopeCompanyIds.length > 0 ? { companyId: { in: scopeCompanyIds } } : {}),
         ...(user.squadIds.length > 0 ? { id: { in: user.squadIds } } : {}),
       },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -69,7 +67,7 @@ export default async function SoldiersPage() {
       where: {
         battalionId: bId,
         active: true,
-        ...(scopeCompanyId ? { companyId: scopeCompanyId } : {}),
+        ...(scopeCompanyIds.length > 0 ? { companyId: { in: scopeCompanyIds } } : {}),
       },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       include: { company: { select: { name: true } } },
