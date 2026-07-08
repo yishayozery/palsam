@@ -158,9 +158,10 @@ function buildOnboardingMsg(user: User, battalionName: string, battalionCode: st
   const screens = ROLE_SCREENS[user.roleLabel] ?? ROLE_SCREENS['רב'] ?? '';
   const pending = !user.passwordSet && user.inviteToken;
   const link = pending ? `${baseUrl}/invite/${user.inviteToken}` : `${baseUrl}/login`;
+  const loginUrl = `${baseUrl}/login?b=${battalionCode}`;
   const loginInfo = pending
-    ? `🔗 קישור להגדרת סיסמה: ${link}\n⚠️ הקישור חד-פעמי — פעיל עד הגדרת סיסמה.`
-    : `🔗 כניסה: ${baseUrl}/login?b=${battalionCode}`;
+    ? `🔑 להגדרת סיסמה (כניסה ראשונה): ${link}\n🔗 כניסה למערכת: ${loginUrl}`
+    : `🔗 כניסה: ${loginUrl}`;
   const allHolders = [user.holderName, ...user.extraHolders].filter(Boolean);
   const holderLine = allHolders.length ? ` (${allHolders.join(", ")})` : "";
   return `שלום ${user.fullName},
@@ -202,7 +203,7 @@ function InviteCell({ user, baseUrl, battalionName, battalionCode }: { user: Use
     );
   }
   const link = `${baseUrl}/invite/${user.inviteToken}`;
-  const inviteWa = waLink(user.phone, `הוזמנת למערכת ${battalionName}.\n\nהקישור להגדרת סיסמה:\n${link}\n\n👤 שם משתמש: ${user.username}\n📋 קוד גדוד: ${battalionCode}\n\n⚠️ קישור חד-פעמי. סיסמה: 12+ תווים, אות גדולה+קטנה, ספרה, תו מיוחד.`);
+  const inviteWa = waLink(user.phone, `הוזמנת למערכת ${battalionName}.\n\n🔑 להגדרת סיסמה (כניסה ראשונה):\n${link}\n\n🔗 כניסה למערכת:\n${baseUrl}/login?b=${battalionCode}\n\n👤 שם משתמש: ${user.username}\n📋 קוד גדוד: ${battalionCode}\n\n📌 סיסמה: 12+ תווים, אות גדולה+קטנה, ספרה, תו מיוחד.`);
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       <Badge className="bg-amber-100 text-amber-800 text-[10px]">⏳ ממתין</Badge>

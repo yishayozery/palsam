@@ -24,7 +24,7 @@ const BUILTIN_LABELS: Record<string, string> = {
   VIEWER: "צופה (קריאה בלבד)",
 };
 
-function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
+function InviteCell({ user, baseUrl, battalionCode }: { user: User; baseUrl: string; battalionCode: string }) {
   const [copied, setCopied] = useState(false);
   if (user.passwordSet) {
     return (
@@ -35,9 +35,10 @@ function InviteCell({ user, baseUrl }: { user: User; baseUrl: string }) {
     );
   }
   const link = `${baseUrl}/invite/${user.inviteToken}`;
+  const inviteMsg = `הוזמנת למערכת.\n🔑 להגדרת סיסמה (כניסה ראשונה): ${link}\n🔗 כניסה למערכת: ${baseUrl}/login?b=${battalionCode}`;
   const wa = user.phone
-    ? `https://wa.me/${user.phone.replace(/\D/g, "").replace(/^0/, "972")}?text=${encodeURIComponent(`הוזמנת למערכת. קישור להגדרת סיסמה: ${link}`)}`
-    : `https://wa.me/?text=${encodeURIComponent(`הוזמנת למערכת. קישור להגדרת סיסמה: ${link}`)}`;
+    ? `https://wa.me/${user.phone.replace(/\D/g, "").replace(/^0/, "972")}?text=${encodeURIComponent(inviteMsg)}`
+    : `https://wa.me/?text=${encodeURIComponent(inviteMsg)}`;
   return (
     <div className="flex items-center gap-2">
       <Badge className="bg-amber-100 text-amber-700">ממתין להפעלה</Badge>
@@ -73,7 +74,7 @@ export default function UsersManager({ users, holders, squads, customRoles, base
                   <Td><Badge className="bg-slate-200 text-slate-700">🔑 {u.roleLabel}</Badge></Td>
                   <Td>{u.holderNames.length > 0 ? u.holderNames.join(", ") : "—"}</Td>
                   <Td className="text-xs text-slate-500">{u.phone ?? "—"}</Td>
-                  <Td><InviteCell user={u} baseUrl={baseUrl} /></Td>
+                  <Td><InviteCell user={u} baseUrl={baseUrl} battalionCode={battalionCode} /></Td>
                   <Td>
                     <form action={toggleUser}>
                       <input type="hidden" name="id" value={u.id} />
