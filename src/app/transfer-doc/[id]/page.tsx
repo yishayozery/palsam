@@ -135,32 +135,54 @@ export default async function PublicTransferDocPage({
 
         {/* חתימות */}
         <div className="grid grid-cols-2 gap-8 mt-10 text-sm">
-          <div className="border-t border-slate-400 pt-2">
-            <div className="text-slate-500">{t.type === "CHECKIN" ? "מקבל / מאשר" : "מוסר / יוצר התעודה"}</div>
-            <div className="font-medium mt-1">{t.createdBy.fullName}</div>
-          </div>
-          <div className="border-t border-slate-400 pt-2">
-            <div className="text-slate-500">{t.type === "CHECKIN" ? "חייל מחזיר" : "מקבל / מאשר"}</div>
-            <div className="font-medium mt-1">
-              {t.approvedBy?.fullName ?? t.signatures[0]?.soldier?.fullName ?? t.signatures[0]?.signerUser?.fullName ?? t.toSoldier?.fullName ?? "________________"}
-              {t.approvedAt && (
-                <span className="text-slate-400"> · {t.approvedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</span>
-              )}
-            </div>
-            {t.signatures[0]?.signatureData && (
-              <div className="mt-3 border border-slate-200 rounded-lg p-2 bg-slate-50">
-                <div className="text-[10px] text-slate-500 mb-1">חתימה דיגיטלית:</div>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={t.signatures[0].signatureData} alt="חתימה" className="max-h-24 object-contain" />
-                {t.signatures[0].signedAt && (
-                  <div className="text-[10px] text-slate-400 mt-1">
-                    נחתם: {t.signatures[0].signedAt.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}
-                    {t.signatures[0].soldier?.personalNumber && ` · מ.א. ${t.signatures[0].soldier.personalNumber}`}
+          {t.type === "CHECKIN" ? (
+            <>
+              {/* זיכוי: החייל המחזיר (toSoldier) מול המחסן המקבל */}
+              <div className="border-t border-slate-400 pt-2">
+                <div className="text-slate-500">חייל מחזיר</div>
+                <div className="font-medium mt-1">
+                  {t.toSoldier?.fullName ?? "________________"}
+                  {t.toSoldier?.personalNumber && <span className="text-slate-400 text-xs mr-1">· מ.א. {t.toSoldier.personalNumber}</span>}
+                </div>
+              </div>
+              <div className="border-t border-slate-400 pt-2">
+                <div className="text-slate-500">מקבל במחסן / מאשר</div>
+                <div className="font-medium mt-1">
+                  {t.approvedBy?.fullName ?? t.createdBy.fullName}
+                  {t.approvedAt && (
+                    <span className="text-slate-400"> · {t.approvedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</span>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* החתמה/העברה: המוסר (מחתים) מול המקבל (חותם) + חתימה */}
+              <div className="border-t border-slate-400 pt-2">
+                <div className="text-slate-500">מוסר / יוצר התעודה (מחתים)</div>
+                <div className="font-medium mt-1">{t.createdBy.fullName}</div>
+              </div>
+              <div className="border-t border-slate-400 pt-2">
+                <div className="text-slate-500">מקבל / חותם</div>
+                <div className="font-medium mt-1">
+                  {t.signatures[0]?.soldier?.fullName ?? t.signatures[0]?.signerUser?.fullName ?? t.toSoldier?.fullName ?? t.approvedBy?.fullName ?? "________________"}
+                  {t.signatures[0]?.soldier?.personalNumber && <span className="text-slate-400 text-xs mr-1">· מ.א. {t.signatures[0].soldier.personalNumber}</span>}
+                </div>
+                {t.signatures[0]?.signatureData && (
+                  <div className="mt-3 border border-slate-200 rounded-lg p-2 bg-slate-50">
+                    <div className="text-[10px] text-slate-500 mb-1">חתימה דיגיטלית:</div>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={t.signatures[0].signatureData} alt="חתימה" className="max-h-24 object-contain" />
+                    {t.signatures[0].signedAt && (
+                      <div className="text-[10px] text-slate-400 mt-1">
+                        נחתם: {t.signatures[0].signedAt.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
 
         <p className="text-xs text-slate-400 text-center mt-8">
