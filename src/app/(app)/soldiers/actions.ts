@@ -79,7 +79,20 @@ export async function saveSoldier(formData: FormData): Promise<string | undefine
   const dutyRoundRaw = String(formData.get("dutyRound") || "").trim();
   const dutyRound = dutyRoundRaw ? (Math.min(3, Math.max(1, parseInt(dutyRoundRaw, 10) || 0)) || null) : null;
   let companyId = String(formData.get("companyId") || "") || null;
-  if (user.holderId && !companyId) companyId = user.holderId;
+  // 🛡️ פלוגת חייל חייבת להיות holder מסוג COMPANY — לעולם לא מחסן.
+  // (מנע באג: מנהל מחסן שערך חייל בלי לבחור פלוגה — הפלוגה נדרסה לשם המחסן שלו.)
+  if (companyId) {
+    const h = await prisma.holder.findUnique({ where: { id: companyId }, select: { kind: true, battalionId: true } });
+    if (!h || h.battalionId !== bId || h.kind !== "COMPANY") companyId = null;
+  }
+  if (!companyId && user.holderId) {
+    const h = await prisma.holder.findUnique({ where: { id: user.holderId }, select: { kind: true } });
+    if (h?.kind === "COMPANY") companyId = user.holderId; // ברירת מחדל רק אם ה-holder הראשי הוא פלוגה
+  }
+  if (id && !companyId) {
+    const existing = await prisma.soldier.findUnique({ where: { id }, select: { companyId: true } });
+    companyId = existing?.companyId ?? null; // בעריכה — שמור על הפלוגה הקיימת, אל תדרוס
+  }
   if (!fullName || !personalNumber) return "שם ומספר אישי הם שדות חובה";
 
   if (!/^\d{7}$/.test(personalNumber)) return "מספר אישי חייב להיות 7 ספרות";
