@@ -680,6 +680,9 @@ model Mission {
   updatedAt     DateTime @updatedAt
   completedAt   DateTime?
   completedById String?
+  // 🆕 התחלת משימה — נחסמת עד שכל הנהגים דיווחו שהקימו הרשאת/לינק נסיעה
+  startedAt     DateTime?
+  startedById   String?
   vehicles      VehicleAssignment[]
 
   @@index([battalionId, missionDate])
@@ -731,6 +734,9 @@ model VehicleAssignmentSoldier {
   // 🆕 חייל חוץ — לא במערכת, שם + מ.א ידניים
   externalName           String?
   externalPersonalNumber String?
+  // 🆕 חיווי נהג שהקים הרשאת/לינק נסיעה. מדווח ע"י הנהג בבוט או ע"י קצין הרכב.
+  tripConfirmedAt        DateTime?
+  tripConfirmedVia       String?  // "נהג (בוט)" / שם קצין הרכב / "ידני"
   createdAt    DateTime @default(now())
 
   @@unique([assignmentId, soldierId])

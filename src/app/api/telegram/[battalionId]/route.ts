@@ -329,6 +329,36 @@ async function handleCallback(
     return;
   }
 
+  // דיווח הקמת הרשאת נסיעה: tripok:<vehicleAssignmentSoldierId> — הנהג עצמו או קצין רכב
+  if (data.startsWith("tripok:")) {
+    const vasId = data.split(":")[1];
+    const vas = await prisma.vehicleAssignmentSoldier.findFirst({
+      where: { id: vasId, assignment: { battalionId } },
+      select: { id: true, tripConfirmedAt: true, soldier: { select: { fullName: true, telegramChatId: true } } },
+    });
+    if (!vas) { await answerCallbackQuery(token, callback.id, "שגיאה"); return; }
+    const isDriver = vas.soldier?.telegramChatId === chatId;
+    let via: string | null = isDriver ? "נהג (בוט)" : null;
+    if (!isDriver) {
+      // קצין רכב מאשר בשם הנהג
+      const officer = await prisma.appUser.findFirst({
+        where: {
+          battalionId, active: true, soldier: { is: { telegramChatId: chatId } },
+          OR: [{ holder: { warehouseType: "VEHICLES" } }, { assignedHolders: { some: { holder: { warehouseType: "VEHICLES" } } } }],
+        },
+        select: { fullName: true },
+      });
+      if (officer) via = `${officer.fullName} (קצין רכב)`;
+    }
+    if (!via) { await answerCallbackQuery(token, callback.id, "אין הרשאה לאשר"); return; }
+    if (!vas.tripConfirmedAt) {
+      await prisma.vehicleAssignmentSoldier.update({ where: { id: vas.id }, data: { tripConfirmedAt: new Date(), tripConfirmedVia: via } });
+    }
+    await answerCallbackQuery(token, callback.id, "דווח ✅");
+    await editMessageText(token, chatId, messageId, `✅ <b>הרשאת נסיעה הוקמה</b> — ${vas.soldier?.fullName || "נהג"}.\nדווח ע"י: ${via}. תודה!`);
+    return;
+  }
+
   // Format: verify:<itemId>:<found|denied>
   if (data.startsWith("verify:")) {
     const parts = data.split(":");

@@ -175,22 +175,27 @@ async function notifyMissionCreated(missionId: string, bId: string): Promise<voi
         ? `${v.externalVehicleTypeName || "רכב חוץ"} ${v.externalVehicleNumber || ""}`.trim()
         : `${v.vehicleSerialUnit?.itemType.name || "רכב"} ${v.vehicleSerialUnit?.serialNumber || ""}`.trim();
 
-    // 1. הודעה לכל נהג משובץ + איסוף שורות סיכום לקצין רכב
+    // 1. הודעה לכל נהג משובץ + כפתור "הקמתי לינק/הרשאה" + איסוף שורות סיכום לקצין רכב
     const driverLines: string[] = [];
+    const officerButtons: { text: string; callback_data: string }[][] = [];
     for (const v of mission.vehicles) {
       const vName = vehicleLabel(v);
       for (const s of v.soldiers) {
         if (!s.isDriver) continue;
         const name = s.soldier?.fullName || s.externalName || "נהג";
         driverLines.push(`• ${vName} — ${name}`);
+        // כפתור לקצין הרכב לאשר בשם הנהג (רק לרכב מערכת עם נהג מהמערכת)
+        if (s.soldierId) officerButtons.push([{ text: `✅ ${name} — ${vName}`, callback_data: `tripok:${s.id}` }]);
         if (s.soldier?.telegramChatId) {
-          const text = `🚗 <b>שובצת למשימת נסיעה</b>\nתאריך: ${dateStr} · שעה: ${mission.departureTime}\nרכב: ${vName}\n\nיש לפתוח משימת נסיעה בקישור:\n${link}`;
-          await sendTelegramMessage(token, s.soldier.telegramChatId, text);
+          const text = `🚗 <b>שובצת למשימת נסיעה</b>\nתאריך: ${dateStr} · שעה: ${mission.departureTime}\nרכב: ${vName}\n\nיש לפתוח משימת נסיעה בקישור:\n${link}\n\n<b>לאחר שהקמת את ההרשאה/לינק — לחץ על הכפתור לדיווח.</b>`;
+          await sendTelegramMessage(token, s.soldier.telegramChatId, text, {
+            inline_keyboard: [[{ text: "✅ הקמתי הרשאת נסיעה", callback_data: `tripok:${s.id}` }]],
+          });
         }
       }
     }
 
-    // 2. ידיעה לקצין הרכב (מנהל מחסן רכבים) — נהגים ורכבים
+    // 2. ידיעה לקצין הרכב (מנהל מחסן רכבים) — נהגים ורכבים + כפתורי אישור בשם הנהג
     if (driverLines.length) {
       const officers = await prisma.appUser.findMany({
         where: {
@@ -199,11 +204,14 @@ async function notifyMissionCreated(missionId: string, bId: string): Promise<voi
         },
         select: { soldier: { select: { telegramChatId: true } } },
       });
-      const summary = `🚚 <b>נפתחה משימת נסיעה</b>\nתאריך: ${dateStr} · שעה: ${mission.departureTime}${mission.title ? `\nמשימה: ${mission.title}` : ""}\n\n<b>רכבים ונהגים:</b>\n${driverLines.join("\n")}`;
+      const summary = `🚚 <b>נפתחה משימת נסיעה</b>\nתאריך: ${dateStr} · שעה: ${mission.departureTime}${mission.title ? `\nמשימה: ${mission.title}` : ""}\n\n<b>רכבים ונהגים:</b>\n${driverLines.join("\n")}\n\nניתן לאשר הקמת הרשאה בשם נהג בכפתורים:`;
       const seen = new Set<string>();
       for (const o of officers) {
         const chatId = o.soldier?.telegramChatId;
-        if (chatId && !seen.has(chatId)) { seen.add(chatId); await sendTelegramMessage(token, chatId, summary); }
+        if (chatId && !seen.has(chatId)) {
+          seen.add(chatId);
+          await sendTelegramMessage(token, chatId, summary, officerButtons.length ? { inline_keyboard: officerButtons } : undefined);
+        }
       }
     }
 
@@ -364,6 +372,61 @@ export async function toggleMissionComplete(formData: FormData): Promise<{ ok?: 
       prisma.vehicleAssignment.updateMany({ where: { missionId: id }, data: { completedAt, completedById: setCompleted ? user.id : null } }),
     ]);
     await audit(user.id, setCompleted ? "MISSION_COMPLETE" : "MISSION_REOPEN", "Mission", id);
+    revalidatePath("/dispatch");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** דיווח/ביטול הקמת הרשאת נסיעה ע"י נהג (ידני מהמסך — קצין רכב/מפקד). */
+export async function toggleTripConfirmed(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireCapability("dispatch.manage");
+    const vasId = String(formData.get("vasId") || "");
+    const confirmed = String(formData.get("confirmed") || "true") === "true";
+    if (!vasId) return { error: "חסר מזהה" };
+    const vas = await prisma.vehicleAssignmentSoldier.findUnique({
+      where: { id: vasId },
+      select: { id: true, assignment: { select: { battalionId: true } } },
+    });
+    if (!vas || vas.assignment.battalionId !== user.battalionId) return { error: "שיבוץ לא נמצא" };
+    await prisma.vehicleAssignmentSoldier.update({
+      where: { id: vasId },
+      data: { tripConfirmedAt: confirmed ? new Date() : null, tripConfirmedVia: confirmed ? `${user.fullName} (ידני)` : null },
+    });
+    revalidatePath("/dispatch");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** התחלת משימה — נחסמת עד שכל הנהגים (רכב מערכת) דיווחו שהקימו הרשאת נסיעה. */
+export async function startMission(formData: FormData): Promise<{ ok?: boolean; error?: string; missing?: string[] }> {
+  try {
+    const user = await requireCapability("dispatch.manage");
+    const id = String(formData.get("id") || "");
+    const force = String(formData.get("force") || "") === "true";
+    if (!id) return { error: "חסר מזהה" };
+    const m = await prisma.mission.findUnique({
+      where: { id },
+      select: {
+        battalionId: true, startedAt: true,
+        vehicles: { select: { isExternal: true, soldiers: { select: { isDriver: true, soldierId: true, tripConfirmedAt: true, soldier: { select: { fullName: true } } } } } },
+      },
+    });
+    if (!m || m.battalionId !== user.battalionId) return { error: "משימה לא נמצאה" };
+    // נהגי רכב-מערכת שטרם דיווחו הקמת הרשאה (רכב חוץ מדולג)
+    const missing = m.vehicles
+      .filter((v) => !v.isExternal)
+      .flatMap((v) => v.soldiers.filter((s) => s.isDriver && s.soldierId && !s.tripConfirmedAt))
+      .map((s) => s.soldier?.fullName || "נהג");
+    if (missing.length > 0 && !force) {
+      return { error: `נהגים שטרם דיווחו הקמת הרשאה: ${missing.join(", ")}`, missing };
+    }
+    await prisma.mission.update({ where: { id }, data: { startedAt: new Date(), startedById: user.id } });
+    await audit(user.id, "MISSION_START", "Mission", id, { forced: force, missing });
     revalidatePath("/dispatch");
     return { ok: true };
   } catch (e) {

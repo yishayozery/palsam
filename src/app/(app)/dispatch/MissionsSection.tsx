@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import ConvoyView from "./ConvoyView";
 import MissionModal, { type MVehicle, type MSoldier, type MTemplate, type EditMission } from "./MissionModal";
-import { toggleMissionComplete, deleteMission } from "./actions";
+import { toggleMissionComplete, deleteMission, startMission, toggleTripConfirmed } from "./actions";
 
-type MSoldierFull = { soldierId: string | null; externalName: string | null; externalPersonalNumber: string | null; isDriver: boolean; name: string; pn: string | null };
+type MSoldierFull = { vasId: string; soldierId: string | null; externalName: string | null; externalPersonalNumber: string | null; isDriver: boolean; name: string; pn: string | null; tripConfirmedAt: string | null };
 type MVehicleFull = {
   isExternal: boolean; vehicleSerialUnitId: string | null; externalVehicleNumber: string | null; externalVehicleTypeName: string | null;
   label: string; typeName: string; soldiers: MSoldierFull[];
@@ -16,7 +16,7 @@ export type MissionFull = {
   id: string; title: string | null; companyId: string | null; companyName: string | null;
   commanderName: string | null; commanderSoldierId?: string | null; commanderNameRaw?: string | null;
   hasExternal: boolean; hasUnqualifiedDriver: boolean;
-  missionDate: string; departureTime: string; notes: string | null; completedAt: string | null; createdByName: string;
+  missionDate: string; departureTime: string; notes: string | null; completedAt: string | null; startedAt: string | null; createdByName: string;
   vehicles: MVehicleFull[];
 };
 
@@ -64,6 +64,23 @@ export default function MissionsSection({
     if (extra) for (const [k, v] of Object.entries(extra)) fd.set(k, v);
     start(async () => { await fn(fd); router.refresh(); });
   }
+  function startMissionAct(id: string) {
+    const fd = new FormData(); fd.set("id", id);
+    start(async () => {
+      const r = await startMission(fd);
+      if (r.error && r.missing && r.missing.length) {
+        if (confirm(`${r.error}\n\nלהתחיל את המשימה בכל זאת?`)) {
+          const fd2 = new FormData(); fd2.set("id", id); fd2.set("force", "true");
+          await startMission(fd2);
+        }
+      }
+      router.refresh();
+    });
+  }
+  function confirmTrip(vasId: string, confirmed: boolean) {
+    const fd = new FormData(); fd.set("vasId", vasId); fd.set("confirmed", String(confirmed));
+    start(async () => { await toggleTripConfirmed(fd); router.refresh(); });
+  }
 
   return (
     <div className="mb-6">
@@ -94,12 +111,16 @@ export default function MissionsSection({
                     {m.companyName && <span className="text-xs bg-white border border-slate-200 rounded px-2 py-0.5">{m.companyName}</span>}
                     {m.hasExternal && <span title="כולל רכב חוץ" className="text-sm">🔶</span>}
                     {m.hasUnqualifiedDriver && <span title="נהג לא מוסמך במשימה!" className="text-xs bg-rose-600 text-white font-bold rounded px-2 py-0.5">🔴 נהג לא מוסמך</span>}
+                    {m.startedAt && !m.completedAt && <span title="המשימה יצאה לדרך" className="text-[11px] text-blue-700 bg-blue-50 rounded px-2 py-0.5">▶️ יצאה</span>}
                     {m.completedAt && <span className="text-[11px] text-emerald-700 bg-emerald-50 rounded px-2 py-0.5">✓ הסתיימה</span>}
                   </div>
                   <div className="flex items-center gap-2">
                     <a href={`https://wa.me/?text=${encodeURIComponent(missionText(m))}`} target="_blank" rel="noreferrer" title="שלח בוואטסאפ" className="text-xs text-emerald-600 hover:underline">💬</a>
                     <a href={`https://t.me/share/url?url=${encodeURIComponent("https://www.palmy.co.il")}&text=${encodeURIComponent(missionText(m))}`} target="_blank" rel="noreferrer" title="שלח בטלגרם" className="text-xs text-sky-600 hover:underline">📲</a>
                     <button onClick={() => openEdit(m)} className="text-xs text-slate-600 hover:underline">✏️ עריכה</button>
+                    {!m.completedAt && !m.startedAt && (
+                      <button onClick={() => startMissionAct(m.id)} className="text-xs text-blue-700 hover:underline font-medium">▶️ התחל משימה</button>
+                    )}
                     <button onClick={() => act(toggleMissionComplete, m.id, { completed: m.completedAt ? "false" : "true" })}
                       className="text-xs text-emerald-700 hover:underline">{m.completedAt ? "↩︎ פתח מחדש" : "✓ סיים משימה"}</button>
                     <button onClick={() => { if (confirm("למחוק את המשימה?")) act(deleteMission, m.id); }}
@@ -117,8 +138,17 @@ export default function MissionsSection({
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {v.soldiers.map((s, si) => (
-                            <span key={si} className={`text-[11px] rounded px-2 py-0.5 ${s.isDriver ? "bg-sky-100 text-sky-800 font-medium" : "bg-slate-100 text-slate-600"}`}>
+                            <span key={si} className={`text-[11px] rounded px-2 py-0.5 inline-flex items-center gap-1 ${s.isDriver ? "bg-sky-100 text-sky-800 font-medium" : "bg-slate-100 text-slate-600"}`}>
                               {s.isDriver && "🚗 "}{s.name}{s.externalName ? " (חוץ)" : ""}
+                              {s.isDriver && !v.isExternal && s.soldierId && (
+                                <button
+                                  onClick={() => confirmTrip(s.vasId, !s.tripConfirmedAt)}
+                                  title={s.tripConfirmedAt ? "הרשאת נסיעה הוקמה — לחץ לביטול" : "טרם דווחה הקמת הרשאה — לחץ לסימון"}
+                                  className={s.tripConfirmedAt ? "" : "opacity-70"}
+                                >
+                                  {s.tripConfirmedAt ? "✅" : "⏳"}
+                                </button>
+                              )}
                             </span>
                           ))}
                           {v.soldiers.length === 0 && <span className="text-[11px] text-slate-300">אין חיילים</span>}

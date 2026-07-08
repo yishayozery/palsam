@@ -1,8 +1,8 @@
 import { requireCapability } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
-import DispatchClient from "./DispatchClient";
 import MissionsSection from "./MissionsSection";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,7 @@ export default async function DispatchPage() {
     effectiveCompanyId = sq?.companyId ?? null;
   }
 
-  const [battalion, vehicles, soldiers, assignments, templates, vehicleTypeLicenses, missions] = await Promise.all([
+  const [battalion, vehicles, soldiers, templates, vehicleTypeLicenses, missions] = await Promise.all([
     prisma.battalion.findUnique({ where: { id: bId }, select: { name: true } }),
     // כל רכבי הגדוד התקינים
     prisma.serialUnit.findMany({
@@ -56,22 +56,6 @@ export default async function DispatchPage() {
         drivingLicenses: { include: { licenseType: { select: { id: true, name: true } } } },
       },
       orderBy: { fullName: "asc" },
-    }),
-    // כל השיבוצים - גלוי לכולם
-    prisma.vehicleAssignment.findMany({
-      where: { battalionId: bId },
-      include: {
-        vehicleSerialUnit: {
-          include: {
-            itemType: { select: { name: true } },
-            currentHolder: { select: { id: true, name: true, kind: true } },
-          },
-        },
-        company: { select: { name: true } },
-        createdBy: { select: { fullName: true } },
-        soldiers: { include: { soldier: { select: { id: true, fullName: true, personalNumber: true, company: { select: { name: true } } } } } },
-      },
-      orderBy: [{ missionDate: "desc" }, { departureTime: "desc" }],
     }),
     prisma.dispatchTemplate.findMany({
       where: { battalionId: bId, active: true },
@@ -138,7 +122,7 @@ export default async function DispatchPage() {
     hasExternal: m.vehicles.some((v) => v.isExternal),
     hasUnqualifiedDriver: m.vehicles.some((v) => !v.isExternal && v.soldiers.some((s) => s.isDriver && s.soldierId && !driverQualified(s.soldierId, v.vehicleSerialUnit?.itemType.id ?? null))),
     missionDate: m.missionDate.toISOString().slice(0, 10), departureTime: m.departureTime, notes: m.notes,
-    completedAt: m.completedAt?.toISOString() ?? null, createdByName: m.createdBy.fullName,
+    completedAt: m.completedAt?.toISOString() ?? null, startedAt: m.startedAt?.toISOString() ?? null, createdByName: m.createdBy.fullName,
     vehicles: m.vehicles.map((v) => ({
       isExternal: v.isExternal, vehicleSerialUnitId: v.vehicleSerialUnitId,
       externalVehicleNumber: v.externalVehicleNumber, externalVehicleTypeName: v.externalVehicleTypeName,
@@ -147,8 +131,9 @@ export default async function DispatchPage() {
         : `${v.vehicleSerialUnit?.itemType.name || "רכב"} · ${v.vehicleSerialUnit?.serialNumber || ""}`,
       typeName: v.isExternal ? (v.externalVehicleTypeName || "רכב חוץ") : (v.vehicleSerialUnit?.itemType.name || "רכב"),
       soldiers: v.soldiers.map((s) => ({
-        soldierId: s.soldierId, externalName: s.externalName, externalPersonalNumber: s.externalPersonalNumber, isDriver: s.isDriver,
+        vasId: s.id, soldierId: s.soldierId, externalName: s.externalName, externalPersonalNumber: s.externalPersonalNumber, isDriver: s.isDriver,
         name: s.soldier?.fullName || s.externalName || "—", pn: s.soldier?.personalNumber ?? s.externalPersonalNumber ?? null,
+        tripConfirmedAt: s.tripConfirmedAt?.toISOString() ?? null,
       })),
     })),
   }));
@@ -173,6 +158,15 @@ export default async function DispatchPage() {
         subtitle="פתיחת משימה (שיירה) עם רכב אחד או יותר. ניתן לצפייה ועריכה ע&quot;י כל המשתמשים."
       />
 
+      {/* שבצ"ק קבוע — תבניות שיירה קבועות, בראש הדף */}
+      <div className="mb-4">
+        <Link href="/dispatch/templates"
+          className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
+          📋 שבצ&quot;ק קבוע
+          <span className="text-xs opacity-80">(תבניות שיירה קבועות)</span>
+        </Link>
+      </div>
+
       <MissionsSection
         missions={missionsData}
         companies={companies.map((c) => ({ id: c.id, name: c.name }))}
@@ -182,68 +176,15 @@ export default async function DispatchPage() {
         myCompanyId={effectiveCompanyId}
       />
 
-      {assignments.length === 0 && vehicles.length === 0 ? (
+      {vehicles.length === 0 && (
         <Card className="p-6">
           <EmptyState>
             <div className="space-y-2 text-center">
               <p>🚫 אין רכבים פעילים בגדוד.</p>
-              <p className="text-sm">כדי ליצור שיבוץ, יש לקלוט רכבים תחת קטגוריה ש-warehouseType=VEHICLES.</p>
+              <p className="text-sm">כדי ליצור משימה, יש לקלוט רכבים תחת קטגוריה ש-warehouseType=VEHICLES.</p>
             </div>
           </EmptyState>
         </Card>
-      ) : (
-        <DispatchClient
-          battalionName={battalion?.name ?? ""}
-          myCompanyId={effectiveCompanyId}
-          companies={companies.map((c) => ({ id: c.id, name: c.name }))}
-          templates={templates.filter((t) => t.vehicleSerialUnit).map((t) => ({
-            id: t.id,
-            name: t.name,
-            vehicleSerialUnitId: t.vehicleSerialUnitId!,
-            vehicleName: t.vehicleSerialUnit!.itemType.name,
-            vehicleSerial: t.vehicleSerialUnit!.serialNumber,
-            soldierIds: t.slots.filter((ts) => ts.soldier).map((ts) => ts.soldier!.id),
-          }))}
-          vehicles={vehicles.map((v) => ({
-            id: v.id,
-            itemTypeId: v.itemTypeId,
-            itemName: v.itemType.name,
-            serialNumber: v.serialNumber,
-            statusName: v.status.name,
-            isWear: v.status.isWear,
-            isLoss: v.status.isLoss,
-            holderId: v.currentHolderId,
-            holderName: v.currentHolder?.name ?? null,
-            holderKind: v.currentHolder?.kind ?? null,
-            requiredLicenseIds: vtlMap[v.itemTypeId] ?? [],
-          }))}
-          soldiers={soldiers.map((s) => ({
-            id: s.id, fullName: s.fullName, personalNumber: s.personalNumber, phone: s.phone,
-            companyId: s.companyId, companyName: s.company?.name ?? null,
-            roleName: s.companyRole?.name ?? null,
-            licenseIds: s.drivingLicenses.map((dl) => dl.licenseType.id),
-          }))}
-          assignments={assignments.filter((a) => a.vehicleSerialUnit).map((a) => ({
-            id: a.id,
-            vehicleSerialUnitId: a.vehicleSerialUnitId!,
-            vehicleName: a.vehicleSerialUnit!.itemType.name,
-            vehicleSerial: a.vehicleSerialUnit!.serialNumber,
-            vehicleCompanyName: a.vehicleSerialUnit!.currentHolder?.kind === "COMPANY"
-              ? a.vehicleSerialUnit!.currentHolder.name : null,
-            companyName: a.company?.name ?? null,
-            missionDate: a.missionDate.toISOString().slice(0, 10),
-            departureTime: a.departureTime,
-            createdByName: a.createdBy.fullName,
-            createdAt: a.createdAt.toISOString(),
-            completedAt: a.completedAt?.toISOString() ?? null,
-            soldiers: a.soldiers.filter((s) => s.soldier).map((s) => ({
-              id: s.soldier!.id,
-              fullName: s.soldier!.fullName,
-              personalNumber: s.soldier!.personalNumber,
-              companyName: s.soldier!.company?.name ?? null,
-            })),
-          }))}
-        />
       )}
     </div>
   );
