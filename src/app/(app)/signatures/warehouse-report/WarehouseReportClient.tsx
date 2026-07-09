@@ -49,31 +49,36 @@ export default function WarehouseReportClient({
       .filter((c) => c.soldiers.length > 0);
   }, [companies, search]);
 
-  // סיכום פלוגתי מצומצם: לכל פלוגה — ספירת כל סוג פריט
-  const summary = useMemo(() => {
-    return filtered.map((c) => {
-      const counts = new Map<string, number>();
+  // 📊 טבלת-ציר: שורה=פלוגה, עמודה=סוג פריט, + שורת מחסן (לא חתום) למטה
+  const pivot = useMemo(() => {
+    const colSet = new Set<string>();
+    const compRows = filtered.map((c) => {
+      const counts: Record<string, number> = {};
       let total = 0;
-      for (const s of c.soldiers) for (const it of s.items) {
-        const n = it.qty ?? 1;
-        counts.set(it.name, (counts.get(it.name) ?? 0) + n);
-        total += n;
-      }
-      return {
-        name: c.name,
-        soldiers: c.soldiers.length,
-        total,
-        items: [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
-      };
+      for (const s of c.soldiers) for (const it of s.items) { const n = it.qty ?? 1; counts[it.name] = (counts[it.name] ?? 0) + n; total += n; colSet.add(it.name); }
+      return { label: c.name, soldiers: c.soldiers.length, counts, total, isWarehouse: false };
     });
-  }, [filtered]);
+    const whCounts: Record<string, number> = {};
+    let whTotal = 0;
+    for (const s of stock.serials) { whCounts[s.name] = (whCounts[s.name] ?? 0) + 1; whTotal++; colSet.add(s.name); }
+    for (const q of stock.qty) { whCounts[q.name] = (whCounts[q.name] ?? 0) + q.qty; whTotal += q.qty; colSet.add(q.name); }
+    const cols = [...colSet];
+    const colTotals: Record<string, number> = {};
+    for (const col of cols) colTotals[col] = compRows.reduce((n, r) => n + (r.counts[col] ?? 0), 0) + (whCounts[col] ?? 0);
+    cols.sort((a, b) => colTotals[b] - colTotals[a] || a.localeCompare(b));
+    return { cols, compRows, whRow: { label: "מחסן (לא חתום)", counts: whCounts, total: whTotal }, colTotals,
+      grandTotal: compRows.reduce((n, r) => n + r.total, 0) + whTotal, whHasAny: whTotal > 0 };
+  }, [filtered, stock]);
 
   function exportCsv() {
     let rows: (string | number)[][];
     let fname: string;
     if (mode === "summary") {
-      rows = [["מחסן", "פלוגה", "פריט", "כמות"]];
-      for (const c of summary) for (const [item, n] of c.items) rows.push([selectedName, c.name, item, n]);
+      // טבלת-ציר: פלוגה × סוג פריט + שורת מחסן + סה"כ
+      rows = [["פלוגה", ...pivot.cols, "סה\"כ"]];
+      for (const r of pivot.compRows) rows.push([r.label, ...pivot.cols.map((c) => r.counts[c] ?? 0), r.total]);
+      if (pivot.whHasAny) rows.push(["מחסן (לא חתום)", ...pivot.cols.map((c) => pivot.whRow.counts[c] ?? 0), pivot.whRow.total]);
+      rows.push(["סה\"כ", ...pivot.cols.map((c) => pivot.colTotals[c]), pivot.grandTotal]);
       fname = `סיכום-פלוגתי-${selectedName}.csv`;
     } else {
       rows = [["מחסן", "פלוגה", "מספר ברזל", "שם חייל", "מ.א", "פריט", "סריאל / אצווה", "כמות", "תפוגה", "סטטוס", "מיקום"]];
@@ -169,42 +174,45 @@ export default function WarehouseReportClient({
       {filtered.length === 0 && stockTotal === 0 ? (
         <Card className="p-6 text-center text-slate-400 text-sm">אין ציוד חתום במחסן זה.</Card>
       ) : mode === "summary" ? (
-        /* ===== תצוגה מצומצמת — סיכום פלוגתי ===== */
+        /* ===== תצוגה מצומצמת — טבלת-ציר: פלוגה × סוג פריט ===== */
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="text-sm border-separate" style={{ borderSpacing: 0 }}>
               <thead>
                 <tr className="bg-slate-100 text-slate-600 text-xs">
-                  <th className="px-3 py-2 text-right font-medium">פלוגה</th>
-                  <th className="px-3 py-2 text-center font-medium w-20">חיילים</th>
-                  <th className="px-3 py-2 text-center font-medium w-24">סה״כ פריטים</th>
-                  <th className="px-3 py-2 text-right font-medium">פירוט לפי סוג</th>
+                  <th className="sticky right-0 z-10 bg-slate-100 px-3 py-2 text-right font-medium border-b border-slate-200">פלוגה</th>
+                  {pivot.cols.map((col) => (
+                    <th key={col} className="px-2 py-2 text-center font-medium border-b border-slate-200 whitespace-nowrap min-w-[52px]">{col}</th>
+                  ))}
+                  <th className="px-3 py-2 text-center font-bold border-b border-slate-200 border-r-2 border-r-slate-200 bg-slate-50">סה״כ</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {summary.map((c) => (
-                  <tr key={c.name} className="align-top">
-                    <td className="px-3 py-2 font-bold text-slate-800 whitespace-nowrap">🪖 {c.name}</td>
-                    <td className="px-3 py-2 text-center text-slate-600">{c.soldiers}</td>
-                    <td className="px-3 py-2 text-center font-bold text-slate-800">{c.total}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-wrap gap-1.5">
-                        {c.items.map(([item, n]) => (
-                          <span key={item} className="text-[11px] bg-slate-100 rounded px-2 py-0.5 whitespace-nowrap">
-                            {item} <span className="font-bold text-slate-700">×{n}</span>
-                          </span>
-                        ))}
-                      </div>
-                    </td>
+              <tbody>
+                {pivot.compRows.map((r) => (
+                  <tr key={r.label} className="hover:bg-slate-50">
+                    <td className="sticky right-0 z-10 bg-white px-3 py-1.5 font-bold text-slate-800 whitespace-nowrap border-b border-slate-100">🪖 {r.label} <span className="text-[10px] text-slate-400 font-normal">({r.soldiers})</span></td>
+                    {pivot.cols.map((col) => (
+                      <td key={col} className="px-2 py-1.5 text-center border-b border-slate-100">{r.counts[col] ? <span className="font-medium text-slate-800">{r.counts[col]}</span> : <span className="text-slate-200">·</span>}</td>
+                    ))}
+                    <td className="px-3 py-1.5 text-center font-bold text-slate-800 border-b border-slate-100 border-r-2 border-r-slate-200 bg-slate-50/60">{r.total}</td>
                   </tr>
                 ))}
+                {/* שורת מחסן — מה שלא חתום */}
+                {pivot.whHasAny && (
+                  <tr className="bg-teal-50/60">
+                    <td className="sticky right-0 z-10 bg-teal-50 px-3 py-1.5 font-bold text-teal-800 whitespace-nowrap border-b border-teal-100">🏬 {pivot.whRow.label}</td>
+                    {pivot.cols.map((col) => (
+                      <td key={col} className="px-2 py-1.5 text-center border-b border-teal-100 text-teal-800">{pivot.whRow.counts[col] ? <span className="font-medium">{pivot.whRow.counts[col]}</span> : <span className="text-teal-200">·</span>}</td>
+                    ))}
+                    <td className="px-3 py-1.5 text-center font-bold text-teal-800 border-b border-teal-100 border-r-2 border-r-slate-200">{pivot.whRow.total}</td>
+                  </tr>
+                )}
               </tbody>
               <tfoot>
-                <tr className="bg-slate-50 font-bold text-slate-800 border-t-2 border-slate-200">
-                  <td className="px-3 py-2">סה״כ</td>
-                  <td className="px-3 py-2 text-center">{summary.reduce((n, c) => n + c.soldiers, 0)}</td>
-                  <td className="px-3 py-2 text-center">{summary.reduce((n, c) => n + c.total, 0)}</td>
-                  <td className="px-3 py-2" />
+                <tr className="bg-slate-100 font-bold text-slate-800 border-t-2 border-slate-300">
+                  <td className="sticky right-0 z-10 bg-slate-100 px-3 py-2">סה״כ</td>
+                  {pivot.cols.map((col) => <td key={col} className="px-2 py-2 text-center">{pivot.colTotals[col]}</td>)}
+                  <td className="px-3 py-2 text-center border-r-2 border-r-slate-200">{pivot.grandTotal}</td>
                 </tr>
               </tfoot>
             </table>
