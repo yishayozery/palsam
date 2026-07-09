@@ -13,6 +13,7 @@ import {
 } from "./actions";
 import ConfirmForm from "./ConfirmForm";
 import { generatePendingTasks } from "@/lib/countScheduler";
+import { buildHolderItemTypes } from "@/lib/holderItemTypes";
 
 export const dynamic = "force-dynamic";
 
@@ -116,7 +117,7 @@ export default async function CountsPage() {
     prisma.itemType.findMany({
       where: itemWhere,
       orderBy: { name: "asc" },
-      select: { id: true, name: true, sku: true },
+      select: { id: true, name: true, sku: true, categoryId: true },
     }),
     prisma.appUser.findMany({
       // אחראי ספירה — רק אנשי המקים (פלוגה/מחסן שלו) או הוא עצמו; מפ"מ רואה הכל
@@ -145,6 +146,9 @@ export default async function CountsPage() {
   }));
   const myCounts = sessionRows.filter((r) => r.mine);
   const otherCounts = sessionRows.filter((r) => !r.mine);
+
+  // מפת "מה קיים בכל מחזיק" — לסינון data-driven של הקטגוריות/פריטים בטופס
+  const holderItemTypes = await buildHolderItemTypes(bId, holders);
 
   return (
     <div>
@@ -179,7 +183,8 @@ export default async function CountsPage() {
               <CountPlanForm
                 holders={holders.map((h) => ({ id: h.id, name: h.name, kind: h.kind, warehouseType: h.warehouseType }))}
                 categories={categories}
-                items={itemTypes.map((i) => ({ id: i.id, name: i.name, sku: i.sku }))}
+                items={itemTypes.map((i) => ({ id: i.id, name: i.name, sku: i.sku, categoryId: i.categoryId }))}
+                holderItemTypes={holderItemTypes}
                 users={battalionUsers
                   .filter((u) => ["BATTALION_ADMIN", "WAREHOUSE_MANAGER", "COMPANY_REP"].includes(u.role))
                   .map((u) => ({ id: u.id, name: u.fullName, role: u.role, holderName: u.holder?.name ?? null }))}

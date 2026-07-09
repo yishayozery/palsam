@@ -4,6 +4,7 @@ import { PageHeader, Card, Badge, EmptyState, Table, Th, Td } from "@/components
 import { WAREHOUSE_TYPE_SHORT } from "@/lib/rbac";
 import CountPlanForm from "./CountPlanForm";
 import { toggleCountPlan, deleteCountPlan } from "./actions";
+import { buildHolderItemTypes } from "@/lib/holderItemTypes";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,9 @@ export default async function CountPlansPage() {
     }),
   ]);
 
+  // מפת "אילו סוגי פריט קיימים בפועל בכל מחזיק" — לסינון data-driven של קטגוריות/פריטים בטופס
+  const holderItemTypes = await buildHolderItemTypes(bId, holders);
+
   return (
     <div>
       <PageHeader
@@ -73,6 +77,7 @@ export default async function CountPlansPage() {
             holders={holders.map((h) => ({ id: h.id, name: h.name, kind: h.kind, warehouseType: h.warehouseType }))}
             categories={categories}
             items={items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, categoryId: i.categoryId }))}
+            holderItemTypes={holderItemTypes}
             users={eligibleUsers.map((u) => ({ id: u.id, name: u.fullName, role: u.role, holderName: u.holder?.name ?? null }))}
           />
         }
