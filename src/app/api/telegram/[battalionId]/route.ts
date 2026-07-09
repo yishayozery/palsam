@@ -74,6 +74,7 @@ export async function POST(
       "🕐 ארוחות ותפילות": "/info",
       "👥 מנה צוות": "/team",
       "🪪 בדיקת רישיון": "/license",
+      "📁 טפסי נהג": "/driverforms",
       "❓ עזרה": "/help",
       // backward compat — old button labels
       "📊 סטטוס": "/status",
@@ -124,14 +125,18 @@ export async function POST(
         armoryTestProofAt: true,
         weaponsAgreementSignedAt: true,
         drivingRefresherDate: true,
+        civilianLicenseNumber: true,
         company: { select: { name: true } },
         appUser: { select: { id: true, role: true, holderId: true, assignedHolders: { select: { holderId: true } } } },
+        _count: { select: { drivingLicenses: true, driverForms: true } },
       },
     });
     const canAttendance = soldier?.appUser?.role === "COMPANY_REP";
     const mgr = soldier?.appUser;
     const canManageTeam = !!(mgr && (mgr.holderId || (mgr.assignedHolders?.length ?? 0) > 0));
-    const keyboard = buildMainKeyboard(canAttendance, canManageTeam);
+    // נהג = יש רישיון/היתר, ריענון, רישיון אזרחי או טופס תיק נהג — מקבל כפתור טפסי נהג קבוע
+    const isDriver = !!soldier && ((soldier._count?.drivingLicenses ?? 0) > 0 || (soldier._count?.driverForms ?? 0) > 0 || !!soldier.drivingRefresherDate || !!soldier.civilianLicenseNumber);
+    const keyboard = buildMainKeyboard(canAttendance, canManageTeam, isDriver);
 
     // /help
     if (cmd === "/help") {
@@ -231,6 +236,16 @@ export async function POST(
       } else {
         await sendTelegramMessage(token, chatId, `ℹ️ <b>מידע כללי — ${battalion.name}</b>\n\n${info}`);
       }
+      return NextResponse.json({ ok: true });
+    }
+
+    // 📁 טפסי נהג — הנהג ממלא/חותם על טפסי תיק הנהג שלו
+    if (cmd === "/driverforms") {
+      if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
+      if (!isDriver) { await sendTelegramMessage(token, chatId, "📁 אין לך טפסי נהג. אם אתה נהג — פנה/י לקצין הרכב.", keyboard); return NextResponse.json({ ok: true }); }
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+      await sendTelegramMessage(token, chatId,
+        `📁 <b>טפסי נהג — ${battalion.name}</b>\n\n${soldier.fullName}, למילוי וחתימה על טפסי תיק הנהג שלך:\n\n👉 <a href="${baseUrl}/driver-form/${soldier.id}">לחץ כאן למילוי הטפסים</a>`, keyboard);
       return NextResponse.json({ ok: true });
     }
 

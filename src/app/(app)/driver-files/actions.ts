@@ -6,6 +6,8 @@ import { requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 import { type FormType, DEFAULT_VALIDITY_DAYS } from "@/lib/driverForms";
 
+const BASE = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+
 async function guard() {
   const user = await requireCapability("dispatch.manage");
   return { user, bId: user.battalionId! };
@@ -81,6 +83,45 @@ export async function saveDriverForm(
   revalidatePath(`/driver-files/${soldierId}`);
   revalidatePath("/driver-files");
   return { ok: true };
+}
+
+const formsMsg = (name: string, battalionName: string, soldierId: string) =>
+  [`📁 <b>טפסי נהג — ${battalionName}</b>`, ``, `${name}, נדרש מילוי וחתימה על טפסי תיק הנהג שלך:`, ``,
+   `👉 <a href="${BASE}/driver-form/${soldierId}">לחץ כאן למילוי הטפסים</a>`].join("\n");
+
+/** שליחת קישור מילוי הטפסים לנהג בודד בבוט. */
+export async function sendDriverFormsLink(soldierId: string) {
+  const { bId } = await guard();
+  const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true, fullName: true, telegramChatId: true } });
+  if (!soldier || soldier.battalionId !== bId) return { error: "חייל לא נמצא" };
+  if (!soldier.telegramChatId) return { error: "הנהג אינו מחובר לבוט" };
+  const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { telegramBotToken: true, name: true } });
+  if (!battalion?.telegramBotToken) return { error: "לגדוד אין בוט" };
+  const { sendTelegramMessage } = await import("@/lib/telegram");
+  await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, formsMsg(soldier.fullName, battalion.name, soldierId)).catch(() => {});
+  return { ok: true };
+}
+
+/** שליחת קישור מילוי הטפסים לנהגים נבחרים (רשימת מזהים) — לא לכולם ללא בחירה. */
+export async function sendDriverFormsToMany(soldierIds: string[]) {
+  const { bId } = await guard();
+  if (!soldierIds.length) return { error: "לא נבחרו נהגים" };
+  const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { telegramBotToken: true, name: true } });
+  if (!battalion?.telegramBotToken) return { error: "לגדוד אין בוט" };
+  const soldiers = await prisma.soldier.findMany({
+    where: { id: { in: soldierIds }, battalionId: bId, telegramChatId: { not: null } },
+    select: { id: true, fullName: true, telegramChatId: true },
+  });
+  if (soldiers.length === 0) return { ok: true, sent: 0 };
+  const { sendTelegramMessage } = await import("@/lib/telegram");
+  const token = battalion.telegramBotToken;
+  let sent = 0;
+  for (let i = 0; i < soldiers.length; i += 20) {
+    const batch = soldiers.slice(i, i + 20);
+    const res = await Promise.allSettled(batch.map((s) => sendTelegramMessage(token, s.telegramChatId!, formsMsg(s.fullName, battalion.name, s.id))));
+    sent += res.filter((r) => r.status === "fulfilled").length;
+  }
+  return { ok: true, sent };
 }
 
 /** אישור / ביטול-אישור תיק נהג ע"י קצין רכב. */

@@ -75,7 +75,7 @@ export async function editMessageText(
 }
 
 /** תפריט דינמי — קומפקטי (ללא כפתור עזרה; ההסבר נשלח ברישום). "דיווח נוכחות"/"מנה צוות" רק למי שרשאי. */
-export function buildMainKeyboard(canReportAttendance = false, canManageTeam = false) {
+export function buildMainKeyboard(canReportAttendance = false, canManageTeam = false, isDriver = false) {
   const rows: { text: string }[][] = [
     [{ text: "📋 טפסים להחתמה" }, { text: "📦 הציוד שלי" }],
     [{ text: "🚗 משימות ושבצ\"ק" }, { text: "📊 ספירות מלאי" }],
@@ -85,7 +85,10 @@ export function buildMainKeyboard(canReportAttendance = false, canManageTeam = f
   extra.push({ text: "🕐 ארוחות ותפילות" });
   if (canManageTeam) extra.push({ text: "👥 מנה צוות" });
   rows.push(extra);
-  if (canManageTeam) rows.push([{ text: "🪪 בדיקת רישיון" }]);
+  const last: { text: string }[] = [];
+  if (isDriver) last.push({ text: "📁 טפסי נהג" });
+  if (canManageTeam) last.push({ text: "🪪 בדיקת רישיון" });
+  if (last.length) rows.push(last);
   return { keyboard: rows, resize_keyboard: true, is_persistent: true };
 }
 

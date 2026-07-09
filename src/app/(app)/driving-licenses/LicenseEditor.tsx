@@ -3,7 +3,7 @@
 import { useState, useMemo, useTransition, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { saveSoldierLicenses, sendDrivingProcedureForSign } from "./actions";
-import { toggleDriverFileApproval } from "../driver-files/actions";
+import { toggleDriverFileApproval, sendDriverFormsToMany } from "../driver-files/actions";
 
 type LicenseType = { id: string; name: string; kind: string };
 type SoldierLicense = { licenseTypeId: string };
@@ -92,6 +92,12 @@ export default function LicenseEditor({
   }, [soldiers]);
 
   function approveFile(id: string) { startTransition(async () => { await toggleDriverFileApproval(id); router.refresh(); }); }
+  function sendFormsToFiltered() {
+    const targets = filtered.filter((s) => s.telegramLinked).map((s) => s.id);
+    if (targets.length === 0) { setSendMsg("אין נהגים מחוברים לבוט בבחירה הנוכחית"); setTimeout(() => setSendMsg(null), 3000); return; }
+    if (!confirm(`לשלוח טפסי נהג בבוט ל-${targets.length} הנהגים הנבחרים (המסוננים כעת)?`)) return;
+    startTransition(async () => { const r = await sendDriverFormsToMany(targets); setSendMsg(r.error ? "⚠️ " + r.error : `✅ נשלח ל-${r.sent} נהגים`); setTimeout(() => setSendMsg(null), 4000); });
+  }
 
   function startEdit(s: Soldier) {
     setEditingSoldier(s.id);
@@ -150,6 +156,12 @@ export default function LicenseEditor({
           <input type="checkbox" checked={onlyDrivers} onChange={(e) => setOnlyDrivers(e.target.checked)} className="rounded" />
           רק בעלי הרשאה
         </label>
+        {canEdit && (
+          <button onClick={sendFormsToFiltered} disabled={pending}
+            className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-2 disabled:opacity-50" title="שולח טפסי נהג בבוט לכל הנהגים המסוננים כעת (המחוברים לבוט)">
+            📲 שלח טפסים לנבחרים ({filtered.filter((s) => s.telegramLinked).length})
+          </button>
+        )}
         {sendMsg && <span className="text-sm text-emerald-600">{sendMsg}</span>}
       </div>
 
