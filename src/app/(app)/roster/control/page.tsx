@@ -1,4 +1,5 @@
 import { requireScreenEdit } from "@/lib/guard";
+import { canEdit } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui";
 import ControlClient from "./ControlClient";
@@ -20,6 +21,7 @@ export default async function RosterControlPage({
 }) {
   const user = await requireScreenEdit("roster");
   const bId = user.battalionId!;
+  const canManageEmployment = canEdit(user, "employment");
   const sp = await searchParams;
 
   const now = new Date();
@@ -150,6 +152,7 @@ export default async function RosterControlPage({
         totals={{ soldiers: soldiers.length, reported: totalReported, companiesReported: companyData.filter((c) => c.total > 0 && c.reported >= c.total).length, companiesTotal: companyData.filter((c) => c.total > 0).length }}
         employments={employments.map((e) => ({ id: e.id, name: e.name, startDate: iso(e.startDate), endDate: iso(e.endDate), active: e.active }))}
         selectedEmploymentId={selectedEmp?.id ?? null}
+        canManageEmployment={canManageEmployment}
         range={{ start: rangeStart, end: rangeEnd, manual: !!(validFrom && validTo) }}
         days={days}
         aggRows={aggRows}

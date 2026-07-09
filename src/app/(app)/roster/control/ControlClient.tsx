@@ -14,7 +14,7 @@ type AggRow = { id: string; name: string; pn: string; company: string; cells: st
 
 export default function ControlClient({
   date, companies, statuses, notReported, totals,
-  employments, selectedEmploymentId, range, days, aggRows,
+  employments, selectedEmploymentId, range, days, aggRows, canManageEmployment,
 }: {
   date: string;
   companies: Company[];
@@ -26,6 +26,7 @@ export default function ControlClient({
   range: { start: string; end: string; manual: boolean };
   days: string[];
   aggRows: AggRow[];
+  canManageEmployment: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -34,6 +35,7 @@ export default function ControlClient({
   const [popupSoldier, setPopupSoldier] = useState<AggRow | null>(null);
 
   const statusById = useMemo(() => new Map(statuses.map((s) => [s.id, s])), [statuses]);
+  const selectedEmployment = employments.find((e) => e.id === selectedEmploymentId) ?? null;
 
   function shiftDay(delta: number) {
     const d = new Date(date + "T00:00:00Z");
@@ -84,72 +86,72 @@ export default function ControlClient({
         </div>
       </Card>
 
-      {/* בלוק פילוח יומי — טרם דיווחו למעלה, סטטוסים בשורה אחת */}
+      {/* סרגל תעסוקה — בחירה + ניהול + תקני פלוגות (שלישות) */}
+      {employments.length > 0 && (
+        <Card className="p-3 flex items-center gap-3 flex-wrap">
+          <label className="text-sm font-medium text-slate-700">📊 תעסוקה:</label>
+          <select value={selectedEmploymentId ?? ""} onChange={(e) => pushRange({ employmentId: e.target.value })}
+            className="rounded-lg border-2 border-slate-300 px-3 py-1.5 text-sm min-w-[200px]">
+            <option value="">— ללא תעסוקה —</option>
+            {employments.map((e) => <option key={e.id} value={e.id}>{e.active ? "🟢 " : ""}{e.name} ({e.startDate.slice(5)}→{e.endDate.slice(5)})</option>)}
+          </select>
+          {canManageEmployment && (
+            <a href="/employment" className="text-xs text-blue-600 hover:text-blue-800 underline">ניהול תעסוקות</a>
+          )}
+          {selectedEmployment && (
+            <a href={`/employment/${selectedEmployment.id}`} className="text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-2 py-1 rounded-lg font-medium">
+              ⚙️ תקני פלוגות
+            </a>
+          )}
+        </Card>
+      )}
+
+      {/* בלוק פילוח יומי — הכל בשורה אחת (לחיצה = העתקת מ.א) */}
       <div>
-        <h3 className="font-bold text-slate-700 text-sm mb-2">📊 פילוח יום {dayLabel(date)} — העתקת מ.א</h3>
-        {/* טרם דיווחו — בראש, מודגש */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-          <div className="rounded-xl border-2 border-rose-300 bg-rose-50 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-rose-800">🔴 טרם דיווחו — בשמ״פ</span>
-              <span className="text-2xl font-black text-rose-800">{notReported.inShmp.count}</span>
-            </div>
-            <button onClick={() => copyPns("nr_shmp", notReported.inShmp.pns)} disabled={notReported.inShmp.pns.length === 0}
-              className="mt-1 w-full text-xs rounded-lg py-1.5 bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-40">
-              {copied === "nr_shmp" ? "✓ הועתק" : `📋 העתק מ.א (${notReported.inShmp.pns.length})`}
-            </button>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-slate-500">⚪ טרם דיווחו — מחוץ לשמ״פ</span>
-              <span className="text-2xl font-bold text-slate-400">{notReported.offShmp.count}</span>
-            </div>
-            <button onClick={() => copyPns("nr_off", notReported.offShmp.pns)} disabled={notReported.offShmp.pns.length === 0}
-              className="mt-1 w-full text-xs rounded-lg py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 disabled:opacity-40">
-              {copied === "nr_off" ? "✓ הועתק" : `📋 העתק מ.א (${notReported.offShmp.pns.length})`}
-            </button>
-          </div>
-        </div>
-        {/* סטטוסים — שורה אחת */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+        <h3 className="font-bold text-slate-700 text-sm mb-2">📊 פילוח יום {dayLabel(date)} — לחיצה מעתיקה מ.א</h3>
+        <div className="flex flex-wrap gap-2 items-stretch">
+          {/* טרם דיווחו — מודגשים, בתחילת השורה */}
+          <button onClick={() => copyPns("nr_shmp", notReported.inShmp.pns)} disabled={notReported.inShmp.pns.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border-2 border-rose-300 bg-rose-50 px-2.5 py-1.5 text-sm hover:bg-rose-100 disabled:opacity-50">
+            <span className="font-bold text-rose-800">🔴 טרם דיווחו·שמ״פ</span>
+            <b className="text-rose-800 text-base">{notReported.inShmp.count}</b>
+            <span className="text-[10px] text-rose-500">{copied === "nr_shmp" ? "✓" : `📋${notReported.inShmp.pns.length}`}</span>
+          </button>
+          <button onClick={() => copyPns("nr_off", notReported.offShmp.pns)} disabled={notReported.offShmp.pns.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm hover:bg-slate-100 disabled:opacity-50">
+            <span className="font-medium text-slate-500">⚪ טרם·חוץ</span>
+            <b className="text-slate-500 text-base">{notReported.offShmp.count}</b>
+            <span className="text-[10px] text-slate-400">{copied === "nr_off" ? "✓" : `📋${notReported.offShmp.pns.length}`}</span>
+          </button>
+          {/* סטטוסים */}
           {statuses.map((st) => (
-            <div key={st.id} className="rounded-xl border border-slate-200 bg-white p-3">
-              <div className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
-                <span className="w-3 h-3 rounded-full inline-block shrink-0" style={{ backgroundColor: st.color }} />
-                <span className="truncate">{st.icon} {st.name}</span>
-              </div>
-              <div className="text-2xl font-bold text-slate-800 mt-1">{st.count}</div>
-              <button onClick={() => copyPns(st.id, st.pns)} disabled={st.pns.length === 0}
-                className="mt-1 w-full text-xs rounded-lg py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40">
-                {copied === st.id ? "✓ הועתק" : `📋 (${st.pns.length})`}
-              </button>
-            </div>
+            <button key={st.id} onClick={() => copyPns(st.id, st.pns)} disabled={st.pns.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50">
+              <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ backgroundColor: st.color }} />
+              <span className="text-slate-700">{st.icon} {st.name}</span>
+              <b className="text-slate-900 text-base">{st.count}</b>
+              <span className="text-[10px] text-slate-400">{copied === st.id ? "✓" : `📋${st.pns.length}`}</span>
+            </button>
           ))}
         </div>
       </div>
 
-      {/* בלוק סטטוס פלוגות + נעילה */}
+      {/* בלוק סטטוס פלוגות + נעילה — שורה אחת קומפקטית (לחיצה = נעילה/פתיחה) */}
       <div>
-        <h3 className="font-bold text-slate-700 text-sm mb-2">🏢 סטטוס דיווח פלוגות (שמ״פ)</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+        <h3 className="font-bold text-slate-700 text-sm mb-2">🏢 סטטוס דיווח פלוגות (שמ״פ) — לחיצה נועלת/פותחת</h3>
+        <div className="flex flex-wrap gap-2 items-stretch">
           {companies.filter((c) => c.total > 0).map((c) => {
             const full = c.shmp > 0 ? c.shmpReported >= c.shmp : c.reported >= c.total;
             const someReport = c.reported > 0;
             const bg = c.locked ? "bg-purple-50 border-purple-300" : full ? "bg-emerald-50 border-emerald-300" : someReport ? "bg-amber-50 border-amber-300" : "bg-slate-50 border-slate-200";
             return (
-              <div key={c.id} className={`rounded-xl border p-3 ${bg}`}>
-                <div className="flex items-center justify-between gap-1">
-                  <span className="font-bold text-sm text-slate-800">{c.name}</span>
-                  <span className="text-lg">{c.locked ? "🔒" : full ? "🟢" : someReport ? "🟡" : "⚪"}</span>
-                </div>
-                <div className="text-xs text-slate-500 mt-1">
-                  שמ״פ: <b>{c.shmpReported}/{c.shmp}</b> · סה״כ {c.reported}/{c.total}
-                </div>
-                <button onClick={() => lock(c.id, !c.locked)} disabled={pending}
-                  className={`mt-2 w-full text-xs rounded-lg py-1 disabled:opacity-50 ${c.locked ? "bg-white border border-slate-300 text-slate-600 hover:bg-slate-50" : "bg-rose-600 text-white hover:bg-rose-700"}`}>
-                  {c.locked ? "🔓 פתח עדכון" : "🔒 נעל עדכון"}
-                </button>
-              </div>
+              <button key={c.id} onClick={() => lock(c.id, !c.locked)} disabled={pending}
+                title={c.locked ? "נעול — לחץ לפתיחה" : "לחץ לנעילה"}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm hover:brightness-95 disabled:opacity-50 ${bg}`}>
+                <span className="text-base">{c.locked ? "🔒" : full ? "🟢" : someReport ? "🟡" : "⚪"}</span>
+                <span className="font-bold text-slate-800">{c.name}</span>
+                <span className="text-xs text-slate-500">שמ״פ <b>{c.shmpReported}/{c.shmp}</b> · {c.reported}/{c.total}</span>
+              </button>
             );
           })}
         </div>
@@ -161,12 +163,7 @@ export default function ControlClient({
         <Card className="p-3">
           {/* בורר טווח */}
           <div className="flex gap-2 flex-wrap items-center mb-3">
-            <select value={selectedEmploymentId ?? ""} onChange={(e) => pushRange({ employmentId: e.target.value })}
-              className="border border-slate-300 rounded-lg px-2 py-1 text-sm">
-              <option value="">— בחר תעסוקה —</option>
-              {employments.map((e) => <option key={e.id} value={e.id}>{e.active ? "🟢 " : ""}{e.name} ({e.startDate.slice(5)}→{e.endDate.slice(5)})</option>)}
-            </select>
-            <span className="text-xs text-slate-400">או טווח ידני:</span>
+            <span className="text-xs text-slate-400">טווח ידני:</span>
             <input type="date" defaultValue={range.start} onChange={(e) => e.target.value && pushRange({ from: e.target.value, to: range.end })}
               className="border border-slate-300 rounded-lg px-2 py-1 text-sm" />
             <span className="text-xs text-slate-400">→</span>
