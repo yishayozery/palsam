@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 
 type Vehicle = { id: string; label: string };
 type Soldier = { id: string; name: string; pn: string | null; company: string | null };
+type Role = { id: string; name: string; icon: string | null; isDriver: boolean };
 
 declare global {
   interface Window {
@@ -39,6 +40,9 @@ export default function DispatchWebApp() {
   const { battalionId } = useParams<{ battalionId: string }>();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [soldiers, setSoldiers] = useState<Soldier[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [driverId, setDriverId] = useState("");
+  const [roleBySoldier, setRoleBySoldier] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -77,6 +81,7 @@ export default function DispatchWebApp() {
         if (data.error) { setError(data.error); return; }
         setVehicles(data.vehicles ?? []);
         setSoldiers(data.soldiers ?? []);
+        setRoles(data.roles ?? []);
       })
       .catch(() => setError("שגיאה בטעינה"))
       .finally(() => setLoading(false));
@@ -103,7 +108,10 @@ export default function DispatchWebApp() {
           "Content-Type": "application/json",
           "x-telegram-init-data": initData,
         },
-        body: JSON.stringify({ vehicleSerialUnitId: vehicleId, missionDate, departureTime, soldierIds: selectedSoldiers }),
+        body: JSON.stringify({
+          vehicleSerialUnitId: vehicleId, missionDate, departureTime,
+          soldiers: selectedSoldiers.map((id) => ({ soldierId: id, isDriver: id === (driverId || selectedSoldiers[0]), dispatchRoleId: roleBySoldier[id] || null })),
+        }),
       });
       const data = await res.json();
       if (data.error) { tg?.showAlert(data.error); setSubmitting(false); return; }
@@ -113,7 +121,7 @@ export default function DispatchWebApp() {
       tg?.showAlert("שגיאה בשמירה");
       setSubmitting(false);
     }
-  }, [submitting, done, vehicleId, missionDate, departureTime, selectedSoldiers, battalionId, initData, tg]);
+  }, [submitting, done, vehicleId, missionDate, departureTime, selectedSoldiers, driverId, roleBySoldier, battalionId, initData, tg]);
 
   // Telegram MainButton
   useEffect(() => {
@@ -209,21 +217,29 @@ export default function DispatchWebApp() {
         </div>
       </div>
 
-      {/* Selected soldiers chips */}
+      {/* Selected soldiers — נהג + תפקיד */}
       {selectedSoldiers.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          <label style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, display: "block" }}>👥 נבחרו ({selectedSoldiers.length})</label>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, display: "block" }}>👥 צוות ({selectedSoldiers.length}) — 🚗 = נהג</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {selectedSoldiers.map((sid) => {
               const s = soldiers.find((x) => x.id === sid);
+              const isDriver = sid === (driverId || selectedSoldiers[0]);
               return (
-                <button
-                  key={sid}
-                  onClick={() => toggleSoldier(sid)}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 16, background: accent, color: "#fff", border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                >
-                  {s?.name ?? sid} ✕
-                </button>
+                <div key={sid} style={{ display: "flex", alignItems: "center", gap: 6, background: cardBg, border: `1px solid ${border}`, borderRadius: 10, padding: "6px 8px" }}>
+                  <button onClick={() => setDriverId(sid)} title="סמן כנהג"
+                    style={{ fontSize: 15, background: isDriver ? accent : "transparent", color: isDriver ? "#fff" : muted, border: `1px solid ${isDriver ? accent : border}`, borderRadius: 8, padding: "3px 7px", cursor: "pointer" }}>🚗</button>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{s?.name ?? sid}{isDriver && <span style={{ color: accent, fontSize: 11 }}> · נהג</span>}</span>
+                  {roles.length > 0 && (
+                    <select value={roleBySoldier[sid] ?? ""}
+                      onChange={(e) => { const rid = e.target.value; setRoleBySoldier((p) => ({ ...p, [sid]: rid })); const role = roles.find((r) => r.id === rid); if (role?.isDriver) setDriverId(sid); }}
+                      style={{ fontSize: 12, padding: "4px 6px", borderRadius: 8, border: `1px solid ${border}`, background: cardBg, color: text }}>
+                      <option value="">תפקיד…</option>
+                      {roles.map((r) => <option key={r.id} value={r.id}>{r.icon} {r.name}</option>)}
+                    </select>
+                  )}
+                  <button onClick={() => toggleSoldier(sid)} style={{ color: "#ef4444", background: "transparent", border: "none", fontSize: 15, cursor: "pointer" }}>✕</button>
+                </div>
               );
             })}
           </div>

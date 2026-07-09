@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateTelegramInitData } from "@/lib/telegram-auth";
 import { audit } from "@/lib/audit";
+import { notifyMissionCreated } from "@/lib/dispatch-notify";
 
 type Params = { params: Promise<{ battalionId: string }> };
 
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   const auth = await authenticate(req, battalionId);
   if (!auth) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const [vehicles, soldiers] = await Promise.all([
+  const [vehicles, soldiers, roles] = await Promise.all([
     prisma.serialUnit.findMany({
       where: {
         battalionId,
@@ -54,6 +55,11 @@ export async function GET(req: NextRequest, { params }: Params) {
       },
       orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }],
     }),
+    prisma.dispatchRole.findMany({
+      where: { battalionId, active: true },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, name: true, icon: true, isDriver: true },
+    }),
   ]);
 
   return NextResponse.json({
@@ -67,6 +73,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       pn: s.personalNumber,
       company: s.company?.name ?? null,
     })),
+    roles: roles.map((r) => ({ id: r.id, name: r.name, icon: r.icon, isDriver: r.isDriver })),
   });
 }
 
@@ -77,17 +84,20 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!auth) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { vehicleSerialUnitId, missionDate, departureTime, soldierIds } = body as {
+  const { vehicleSerialUnitId, missionDate, departureTime } = body as {
     vehicleSerialUnitId?: string;
     missionDate?: string;
     departureTime?: string;
-    soldierIds?: string[];
   };
+  // תמיכה בשני פורמטים: soldiers מובנה (עם נהג/תפקיד) או soldierIds ישן (הראשון = נהג)
+  const soldiersInput: { soldierId: string; isDriver?: boolean; dispatchRoleId?: string | null }[] | null =
+    Array.isArray(body.soldiers) ? body.soldiers : null;
+  const soldierIds: string[] = soldiersInput ? soldiersInput.map((s) => s.soldierId) : (Array.isArray(body.soldierIds) ? body.soldierIds : []);
 
   if (!vehicleSerialUnitId) return NextResponse.json({ error: "בחר רכב" }, { status: 400 });
   if (!missionDate) return NextResponse.json({ error: "בחר תאריך" }, { status: 400 });
   if (!departureTime || !/^\d{2}:\d{2}$/.test(departureTime)) return NextResponse.json({ error: "שעת יציאה בפורמט HH:mm" }, { status: 400 });
-  if (!soldierIds?.length) return NextResponse.json({ error: "הוסף לפחות חייל אחד" }, { status: 400 });
+  if (!soldierIds.length) return NextResponse.json({ error: "הוסף לפחות חייל אחד" }, { status: 400 });
 
   const vehicle = await prisma.serialUnit.findUnique({
     where: { id: vehicleSerialUnitId },
@@ -127,26 +137,31 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!createdById) return NextResponse.json({ error: "אין משתמש מערכת" }, { status: 500 });
   }
 
+  // רשימת חיילים מובנית — נהג + תפקיד (ברירת מחדל: הראשון נהג)
+  const crew = soldiersInput
+    ? soldiersInput.map((s) => ({ soldierId: s.soldierId, isDriver: !!s.isDriver, dispatchRoleId: s.dispatchRoleId ?? null }))
+    : soldierIds.map((sid, i) => ({ soldierId: sid, isDriver: i === 0, dispatchRoleId: null as string | null }));
+  if (!crew.some((c) => c.isDriver)) crew[0].isDriver = true; // תמיד נהג אחד
+
+  // יצירת Mission (המודל החדש) — כדי שהשבצ"ק יופיע במסך המשימות + התראות בוט לנהג
   const created = await prisma.$transaction(async (tx) => {
-    const a = await tx.vehicleAssignment.create({
-      data: {
-        battalionId,
-        companyId: firstSoldier?.companyId ?? null,
-        vehicleSerialUnitId,
-        missionDate: missionDateObj,
-        departureTime,
-        createdById,
-      },
+    const companyId = firstSoldier?.companyId ?? null;
+    const m = await tx.mission.create({
+      data: { battalionId, companyId, missionDate: missionDateObj, departureTime, createdById },
     });
-    for (const sid of soldierIds) {
-      await tx.vehicleAssignmentSoldier.create({ data: { assignmentId: a.id, soldierId: sid } });
+    const a = await tx.vehicleAssignment.create({
+      data: { battalionId, companyId, missionId: m.id, vehicleSerialUnitId, missionDate: missionDateObj, departureTime, createdById },
+    });
+    for (const s of crew) {
+      await tx.vehicleAssignmentSoldier.create({ data: { assignmentId: a.id, soldierId: s.soldierId, isDriver: s.isDriver, dispatchRoleId: s.dispatchRoleId } });
     }
-    return a;
+    return m;
   });
 
-  await audit(createdById, "CREATE", "VehicleAssignment", created.id, {
-    vehicleSerialUnitId, soldierCount: soldierIds.length, source: "telegram",
+  await audit(createdById, "CREATE", "Mission", created.id, {
+    vehicleSerialUnitId, soldierCount: crew.length, source: "telegram",
   });
+  await notifyMissionCreated(created.id, battalionId);
 
   return NextResponse.json({ ok: true, id: created.id });
 }
