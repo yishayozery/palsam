@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { sendTelegramMessage } from "./telegram";
+import { runCountFromPlan } from "./count-runner";
 
 // ===== אזור זמן ישראל — שעות הספירה מתפרשות לפי שעון ישראל, לא UTC של השרת =====
 const TZ = "Asia/Jerusalem";
@@ -99,30 +100,27 @@ export async function generatePendingTasks(now: Date = new Date()): Promise<numb
       if (nextTime > endOfDayForNext) continue;
     }
 
-    const holderIds = await holdersForPlan(plan);
-    const dueAt = new Date(nextTime.getTime() + plan.graceMinutes * 60 * 1000);
-    for (const hId of holderIds) {
-      const exists = await prisma.countTask.findFirst({
-        where: { planId: plan.id, holderId: hId, scheduledAt: nextTime },
-      });
-      if (exists) continue;
-      // "אחראי ספירה" (responsibleUserId) קובע מי מקבל את המשימה בבוט; אם לא הוגדר — המשתמש הראשון על ההולדר
-      const assigneeId = plan.responsibleUserId ?? await pickAssignee(hId);
-      const newTask = await prisma.countTask.create({
-        data: {
-          battalionId: plan.battalionId, planId: plan.id, holderId: hId,
-          assignedUserId: assigneeId, scheduledAt: nextTime, dueAt,
-          status: "PENDING",
-        },
-        include: {
-          holder: { select: { name: true } },
-          assignedUser: { select: { fullName: true, soldier: { select: { telegramChatId: true } } } },
-        },
-      });
-      created++;
-      // שליחת התראת טלגרם לאחראי על המשימה
-      await notifyTaskAssignee(plan.battalionId, newTask).catch(() => {});
-    }
+    // DEDUP: runCountFromPlan קובע scheduledAt=now, לכן dedup לפי nextTime לא עובד.
+    // מוודאים ריצה אחת לכל היותר לתכנית ליום ישראלי אחד.
+    const existing = await prisma.countTask.findMany({
+      where: { planId: plan.id },
+      select: { scheduledAt: true },
+    });
+    if (existing.some((t) => israelDayNum(t.scheduledAt) === israelDayNum(now))) continue;
+
+    // "אחראי ספירה" (responsibleUserId) קובע מי מקבל את המשימה; אם לא הוגדר — המשתמש הראשון על ההולדר הראשון
+    const assigneeId = plan.responsibleUserId ?? (await pickAssignee(plan.scopeHolderIds[0] ?? "")) ?? null;
+    if (!assigneeId) continue;
+
+    // ריצה מלאה אחת לתכנית — מחסן + מפוזר (קסקדת אימות per-soldier + טלגרם)
+    const sid = await runCountFromPlan(
+      plan.battalionId, plan.id, plan.scopeHolderIds, assigneeId, false,
+      plan.isBlind, plan.countScope,
+      { scopeCategoryIds: plan.scopeCategoryIds, scopeItemTypeIds: plan.scopeItemTypeIds, trackingMethods: plan.trackingMethods },
+      plan.graceMinutes,
+      { signOnComplete: plan.signOnComplete, correctByReporter: plan.correctByReporter },
+    );
+    if (sid) created++;
   }
   // עדכון משימות OVERDUE + שליחת התראות
   const overdueTasks = await prisma.countTask.findMany({
