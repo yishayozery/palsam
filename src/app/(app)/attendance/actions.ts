@@ -63,6 +63,11 @@ export async function saveAttendance(
       entries = entries.filter((e) => !isBlocked(e));
     }
 
+    // 🚫 דיווח ביצוע בפועל (record) — רק על היום הנוכחי ואחורה. אין דיווח עתידי.
+    const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
+    entries = entries.filter((e) => !(e.type === "record" && e.date > todayIL));
+    if (entries.length === 0) return { error: "לא ניתן לדווח ביצוע על יום עתידי — רק על היום הנוכחי" };
+
     const departureAlerts: { soldierId: string; statusName: string }[] = [];
 
     for (const entry of entries) {

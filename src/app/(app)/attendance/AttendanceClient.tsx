@@ -116,8 +116,14 @@ export default function AttendanceClient({
     [dataMap, pendingChanges],
   );
 
+  // דיווח ביצוע בפועל (record) — רק על היום הנוכחי ואחורה; אין דיווח עתידי.
+  // תכנון (plan) עתידי מותר — זו מטרתו.
+  const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
+  const isFuture = (date: string) => mode === "record" && date > todayStr;
+
   function cycleStatus(soldierId: string, date: string) {
     if (!canManage) return;
+    if (isFuture(date)) return;
     if (isShmapLocked(soldierId, date)) return;
     const current = getStatus(soldierId, date);
     const idx = current ? statuses.findIndex((s) => s.id === current) : -1;
@@ -131,6 +137,7 @@ export default function AttendanceClient({
 
   function setStatusDirectly(soldierId: string, date: string, statusId: string | null) {
     if (!canManage) return;
+    if (isFuture(date)) return;
     if (isShmapLocked(soldierId, date)) return;
     setPendingChanges((prev) => {
       const m = new Map(prev);
@@ -222,7 +229,7 @@ export default function AttendanceClient({
     return groups;
   }, [filteredSoldiers, squads, isAllCompanies, selectedCompanyId]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayStr; // שעון ישראל (מוגדר למעלה) — לא UTC
 
   // Context menu
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; soldierId: string; date: string } | null>(null);
@@ -857,6 +864,7 @@ export default function AttendanceClient({
                       </td>
                       {days.map((d) => {
                         const afterDischarge = isDischarged && d.date > soldier.callupClosedAt!;
+                        const future = isFuture(d.date);
                         const locked = isShmapLocked(soldier.id, d.date);
                         const inShmapDay = isInShmap(soldier.id, d.date);
                         const statusId = getStatus(soldier.id, d.date);
@@ -866,15 +874,15 @@ export default function AttendanceClient({
                         return (
                           <td
                             key={d.date}
-                            onClick={() => !afterDischarge && !locked && cycleStatus(soldier.id, d.date)}
-                            onContextMenu={(e) => !afterDischarge && !locked && handleContextMenu(e, soldier.id, d.date)}
+                            onClick={() => !afterDischarge && !locked && !future && cycleStatus(soldier.id, d.date)}
+                            onContextMenu={(e) => !afterDischarge && !locked && !future && handleContextMenu(e, soldier.id, d.date)}
                             className={`text-center select-none transition-colors border-l border-slate-50
-                              ${afterDischarge || locked ? "cursor-not-allowed" : "cursor-pointer hover:bg-slate-100"}
-                              ${locked ? "bg-purple-100/60" : afterDischarge ? "bg-slate-200/50" : ""}
-                              ${inShmapDay && !locked ? "bg-purple-50/40" : ""}
-                              ${d.date === today && !afterDischarge && !locked ? "bg-blue-50" : isWeekend && !afterDischarge && !locked ? "bg-slate-50/50" : ""}
+                              ${afterDischarge || locked || future ? "cursor-not-allowed" : "cursor-pointer hover:bg-slate-100"}
+                              ${future ? "bg-slate-100/70 opacity-40" : locked ? "bg-purple-100/60" : afterDischarge ? "bg-slate-200/50" : ""}
+                              ${inShmapDay && !locked && !future ? "bg-purple-50/40" : ""}
+                              ${d.date === today && !afterDischarge && !locked ? "bg-blue-50" : isWeekend && !afterDischarge && !locked && !future ? "bg-slate-50/50" : ""}
                               ${isPending ? "ring-2 ring-inset ring-amber-400" : ""}`}
-                            title={afterDischarge ? `${soldier.fullName} — שוחרר` : locked ? `${soldier.fullName} — נעול (שמ"פ סגור)` : inShmapDay ? `${soldier.fullName} — בשמ"פ — ${d.date}${status ? ` — ${status.name}` : ""}` : `${soldier.fullName} — ${d.date}${status ? ` — ${status.name}` : ""}`}
+                            title={future ? `יום עתידי — לא ניתן לדווח (דיווח רק על היום הנוכחי)` : afterDischarge ? `${soldier.fullName} — שוחרר` : locked ? `${soldier.fullName} — נעול (שמ"פ סגור)` : inShmapDay ? `${soldier.fullName} — בשמ"פ — ${d.date}${status ? ` — ${status.name}` : ""}` : `${soldier.fullName} — ${d.date}${status ? ` — ${status.name}` : ""}`}
                           >
                             {afterDischarge ? (
                               <span className="text-slate-300 text-[9px]">—</span>
