@@ -26,8 +26,10 @@ export default async function DrivingLicensesPage({
 
   const isAdmin = can(user, "battalion.profile");
   const isVehicleOfficer = user.role === "WAREHOUSE_MANAGER";
-  const canManageTypes = isAdmin || isVehicleOfficer;
-  const canEditLicenses = isAdmin || isVehicleOfficer;
+  // המסך כולו מאחורי dispatch.manage — כל מי שנכנס אליו (קצין רכב) יכול לנהל סוגי הרשאות ורישיונות
+  const canManage = isAdmin || isVehicleOfficer || can(user, "dispatch.manage");
+  const canManageTypes = canManage;
+  const canEditLicenses = canManage;
 
   const battalion = await prisma.battalion.findUnique({
     where: { id: bId },
@@ -77,10 +79,9 @@ export default async function DrivingLicensesPage({
 
   const TABS = [
     { key: "soldiers", label: "רשיונות והיתרים" },
-    { key: "procedure", label: "📝 נוהל נהיגה" },
     { key: "types", label: "סוגי הרשאות" },
     { key: "vehicles", label: "שיוך רכבים" },
-    { key: "driverfile", label: "📁 תיק נהג — הגדרות" },
+    { key: "driverfile", label: "📁 תיק נהג" },
   ] as const;
 
   return (
@@ -133,10 +134,6 @@ export default async function DrivingLicensesPage({
         />
       )}
 
-      {tab === "procedure" && (
-        <ProcedureTextForm current={battalion?.drivingProcedureText ?? ""} action={saveDrivingProcedureText} canEdit={canEditLicenses} />
-      )}
-
       {tab === "soldiers" && (
         <LicenseEditor
           soldiers={soldiers.map((s) => ({
@@ -169,10 +166,13 @@ export default async function DrivingLicensesPage({
       )}
 
       {tab === "driverfile" && (
-        <DriverFileSettings
-          validities={FORM_ORDER.map((ft) => ({ formType: ft, title: FORM_TITLES[ft], days: valMap.get(ft) ?? DEFAULT_VALIDITY_DAYS[ft] }))}
-          canEdit={canEditLicenses}
-        />
+        <div className="space-y-4">
+          <DriverFileSettings
+            validities={FORM_ORDER.map((ft) => ({ formType: ft, title: FORM_TITLES[ft], days: valMap.get(ft) ?? DEFAULT_VALIDITY_DAYS[ft] }))}
+            canEdit={canEditLicenses}
+          />
+          <ProcedureTextForm current={battalion?.drivingProcedureText ?? ""} action={saveDrivingProcedureText} canEdit={canEditLicenses} />
+        </div>
       )}
     </div>
   );

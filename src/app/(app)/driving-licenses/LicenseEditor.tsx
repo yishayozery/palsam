@@ -204,7 +204,7 @@ export default function LicenseEditor({
                       </div>
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      {s.licenses.length > 0
+                      {s.drivingRefresherDate || s.licenses.length > 0
                         ? <span className={`text-[11px] rounded px-2 py-0.5 ${ref.cls}`}>{ref.label}</span>
                         : <span className="text-slate-300 text-xs">—</span>}
                     </td>
