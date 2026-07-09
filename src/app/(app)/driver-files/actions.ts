@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
-import { type FormType, DEFAULT_VALIDITY_DAYS } from "@/lib/driverForms";
+import { type FormType, DEFAULT_VALIDITY_DAYS, DRIVER_FORMS, FORM_ORDER, FORM_TITLES } from "@/lib/driverForms";
 
 const BASE = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
 
@@ -92,20 +92,36 @@ export async function saveDriverForm(
   return { ok: true };
 }
 
-const formsMsg = (name: string, battalionName: string, soldierId: string) =>
-  [`📁 <b>טפסי נהג — ${battalionName}</b>`, ``, `${name}, נדרש מילוי וחתימה על טפסי תיק הנהג שלך:`, ``,
-   `👉 <a href="${BASE}/driver-form/${soldierId}">לחץ כאן למילוי הטפסים</a>`].join("\n");
+const formsMsg = (name: string, battalionName: string, soldierId: string, incomplete: string[]) => {
+  const lines = [`📁 <b>טפסי נהג — ${battalionName}</b>`, ``, `${name}, נדרש למלא ולחתום על טפסי תיק הנהג ולשלוח צילומי רישיון.`];
+  if (incomplete.length > 0) lines.push(``, `⚠️ טרם הושלם:`, ...incomplete.map((x) => `• ${x}`));
+  lines.push(``, `👉 <a href="${BASE}/driver-form/${soldierId}">לחץ כאן להשלמה</a>`);
+  return lines.join("\n");
+};
 
-/** שליחת קישור מילוי הטפסים לנהג בודד בבוט. */
+type DriverFileState = { driverForms: { formType: string }[]; civilianLicenseFrontData: string | null; civilianLicenseBackData: string | null; militaryLicenseFrontData: string | null };
+/** רשימת מה שעדיין לא הושלם — טפסים (שאינם officerOnly) + צילומי רישיון. */
+function incompleteItems(s: DriverFileState): string[] {
+  const done = new Set(s.driverForms.map((f) => f.formType));
+  const items: string[] = [];
+  for (const ft of FORM_ORDER) if (!DRIVER_FORMS[ft].officerOnly && !done.has(ft)) items.push(FORM_TITLES[ft]);
+  if (!s.civilianLicenseFrontData) items.push("צילום רישיון אזרחי — קדימה");
+  if (!s.civilianLicenseBackData) items.push("צילום רישיון אזרחי — אחורה");
+  if (!s.militaryLicenseFrontData) items.push("צילום רישיון צבאי — קדימה");
+  return items;
+}
+const DF_SELECT = { driverForms: { select: { formType: true } }, civilianLicenseFrontData: true, civilianLicenseBackData: true, militaryLicenseFrontData: true } as const;
+
+/** שליחת קישור מילוי הטפסים לנהג בודד בבוט (כולל מה שטרם הושלם). */
 export async function sendDriverFormsLink(soldierId: string) {
   const { bId } = await guard();
-  const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true, fullName: true, telegramChatId: true } });
+  const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true, fullName: true, telegramChatId: true, ...DF_SELECT } });
   if (!soldier || soldier.battalionId !== bId) return { error: "חייל לא נמצא" };
   if (!soldier.telegramChatId) return { error: "הנהג אינו מחובר לבוט" };
   const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { telegramBotToken: true, name: true } });
   if (!battalion?.telegramBotToken) return { error: "לגדוד אין בוט" };
   const { sendTelegramMessage } = await import("@/lib/telegram");
-  await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, formsMsg(soldier.fullName, battalion.name, soldierId)).catch(() => {});
+  await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, formsMsg(soldier.fullName, battalion.name, soldierId, incompleteItems(soldier))).catch(() => {});
   return { ok: true };
 }
 
@@ -117,7 +133,7 @@ export async function sendDriverFormsToMany(soldierIds: string[]) {
   if (!battalion?.telegramBotToken) return { error: "לגדוד אין בוט" };
   const soldiers = await prisma.soldier.findMany({
     where: { id: { in: soldierIds }, battalionId: bId, telegramChatId: { not: null } },
-    select: { id: true, fullName: true, telegramChatId: true },
+    select: { id: true, fullName: true, telegramChatId: true, ...DF_SELECT },
   });
   if (soldiers.length === 0) return { ok: true, sent: 0 };
   const { sendTelegramMessage } = await import("@/lib/telegram");
@@ -125,10 +141,22 @@ export async function sendDriverFormsToMany(soldierIds: string[]) {
   let sent = 0;
   for (let i = 0; i < soldiers.length; i += 20) {
     const batch = soldiers.slice(i, i + 20);
-    const res = await Promise.allSettled(batch.map((s) => sendTelegramMessage(token, s.telegramChatId!, formsMsg(s.fullName, battalion.name, s.id))));
+    const res = await Promise.allSettled(batch.map((s) => sendTelegramMessage(token, s.telegramChatId!, formsMsg(s.fullName, battalion.name, s.id, incompleteItems(s)))));
     sent += res.filter((r) => r.status === "fulfilled").length;
   }
   return { ok: true, sent };
+}
+
+/** מחיקת טופס תיק נהג (אם לא תקין) — חוזר ל"טרם מולא"; אפשר לשלוח שוב לנהג. */
+export async function deleteDriverForm(soldierId: string, formType: FormType) {
+  const { user, bId } = await guard();
+  const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true } });
+  if (!soldier || soldier.battalionId !== bId) return { error: "חייל לא נמצא" };
+  await prisma.driverForm.deleteMany({ where: { soldierId, formType } });
+  await audit(user.id, "DELETE_DRIVER_FORM", "Soldier", soldierId, { formType });
+  revalidatePath(`/driver-files/${soldierId}`);
+  revalidatePath("/driving-licenses");
+  return { ok: true };
 }
 
 /** אישור / ביטול-אישור תיק נהג ע"י קצין רכב. */

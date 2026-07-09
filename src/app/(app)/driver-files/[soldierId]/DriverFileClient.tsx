@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import SigPadInline from "@/app/(app)/signatures/SigPadInline";
 import { DRIVER_FORMS, FORM_ORDER, FORM_TITLES, prefillValue, type FormType, type FieldDef } from "@/lib/driverForms";
-import { saveDriverForm, saveLicenseDetails, sendDriverFormsLink } from "../actions";
+import { saveDriverForm, saveLicenseDetails, sendDriverFormsLink, deleteDriverForm } from "../actions";
 import { FieldInput, fileImage } from "../FormFields";
 
 type Soldier = {
@@ -51,6 +51,16 @@ export default function DriverFileClient({
     setBotMsg(null);
     start(async () => { const r = await sendDriverFormsLink(soldier.id); setBotMsg(r.error ? "⚠️ " + r.error : "✅ נשלח לנהג בבוט"); });
   }
+  function deleteAndResend(ft: FormType) {
+    if (!confirm("למחוק את הטופס (אם לא תקין) ולשלוח לנהג למילוי מחדש בבוט?")) return;
+    setBotMsg(null);
+    start(async () => {
+      await deleteDriverForm(soldier.id, ft);
+      const r = await sendDriverFormsLink(soldier.id);
+      setBotMsg(r.error ? `נמחק · ⚠️ ${r.error}` : "🗑️ נמחק ונשלח לנהג למילוי מחדש");
+      router.refresh();
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -92,6 +102,9 @@ export default function DriverFileClient({
                 </button>
                 {rec?.filledAt && (
                   <button onClick={() => printForm(ft, rec, soldier, battalion)} className="text-xs border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50">🖨️</button>
+                )}
+                {rec?.filledAt && !DRIVER_FORMS[ft].officerOnly && (
+                  <button onClick={() => deleteAndResend(ft)} disabled={pending} className="text-xs border border-rose-200 text-rose-600 rounded-lg px-2 py-1.5 hover:bg-rose-50 disabled:opacity-50" title="מחק ושלח שוב לנהג">🗑️</button>
                 )}
               </div>
             </Card>
