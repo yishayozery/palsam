@@ -185,20 +185,22 @@ export async function saveMission(formData: FormData): Promise<{ ok?: boolean; e
     if (!input.departureTime || !/^\d{2}:\d{2}$/.test(input.departureTime)) return { error: "הזן שעת יציאה בפורמט HH:mm" };
     if (!Array.isArray(input.vehicles) || input.vehicles.length === 0) return { error: "הוסף לפחות רכב אחד" };
 
-    // ולידציה של כל רכב
-    for (const v of input.vehicles) {
+    // ולידציה של כל רכב — עם ציון מספר הרכב בשגיאה כדי שיהיה ברור על איזה רכב מדובר
+    for (let vi = 0; vi < input.vehicles.length; vi++) {
+      const v = input.vehicles[vi];
+      const label = `רכב ${vi + 1}`;
       const external = v.isExternal || !v.vehicleSerialUnitId;
       if (external) {
-        if (!v.externalVehicleNumber?.trim()) return { error: "רכב חוץ — חסר מספר רכב" };
+        if (!v.externalVehicleNumber?.trim()) return { error: `${label} (חוץ) — חסר מספר רכב` };
       } else {
         const veh = await prisma.serialUnit.findUnique({
           where: { id: v.vehicleSerialUnitId! },
           select: { battalionId: true, itemType: { select: { category: { select: { warehouseType: true } } } } },
         });
-        if (!veh || veh.battalionId !== bId) return { error: "רכב לא נמצא בגדוד" };
-        if (veh.itemType.category?.warehouseType !== "VEHICLES") return { error: "הפריט אינו רכב" };
+        if (!veh || veh.battalionId !== bId) return { error: `${label} — הרכב לא נמצא בגדוד` };
+        if (veh.itemType.category?.warehouseType !== "VEHICLES") return { error: `${label} — הפריט אינו רכב` };
       }
-      if (!Array.isArray(v.soldiers) || v.soldiers.length === 0) return { error: "כל רכב חייב לפחות חייל אחד" };
+      if (!Array.isArray(v.soldiers) || v.soldiers.length === 0) return { error: `${label} — חייב לפחות חייל אחד` };
       // ולידציה של חיילי מערכת
       const sysIds = v.soldiers.filter((s): s is { soldierId: string } => "soldierId" in s && !!s.soldierId).map((s) => s.soldierId);
       if (sysIds.length) {

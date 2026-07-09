@@ -303,6 +303,7 @@ export default function MissionModal({
                           className={`text-xs rounded-lg px-2.5 py-1 border flex items-center gap-1 ${isActive ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-100"}`}>
                           {row.source === "external" ? "🔶" : "🚗"} רכב {ri + 1}
                           <span className={`rounded-full px-1.5 text-[10px] ${isActive ? "bg-white/25" : "bg-slate-100"}`}>{row.soldiers.length}</span>
+                          {row.source === "external" && !row.externalVehicleNumber.trim() && <span title="חסר מספר רכב">⚠️</span>}
                           {unq && <span title="נהג לא מוסמך">🔴</span>}
                         </button>
                       );
@@ -327,11 +328,15 @@ export default function MissionModal({
                           {vehicles.map((v) => <option key={v.id} value={v.id}>{v.name} · {v.serial}</option>)}
                         </select>
                       ) : (
-                        <div className="grid grid-cols-2 gap-2 mb-2">
-                          <input value={row.externalVehicleNumber} onChange={(e) => patchRow(row.key, { externalVehicleNumber: e.target.value })}
-                            placeholder="מספר רכב" className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
-                          <input value={row.externalVehicleTypeName} onChange={(e) => patchRow(row.key, { externalVehicleTypeName: e.target.value })}
-                            placeholder="סוג רכב (למשל האמר)" className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
+                        <div className="mb-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <input value={row.externalVehicleNumber} onChange={(e) => patchRow(row.key, { externalVehicleNumber: e.target.value })}
+                              placeholder="מספר רכב (חובה)"
+                              className={`border rounded-lg px-2 py-1.5 text-sm ${row.externalVehicleNumber.trim() ? "border-slate-300" : "border-rose-400 bg-rose-50"}`} />
+                            <input value={row.externalVehicleTypeName} onChange={(e) => patchRow(row.key, { externalVehicleTypeName: e.target.value })}
+                              placeholder="סוג רכב (למשל האמר)" className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
+                          </div>
+                          {!row.externalVehicleNumber.trim() && <p className="text-[11px] text-rose-600 mt-1">⚠️ רכב חוץ — חובה למלא מספר רכב</p>}
                         </div>
                       )}
 
