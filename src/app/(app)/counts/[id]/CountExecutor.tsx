@@ -47,7 +47,15 @@ export default function CountExecutor({
   const [scanInput, setScanInput] = useState("");
   const [scanMsg, setScanMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [filter, setFilter] = useState("");
+  const [holderFilter, setHolderFilter] = useState(""); // טאב מחזיק פעיל (כמו בדוח)
   const dig = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
+
+  const holderNames = useMemo(() => Object.keys(groups), [groups]);
+  const isFilled = (l: Line) => (counts[l.id] ?? "") !== "" || (serials[l.id] ?? "") !== "";
+  const doneOf = (holder: string | null) => {
+    const hl = holder ? (groups[holder] ?? []) : lines;
+    return { done: hl.filter(isFilled).length, total: hl.length };
+  };
 
   // סריקה: מתאים את הסריאלי לשורה, מסמן "נמצא" אוטומטית
   function doScan() {
@@ -152,15 +160,42 @@ export default function CountExecutor({
         </Card>
       )}
 
+      {/* 📑 טאבים לפי מחזיק (פלוגה / מחסן) — כמו בדוח, עם כמה הושלמו */}
+      {holderNames.length > 1 && (
+        <div className="flex gap-1.5 flex-wrap">
+          {(() => {
+            const all = doneOf(null);
+            return (
+              <button type="button" onClick={() => setHolderFilter("")}
+                className={`text-xs rounded-lg px-3 py-1.5 border font-medium ${holderFilter === "" ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>
+                הכל <span className="opacity-70">{all.done}/{all.total}</span>
+              </button>
+            );
+          })()}
+          {holderNames.map((h) => {
+            const st = doneOf(h);
+            const complete = st.total > 0 && st.done >= st.total;
+            return (
+              <button key={h} type="button" onClick={() => setHolderFilter(h)}
+                className={`text-xs rounded-lg px-3 py-1.5 border font-medium flex items-center gap-1 ${holderFilter === h ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>
+                {complete ? "✅" : "⏳"} {h} <span className="opacity-70">{st.done}/{st.total}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {Object.entries(groups).map(([holder, allItems]) => {
+        // מוסתר-ע"י-טאב: לא מנתקים מה-DOM (אחרת השדות לא יישלחו) — מסתירים ב-CSS
+        const hiddenByTab = !!holderFilter && holder !== holderFilter;
         const fq = filter.trim().toLowerCase();
         const fqd = dig(filter);
-        const items = fq
+        const items = (!hiddenByTab && fq)
           ? allItems.filter((l) => l.item.toLowerCase().includes(fq) || (l.serial ? dig(l.serial).includes(fqd) : false) || (l.signedSoldier ?? "").toLowerCase().includes(fq))
           : allItems;
-        if (items.length === 0) return null;
+        if (!hiddenByTab && items.length === 0) return null;
         return (
-        <Card key={holder} className="p-4">
+        <Card key={holder} className={`p-4 ${hiddenByTab ? "hidden" : ""}`}>
           <h3 className="font-bold text-slate-700 mb-3 flex items-center justify-between flex-wrap gap-2">
             <span className="flex items-center gap-2">
               <span>📍 {holder}</span>
