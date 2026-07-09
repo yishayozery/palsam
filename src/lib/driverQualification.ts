@@ -19,7 +19,7 @@ export async function checkDriverQualified(
   const [soldier, battalion, required] = await Promise.all([
     prisma.soldier.findUnique({
       where: { id: soldierId },
-      select: { drivingRefresherDate: true, drivingProcedureSignedAt: true, drivingLicenses: { select: { licenseTypeId: true } } },
+      select: { drivingRefresherDate: true, drivingProcedureSignedAt: true, civilianLicenseExpiry: true, drivingLicenses: { select: { licenseTypeId: true } } },
     }),
     prisma.battalion.findUnique({ where: { id: battalionId }, select: { drivingRefreshDays: true, drivingProcedureUpdatedAt: true } }),
     vehicleItemTypeId
@@ -43,6 +43,11 @@ export async function checkDriverQualified(
     const exp = new Date(soldier.drivingRefresherDate);
     exp.setDate(exp.getDate() + (battalion?.drivingRefreshDays ?? 180));
     if (exp.getTime() < Date.now()) reasons.push("ריענון נהיגה פג");
+  }
+
+  // (4) תוקף רישיון אזרחי — פג ⇒ לא מוסמך (חלק מבדיקת שיבוץ נהג)
+  if (soldier.civilianLicenseExpiry && new Date(soldier.civilianLicenseExpiry).getTime() < Date.now()) {
+    reasons.push("רישיון נהיגה אזרחי פג תוקף");
   }
 
   return { qualified: reasons.length === 0, reasons };

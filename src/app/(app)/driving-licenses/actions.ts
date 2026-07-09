@@ -100,6 +100,41 @@ export async function saveDrivingProcedureText(formData: FormData) {
   revalidatePath("/driving-licenses");
 }
 
+/** שליחת נוהל הנהיגה כהנחיה חד-פעמית בבוט — לכל הנהגים ולכל המ"פים. */
+export async function broadcastDrivingProcedure() {
+  const user = await requireUser();
+  const isAdmin = can(user, "battalion.profile");
+  const isVehicleOfficer = user.role === "WAREHOUSE_MANAGER";
+  if (!isAdmin && !isVehicleOfficer && !can(user, "dispatch.manage")) return { error: "אין הרשאה" };
+  const bId = user.battalionId!;
+
+  const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { telegramBotToken: true, name: true, drivingProcedureText: true } });
+  if (!battalion?.telegramBotToken) return { error: "לגדוד אין בוט" };
+  if (!battalion.drivingProcedureText) return { error: "אין נוסח נוהל — שמור נוסח קודם" };
+
+  // נהגים (רישיון/היתר או רישיון אזרחי) + מפקדי פלוגות — מחוברים לבוט
+  const recipients = await prisma.soldier.findMany({
+    where: {
+      battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] }, telegramChatId: { not: null },
+      OR: [{ drivingLicenses: { some: {} } }, { civilianLicenseNumber: { not: null } }, { companyRole: { isCommander: true } }],
+    },
+    select: { telegramChatId: true },
+  });
+  const chatIds = [...new Set(recipients.map((r) => r.telegramChatId!).filter(Boolean))];
+  if (chatIds.length === 0) return { ok: true, sent: 0 };
+
+  const { sendTelegramMessage } = await import("@/lib/telegram");
+  const text = [`📖 <b>נוהל נהיגה — ${battalion.name}</b>`, ``, battalion.drivingProcedureText].join("\n");
+  let sent = 0;
+  for (let i = 0; i < chatIds.length; i += 20) {
+    const batch = chatIds.slice(i, i + 20);
+    const res = await Promise.allSettled(batch.map((c) => sendTelegramMessage(battalion.telegramBotToken!, c, text)));
+    sent += res.filter((r) => r.status === "fulfilled").length;
+  }
+  await audit(user.id, "BROADCAST_DRIVING_PROCEDURE", "Battalion", bId, { sent });
+  return { ok: true, sent };
+}
+
 /** סימון ידני שחייל חתם על נוהל נהיגה (ע"י קצין רכב). toggle. */
 export async function markProcedureSigned(formData: FormData) {
   const user = await requireUser();
