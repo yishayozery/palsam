@@ -85,6 +85,7 @@ export function buildMainKeyboard(canReportAttendance = false, canManageTeam = f
   extra.push({ text: "🕐 ארוחות ותפילות" });
   if (canManageTeam) extra.push({ text: "👥 מנה צוות" });
   rows.push(extra);
+  if (canManageTeam) rows.push([{ text: "🪪 בדיקת רישיון" }]);
   return { keyboard: rows, resize_keyboard: true, is_persistent: true };
 }
 

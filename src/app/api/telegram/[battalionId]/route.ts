@@ -73,6 +73,7 @@ export async function POST(
       "🗓️ דיווח נוכחות": "/attendance",
       "🕐 ארוחות ותפילות": "/info",
       "👥 מנה צוות": "/team",
+      "🪪 בדיקת רישיון": "/license",
       "❓ עזרה": "/help",
       // backward compat — old button labels
       "📊 סטטוס": "/status",
@@ -230,6 +231,66 @@ export async function POST(
       } else {
         await sendTelegramMessage(token, chatId, `ℹ️ <b>מידע כללי — ${battalion.name}</b>\n\n${info}`);
       }
+      return NextResponse.json({ ok: true });
+    }
+
+    // 🪪 בדיקת רישיון — "/license" מציג הסבר; "רישיון <מ.א>" מבצע בדיקה
+    if (cmd === "/license") {
+      if (!mgr) { await sendTelegramMessage(token, chatId, "🪪 בדיקת רישיון זמינה לבעלי תפקיד (קצין רכב / מפקדים).", keyboard); return NextResponse.json({ ok: true }); }
+      await sendTelegramMessage(token, chatId, "🪪 <b>בדיקת רישיון נהג</b>\n\nשלח/י:\n<code>רישיון &lt;מספר אישי&gt;</code>\n\nלדוגמה: <code>רישיון 1234567</code>", keyboard);
+      return NextResponse.json({ ok: true });
+    }
+    const licMatch = text.match(/^(?:רישיון|בדיקת רישיון)\s+(\d{5,})/);
+    if (licMatch) {
+      if (!mgr) { await sendTelegramMessage(token, chatId, "🪪 בדיקת רישיון זמינה לבעלי תפקיד בלבד.", keyboard); return NextResponse.json({ ok: true }); }
+      const pn = licMatch[1];
+      const target = await prisma.soldier.findFirst({
+        where: { battalionId, personalNumber: pn },
+        select: {
+          fullName: true, drivingRefresherDate: true, drivingProcedureSignedAt: true, civilianLicenseExpiry: true, civilianLicenseGrade: true,
+          company: { select: { name: true } },
+          drivingLicenses: { select: { licenseTypeId: true, licenseType: { select: { name: true, kind: true } } } },
+          driverFileApprovedAt: true,
+        },
+      });
+      if (!target) { await sendTelegramMessage(token, chatId, `🪪 לא נמצא חייל עם מ.א ${pn}.`, keyboard); return NextResponse.json({ ok: true }); }
+
+      const [bat, vtl] = await Promise.all([
+        prisma.battalion.findUnique({ where: { id: battalionId }, select: { drivingRefreshDays: true } }),
+        prisma.vehicleTypeLicense.findMany({ where: { itemType: { battalionId } }, select: { licenseTypeId: true, itemType: { select: { id: true, name: true } } } }),
+      ]);
+      const has = new Set(target.drivingLicenses.map((l) => l.licenseTypeId));
+      const byVehicle = new Map<string, { name: string; required: string[] }>();
+      for (const r of vtl) { const v = byVehicle.get(r.itemType.id) ?? { name: r.itemType.name, required: [] }; v.required.push(r.licenseTypeId); byVehicle.set(r.itemType.id, v); }
+      const allowed = [...byVehicle.values()].filter((v) => v.required.every((id) => has.has(id))).map((v) => v.name);
+
+      const refreshDays = bat?.drivingRefreshDays ?? 180;
+      let refreshLine = "❌ לא בוצע ריענון";
+      if (target.drivingRefresherDate) {
+        const exp = new Date(target.drivingRefresherDate); exp.setDate(exp.getDate() + refreshDays);
+        const days = Math.ceil((exp.getTime() - Date.now()) / 86400000);
+        refreshLine = days < 0 ? `🔴 ריענון פג (${target.drivingRefresherDate.toISOString().slice(0, 10)})` : `🟢 ריענון תקף — ${target.drivingRefresherDate.toISOString().slice(0, 10)} (עוד ${days} י׳)`;
+      }
+      let civLine = "—";
+      if (target.civilianLicenseExpiry) {
+        const d = Math.ceil((target.civilianLicenseExpiry.getTime() - Date.now()) / 86400000);
+        civLine = `${target.civilianLicenseExpiry.toISOString().slice(0, 10)} ${d < 0 ? "🔴 פג" : d < 30 ? `🟡 עוד ${d} י׳` : "🟢"}`;
+      }
+      const licNames = target.drivingLicenses.filter((l) => l.licenseType.kind === "LICENSE").map((l) => l.licenseType.name);
+      const permitNames = target.drivingLicenses.filter((l) => l.licenseType.kind !== "LICENSE").map((l) => l.licenseType.name);
+
+      const msg = [
+        `🪪 <b>${target.fullName}</b> · ${target.company?.name ?? "—"} (מ.א ${pn})`, ``,
+        `רישיונות: ${licNames.join(", ") || "—"}${target.civilianLicenseGrade ? ` (${target.civilianLicenseGrade})` : ""}`,
+        `היתרים: ${permitNames.join(", ") || "—"}`,
+        `תוקף רישיון אזרחי: ${civLine}`,
+        refreshLine,
+        `תיק נהג: ${target.driverFileApprovedAt ? "✅ מאושר" : "⚠️ לא מאושר"}`,
+        ``,
+        `🚗 <b>מורשה לנהוג ב:</b>`,
+        allowed.length ? allowed.map((n) => `• ${n}`).join("\n") : "— אין רכב שהוא מורשה לנהוג בו",
+      ].join("\n");
+      await sendTelegramMessage(token, chatId, msg, keyboard);
       return NextResponse.json({ ok: true });
     }
 
