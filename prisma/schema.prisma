@@ -145,6 +145,8 @@ model Battalion {
   tripLink                    String? // קישור "פתיחת משימת נסיעה" שנשלח לנהגים בבוט עם השיבוץ למשימה
   drivingProcedureText        String? // נוסח נוהל נהיגה לחתימת נהגים (מוצג בבוט + קצין רכב)
   drivingProcedureUpdatedAt   DateTime? // מתי עודכן הנוסח — חתימה מלפני התאריך נחשבת לא-תקפה (גרסה חדשה → חתימה מחדש)
+  driverFormValidities        DriverFormValidity[] // תוקף פר-סוג-טופס בתיק נהג
+  driverForms                 DriverForm[] // טפסי תיק נהג בגדוד
   telegramBotToken            String? // טוקן בוט טלגרם לשליחת הודעות אוטומטיות
   telegramBotInfo             String? // מידע כללי שהבוט ישלח (ארוחות, תפילות, טלפונים)
   telegramBotUsername         String? // username של הבוט (מתעדכן אוטומטית ברישום webhook)
@@ -619,6 +621,12 @@ model Soldier {
   telegramChatId String? // Telegram chat ID לשליחת הודעות מבוט
   drivingRefresherDate DateTime? @db.Date // ריענון נהיגה כללי
   drivingProcedureSignedAt DateTime? // חתימה על נוהל נהיגה (דרך קצין רכב / בוט)
+  // תיק נהג — פרטי רישיון אזרחי + צילום (קובץ 4)
+  civilianLicenseNumber String? // מספר רישיון נהיגה אזרחי
+  civilianLicenseGrade  String? // דרגות רישיון (למשל: B, C1, C, E)
+  civilianLicenseExpiry DateTime? @db.Date // תוקף רישיון אזרחי — נכנס לבדיקת שיבוץ נהג
+  licensePhotoData      String? // צילום רישיון נהיגה (base64)
+  driverForms           DriverForm[] @relation("SoldierDriverForms")
   callupClosedAt DateTime? // תאריך סגירת גיוס
   createdAt      DateTime  @default(now())
 
@@ -1489,6 +1497,41 @@ model CallupPeriod {
 
   @@index([soldierId])
   @@index([startDate])
+}
+
+// ===================== תיק נהג (Driver File) =====================
+// 3 טפסים מובנים (מילוי דיגיטלי + הדפסה + חתימה) + צילום רישיון על החייל = 4 קבצים.
+// סוגי טפסים: SAFETY_TRACKING (תיק נהג ומעקב בטיחות) · SAFETY_CHECKOUT (הכשרת בטיחות א-ז) · LICENSE_DECLARATION (הצהרת בעל רישיון)
+
+model DriverFormValidity {
+  id          String    @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  formType    String    // SAFETY_TRACKING | SAFETY_CHECKOUT | LICENSE_DECLARATION
+  validityDays Int      @default(365) // 0 = ללא תוקף (קבוע)
+
+  @@unique([battalionId, formType])
+  @@index([battalionId])
+}
+
+model DriverForm {
+  id                   String    @id @default(cuid())
+  battalionId          String
+  battalion            Battalion @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  soldierId            String
+  soldier              Soldier   @relation("SoldierDriverForms", fields: [soldierId], references: [id], onDelete: Cascade)
+  formType             String    // SAFETY_TRACKING | SAFETY_CHECKOUT | LICENSE_DECLARATION
+  data                 Json      // שדות הטופס המובנים
+  signatureData        String?   // חתימה דיגיטלית (dataURL)
+  signerName           String?   // שם החותם
+  signerPersonalNumber String?   // מ.א החותם
+  filledById           String?   // AppUser שמילא
+  filledAt             DateTime  @default(now())
+  validUntil           DateTime? // filledAt + תוקף פר-טופס (null = קבוע)
+
+  @@unique([soldierId, formType])
+  @@index([soldierId])
+  @@index([battalionId])
 }
 
 // ===================== העברת משמרת / סבב (Shift Handover) =====================
