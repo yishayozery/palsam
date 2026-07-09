@@ -221,6 +221,10 @@ export async function runCountFromPlan(
 
       const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { telegramBotToken: true, name: true } });
 
+      // 📤 אוספים את כל ההודעות ושולחים במנות מקבילות אחרי הלולאה —
+      //    מונע timeout של הקרון כששולחים לעשרות/מאות חיילים (טורי = ~150ms×N).
+      const pendingSends: { vReqId: string; chatId: string; text: string }[] = [];
+
       for (const soldierId of allSoldierIds) {
         const soldier = soldierInfo.get(soldierId)!;
         const signerUserId = soldier.companyId ? (companySigners.get(soldier.companyId) ?? null) : null;
@@ -252,8 +256,6 @@ export async function runCountFromPlan(
         });
 
         if (soldier.telegramChatId && battalion?.telegramBotToken) {
-          try {
-            const { sendTelegramMessage } = await import("@/lib/telegram");
             const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
             const link = `${baseUrl}/verify/${vReq.token}`;
             const serialCount = serialUnits.length;
@@ -286,9 +288,22 @@ export async function runCountFromPlan(
                 `👉 <a href="${link}">לחץ כאן לדיווח</a>`,
               ].join("\n");
             }
-            await sendTelegramMessage(battalion.telegramBotToken, soldier.telegramChatId, text);
-            await prisma.verificationRequest.update({ where: { id: vReq.id }, data: { sentAt: new Date(), sentVia: "TELEGRAM" } });
-          } catch { /* Telegram send failure — non-fatal */ }
+            pendingSends.push({ vReqId: vReq.id, chatId: soldier.telegramChatId, text });
+        }
+      }
+
+      // שליחה מקבילה במנות של 20 — 120 הודעות ב-~1ש' במקום ~18ש' טורי
+      if (pendingSends.length > 0 && battalion?.telegramBotToken) {
+        const { sendTelegramMessage } = await import("@/lib/telegram");
+        const token = battalion.telegramBotToken;
+        const sentIds: string[] = [];
+        for (let i = 0; i < pendingSends.length; i += 20) {
+          const batch = pendingSends.slice(i, i + 20);
+          const results = await Promise.allSettled(batch.map((s) => sendTelegramMessage(token, s.chatId, s.text)));
+          results.forEach((r, j) => { if (r.status === "fulfilled") sentIds.push(batch[j].vReqId); });
+        }
+        if (sentIds.length > 0) {
+          await prisma.verificationRequest.updateMany({ where: { id: { in: sentIds } }, data: { sentAt: new Date(), sentVia: "TELEGRAM" } });
         }
       }
 

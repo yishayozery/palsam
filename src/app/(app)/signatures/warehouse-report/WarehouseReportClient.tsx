@@ -9,18 +9,35 @@ type Loc = { id: string; name: string; isVehicle: boolean };
 type Item = { name: string; serial: string | null; status: string | null; qty?: number; location?: string | null; expiry?: string | null; serialUnitId?: string | null; locId?: string | null };
 type Soldier = { id: string; name: string; pn: string | null; companyId?: string | null; iron: number | null; items: Item[] };
 type Company = { name: string; soldiers: Soldier[] };
+type StockSerial = { name: string; serial: string | null; status: string | null; location: string | null; expiry: string | null };
+type WarehouseStock = { serials: StockSerial[]; qty: { name: string; qty: number }[] };
 
 export default function WarehouseReportClient({
-  warehouses, selectedId, selectedName, canEditIron, companies, locationsByCompanyId = {},
+  warehouses, selectedId, selectedName, canEditIron, companies, locationsByCompanyId = {}, warehouseStock,
 }: {
   warehouses: { id: string; name: string }[];
   selectedId: string; selectedName: string; canEditIron: boolean;
   companies: Company[];
   locationsByCompanyId?: Record<string, Loc[]>;
+  warehouseStock?: WarehouseStock;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [mode, setMode] = useState<"detailed" | "summary" | "flat">("detailed");
+  const [showStock, setShowStock] = useState(false);
+
+  const stock = warehouseStock ?? { serials: [], qty: [] };
+  const stockSerialsFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return stock.serials;
+    return stock.serials.filter((s) => s.name.toLowerCase().includes(q) || (s.serial || "").toLowerCase().includes(q));
+  }, [stock.serials, search]);
+  const stockQtyFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return stock.qty;
+    return stock.qty.filter((s) => s.name.toLowerCase().includes(q));
+  }, [stock.qty, search]);
+  const stockTotal = stock.serials.length + stock.qty.reduce((n, q) => n + q.qty, 0);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -63,7 +80,10 @@ export default function WarehouseReportClient({
       for (const c of filtered) for (const s of c.soldiers) for (const it of s.items) {
         rows.push([selectedName, c.name, s.iron ?? "", s.name, s.pn ?? "", it.name, it.serial ?? "", it.qty ?? "", it.expiry ?? "", it.status ?? "", it.location ?? ""]);
       }
-      fname = `ציוד-חתום-מפורט-${selectedName}.csv`;
+      // ציוד במחסן — לא חתום
+      for (const s of stock.serials) rows.push([selectedName, "🏬 מחסן (לא חתום)", "", "", "", s.name, s.serial ?? "", 1, s.expiry ?? "", s.status ?? "", s.location ?? ""]);
+      for (const q of stock.qty) rows.push([selectedName, "🏬 מחסן (לא חתום)", "", "", "", q.name, "", q.qty, "", "", ""]);
+      fname = `ציוד-חתום-ומחסן-${selectedName}.csv`;
     }
     const csv = "﻿" + rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\r\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -98,10 +118,55 @@ export default function WarehouseReportClient({
       </div>
 
       <div className="hidden print:block text-center mb-3">
-        <h1 className="text-lg font-bold">{mode === "summary" ? "דוח פיזור מצומצם — סיכום פלוגתי" : "דוח ציוד חתום — מפורט"} — {selectedName}</h1>
+        <h1 className="text-lg font-bold">{mode === "summary" ? "דוח פיזור מצומצם — סיכום פלוגתי" : "דוח ציוד חתום + מחסן"} — {selectedName}</h1>
       </div>
 
-      {filtered.length === 0 ? (
+      {/* 🏬 ציוד במחסן — לא חתום על אף חייל */}
+      {stockTotal > 0 && (
+        <Card className="mb-4 overflow-hidden border-2 border-teal-200">
+          <button onClick={() => setShowStock((v) => !v)}
+            className="w-full bg-teal-50 px-4 py-2 font-bold text-teal-800 border-b border-teal-100 flex items-center justify-between hover:bg-teal-100/70">
+            <span>🏬 ציוד במחסן (לא חתום)</span>
+            <span className="text-sm font-normal text-teal-600">{stockSerialsFiltered.length + stockQtyFiltered.length} סוגים · {stockTotal} יח׳ · {showStock ? "▼" : "◀"}</span>
+          </button>
+          {showStock && (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead><tr className="bg-slate-50 text-slate-500 text-xs">
+                  <th className="px-3 py-1.5 text-right font-medium">פריט</th>
+                  <th className="px-3 py-1.5 text-right font-medium">סריאלי / אצווה</th>
+                  <th className="px-3 py-1.5 text-center font-medium w-14">כמות</th>
+                  <th className="px-3 py-1.5 text-right font-medium">תפוגה</th>
+                  <th className="px-3 py-1.5 text-right font-medium">מיקום</th>
+                  <th className="px-3 py-1.5 text-right font-medium">סטטוס</th>
+                </tr></thead>
+                <tbody className="divide-y divide-slate-100">
+                  {stockSerialsFiltered.map((s, i) => (
+                    <tr key={`ss-${i}`} className="hover:bg-slate-50">
+                      <td className="px-3 py-1.5 whitespace-nowrap">{s.name}</td>
+                      <td className="px-3 py-1.5 font-mono text-[11px]">{s.serial ?? "—"}</td>
+                      <td className="px-3 py-1.5 text-center">1</td>
+                      <td className="px-3 py-1.5 text-amber-700 whitespace-nowrap">{s.expiry ?? "—"}</td>
+                      <td className="px-3 py-1.5 text-slate-500">{s.location ?? "—"}</td>
+                      <td className="px-3 py-1.5">{s.status && s.status !== "תקין" ? <span className="text-rose-600">{s.status}</span> : s.status ?? "—"}</td>
+                    </tr>
+                  ))}
+                  {stockQtyFiltered.map((q, i) => (
+                    <tr key={`sq-${i}`} className="hover:bg-slate-50">
+                      <td className="px-3 py-1.5 whitespace-nowrap">{q.name}</td>
+                      <td className="px-3 py-1.5 text-slate-300">— כמותי —</td>
+                      <td className="px-3 py-1.5 text-center font-bold">{q.qty}</td>
+                      <td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">—</td><td className="px-3 py-1.5">—</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {filtered.length === 0 && stockTotal === 0 ? (
         <Card className="p-6 text-center text-slate-400 text-sm">אין ציוד חתום במחסן זה.</Card>
       ) : mode === "summary" ? (
         /* ===== תצוגה מצומצמת — סיכום פלוגתי ===== */

@@ -14,7 +14,7 @@ export default async function VerifyPage({
   const req = await prisma.verificationRequest.findUnique({
     where: { token },
     include: {
-      soldier: { select: { fullName: true, personalNumber: true } },
+      soldier: { select: { fullName: true, personalNumber: true, companyId: true } },
       holder: { select: { name: true } },
       session: { select: { id: true, status: true, correctByReporter: true } },
       battalion: {
@@ -63,6 +63,14 @@ export default async function VerifyPage({
     .flatMap((h) => h.equipmentLocations)
     .map((el) => ({ id: el.id, name: el.name }));
 
+  // חיילי הפלוגה המחוברים לבוט — יעדים אפשריים להאצלת הדיווח
+  const peers = req.soldier?.companyId
+    ? (await prisma.soldier.findMany({
+        where: { companyId: req.soldier.companyId, telegramChatId: { not: null }, status: { notIn: ["DISCHARGED", "INACTIVE"] }, id: { not: req.soldierId ?? undefined } },
+        orderBy: { fullName: "asc" }, select: { id: true, fullName: true },
+      })).map((s) => ({ id: s.id, name: s.fullName }))
+    : [];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-800 to-slate-950 p-4">
       <div className="max-w-md mx-auto">
@@ -92,6 +100,7 @@ export default async function VerifyPage({
               soldierName={name}
               mode={req.mode}
               locations={locations}
+              peers={peers}
             />
           )}
         </div>

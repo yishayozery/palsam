@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
-import { submitVerification } from "./actions";
+import { submitVerification, delegateVerification } from "./actions";
 
 type Item = {
   id: string;
@@ -68,12 +68,14 @@ export default function VerificationClient({
   soldierName,
   mode,
   locations,
+  peers,
 }: {
   token: string;
   items: Item[];
   soldierName: string;
   mode: string;
   locations: { id: string; name: string }[];
+  peers: { id: string; name: string }[];
 }) {
   const [responses, setResponses] = useState<Record<string, Response>>(() => {
     const init: Record<string, Response> = {};
@@ -86,6 +88,21 @@ export default function VerificationClient({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  // האצלה — שליחת הקישור לחייל אחר בפלוגה
+  const [showDelegate, setShowDelegate] = useState(false);
+  const [delegateTo, setDelegateTo] = useState("");
+  const [delegateMsg, setDelegateMsg] = useState<string | null>(null);
+  const [delegating, startDelegate] = useTransition();
+  const doDelegate = () => {
+    if (!delegateTo) return;
+    setDelegateMsg(null);
+    startDelegate(async () => {
+      const res = await delegateVerification(token, delegateTo);
+      if (res.error) setDelegateMsg("⚠️ " + res.error);
+      else setDelegateMsg(`✅ נשלח ל${res.name}`);
+    });
+  };
 
   const isBlind = mode === "BLIND_COUNT";
   const isConfirm = mode === "CONFIRM";
@@ -217,9 +234,37 @@ export default function VerificationClient({
 
   return (
     <div>
-      <p className="text-xs text-slate-500 mb-4 text-center">
+      <p className="text-xs text-slate-500 mb-3 text-center">
         {isBlind ? "🔒 ספירה עיוורת — דווח/י מה שמצאת בפועל (אין נתונים מראש)." : isConfirm ? "אשר/י כל פריט: נמצא או חסר." : "מלא/י את הדיווח לכל פריט."}
       </p>
+
+      {/* האצלה — שליחת הדיווח לחייל אחר בפלוגה */}
+      {peers.length > 0 && (
+        <div className="mb-4 text-center">
+          {!showDelegate ? (
+            <button onClick={() => setShowDelegate(true)} className="text-xs text-indigo-600 hover:underline">
+              🔁 לא אני מבצע — האצל/י לחייל אחר בפלוגה
+            </button>
+          ) : (
+            <div className="border border-indigo-200 bg-indigo-50/50 rounded-xl p-3 text-right">
+              <div className="text-xs font-medium text-indigo-800 mb-2">🔁 האצלת הדיווח — הקישור יישלח בבוט</div>
+              <div className="flex gap-2">
+                <select value={delegateTo} onChange={(e) => setDelegateTo(e.target.value)}
+                  className="flex-1 border border-indigo-200 rounded-lg px-2 py-2 text-sm bg-white">
+                  <option value="">— בחר/י חייל —</option>
+                  {peers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <button onClick={doDelegate} disabled={!delegateTo || delegating}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg px-3 py-2 text-sm font-bold">
+                  {delegating ? "שולח..." : "שלח"}
+                </button>
+              </div>
+              {delegateMsg && <p className="text-xs mt-2 text-slate-700">{delegateMsg}</p>}
+              <button onClick={() => setShowDelegate(false)} className="text-[11px] text-slate-400 mt-2 hover:underline">ביטול</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {mode === "BATCH" ? (
         <div>

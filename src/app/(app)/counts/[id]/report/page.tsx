@@ -130,6 +130,33 @@ export default async function SessionReportPage({
   const notReported = lines.filter((l) => l.status === "not_reported").length;
   const discrepancyCount = lines.filter((l) => l.status === "discrepancy").length;
 
+  // דיווחי חיילים (מ-VerificationRequest) — מי דיווח והאם תקין
+  const vreqs = await prisma.verificationRequest.findMany({
+    where: { sessionId: id },
+    select: {
+      respondedAt: true, sentAt: true,
+      soldier: { select: { fullName: true, personalNumber: true, telegramChatId: true, company: { select: { name: true } } } },
+      items: { select: { status: true } },
+    },
+    orderBy: [{ respondedAt: "asc" }],
+  });
+  const soldierReports = vreqs.filter((v) => v.soldier).map((v) => {
+    const gaps = v.items.filter((i) => i.status === "DENIED").length;
+    const reportedItems = v.items.filter((i) => i.status && i.status !== "PENDING").length;
+    return {
+      name: v.soldier!.fullName,
+      pn: v.soldier!.personalNumber ?? "",
+      company: v.soldier!.company?.name ?? "—",
+      connected: !!v.soldier!.telegramChatId,
+      responded: !!v.respondedAt,
+      sent: !!v.sentAt,
+      totalItems: v.items.length,
+      reportedItems,
+      gaps,
+      ok: !!v.respondedAt && gaps === 0,
+    };
+  }).sort((a, b) => Number(a.responded) - Number(b.responded) || a.company.localeCompare(b.company, "he"));
+
   return (
     <div>
       <PageHeader
@@ -148,9 +175,11 @@ export default async function SessionReportPage({
         }
       />
       <SessionReportView
+        sessionId={id}
         lines={lines}
         holders={holders}
         summary={{ total: lines.length, reported, notReported, discrepancy: discrepancyCount }}
+        soldierReports={soldierReports}
         startedBy={session.startedBy?.fullName ?? null}
         startedAt={session.startedAt.toISOString()}
         completedAt={session.completedAt?.toISOString() ?? null}

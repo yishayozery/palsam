@@ -100,14 +100,30 @@ export default async function WarehouseReportPage({ searchParams }: { searchPara
     .map(([name, soldiers]) => ({ name, soldiers: soldiers.sort((a, b) => (a.iron ?? 9e9) - (b.iron ?? 9e9) || a.name.localeCompare(b.name)) }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // 🏬 ציוד שנמצא פיזית במחסן ולא הוחתם על אף חייל — משלים את "ציוד חתום + מחסן"
+  const stockUnits = selectedId ? await prisma.serialUnit.findMany({
+    where: { battalionId: bId, currentHolderId: selectedId, signedSoldierId: null, dischargedAt: null },
+    select: { serialNumber: true, expiryDate: true, physicalLocation: true, itemType: { select: { name: true } }, status: { select: { name: true } }, equipmentLocation: { select: { name: true } } },
+    orderBy: { itemType: { name: "asc" } },
+  }) : [];
+  const stockBalances = selectedId ? await prisma.stockBalance.findMany({
+    where: { battalionId: bId, holderId: selectedId, quantity: { gt: 0 } },
+    select: { quantity: true, itemType: { select: { name: true } } },
+  }) : [];
+  const warehouseStock = {
+    serials: stockUnits.map((u) => ({ name: u.itemType.name, serial: u.serialNumber, status: u.status?.name ?? null, location: u.equipmentLocation?.name || u.physicalLocation || null, expiry: u.expiryDate ? u.expiryDate.toISOString().slice(0, 10) : null })),
+    qty: stockBalances.map((b) => ({ name: b.itemType.name, qty: b.quantity })).sort((a, b) => a.name.localeCompare(b.name)),
+  };
+  const stockTotal = warehouseStock.serials.length + warehouseStock.qty.reduce((n, q) => n + q.qty, 0);
+
   const selectedName = warehouses.find((w) => w.id === selectedId)?.name ?? "";
   const totalItems = [...bySoldier.values()].reduce((n, s) => n + s.items.length, 0);
 
   return (
     <div>
       <PageHeader
-        title="📋 דוח מחסן — ציוד חתום לפי פלוגה"
-        subtitle={`${selectedName} · ${bySoldier.size} חיילים · ${totalItems} פריטים`}
+        title="📋 דוח מחסן — ציוד חתום + מחסן"
+        subtitle={`${selectedName} · ${bySoldier.size} חיילים · ${totalItems} חתום · ${stockTotal} במחסן`}
       />
       <WarehouseReportClient
         warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
@@ -116,6 +132,7 @@ export default async function WarehouseReportPage({ searchParams }: { searchPara
         canEditIron={can(user, "signatures.manage")}
         companies={companies}
         locationsByCompanyId={locationsByCompanyId}
+        warehouseStock={warehouseStock}
       />
     </div>
   );

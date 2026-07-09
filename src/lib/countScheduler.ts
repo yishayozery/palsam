@@ -122,6 +122,10 @@ export async function generatePendingTasks(now: Date = new Date()): Promise<numb
     );
     if (sid) created++;
   }
+  // 🧹 ניקוי retention — מונע התנפחות DB מספירות יומיות. מוחק סשנים שהושלמו
+  //    מלפני 90+ יום (+ שורות/בקשות-אימות בקסקדה, ומשימות/פערים ידנית).
+  await cleanupOldCounts(now).catch(() => {});
+
   // עדכון משימות OVERDUE + שליחת התראות
   const overdueTasks = await prisma.countTask.findMany({
     where: { status: { in: ["PENDING", "IN_PROGRESS"] }, dueAt: { lt: now } },
@@ -141,6 +145,25 @@ export async function generatePendingTasks(now: Date = new Date()): Promise<numb
     }
   }
   return created;
+}
+
+/** מחיקת סשני-ספירה שהושלמו מלפני 90+ יום — retention נגד התנפחות DB. */
+const COUNT_RETENTION_DAYS = 90;
+export async function cleanupOldCounts(now: Date = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - COUNT_RETENTION_DAYS * 86400000);
+  const stale = await prisma.countSession.findMany({
+    where: { status: "COMPLETED", completedAt: { lt: cutoff } },
+    select: { id: true },
+    take: 500, // תקרה לריצה — לא לחסום את הקרון
+  });
+  if (stale.length === 0) return 0;
+  const ids = stale.map((s) => s.id);
+  // CountTask (sessionId ייחודי, ללא cascade) + Discrepancy (ללא cascade) — למחוק ידנית קודם
+  await prisma.countTask.deleteMany({ where: { sessionId: { in: ids } } });
+  await prisma.discrepancy.deleteMany({ where: { sessionId: { in: ids } } });
+  // מחיקת הסשן מוחקת בקסקדה CountLine + VerificationRequest (+ VerificationItem)
+  const del = await prisma.countSession.deleteMany({ where: { id: { in: ids } } });
+  return del.count;
 }
 
 /** שליחת הודעת טלגרם לאחראי על משימת ספירה חדשה */

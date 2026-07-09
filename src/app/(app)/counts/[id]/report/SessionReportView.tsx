@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useTransition } from "react";
 import { Card, Badge } from "@/components/ui";
+import { resendIncomplete, alertCommanders } from "./actions";
 
 type ReportLine = {
   id: string;
@@ -26,6 +27,7 @@ type ReportLine = {
 };
 
 type Holder = { id: string; name: string };
+type SoldierReport = { name: string; pn: string; company: string; connected: boolean; responded: boolean; sent: boolean; totalItems: number; reportedItems: number; gaps: number; ok: boolean };
 
 const STATUS_LABEL: Record<string, string> = {
   reported: "דווח ✓",
@@ -46,16 +48,20 @@ const ROW_BG: Record<string, string> = {
 };
 
 export default function SessionReportView({
+  sessionId,
   lines,
   holders,
   summary,
+  soldierReports,
   startedBy,
   startedAt,
   completedAt,
 }: {
+  sessionId: string;
   lines: ReportLine[];
   holders: Holder[];
   summary: { total: number; reported: number; notReported: number; discrepancy: number };
+  soldierReports: SoldierReport[];
   startedBy: string | null;
   startedAt: string;
   completedAt: string | null;
@@ -64,6 +70,13 @@ export default function SessionReportView({
   const [holderFilter, setHolderFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | "reported" | "not_reported" | "discrepancy">("");
   const printRef = useRef<HTMLDivElement>(null);
+
+  const [showSoldiers, setShowSoldiers] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [acting, startAct] = useTransition();
+  const doResend = () => { setActionMsg(null); startAct(async () => { const r = await resendIncomplete(sessionId); setActionMsg(r.error ? "⚠️ " + r.error : `✅ נשלחה תזכורת ל-${r.sent} חיילים`); }); };
+  const doAlert = () => { setActionMsg(null); startAct(async () => { const r = await alertCommanders(sessionId); setActionMsg(r.error ? "⚠️ " + r.error : `✅ נשלחה התראה ל-${r.sent} מפקדים`); }); };
+  const soldierResponded = soldierReports.filter((s) => s.responded).length;
 
   const filtered = useMemo(() => {
     let result = lines;
@@ -188,6 +201,50 @@ export default function SessionReportView({
         <span>{progressPct}% הושלמו</span>
         <span>ביצע: {startedBy ?? "—"} · {completedAt ? new Date(completedAt).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "בביצוע"}</span>
       </div>
+
+      {/* 🪖 דיווחי חיילים — מי דיווח והאם תקין + פעולות */}
+      {soldierReports.length > 0 && (
+        <Card className="p-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <button onClick={() => setShowSoldiers((v) => !v)} className="font-bold text-slate-700 text-sm flex items-center gap-2 hover:text-slate-900">
+              {showSoldiers ? "▼" : "◀"} 🪖 דיווחי חיילים <span className="text-slate-400 font-normal">({soldierResponded}/{soldierReports.length} דיווחו)</span>
+            </button>
+            <div className="flex gap-2">
+              <button onClick={doResend} disabled={acting}
+                className="text-xs bg-amber-500 hover:bg-amber-600 text-white rounded-lg px-3 py-1.5 disabled:opacity-50">
+                🔔 שלח שוב למי שלא דיווח
+              </button>
+              <button onClick={doAlert} disabled={acting}
+                className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-50">
+                📊 התראה למ״פ
+              </button>
+            </div>
+          </div>
+          {actionMsg && <p className="text-xs text-slate-600 mt-2">{actionMsg}</p>}
+          {showSoldiers && (
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead><tr className="bg-slate-100 text-slate-600 text-xs">
+                  <th className="px-3 py-1.5 text-right">חייל</th><th className="px-3 py-1.5 text-right">פלוגה</th>
+                  <th className="px-3 py-1.5 text-center">דיווח</th><th className="px-3 py-1.5 text-center">תקין</th>
+                  <th className="px-3 py-1.5 text-center">פריטים</th>
+                </tr></thead>
+                <tbody>
+                  {soldierReports.map((s, i) => (
+                    <tr key={i} className={`border-b border-slate-50 ${!s.responded ? "bg-amber-50/40" : s.gaps > 0 ? "bg-rose-50/40" : ""}`}>
+                      <td className="px-3 py-1.5">{s.name}{s.pn && <span className="text-slate-400 text-xs font-mono"> ({s.pn})</span>}{!s.connected && <span className="text-slate-300 text-[10px]"> · לא בבוט</span>}</td>
+                      <td className="px-3 py-1.5 text-slate-500">{s.company}</td>
+                      <td className="px-3 py-1.5 text-center">{s.responded ? "✅" : "⏳"}</td>
+                      <td className="px-3 py-1.5 text-center">{!s.responded ? "—" : s.gaps > 0 ? <span className="text-rose-600">⚠️ {s.gaps}</span> : "🟢"}</td>
+                      <td className="px-3 py-1.5 text-center text-xs text-slate-500">{s.reportedItems}/{s.totalItems}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Filters */}
       <Card className="p-3 flex flex-wrap gap-3 items-center">
