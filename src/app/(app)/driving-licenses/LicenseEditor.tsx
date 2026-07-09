@@ -167,14 +167,13 @@ export default function LicenseEditor({
 
       <div className="overflow-x-auto border border-slate-200 rounded-xl">
         <table className="min-w-full text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10">
             <tr className="bg-slate-100 text-slate-600 text-xs">
               <th className="px-3 py-2 text-right font-medium">חייל</th>
               <th className="px-3 py-2 text-right font-medium">פלוגה · מחלקה</th>
               <th className="px-3 py-2 text-right font-medium">🪪 רשיונות</th>
               <th className="px-3 py-2 text-right font-medium">🎖️ היתרים</th>
               <th className="px-3 py-2 text-right font-medium">🔄 ריענון</th>
-              <th className="px-3 py-2 text-right font-medium">📝 נוהל נהיגה</th>
               <th className="px-3 py-2 text-right font-medium">📁 תיק נהג</th>
               {canEdit && <th className="px-3 py-2"></th>}
             </tr>
@@ -208,25 +207,6 @@ export default function LicenseEditor({
                         ? <span className={`text-[11px] rounded px-2 py-0.5 ${ref.cls}`}>{ref.label}</span>
                         : <span className="text-slate-300 text-xs">—</span>}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      {(() => {
-                        const st = procStatus(s.procedureSignedAt);
-                        if (st === "signed") return <span className="text-[11px] text-emerald-700">✓ חתם {new Date(s.procedureSignedAt!).toLocaleDateString("he-IL")}</span>;
-                        return (
-                          <div className="flex items-center gap-1.5">
-                            {st === "stale"
-                              ? <span className="text-[11px] text-amber-700" title={`חתם ${new Date(s.procedureSignedAt!).toLocaleDateString("he-IL")} — לפני עדכון הנוסח`}>🔄 עודכן — חתימה מחדש</span>
-                              : <span className="text-[11px] text-slate-400">לא חתם</span>}
-                            {canEdit && hasProcedureText && s.telegramLinked && (
-                              <button onClick={() => sendProcedure(s.id)} disabled={pending} className="text-[11px] text-sky-600 hover:underline">📲 שלח לחתימה</button>
-                            )}
-                            {canEdit && hasProcedureText && !s.telegramLinked && (
-                              <span className="text-[10px] text-slate-300" title="החייל אינו מחובר לבוט — לא ניתן לשלוח לחתימה">📵 לא בבוט</span>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </td>
                     {/* 📁 תיק נהג — פתיחה + סטטוס + אישור */}
                     <td className="px-3 py-2 whitespace-nowrap">
                       <div className="flex items-center gap-2">
@@ -252,7 +232,7 @@ export default function LicenseEditor({
                   </tr>
                   {isEditing && (
                     <tr className="bg-blue-50/30">
-                      <td colSpan={canEdit ? 8 : 7} className="px-3 py-3">
+                      <td colSpan={canEdit ? 7 : 6} className="px-3 py-3">
                         <div className="space-y-3">
                           <div>
                             <div className="text-xs font-medium text-blue-700 mb-1.5">🪪 רשיונות נהיגה:</div>
