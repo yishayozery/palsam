@@ -1,31 +1,43 @@
 import { prisma } from "./prisma";
 import { sendTelegramMessage } from "./telegram";
 
-/** מחזיר את הזמן הבא לפי המגדר. אם השעות ריקות — לפי frequencyDays מהזמן הנוכחי. */
+// ===== אזור זמן ישראל — שעות הספירה מתפרשות לפי שעון ישראל, לא UTC של השרת =====
+const TZ = "Asia/Jerusalem";
+/** רכיבי שעון-קיר ישראלי (שנה/חודש/יום/יום-בשבוע) עבור רגע נתון. */
+export function israelParts(date: Date): { y: number; m: number; d: number; dow: number } {
+  const l = new Date(date.toLocaleString("en-US", { timeZone: TZ }));
+  return { y: l.getFullYear(), m: l.getMonth(), d: l.getDate(), dow: l.getDay() };
+}
+function israelOffsetMs(date: Date): number {
+  const utc = new Date(date.toLocaleString("en-US", { timeZone: "UTC" }));
+  const il = new Date(date.toLocaleString("en-US", { timeZone: TZ }));
+  return il.getTime() - utc.getTime();
+}
+/** ממיר שעון-קיר ישראלי (y,m,d,h,min) ל-Date ב-UTC — כולל שעון קיץ. */
+function israelWallToDate(y: number, m: number, d: number, h: number, min: number): Date {
+  const ts = Date.UTC(y, m, d, h, min);
+  return new Date(ts - israelOffsetMs(new Date(ts)));
+}
+export const israelDayNum = (date: Date): number => { const p = israelParts(date); return p.y * 10000 + p.m * 100 + p.d; };
+
+/** מחזיר את הזמן הבא (UTC) לפי המגדר — שעות לפי שעון ישראל. */
 export function nextOccurrenceFor(
   plan: { scheduledTimes: string[]; daysOfWeek: number[]; frequencyDays: number },
   from: Date,
 ): Date | null {
-  const base = new Date(from);
-  // אם אין שעות מוגדרות — פשוט להוסיף frequencyDays
   if (plan.scheduledTimes.length === 0) {
     if (plan.frequencyDays <= 0) return null;
-    const d = new Date(base);
-    d.setDate(d.getDate() + plan.frequencyDays);
-    d.setHours(8, 0, 0, 0);
-    return d;
+    const next = new Date(from.getTime() + plan.frequencyDays * 86400000);
+    const p = israelParts(next);
+    return israelWallToDate(p.y, p.m, p.d, 8, 0);
   }
-  // עוברים על הימים הקרובים עד 14 ימים לפנים
   for (let offset = 0; offset < 14; offset++) {
-    const day = new Date(base);
-    day.setDate(day.getDate() + offset);
-    const dow = day.getDay();
-    if (plan.daysOfWeek.length > 0 && !plan.daysOfWeek.includes(dow)) continue;
+    const p = israelParts(new Date(from.getTime() + offset * 86400000));
+    if (plan.daysOfWeek.length > 0 && !plan.daysOfWeek.includes(p.dow)) continue;
     for (const tm of plan.scheduledTimes) {
-      const [h, m] = tm.split(":").map((n) => parseInt(n, 10));
-      if (isNaN(h) || isNaN(m)) continue;
-      const candidate = new Date(day);
-      candidate.setHours(h, m, 0, 0);
+      const [h, mi] = tm.split(":").map((n) => parseInt(n, 10));
+      if (isNaN(h) || isNaN(mi)) continue;
+      const candidate = israelWallToDate(p.y, p.m, p.d, h, mi);
       if (candidate > from) return candidate;
     }
   }
@@ -78,7 +90,9 @@ export async function generatePendingTasks(now: Date = new Date()): Promise<numb
     const earliestStart = plan.startDate ?? new Date(now.getTime() - plan.frequencyDays * 24 * 60 * 60 * 1000);
     const startFrom = latest?.scheduledAt ?? earliestStart;
     const nextTime = nextOccurrenceFor(plan, startFrom);
-    if (!nextTime || nextTime > now) continue; // עתידי — לא ניצור עדיין
+    // הקרון רץ פעם ביום (04:00 UTC) — יוצרים אם מועד הספירה חל היום (ישראל) או בעבר,
+    // גם אם השעה מאוחרת מהקרון (אחרת התכנית "נופלת" ליום הבא).
+    if (!nextTime || israelDayNum(nextTime) > israelDayNum(now)) continue;
     if (plan.endDate) {
       const endOfDayForNext = new Date(plan.endDate);
       endOfDayForNext.setHours(23, 59, 59, 999);
