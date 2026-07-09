@@ -9,6 +9,8 @@ import ProcedureTextForm from "./ProcedureTextForm";
 import LicenseEditor from "./LicenseEditor";
 import VehicleTypeLicenseEditor from "./VehicleTypeLicenseEditor";
 import RefreshDaysSettings from "./RefreshDaysSettings";
+import DriverFileSettings from "./DriverFileSettings";
+import { FORM_ORDER, FORM_TITLES, DEFAULT_VALIDITY_DAYS } from "@/lib/driverForms";
 
 export const dynamic = "force-dynamic";
 
@@ -41,10 +43,14 @@ export default async function DrivingLicensesPage({
     prisma.soldier.findMany({
       where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
       orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }],
-      include: {
+      select: {
+        id: true, fullName: true, telegramChatId: true,
+        drivingRefresherDate: true, drivingProcedureSignedAt: true,
+        civilianLicenseExpiry: true, driverFileApprovedAt: true,
         company: { select: { name: true } },
         squad: { select: { name: true } },
         drivingLicenses: { select: { licenseTypeId: true } },
+        driverForms: { select: { formType: true, validUntil: true } },
       },
     }),
     prisma.itemType.findMany({
@@ -62,11 +68,19 @@ export default async function DrivingLicensesPage({
     }),
   ]);
 
+  const [withPhoto, validities] = await Promise.all([
+    prisma.soldier.findMany({ where: { battalionId: bId, licensePhotoData: { not: null } }, select: { id: true } }),
+    prisma.driverFormValidity.findMany({ where: { battalionId: bId }, select: { formType: true, validityDays: true } }),
+  ]);
+  const photoSet = new Set(withPhoto.map((s) => s.id));
+  const valMap = new Map(validities.map((v) => [v.formType, v.validityDays]));
+
   const TABS = [
     { key: "soldiers", label: "רשיונות והיתרים" },
     { key: "procedure", label: "📝 נוהל נהיגה" },
     { key: "types", label: "סוגי הרשאות" },
     { key: "vehicles", label: "שיוך רכבים" },
+    { key: "driverfile", label: "📁 תיק נהג — הגדרות" },
   ] as const;
 
   return (
@@ -136,12 +150,28 @@ export default async function DrivingLicensesPage({
             procedureSignedAt: s.drivingProcedureSignedAt ? s.drivingProcedureSignedAt.toISOString() : null,
             telegramLinked: !!s.telegramChatId,
             licenses: s.drivingLicenses.map((dl) => ({ licenseTypeId: dl.licenseTypeId })),
+            driverFile: (() => {
+              const now = Date.now();
+              const formsDone = s.driverForms.length;
+              const hasPhoto = photoSet.has(s.id);
+              const done = formsDone + (hasPhoto ? 1 : 0);
+              const anyExpired = s.driverForms.some((f) => f.validUntil && f.validUntil.getTime() < now)
+                || (!!s.civilianLicenseExpiry && s.civilianLicenseExpiry.getTime() < now);
+              return { done, total: 4, approved: !!s.driverFileApprovedAt, anyExpired };
+            })(),
           }))}
           licenseTypes={licenseTypes.map((lt) => ({ id: lt.id, name: lt.name, kind: lt.kind }))}
           canEdit={canEditLicenses}
           drivingRefreshDays={drivingRefreshDays}
           hasProcedureText={!!battalion?.drivingProcedureText}
           procedureUpdatedAt={battalion?.drivingProcedureUpdatedAt ? battalion.drivingProcedureUpdatedAt.toISOString() : null}
+        />
+      )}
+
+      {tab === "driverfile" && (
+        <DriverFileSettings
+          validities={FORM_ORDER.map((ft) => ({ formType: ft, title: FORM_TITLES[ft], days: valMap.get(ft) ?? DEFAULT_VALIDITY_DAYS[ft] }))}
+          canEdit={canEditLicenses}
         />
       )}
     </div>

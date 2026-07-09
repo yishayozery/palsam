@@ -83,6 +83,22 @@ export async function saveDriverForm(
   return { ok: true };
 }
 
+/** אישור / ביטול-אישור תיק נהג ע"י קצין רכב. */
+export async function toggleDriverFileApproval(soldierId: string) {
+  const { user, bId } = await guard();
+  const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true, driverFileApprovedAt: true } });
+  if (!soldier || soldier.battalionId !== bId) return { error: "חייל לא נמצא" };
+  const approve = !soldier.driverFileApprovedAt;
+  await prisma.soldier.update({
+    where: { id: soldierId },
+    data: { driverFileApprovedAt: approve ? new Date() : null, driverFileApprovedById: approve ? user.id : null },
+  });
+  await audit(user.id, approve ? "APPROVE_DRIVER_FILE" : "UNAPPROVE_DRIVER_FILE", "Soldier", soldierId);
+  revalidatePath("/driving-licenses");
+  revalidatePath(`/driver-files/${soldierId}`);
+  return { ok: true, approved: approve };
+}
+
 /** הגדרת ימי תוקף פר-סוג-טופס (רמת גדוד). */
 export async function saveFormValidity(formData: FormData) {
   const { user, bId } = await guard();

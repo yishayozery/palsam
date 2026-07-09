@@ -3,6 +3,7 @@
 import { useState, useMemo, useTransition, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { saveSoldierLicenses, sendDrivingProcedureForSign } from "./actions";
+import { toggleDriverFileApproval } from "../driver-files/actions";
 
 type LicenseType = { id: string; name: string; kind: string };
 type SoldierLicense = { licenseTypeId: string };
@@ -15,6 +16,7 @@ type Soldier = {
   procedureSignedAt: string | null;
   telegramLinked: boolean;
   licenses: SoldierLicense[];
+  driverFile: { done: number; total: number; approved: boolean; anyExpired: boolean };
 };
 
 function refreshInfo(refresherDate: string | null, refreshDays: number): { label: string; cls: string } {
@@ -51,6 +53,7 @@ export default function LicenseEditor({
   const [pending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
   const [onlyDrivers, setOnlyDrivers] = useState(false);
+  const [fileFilter, setFileFilter] = useState<"" | "approved" | "unapproved" | "incomplete" | "expired">("");
   const [sendMsg, setSendMsg] = useState<string | null>(null);
 
   const typeById = useMemo(() => new Map(licenseTypes.map((t) => [t.id, t])), [licenseTypes]);
@@ -61,13 +64,34 @@ export default function LicenseEditor({
     let list = soldiers;
     // "נהג" = יש רישיון/היתר, או שבוצע לו ריענון, או שחתם על נוהל (גם לפני מתן רישיון פורמלי)
     if (onlyDrivers) list = list.filter((s) => s.licenses.length > 0 || !!s.drivingRefresherDate || !!s.procedureSignedAt);
+    if (fileFilter) list = list.filter((s) => {
+      const f = s.driverFile;
+      if (fileFilter === "approved") return f.approved;
+      if (fileFilter === "unapproved") return !f.approved;
+      if (fileFilter === "incomplete") return f.done < f.total;
+      if (fileFilter === "expired") return f.anyExpired;
+      return true;
+    });
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter((s) => s.fullName.toLowerCase().includes(q) ||
         (s.companyName && s.companyName.toLowerCase().includes(q)) || (s.squadName && s.squadName.toLowerCase().includes(q)));
     }
     return list;
-  }, [soldiers, search, onlyDrivers]);
+  }, [soldiers, search, onlyDrivers, fileFilter]);
+
+  // דשבורד סיכום
+  const dash = useMemo(() => {
+    const drivers = soldiers.filter((s) => s.licenses.length > 0 || !!s.drivingRefresherDate || !!s.procedureSignedAt);
+    return {
+      drivers: drivers.length,
+      approved: drivers.filter((s) => s.driverFile.approved).length,
+      incomplete: drivers.filter((s) => s.driverFile.done < s.driverFile.total).length,
+      expired: drivers.filter((s) => s.driverFile.anyExpired).length,
+    };
+  }, [soldiers]);
+
+  function approveFile(id: string) { startTransition(async () => { await toggleDriverFileApproval(id); router.refresh(); }); }
 
   function startEdit(s: Soldier) {
     setEditingSoldier(s.id);
@@ -96,9 +120,32 @@ export default function LicenseEditor({
 
   return (
     <div>
+      {/* דשבורד סיכום */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+        <button onClick={() => setFileFilter("")} className="rounded-xl border border-slate-200 bg-white p-2.5 text-center hover:bg-slate-50">
+          <div className="text-xl font-bold text-slate-800">{dash.drivers}</div><div className="text-[11px] text-slate-500">נהגים</div>
+        </button>
+        <button onClick={() => setFileFilter("approved")} className={`rounded-xl border p-2.5 text-center ${fileFilter === "approved" ? "border-emerald-400 bg-emerald-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}>
+          <div className="text-xl font-bold text-emerald-600">{dash.approved}</div><div className="text-[11px] text-slate-500">תיקים מאושרים</div>
+        </button>
+        <button onClick={() => setFileFilter("incomplete")} className={`rounded-xl border p-2.5 text-center ${fileFilter === "incomplete" ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}>
+          <div className="text-xl font-bold text-amber-600">{dash.incomplete}</div><div className="text-[11px] text-slate-500">תיקים חסרים</div>
+        </button>
+        <button onClick={() => setFileFilter("expired")} className={`rounded-xl border p-2.5 text-center ${fileFilter === "expired" ? "border-rose-400 bg-rose-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}>
+          <div className="text-xl font-bold text-rose-600">{dash.expired}</div><div className="text-[11px] text-slate-500">פג תוקף</div>
+        </button>
+      </div>
+
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 חיפוש חייל / פלוגה / מחלקה..."
           className="flex-1 min-w-[180px] border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        <select value={fileFilter} onChange={(e) => setFileFilter(e.target.value as typeof fileFilter)} className="border border-slate-300 rounded-lg px-2 py-2 text-sm">
+          <option value="">כל התיקים</option>
+          <option value="approved">מאושרים ✓</option>
+          <option value="unapproved">לא מאושרים</option>
+          <option value="incomplete">חסרים</option>
+          <option value="expired">פג תוקף</option>
+        </select>
         <label className="flex items-center gap-1.5 text-sm text-slate-600 select-none">
           <input type="checkbox" checked={onlyDrivers} onChange={(e) => setOnlyDrivers(e.target.checked)} className="rounded" />
           רק בעלי הרשאה
@@ -116,6 +163,7 @@ export default function LicenseEditor({
               <th className="px-3 py-2 text-right font-medium">🎖️ היתרים</th>
               <th className="px-3 py-2 text-right font-medium">🔄 ריענון</th>
               <th className="px-3 py-2 text-right font-medium">📝 נוהל נהיגה</th>
+              <th className="px-3 py-2 text-right font-medium">📁 תיק נהג</th>
               {canEdit && <th className="px-3 py-2"></th>}
             </tr>
           </thead>
@@ -167,6 +215,23 @@ export default function LicenseEditor({
                         );
                       })()}
                     </td>
+                    {/* 📁 תיק נהג — פתיחה + סטטוס + אישור */}
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <a href={`/driver-files/${s.id}`}
+                          className={`text-xs rounded-lg px-2 py-1 border font-medium ${s.driverFile.anyExpired ? "border-rose-300 bg-rose-50 text-rose-700" : s.driverFile.done >= s.driverFile.total ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-amber-300 bg-amber-50 text-amber-700"}`}
+                          title="פתח תיק נהג">
+                          📁 {s.driverFile.done}/{s.driverFile.total}
+                        </a>
+                        {canEdit && (
+                          <button onClick={() => approveFile(s.id)} disabled={pending}
+                            className={`text-xs rounded px-1.5 py-1 ${s.driverFile.approved ? "text-emerald-600" : "text-slate-300 hover:text-slate-500"}`}
+                            title={s.driverFile.approved ? "תיק מאושר — בטל אישור" : "אשר תיק"}>
+                            {s.driverFile.approved ? "☑ מאושר" : "☐ אשר"}
+                          </button>
+                        )}
+                      </div>
+                    </td>
                     {canEdit && (
                       <td className="px-3 py-2 whitespace-nowrap">
                         <button onClick={() => (isEditing ? setEditingSoldier(null) : startEdit(s))} className="text-xs text-blue-600 hover:underline">{isEditing ? "סגור" : "✏️ עריכה"}</button>
@@ -175,7 +240,7 @@ export default function LicenseEditor({
                   </tr>
                   {isEditing && (
                     <tr className="bg-blue-50/30">
-                      <td colSpan={canEdit ? 7 : 6} className="px-3 py-3">
+                      <td colSpan={canEdit ? 8 : 7} className="px-3 py-3">
                         <div className="space-y-3">
                           <div>
                             <div className="text-xs font-medium text-blue-700 mb-1.5">🪪 רשיונות נהיגה:</div>
