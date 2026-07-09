@@ -229,6 +229,34 @@ export default function SessionReportView({
         </button>
       </Card>
 
+      {/* 📑 טאבים לפי מחזיק (פלוגה / מחסן) — עם מי השלים */}
+      {holders.length > 1 && (
+        <div className="flex gap-1.5 flex-wrap">
+          {(() => {
+            const doneOf = (hid: string | null) => { const hl = hid ? lines.filter((l) => l.holderId === hid) : lines; return { done: hl.filter((l) => l.status !== "not_reported").length, total: hl.length }; };
+            const all = doneOf(null);
+            return (
+              <>
+                <button type="button" onClick={() => setHolderFilter("")}
+                  className={`text-xs rounded-lg px-3 py-1.5 border font-medium ${holderFilter === "" ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>
+                  הכל <span className="opacity-70">{all.done}/{all.total}</span>
+                </button>
+                {holders.map((h) => {
+                  const st = doneOf(h.id);
+                  const complete = st.total > 0 && st.done >= st.total;
+                  return (
+                    <button key={h.id} type="button" onClick={() => setHolderFilter(h.id)}
+                      className={`text-xs rounded-lg px-3 py-1.5 border font-medium flex items-center gap-1 ${holderFilter === h.id ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>
+                      {complete ? "✅" : "⏳"} {h.name} <span className="opacity-70">{st.done}/{st.total}</span>
+                    </button>
+                  );
+                })}
+              </>
+            );
+          })()}
+        </div>
+      )}
+
       <div className="text-xs text-slate-400">{filtered.length} מתוך {lines.length} פריטים</div>
 
       {/* Grouped items */}
