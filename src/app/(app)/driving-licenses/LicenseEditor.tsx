@@ -165,11 +165,11 @@ export default function LicenseEditor({
         {sendMsg && <span className="text-sm text-emerald-600">{sendMsg}</span>}
       </div>
 
-      <div className="overflow-x-auto border border-slate-200 rounded-xl">
+      <div className="overflow-auto max-h-[75vh] border border-slate-200 rounded-xl">
         <table className="min-w-full text-sm">
-          <thead className="sticky top-0 z-10">
+          <thead className="sticky top-0 z-20">
             <tr className="bg-slate-100 text-slate-600 text-xs">
-              <th className="px-3 py-2 text-right font-medium sticky right-0 z-20 bg-slate-100">חייל</th>
+              <th className="px-3 py-2 text-right font-medium sticky right-0 top-0 z-30 bg-slate-100">חייל</th>
               <th className="px-3 py-2 text-right font-medium">פלוגה · מחלקה</th>
               <th className="px-3 py-2 text-right font-medium">🪪 רשיונות</th>
               <th className="px-3 py-2 text-right font-medium">🎖️ היתרים</th>
