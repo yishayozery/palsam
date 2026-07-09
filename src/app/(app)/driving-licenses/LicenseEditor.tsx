@@ -59,7 +59,8 @@ export default function LicenseEditor({
 
   const filtered = useMemo(() => {
     let list = soldiers;
-    if (onlyDrivers) list = list.filter((s) => s.licenses.length > 0);
+    // "נהג" = יש רישיון/היתר, או שבוצע לו ריענון, או שחתם על נוהל (גם לפני מתן רישיון פורמלי)
+    if (onlyDrivers) list = list.filter((s) => s.licenses.length > 0 || !!s.drivingRefresherDate || !!s.procedureSignedAt);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter((s) => s.fullName.toLowerCase().includes(q) ||
