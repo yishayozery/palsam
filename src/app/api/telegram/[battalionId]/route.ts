@@ -641,7 +641,7 @@ async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, 
   lines.push(`${step3 ? "✅" : "⬜"} חתימה על נוהל שמירת נשק${step3 ? ` (${fmtDate(step3)})` : ""}`);
   if (!step3) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
-    lines.push(`   👉 <a href="${baseUrl}/my-equipment">לחץ כאן לקריאה וחתימה</a>`);
+    lines.push(`   👉 <a href="${baseUrl}/weapons-sign/${soldier.id}">לחץ כאן לחתימה על הנוהל</a> (נכנס ישר, חותם, זהו)`);
   }
 
   const allDone = step1 && step2 && step3;
