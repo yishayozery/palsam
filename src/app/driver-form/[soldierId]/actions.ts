@@ -3,6 +3,24 @@
 import { prisma } from "@/lib/prisma";
 import { type FormType, DEFAULT_VALIDITY_DAYS } from "@/lib/driverForms";
 
+/** שמירת צילומי רישיון ע"י הנהג דרך הבוט (ציבורי). כל תמונה בנפרד. */
+export async function savePublicLicensePhotos(
+  soldierId: string,
+  photos: { civFront?: string; civBack?: string; milFront?: string },
+) {
+  const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { id: true } });
+  if (!soldier) return { error: "לא נמצא" };
+  await prisma.soldier.update({
+    where: { id: soldierId },
+    data: {
+      ...(photos.civFront != null ? { civilianLicenseFrontData: photos.civFront || null } : {}),
+      ...(photos.civBack != null ? { civilianLicenseBackData: photos.civBack || null } : {}),
+      ...(photos.milFront != null ? { militaryLicenseFrontData: photos.milFront || null } : {}),
+    },
+  });
+  return { ok: true };
+}
+
 /** מילוי טופס תיק נהג ע"י הנהג עצמו דרך קישור הבוט (ציבורי — לפי soldierId cuid בלתי-ניחוש). */
 export async function submitDriverFormPublic(
   soldierId: string,

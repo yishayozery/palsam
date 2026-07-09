@@ -625,7 +625,10 @@ model Soldier {
   civilianLicenseNumber String? // מספר רישיון נהיגה אזרחי
   civilianLicenseGrade  String? // דרגות רישיון (למשל: B, C1, C, E)
   civilianLicenseExpiry DateTime? @db.Date // תוקף רישיון אזרחי — נכנס לבדיקת שיבוץ נהג
-  licensePhotoData      String? // צילום רישיון נהיגה (base64)
+  licensePhotoData      String? // (legacy) צילום רישיון בודד
+  civilianLicenseFrontData String? // צילום רישיון אזרחי — צד קדמי
+  civilianLicenseBackData  String? // צילום רישיון אזרחי — צד אחורי
+  militaryLicenseFrontData String? // צילום רישיון צבאי — קדמי בלבד
   driverFileApprovedAt  DateTime? // אישור תיק נהג ע"י קצין רכב
   driverFileApprovedById String? // מי אישר את התיק
   driverForms           DriverForm[] @relation("SoldierDriverForms")

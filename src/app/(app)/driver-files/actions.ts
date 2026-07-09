@@ -23,7 +23,12 @@ export async function saveLicenseDetails(formData: FormData) {
   const number = String(formData.get("civilianLicenseNumber") || "").trim() || null;
   const grade = String(formData.get("civilianLicenseGrade") || "").trim() || null;
   const expiryRaw = String(formData.get("civilianLicenseExpiry") || "").trim();
-  const photo = String(formData.get("licensePhotoData") || "").trim();
+  // צילומים — כל שדה שנשלח מתעדכן ("" = הסרה); שדה שלא נשלח נשאר כמו שהוא
+  const photoField = (key: keyof typeof photoMap) => {
+    const v = formData.get(key as string);
+    return v == null ? undefined : (String(v).trim() || null);
+  };
+  const photoMap = { civilianLicenseFrontData: 0, civilianLicenseBackData: 0, militaryLicenseFrontData: 0 } as const;
 
   await prisma.soldier.update({
     where: { id: soldierId },
@@ -31,7 +36,9 @@ export async function saveLicenseDetails(formData: FormData) {
       civilianLicenseNumber: number,
       civilianLicenseGrade: grade,
       civilianLicenseExpiry: expiryRaw ? new Date(expiryRaw) : null,
-      ...(photo ? { licensePhotoData: photo } : {}),
+      ...(photoField("civilianLicenseFrontData") !== undefined ? { civilianLicenseFrontData: photoField("civilianLicenseFrontData") } : {}),
+      ...(photoField("civilianLicenseBackData") !== undefined ? { civilianLicenseBackData: photoField("civilianLicenseBackData") } : {}),
+      ...(photoField("militaryLicenseFrontData") !== undefined ? { militaryLicenseFrontData: photoField("militaryLicenseFrontData") } : {}),
     },
   });
   await audit(user.id, "SAVE_DRIVER_LICENSE", "Soldier", soldierId, { expiry: expiryRaw });

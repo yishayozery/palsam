@@ -169,7 +169,7 @@ export default function LicenseEditor({
         <table className="min-w-full text-sm">
           <thead className="sticky top-0 z-10">
             <tr className="bg-slate-100 text-slate-600 text-xs">
-              <th className="px-3 py-2 text-right font-medium">חייל</th>
+              <th className="px-3 py-2 text-right font-medium sticky right-0 z-20 bg-slate-100">חייל</th>
               <th className="px-3 py-2 text-right font-medium">פלוגה · מחלקה</th>
               <th className="px-3 py-2 text-right font-medium">🪪 רשיונות</th>
               <th className="px-3 py-2 text-right font-medium">🎖️ היתרים</th>
@@ -185,7 +185,7 @@ export default function LicenseEditor({
               return (
                 <Fragment key={s.id}>
                   <tr className={isEditing ? "bg-blue-50/50" : "hover:bg-slate-50"}>
-                    <td className="px-3 py-2 font-medium text-slate-800 whitespace-nowrap">
+                    <td className="px-3 py-2 font-medium text-slate-800 whitespace-nowrap sticky right-0 z-10 bg-white">
                       {s.fullName}
                       {s.telegramLinked ? <span className="text-[10px] text-sky-600 mr-1" title="מחובר לבוט">📲</span> : <span className="text-[10px] text-slate-300 mr-1">📵</span>}
                     </td>

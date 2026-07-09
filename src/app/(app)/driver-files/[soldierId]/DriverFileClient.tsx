@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import SigPadInline from "@/app/(app)/signatures/SigPadInline";
 import { DRIVER_FORMS, FORM_ORDER, FORM_TITLES, prefillValue, type FormType, type FieldDef } from "@/lib/driverForms";
-import { saveDriverForm, saveLicenseDetails, removeLicensePhoto, sendDriverFormsLink } from "../actions";
+import { saveDriverForm, saveLicenseDetails, sendDriverFormsLink } from "../actions";
 import { FieldInput, fileImage } from "../FormFields";
 
 type Soldier = {
   id: string; fullName: string; firstName: string; lastName: string; personalNumber: string; company: string; role: string;
-  civilianLicenseNumber: string; civilianLicenseGrade: string; civilianLicenseExpiry: string; hasPhoto: boolean; licensePhotoData: string | null;
+  civilianLicenseNumber: string; civilianLicenseGrade: string; civilianLicenseExpiry: string;
+  civFront: string | null; civBack: string | null; milFront: string | null;
 };
 type FormRec = {
   formType: FormType; data: Record<string, unknown>; signatureData: string | null; signerName: string | null; signerPersonalNumber: string | null;
@@ -117,7 +118,9 @@ function LicenseCard({ soldier, pending, start, router }: { soldier: Soldier; pe
   const [num, setNum] = useState(soldier.civilianLicenseNumber);
   const [grade, setGrade] = useState(soldier.civilianLicenseGrade);
   const [expiry, setExpiry] = useState(soldier.civilianLicenseExpiry);
-  const [photo, setPhoto] = useState<string | null>(soldier.licensePhotoData);
+  const [civFront, setCivFront] = useState<string | null>(soldier.civFront);
+  const [civBack, setCivBack] = useState<string | null>(soldier.civBack);
+  const [milFront, setMilFront] = useState<string | null>(soldier.milFront);
   const [msg, setMsg] = useState<string | null>(null);
 
   const expT = expiry ? new Date(expiry).getTime() : null;
@@ -126,33 +129,27 @@ function LicenseCard({ soldier, pending, start, router }: { soldier: Soldier; pe
   function save() {
     const fd = new FormData();
     fd.set("soldierId", soldier.id); fd.set("civilianLicenseNumber", num); fd.set("civilianLicenseGrade", grade); fd.set("civilianLicenseExpiry", expiry);
-    if (photo && photo !== soldier.licensePhotoData) fd.set("licensePhotoData", photo);
+    if (civFront !== soldier.civFront) fd.set("civilianLicenseFrontData", civFront ?? "");
+    if (civBack !== soldier.civBack) fd.set("civilianLicenseBackData", civBack ?? "");
+    if (milFront !== soldier.milFront) fd.set("militaryLicenseFrontData", milFront ?? "");
     start(async () => { const r = await saveLicenseDetails(fd); setMsg(r.error ? "⚠️ " + r.error : "✅ נשמר"); router.refresh(); });
   }
 
   return (
     <Card className="p-4">
-      <h3 className="font-bold text-slate-800 text-sm mb-3">🪪 רישיון נהיגה אזרחי + צילום (קובץ 4)</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+      <h3 className="font-bold text-slate-800 text-sm mb-3">🪪 רישיון נהיגה + צילומים (קובץ 4)</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <label className="text-xs text-slate-600">מספר רישיון
           <input value={num} onChange={(e) => setNum(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" /></label>
         <label className="text-xs text-slate-600">דרגות (B, C1, C, E)
           <input value={grade} onChange={(e) => setGrade(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" /></label>
         <label className="text-xs text-slate-600">תוקף רישיון
           <input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} className={`mt-1 w-full border rounded-lg px-2 py-1.5 text-sm font-medium ${expiry ? expCls : "text-slate-500"} ${expT != null && expT < Date.now() ? "border-rose-400" : "border-slate-300"}`} /></label>
-        <div className="text-xs text-slate-600">צילום רישיון
-          <div className="mt-1 flex items-center gap-2">
-            <label className="cursor-pointer text-xs bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-1.5">
-              {photo ? "החלף" : "📷 העלה"}
-              <input type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setPhoto(await fileImage(f)); }} />
-            </label>
-            {photo && <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={photo} alt="" className="h-9 w-9 rounded object-cover border" />
-              <button onClick={() => { setPhoto(null); start(async () => { await removeLicensePhoto(soldier.id); router.refresh(); }); }} className="text-[11px] text-rose-500">הסר</button>
-            </>}
-          </div>
-        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-2 mt-3">
+        <OfficerPhoto label="אזרחי — קדימה" value={civFront} onChange={setCivFront} />
+        <OfficerPhoto label="אזרחי — אחורה" value={civBack} onChange={setCivBack} />
+        <OfficerPhoto label="צבאי — קדימה" value={milFront} onChange={setMilFront} />
       </div>
       <div className="flex items-center gap-3 mt-3">
         <button onClick={save} disabled={pending} className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 disabled:opacity-50">💾 שמור רישיון</button>
@@ -271,31 +268,67 @@ function printForm(formType: FormType, rec: FormRec, soldier: Soldier, battalion
     `<h3>${esc(sec.title)}</h3>${sec.fields.map(fieldHtml).join("")}`).join("");
   const declaration = def.declaration ? `<ol>${def.declaration.map((c) => `<li>${esc(c)}</li>`).join("")}</ol>` : "";
 
+  const fillDate = rec.filledAt ? new Date(rec.filledAt).toLocaleDateString("he-IL") : new Date().toLocaleDateString("he-IL");
   win.document.write(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="utf-8"><title>${esc(def.title)}</title><style>
-    body{font-family:system-ui,Arial,sans-serif;direction:rtl;padding:28px;font-size:13px;color:#0f172a;}
-    .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0f172a;padding-bottom:8px;margin-bottom:14px;}
-    .head img{height:56px;} h1{font-size:18px;margin:0;} .sub{color:#475569;font-size:12px;margin-top:2px;}
-    h3{font-size:14px;margin:14px 0 4px;border-bottom:1px solid #cbd5e1;padding-bottom:2px;}
-    .row{margin:3px 0;} .ln{border-bottom:1px dotted #94a3b8;padding:0 40px 0 4px;} .cb{font-size:15px;}
-    table.grid{width:100%;border-collapse:collapse;margin:6px 0;} table.grid th,table.grid td{border:1px solid #cbd5e1;padding:4px 6px;text-align:right;font-size:12px;}
-    ol{font-size:12px;padding-right:18px;} ol li{margin:2px 0;}
-    .sign{margin-top:26px;display:flex;justify-content:space-between;align-items:flex-end;gap:20px;}
-    .sign .box{flex:1;} .sign img{max-height:70px;} .sigline{border-top:1px solid #0f172a;padding-top:3px;font-size:12px;margin-top:40px;}
-    @media print{body{padding:0;}}
-  </style></head><body>
+    *{box-sizing:border-box;}
+    body{font-family:'Segoe UI',system-ui,Arial,sans-serif;direction:rtl;margin:0;padding:0;font-size:13px;color:#1e293b;background:#fff;}
+    .page{max-width:800px;margin:0 auto;padding:32px 36px;}
+    .head{text-align:center;border-bottom:3px solid #1d4ed8;padding-bottom:14px;margin-bottom:18px;}
+    .head img{height:70px;object-fit:contain;margin-bottom:6px;}
+    .head .bn{font-size:13px;color:#64748b;font-weight:600;letter-spacing:.5px;}
+    .head h1{font-size:21px;margin:6px 0 0;color:#1e3a8a;}
+    .meta{display:flex;flex-wrap:wrap;gap:6px 22px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:12.5px;}
+    .meta b{color:#334155;}
+    h3{font-size:14px;margin:16px 0 6px;color:#1e3a8a;background:#eff6ff;border-right:4px solid #1d4ed8;padding:5px 10px;border-radius:0 6px 6px 0;}
+    .row{margin:4px 2px;font-size:13px;} .ln{border-bottom:1px dotted #94a3b8;padding:0 60px 0 4px;} .cb{font-size:16px;color:#1d4ed8;}
+    table.grid{width:100%;border-collapse:collapse;margin:8px 0;} table.grid th{background:#f1f5f9;} table.grid th,table.grid td{border:1px solid #cbd5e1;padding:5px 8px;text-align:right;font-size:12px;}
+    ol{font-size:12px;padding-right:20px;color:#334155;} ol li{margin:3px 0;}
+    .sign{margin-top:34px;display:flex;justify-content:space-between;align-items:flex-end;gap:24px;border-top:1px dashed #cbd5e1;padding-top:16px;}
+    .sign .box{flex:1;} .sign img{max-height:80px;border:1px solid #e2e8f0;border-radius:6px;padding:4px;background:#fff;}
+    .sigline{border-top:1.5px solid #1e293b;padding-top:4px;font-size:12.5px;margin-top:44px;font-weight:600;}
+    .foot{margin-top:24px;text-align:center;color:#94a3b8;font-size:10.5px;border-top:1px solid #e2e8f0;padding-top:8px;}
+    @media print{.page{padding:0;} @page{margin:14mm;}}
+  </style></head><body><div class="page">
     <div class="head">
-      <div><h1>${esc(def.title)}</h1><div class="sub">${esc(battalion.name)} · נהג: ${esc(soldier.fullName)} · מ.א ${esc(soldier.personalNumber)} · פלוגה ${esc(soldier.company)}</div>
-      <div class="sub">תאריך מילוי: ${rec.filledAt ? new Date(rec.filledAt).toLocaleDateString("he-IL") : new Date().toLocaleDateString("he-IL")}${rec.validUntil ? ` · בתוקף עד: ${new Date(rec.validUntil).toLocaleDateString("he-IL")}` : ""}</div></div>
-      ${battalion.logoData ? `<img src="${battalion.logoData}" alt="" />` : ""}
+      ${battalion.logoData ? `<img src="${battalion.logoData}" alt="" /><br>` : ""}
+      <div class="bn">${esc(battalion.name)}</div>
+      <h1>${esc(def.title)}</h1>
+    </div>
+    <div class="meta">
+      <span><b>נהג:</b> ${esc(soldier.fullName)}</span>
+      <span><b>מ.א:</b> ${esc(soldier.personalNumber)}</span>
+      <span><b>פלוגה:</b> ${esc(soldier.company)}</span>
+      <span><b>תאריך מילוי:</b> ${fillDate}</span>
+      ${rec.validUntil ? `<span><b>בתוקף עד:</b> ${new Date(rec.validUntil).toLocaleDateString("he-IL")}</span>` : ""}
     </div>
     ${declaration}
     ${sections}
     <div class="sign">
-      <div class="box"><div class="sigline">חתימה: ${rec.signerName ? esc(rec.signerName) : "_______________"}${rec.signerPersonalNumber ? ` · מ.א ${esc(rec.signerPersonalNumber)}` : ""}</div></div>
+      <div class="box"><div class="sigline">חתימה: ${rec.signerName ? esc(rec.signerName) : "_______________"}${rec.signerPersonalNumber ? ` &nbsp;·&nbsp; מ.א ${esc(rec.signerPersonalNumber)}` : ""}</div></div>
       ${rec.signatureData ? `<img src="${rec.signatureData}" alt="חתימה" />` : ""}
     </div>
-  </body></html>`);
+    <div class="foot">הופק ממערכת PALMY · ${esc(battalion.name)} · ${fillDate}</div>
+  </div></body></html>`);
   win.document.close();
   win.focus();
   win.print();
+}
+
+function OfficerPhoto({ label, value, onChange }: { label: string; value: string | null; onChange: (v: string | null) => void }) {
+  return (
+    <div className="text-xs text-slate-600">
+      <div className="mb-1">{label}</div>
+      <div className="flex items-center gap-1.5">
+        <label className="cursor-pointer text-xs bg-slate-100 hover:bg-slate-200 rounded-lg px-2 py-1.5">
+          {value ? "החלף" : "📷 העלה"}
+          <input type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) onChange(await fileImage(f, 1100, 0.6)); }} />
+        </label>
+        {value && <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={value} alt="" className="h-9 w-9 rounded object-cover border" />
+          <button type="button" onClick={() => onChange(null)} className="text-[11px] text-rose-500">הסר</button>
+        </>}
+      </div>
+    </div>
+  );
 }

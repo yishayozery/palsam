@@ -21,7 +21,8 @@ export default async function DriverFilePage({ params }: { params: Promise<{ sol
         id: true, fullName: true, personalNumber: true, battalionId: true,
         company: { select: { name: true } },
         companyRole: { select: { name: true } },
-        civilianLicenseNumber: true, civilianLicenseGrade: true, civilianLicenseExpiry: true, licensePhotoData: true,
+        civilianLicenseNumber: true, civilianLicenseGrade: true, civilianLicenseExpiry: true,
+        civilianLicenseFrontData: true, civilianLicenseBackData: true, militaryLicenseFrontData: true,
         driverForms: { select: { formType: true, data: true, signatureData: true, signerName: true, signerPersonalNumber: true, filledAt: true, validUntil: true } },
       },
     }),
@@ -62,7 +63,7 @@ export default async function DriverFilePage({ params }: { params: Promise<{ sol
           personalNumber: soldier.personalNumber ?? "", company: soldier.company?.name ?? "", role: soldier.companyRole?.name ?? "",
           civilianLicenseNumber: soldier.civilianLicenseNumber ?? "", civilianLicenseGrade: soldier.civilianLicenseGrade ?? "",
           civilianLicenseExpiry: soldier.civilianLicenseExpiry ? soldier.civilianLicenseExpiry.toISOString().slice(0, 10) : "",
-          hasPhoto: !!soldier.licensePhotoData, licensePhotoData: soldier.licensePhotoData ?? null,
+          civFront: soldier.civilianLicenseFrontData ?? null, civBack: soldier.civilianLicenseBackData ?? null, milFront: soldier.militaryLicenseFrontData ?? null,
         }}
         forms={forms}
         battalion={{ name: battalion?.name ?? "", logoData: battalion?.logoData ?? null }}

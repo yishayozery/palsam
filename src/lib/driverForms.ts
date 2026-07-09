@@ -18,7 +18,7 @@ export type FieldDef = {
   full?: boolean;            // תופס שורה מלאה
 };
 export type SectionDef = { title: string; note?: string; fields: FieldDef[] };
-export type FormDef = { type: FormType; title: string; sections: SectionDef[]; declaration?: string[] };
+export type FormDef = { type: FormType; title: string; sections: SectionDef[]; declaration?: string[]; officerOnly?: boolean };
 
 const LEVELS = ["שליטה מלאה", "שליטה חלקית", "חוסר שליטה"];
 const PASSFAIL = ["עבר", "נכשל"];
@@ -61,6 +61,7 @@ export const DRIVER_FORMS: Record<FormType, FormDef> = {
   SAFETY_CHECKOUT: {
     type: "SAFETY_CHECKOUT",
     title: "תיק נהג — הכשרה ומעקב בטיחות",
+    officerOnly: true, // ממולא רק במערכת ע"י קצין רכב/ק.בטיחות — לא נשלח לנהג בבוט
     sections: [
       {
         title: "חלק א' — נראה אישי לחייל ע\"י ק.בטיחות/מפקד",

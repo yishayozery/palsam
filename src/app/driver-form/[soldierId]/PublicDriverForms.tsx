@@ -2,17 +2,18 @@
 
 import { useState, useTransition } from "react";
 import SigPadInline from "@/app/(app)/signatures/SigPadInline";
-import { FieldInput } from "@/app/(app)/driver-files/FormFields";
+import { FieldInput, fileImage } from "@/app/(app)/driver-files/FormFields";
 import { DRIVER_FORMS, FORM_ORDER, FORM_TITLES, prefillValue, type FormType } from "@/lib/driverForms";
-import { submitDriverFormPublic } from "./actions";
+import { submitDriverFormPublic, savePublicLicensePhotos } from "./actions";
 
 type Soldier = {
   id: string; fullName: string; firstName: string; lastName: string; personalNumber: string; company: string; role: string;
   civilianLicenseNumber: string; civilianLicenseGrade: string; civilianLicenseExpiry: string;
 };
 type FormRec = { formType: FormType; data: Record<string, unknown>; filledAt: string | null; validUntil: string | null };
+type Photos = { civFront: boolean; civBack: boolean; milFront: boolean };
 
-export default function PublicDriverForms({ soldier, forms }: { soldier: Soldier; forms: FormRec[] }) {
+export default function PublicDriverForms({ soldier, forms, photos }: { soldier: Soldier; forms: FormRec[]; photos: Photos }) {
   const [open, setOpen] = useState<FormType | null>(null);
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
 
@@ -39,7 +40,18 @@ export default function PublicDriverForms({ soldier, forms }: { soldier: Soldier
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500 text-center mb-2">מלא/י וחתום/י על הטפסים הנדרשים ממך כנהג.</p>
+      <p className="text-xs text-slate-500 text-center mb-2">מלא/י וחתום/י על הטפסים ושלח/י צילומי רישיון.</p>
+
+      {/* צילומי רישיון */}
+      <div className="border border-slate-200 rounded-xl p-3">
+        <div className="text-sm font-medium text-slate-800 mb-2">🪪 צילומי רישיון</div>
+        <div className="grid grid-cols-3 gap-2">
+          <PhotoSlot label="אזרחי — קדימה" soldierId={soldier.id} field="civFront" had={photos.civFront} />
+          <PhotoSlot label="אזרחי — אחורה" soldierId={soldier.id} field="civBack" had={photos.civBack} />
+          <PhotoSlot label="צבאי — קדימה" soldierId={soldier.id} field="milFront" had={photos.milFront} />
+        </div>
+      </div>
+
       {forms.map((rec) => {
         const st = statusOf(rec);
         return (
@@ -116,5 +128,30 @@ function PublicFiller({
         {pending ? "שולח…" : "📤 שלח טופס"}
       </button>
     </div>
+  );
+}
+
+function PhotoSlot({ label, soldierId, field, had }: { label: string; soldierId: string; field: "civFront" | "civBack" | "milFront"; had: boolean }) {
+  const [preview, setPreview] = useState<string | null>(null);
+  const [saved, setSaved] = useState(had);
+  const [pending, start] = useTransition();
+  async function onFile(f: File) {
+    const data = await fileImage(f, 1100, 0.6);
+    setPreview(data);
+    start(async () => { await savePublicLicensePhotos(soldierId, { [field]: data }); setSaved(true); });
+  }
+  return (
+    <label className="cursor-pointer border-2 border-dashed rounded-lg p-2 text-center flex flex-col items-center justify-center gap-1 min-h-[84px] hover:bg-slate-50 border-slate-300">
+      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
+      {preview ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={preview} alt="" className="h-12 w-full object-cover rounded" />
+      ) : (
+        <span className="text-lg">{saved ? "✅" : "📷"}</span>
+      )}
+      <span className="text-[10px] text-slate-600 leading-tight">{label}</span>
+      {pending && <span className="text-[9px] text-indigo-500">שומר…</span>}
+      {saved && !pending && !preview && <span className="text-[9px] text-emerald-600">הועלה</span>}
+    </label>
   );
 }

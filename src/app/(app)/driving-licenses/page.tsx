@@ -71,7 +71,7 @@ export default async function DrivingLicensesPage({
   ]);
 
   const [withPhoto, validities] = await Promise.all([
-    prisma.soldier.findMany({ where: { battalionId: bId, licensePhotoData: { not: null } }, select: { id: true } }),
+    prisma.soldier.findMany({ where: { battalionId: bId, civilianLicenseFrontData: { not: null } }, select: { id: true } }),
     prisma.driverFormValidity.findMany({ where: { battalionId: bId }, select: { formType: true, validityDays: true } }),
   ]);
   const photoSet = new Set(withPhoto.map((s) => s.id));

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { FORM_ORDER, type FormType } from "@/lib/driverForms";
+import { FORM_ORDER, DRIVER_FORMS, type FormType } from "@/lib/driverForms";
 import PublicDriverForms from "./PublicDriverForms";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,7 @@ export default async function PublicDriverFormPage({ params }: { params: Promise
       id: true, fullName: true, personalNumber: true,
       company: { select: { name: true } }, companyRole: { select: { name: true } },
       civilianLicenseNumber: true, civilianLicenseGrade: true, civilianLicenseExpiry: true,
+      civilianLicenseFrontData: true, civilianLicenseBackData: true, militaryLicenseFrontData: true,
       battalion: { select: { name: true, logoData: true } },
       driverForms: { select: { formType: true, data: true, filledAt: true, validUntil: true } },
     },
@@ -20,7 +21,8 @@ export default async function PublicDriverFormPage({ params }: { params: Promise
   if (!soldier) notFound();
 
   const formMap = new Map(soldier.driverForms.map((f) => [f.formType, f]));
-  const forms = FORM_ORDER.map((ft) => {
+  // הכשרת בטיחות (officerOnly) לא נשלחת לנהג בבוט — ממולאת רק במערכת
+  const forms = FORM_ORDER.filter((ft) => !DRIVER_FORMS[ft].officerOnly).map((ft) => {
     const f = formMap.get(ft);
     return {
       formType: ft as FormType,
@@ -29,6 +31,11 @@ export default async function PublicDriverFormPage({ params }: { params: Promise
       validUntil: f?.validUntil ? f.validUntil.toISOString() : null,
     };
   });
+  const photos = {
+    civFront: !!soldier.civilianLicenseFrontData,
+    civBack: !!soldier.civilianLicenseBackData,
+    milFront: !!soldier.militaryLicenseFrontData,
+  };
 
   const nameParts = soldier.fullName.split(" ");
   return (
@@ -53,6 +60,7 @@ export default async function PublicDriverFormPage({ params }: { params: Promise
               civilianLicenseExpiry: soldier.civilianLicenseExpiry ? soldier.civilianLicenseExpiry.toISOString().slice(0, 10) : "",
             }}
             forms={forms}
+            photos={photos}
           />
         </div>
       </div>
