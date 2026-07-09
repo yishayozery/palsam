@@ -497,7 +497,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                       )}
                       {/* 💬 שליחת קישור החתימה בוואטסאפ — לכל שורה, אם יש טלפון */}
                       {s.soldier?.phone && (
-                        <a href={`https://wa.me/${s.soldier.phone.startsWith("0") ? "972" + s.soldier.phone.slice(1) : s.soldier.phone}?text=${encodeURIComponent(`נא לחתום על תעודת הציוד: ${baseUrl}/sign/${s.token}`)}`}
+                        <a href={`https://wa.me/972${s.soldier.phone.replace(/\D/g, "").replace(/^(?:972|0)/, "")}?text=${encodeURIComponent(`✍️ נדרשת חתימתך על תעודת ציוד.\nלחתימה: ${baseUrl}/sign/${s.token}`)}`}
                           target="_blank" rel="noreferrer" className="text-xs text-emerald-600 hover:underline" title="שלח קישור חתימה בוואטסאפ">💬 וואטסאפ</a>
                       )}
                       {canSign && (s.transfer?.signaturePending ? (
