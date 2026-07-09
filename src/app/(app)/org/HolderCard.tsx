@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
 import { ROLE_LABELS, WAREHOUSE_TYPE_SHORT, WAREHOUSE_TYPE_ICON } from "@/lib/rbac";
 import type { WarehouseType } from "@/generated/prisma";
@@ -10,6 +11,16 @@ import HolderDetailsModal, { type HolderRowDetail } from "./HolderDetailsModal";
 export default function HolderCard({ row, kind, baseUrl = "" }: { row: HolderRowDetail; kind: "WAREHOUSE" | "COMPANY"; baseUrl?: string }) {
   const [open, setOpen] = useState(false);
   const [editName, setEditName] = useState(false);
+  const router = useRouter();
+  const [, startToggle] = useTransition();
+  function doToggle() {
+    const msg = row.active
+      ? `⚠️ להשבית את "${row.name}"?\n\nהשבתה חוסמת ניפוקים, החתמות וקליטות. ניתן להפעיל מחדש מאוחר יותר.`
+      : `להפעיל מחדש את "${row.name}"?`;
+    if (!confirm(msg)) return;
+    const fd = new FormData(); fd.set("id", row.id);
+    startToggle(async () => { const r = await toggleHolder(fd); if (r?.error) alert("🚫 " + r.error); router.refresh(); });
+  }
 
   const icon = kind === "WAREHOUSE" && row.warehouseType
     ? WAREHOUSE_TYPE_ICON[row.warehouseType]
@@ -55,17 +66,9 @@ export default function HolderCard({ row, kind, baseUrl = "" }: { row: HolderRow
               <button type="button" onClick={() => setEditName(true)} className="text-xs text-slate-400 hover:text-slate-700 px-1.5 py-1" title="ערוך שם">
                 ✎
               </button>
-              <form action={toggleHolder} onSubmit={(e) => {
-                  const msg = row.active
-                    ? `⚠️ להשבית את "${row.name}"?\n\nהשבתה חוסמת ניפוקים, החתמות וקליטות במחסן/פלוגה זו.\nהמלאי הקיים יישאר אך לא ניתן יהיה להזיז אותו.\n\nניתן להפעיל מחדש מאוחר יותר.`
-                    : `להפעיל מחדש את "${row.name}"?`;
-                  if (!confirm(msg)) e.preventDefault();
-                }}>
-                <input type="hidden" name="id" value={row.id} />
-                <button className="text-xs text-slate-400 hover:text-rose-600 px-1.5 py-1" title={row.active ? "השבת" : "הפעל"}>
-                  {row.active ? "🚫" : "↻"}
-                </button>
-              </form>
+              <button type="button" onClick={doToggle} className="text-xs text-slate-400 hover:text-rose-600 px-1.5 py-1" title={row.active ? "השבת" : "הפעל"}>
+                {row.active ? "🚫" : "↻"}
+              </button>
             </div>
           </div>
 

@@ -223,12 +223,38 @@ export async function setHolderLogo(formData: FormData): Promise<{ ok?: boolean;
   }
 }
 
-export async function toggleHolder(formData: FormData) {
+export async function toggleHolder(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   const user = await requireCapability("org.manage");
   const id = String(formData.get("id") || "");
   const h = await prisma.holder.findUnique({ where: { id } });
-  if (!h) return;
+  if (!h || h.battalionId !== user.battalionId) return { error: "לא נמצא" };
+
+  // 🔒 השבתת מחסן — רק אם ריק. אם יש ציוד עליו או החתמות עליו/ממנו לחיילים — חסום.
+  if (h.active && h.kind === "WAREHOUSE") {
+    const [serial, qty, signedQty] = await Promise.all([
+      // ציוד סריאלי ששייך למחסן (על המדף או חתום על חיילים — שומר currentHolderId)
+      prisma.serialUnit.count({ where: { currentHolderId: id, dischargedAt: null } }),
+      // מלאי כמותי במחסן
+      prisma.stockBalance.aggregate({ where: { holderId: id }, _sum: { quantity: true } }),
+      // ציוד כמותי שנופק מהמחסן לחיילים וטרם נקלט בחזרה (SIGNOUT − CHECKIN)
+      prisma.transferLine.findMany({
+        where: { transfer: { status: "COMPLETED", type: { in: ["SIGNOUT", "CHECKIN"] }, fromHolderId: id, toSoldierId: { not: null } }, serialUnitId: null },
+        select: { quantity: true, transfer: { select: { type: true } } },
+      }),
+    ]);
+    const qtyStock = qty._sum.quantity ?? 0;
+    const outstanding = signedQty.reduce((s, l) => s + (l.transfer.type === "SIGNOUT" ? 1 : -1) * l.quantity, 0);
+    const reasons: string[] = [];
+    if (serial > 0) reasons.push(`${serial} פריטים סריאליים (על המדף/חתומים)`);
+    if (qtyStock > 0) reasons.push(`${qtyStock} יח' מלאי כמותי`);
+    if (outstanding > 0) reasons.push(`${outstanding} יח' חתומות על חיילים`);
+    if (reasons.length > 0) {
+      return { error: `לא ניתן להשבית את "${h.name}" — המחסן אינו ריק: ${reasons.join(" · ")}. יש לרוקן/לזכות את הציוד קודם.` };
+    }
+  }
+
   await prisma.holder.update({ where: { id }, data: { active: !h.active } });
   await audit(user.id, "UPDATE", "Holder", id, { active: !h.active });
   revalidatePath("/org");
+  return { ok: true };
 }
