@@ -164,7 +164,8 @@ async function startCountFromPlan(
 
       const units = await prisma.serialUnit.findMany({
         where: {
-          battalionId: bId, currentHolderId: hId, dischargedAt: null,
+          // ספירת מחסן = רק מה שפיזית במחסן (לא חתום על חייל)
+          battalionId: bId, currentHolderId: hId, dischargedAt: null, signedSoldierId: null,
           ...(allowedItemTypeIds ? { itemTypeId: { in: allowedItemTypeIds } } : {}),
         },
       });

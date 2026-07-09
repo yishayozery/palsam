@@ -43,6 +43,29 @@ export default function CountExecutor({
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [recountIds, setRecountIds] = useState<Set<string>>(new Set());
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  // 🔍 סריקה/חיפוש סריאלי — פתרון לספירת מאות נשקים בלי הקלדה ידנית פר-שורה
+  const [scanInput, setScanInput] = useState("");
+  const [scanMsg, setScanMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [filter, setFilter] = useState("");
+  const dig = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
+
+  // סריקה: מתאים את הסריאלי לשורה, מסמן "נמצא" אוטומטית
+  function doScan() {
+    const q = scanInput.trim();
+    if (!q) return;
+    const qd = dig(q);
+    const isMarked = (l: Line) => { const v = counts[l.id]; return v === "1" || v === String(l.expected); };
+    const match = lines.find((l) => l.isSerial && l.serial && dig(l.serial) === qd && !isMarked(l));
+    if (match) {
+      setCounts((c) => ({ ...c, [match.id]: String(match.expected || 1) }));
+      setSerials((s) => ({ ...s, [match.id]: q }));
+      setScanMsg({ ok: true, text: `✓ נמצא: ${match.item}` });
+    } else {
+      const already = lines.find((l) => l.serial && dig(l.serial) === qd);
+      setScanMsg({ ok: false, text: already ? `כבר סומן: ${q}` : `⚠️ ${q} — לא ברשימת המחסן` });
+    }
+    setScanInput("");
+  }
 
   const stats = useMemo(() => {
     let match = 0, gap = 0, filled = 0;
@@ -107,11 +130,36 @@ export default function CountExecutor({
 
       {isBlind && (
         <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-sm text-indigo-800">
-          🔍 <b>ספירה עיוורת</b> — הקלד את מה שאתה רואה. הכמויות הצפויות מוסתרות ויושוו אחרי ההגשה.
+          🔍 <b>ספירה עיוורת</b> — סרוק/הקלד את הסריאלי של כל פריט; הוא יסומן אוטומטית. הכמויות הצפויות מוסתרות.
         </div>
       )}
 
-      {Object.entries(groups).map(([holder, items]) => (
+      {/* 🔫 סורק סריאלי — הקלד/סרוק מספר סריאלי ולחץ Enter, הפריט יסומן "נמצא" */}
+      {lines.some((l) => l.isSerial) && (
+        <Card className="p-3 sticky top-2 z-20">
+          <div className="flex items-center gap-2">
+            <input value={scanInput} onChange={(e) => setScanInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); doScan(); } }}
+              inputMode="numeric" autoFocus placeholder="🔫 סרוק / הקלד מס׳ סריאלי → Enter"
+              className="flex-1 rounded-lg border-2 border-indigo-300 px-3 py-2 text-sm font-mono" />
+            <button type="button" onClick={doScan} className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-bold">סמן</button>
+          </div>
+          {scanMsg && <div className={`text-xs mt-1.5 font-medium ${scanMsg.ok ? "text-emerald-600" : "text-amber-600"}`}>{scanMsg.text}</div>}
+          <div className="mt-2">
+            <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="חיפוש בטבלה (שם / סריאלי)…"
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-xs" />
+          </div>
+        </Card>
+      )}
+
+      {Object.entries(groups).map(([holder, allItems]) => {
+        const fq = filter.trim().toLowerCase();
+        const fqd = dig(filter);
+        const items = fq
+          ? allItems.filter((l) => l.item.toLowerCase().includes(fq) || (l.serial ? dig(l.serial).includes(fqd) : false) || (l.signedSoldier ?? "").toLowerCase().includes(fq))
+          : allItems;
+        if (items.length === 0) return null;
+        return (
         <Card key={holder} className="p-4">
           <h3 className="font-bold text-slate-700 mb-3 flex items-center justify-between flex-wrap gap-2">
             <span className="flex items-center gap-2">
@@ -265,7 +313,8 @@ export default function CountExecutor({
             })}
           </div>
         </Card>
-      ))}
+        );
+      })}
 
       {lines.length === 0 && (
         <Card className="p-5"><p className="text-sm text-slate-400 text-center">אין פריטים לספירה בהיקף זה.</p></Card>

@@ -68,8 +68,9 @@ export async function startCountFromTask(formData: FormData) {
       });
     }
 
+    // ספירת מחסן = רק מה שפיזית במחסן (לא חתום על חייל — החתומים נספרים בקסקדה האישית)
     const unitWhere: Record<string, unknown> = {
-      battalionId: bId, currentHolderId: { in: holderIds }, dischargedAt: null,
+      battalionId: bId, currentHolderId: { in: holderIds }, dischargedAt: null, signedSoldierId: null,
     };
     if (allowedItemTypeIds) unitWhere.itemTypeId = { in: allowedItemTypeIds };
     const units = await tx.serialUnit.findMany({ where: unitWhere });
