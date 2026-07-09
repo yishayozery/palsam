@@ -9,8 +9,11 @@ import { revalidatePath } from "next/cache";
 export async function saveWarehouse(_prev: unknown, fd: FormData) {
   const user = await requireCapability("ymach.manage");
   const bId = user.battalionId!;
-  const holderId = user.holderId;
-  if (!holderId) return { error: "לא משויך לפלוגה" };
+  // מי שיש לו את המסך יכול להקים — משויך-לפלוגה משתמש בפלוגתו; אדמין/מפקדה בוחר פלוגה (holderId מהטופס)
+  const holderId = user.holderId || (fd.get("holderId") as string);
+  if (!holderId) return { error: "יש לבחור פלוגה/מחסן" };
+  const holder = await prisma.holder.findUnique({ where: { id: holderId }, select: { battalionId: true } });
+  if (!holder || holder.battalionId !== bId) return { error: "פלוגה לא תקינה" };
 
   const id = fd.get("id") as string | null;
   const name = (fd.get("name") as string)?.trim();
@@ -18,6 +21,8 @@ export async function saveWarehouse(_prev: unknown, fd: FormData) {
   if (!name) return { error: "שם חובה" };
 
   if (id) {
+    const existing = await prisma.companyWarehouse.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!existing || existing.battalionId !== bId) return { error: "מחסן לא תקין" };
     await prisma.companyWarehouse.update({ where: { id }, data: { name, notes } });
   } else {
     await prisma.companyWarehouse.create({
@@ -30,12 +35,12 @@ export async function saveWarehouse(_prev: unknown, fd: FormData) {
 
 export async function deleteWarehouse(id: string) {
   const user = await requireCapability("ymach.manage");
-  if (!user.holderId) return;
+  const bId = user.battalionId!;
   const wh = await prisma.companyWarehouse.findUnique({
     where: { id },
-    include: { _count: { select: { shelves: true } } },
+    select: { battalionId: true, holderId: true, _count: { select: { shelves: true } } },
   });
-  if (!wh || wh.holderId !== user.holderId) return;
+  if (!wh || wh.battalionId !== bId || (user.holderId && wh.holderId !== user.holderId)) return;
   if (wh._count.shelves > 0) return { error: "יש מדפים במחסן — מחק אותם קודם" };
   await prisma.companyWarehouse.delete({ where: { id } });
   revalidatePath("/ymach");
@@ -45,7 +50,7 @@ export async function deleteWarehouse(id: string) {
 
 export async function saveShelf(_prev: unknown, fd: FormData) {
   const user = await requireCapability("ymach.manage");
-  if (!user.holderId) return { error: "לא משויך לפלוגה" };
+  const bId = user.battalionId!;
 
   const id = fd.get("id") as string | null;
   const warehouseId = fd.get("warehouseId") as string;
@@ -55,9 +60,9 @@ export async function saveShelf(_prev: unknown, fd: FormData) {
 
   if (!column || !row) return { error: "עמודה ושורה חובה" };
 
-  // verify warehouse belongs to holder
-  const wh = await prisma.companyWarehouse.findUnique({ where: { id: warehouseId } });
-  if (!wh || wh.holderId !== user.holderId) return { error: "מחסן לא תקין" };
+  // אימות: המחסן שייך לגדוד של המשתמש (משויך-לפלוגה רואה רק את פלוגתו במסך)
+  const wh = await prisma.companyWarehouse.findUnique({ where: { id: warehouseId }, select: { battalionId: true, holderId: true } });
+  if (!wh || wh.battalionId !== bId || (user.holderId && wh.holderId !== user.holderId)) return { error: "מחסן לא תקין" };
 
   if (id) {
     await prisma.companyShelf.update({ where: { id }, data: { column, row, label } });
@@ -72,15 +77,15 @@ export async function saveShelf(_prev: unknown, fd: FormData) {
 
 export async function deleteShelf(id: string) {
   const user = await requireCapability("ymach.manage");
-  if (!user.holderId) return;
+  const bId = user.battalionId!;
   const shelf = await prisma.companyShelf.findUnique({
     where: { id },
     include: {
-      warehouse: { select: { holderId: true } },
+      warehouse: { select: { battalionId: true, holderId: true } },
       _count: { select: { items: true, operationalKits: true } },
     },
   });
-  if (!shelf || shelf.warehouse.holderId !== user.holderId) return;
+  if (!shelf || shelf.warehouse.battalionId !== bId || (user.holderId && shelf.warehouse.holderId !== user.holderId)) return;
   if (shelf._count.items > 0 || shelf._count.operationalKits > 0)
     return { error: "יש פריטים או ארגזים על המדף — פנה אותם קודם" };
   await prisma.companyShelf.delete({ where: { id } });
@@ -91,13 +96,13 @@ export async function deleteShelf(id: string) {
 
 export async function assignItemToShelf(shelfId: string, itemTypeId: string, quantity: number) {
   const user = await requireCapability("ymach.manage");
-  if (!user.holderId) return { error: "לא משויך" };
+  const bId = user.battalionId!;
 
   const shelf = await prisma.companyShelf.findUnique({
     where: { id: shelfId },
-    include: { warehouse: { select: { holderId: true } } },
+    include: { warehouse: { select: { battalionId: true, holderId: true } } },
   });
-  if (!shelf || shelf.warehouse.holderId !== user.holderId) return { error: "מדף לא תקין" };
+  if (!shelf || shelf.warehouse.battalionId !== bId || (user.holderId && shelf.warehouse.holderId !== user.holderId)) return { error: "מדף לא תקין" };
 
   await prisma.companyShelfItem.upsert({
     where: { shelfId_itemTypeId: { shelfId, itemTypeId } },
@@ -110,7 +115,12 @@ export async function assignItemToShelf(shelfId: string, itemTypeId: string, qua
 
 export async function removeItemFromShelf(shelfId: string, itemTypeId: string) {
   const user = await requireCapability("ymach.manage");
-  if (!user.holderId) return;
+  const bId = user.battalionId!;
+  const shelf = await prisma.companyShelf.findUnique({
+    where: { id: shelfId },
+    include: { warehouse: { select: { battalionId: true, holderId: true } } },
+  });
+  if (!shelf || shelf.warehouse.battalionId !== bId || (user.holderId && shelf.warehouse.holderId !== user.holderId)) return;
   await prisma.companyShelfItem.deleteMany({
     where: { shelfId, itemTypeId },
   });

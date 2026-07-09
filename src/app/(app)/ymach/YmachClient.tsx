@@ -53,7 +53,7 @@ export default function YmachClient({
   return (
     <div className="mt-4">
       {tab === "warehouses" && (
-        <WarehousesTab warehouses={warehouses} />
+        <WarehousesTab warehouses={warehouses} holderId={holderId} />
       )}
       {tab === "items" && (
         <ItemsTab warehouses={warehouses} stockItems={stockItems} allItems={allItems} />
@@ -153,7 +153,7 @@ function SoldierSearch({
 }
 
 // ===================== טאב מחסנים ומדפים =====================
-function WarehousesTab({ warehouses }: { warehouses: Warehouse[] }) {
+function WarehousesTab({ warehouses, holderId }: { warehouses: Warehouse[]; holderId: string }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [addShelfFor, setAddShelfFor] = useState<string | null>(null);
@@ -174,6 +174,7 @@ function WarehousesTab({ warehouses }: { warehouses: Warehouse[] }) {
       {showAdd && (
         <Card className="p-4 bg-blue-50 border-blue-200">
           <form action={(fd) => { startTransition(async () => { await saveWarehouse(null, fd); setShowAdd(false); }); }}>
+            <input type="hidden" name="holderId" value={holderId} />
             <div className="flex gap-2 items-end flex-wrap">
               <div>
                 <label className="text-xs text-slate-600 block mb-1">שם מחסן</label>
