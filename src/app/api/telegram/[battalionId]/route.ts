@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { sendTelegramMessage, answerCallbackQuery, editMessageText, MAIN_KEYBOARD, buildMainKeyboard } from "@/lib/telegram";
+import { linkTokenQuery } from "@/lib/link-token";
 
 export async function POST(
   req: NextRequest,
@@ -93,6 +94,12 @@ export async function POST(
           select: { id: true, fullName: true, telegramChatId: true },
         });
         if (target) {
+          // 🔒 חסימת חטיפת זהות: אם המ.א כבר מחובר למכשיר אחר — לא לאפשר קשירה-מחדש (רק ניתוק ע"י שלישות)
+          if (target.telegramChatId && target.telegramChatId !== chatId) {
+            await sendTelegramMessage(token, chatId, `⛔ המספר האישי ${startParam} כבר מחובר למכשיר אחר.\nאם זה אתה — פנה/י לשלישות לניתוק וחיבור מחדש.`);
+            await sendTelegramMessage(token, target.telegramChatId, `⚠️ מישהו ניסה לחבר את המספר האישי שלך למכשיר אחר. אם זה לא אתה — דווח/י לשלישות.`).catch(() => {});
+            return NextResponse.json({ ok: true });
+          }
           if (target.telegramChatId !== chatId) {
             await prisma.soldier.update({ where: { id: target.id }, data: { telegramChatId: chatId } });
           }
@@ -245,7 +252,7 @@ export async function POST(
       if (!isDriver) { await sendTelegramMessage(token, chatId, "📁 אין לך טפסי נהג. אם אתה נהג — פנה/י לקצין הרכב.", keyboard); return NextResponse.json({ ok: true }); }
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
       await sendTelegramMessage(token, chatId,
-        `📁 <b>טפסי נהג — ${battalion.name}</b>\n\n${soldier.fullName}, למילוי וחתימה על טפסי תיק הנהג שלך:\n\n👉 <a href="${baseUrl}/driver-form/${soldier.id}">לחץ כאן למילוי הטפסים</a>`, keyboard);
+        `📁 <b>טפסי נהג — ${battalion.name}</b>\n\n${soldier.fullName}, למילוי וחתימה על טפסי תיק הנהג שלך:\n\n👉 <a href="${baseUrl}/driver-form/${soldier.id}${linkTokenQuery("driver-form", soldier.id)}">לחץ כאן למילוי הטפסים</a>`, keyboard);
       return NextResponse.json({ ok: true });
     }
 
@@ -338,6 +345,13 @@ export async function POST(
         `כבר מחובר/ת, ${target.fullName}! ✅`,
         MAIN_KEYBOARD,
       );
+      return NextResponse.json({ ok: true });
+    }
+
+    // 🔒 חסימת חטיפת זהות: אם המ.א כבר מחובר למכשיר אחר — לא לאפשר קשירה-מחדש (רק ניתוק ע"י שלישות)
+    if (target.telegramChatId && target.telegramChatId !== chatId) {
+      await sendTelegramMessage(token, chatId, `⛔ המספר האישי ${personalNumber} כבר מחובר למכשיר אחר.\nאם זה אתה — פנה/י לשלישות לניתוק וחיבור מחדש.`);
+      await sendTelegramMessage(token, target.telegramChatId, `⚠️ מישהו ניסה לחבר את המספר האישי שלך למכשיר אחר. אם זה לא אתה — דווח/י לשלישות.`).catch(() => {});
       return NextResponse.json({ ok: true });
     }
 
@@ -717,7 +731,7 @@ async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, 
   lines.push(`${step3 ? "✅" : "⬜"} חתימה על נוהל שמירת נשק${step3 ? ` (${fmtDate(step3)})` : ""}`);
   if (!step3) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
-    lines.push(`   👉 <a href="${baseUrl}/weapons-sign/${soldier.id}">לחץ כאן לחתימה על הנוהל</a> (נכנס ישר, חותם, זהו)`);
+    lines.push(`   👉 <a href="${baseUrl}/weapons-sign/${soldier.id}${linkTokenQuery("weapons-sign", soldier.id)}">לחץ כאן לחתימה על הנוהל</a> (נכנס ישר, חותם, זהו)`);
   }
 
   const allDone = step1 && step2 && step3;

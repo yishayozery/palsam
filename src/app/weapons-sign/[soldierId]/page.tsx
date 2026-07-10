@@ -1,12 +1,16 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { WEAPONS_AGREEMENT_TITLE, WEAPONS_AGREEMENT_CLAUSES, WEAPONS_AGREEMENT_FOOTER } from "@/lib/weapons-agreement-text";
+import { verifyLink } from "@/lib/link-token";
 import SignForm from "./SignForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function WeaponsSignPage({ params }: { params: Promise<{ soldierId: string }> }) {
+export default async function WeaponsSignPage({ params, searchParams }: { params: Promise<{ soldierId: string }>; searchParams: Promise<{ t?: string }> }) {
   const { soldierId } = await params;
+  const { t: tok } = await searchParams;
+  // 🔒 גישה מותרת רק עם טוקן חתום — מונע חתימה על חיילים אקראיים
+  if (!verifyLink("weapons-sign", soldierId, tok)) notFound();
   const soldier = await prisma.soldier.findUnique({
     where: { id: soldierId },
     select: {
@@ -48,6 +52,7 @@ export default async function WeaponsSignPage({ params }: { params: Promise<{ so
         ) : (
           <SignForm
             soldierId={soldier.id}
+            token={tok ?? ""}
             fullName={soldier.fullName ?? ""}
             personalNumber={soldier.personalNumber ?? ""}
             clauses={clauses}

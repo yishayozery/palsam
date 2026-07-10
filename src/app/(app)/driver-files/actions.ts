@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 import { type FormType, DEFAULT_VALIDITY_DAYS, DRIVER_FORMS, FORM_ORDER, FORM_TITLES } from "@/lib/driverForms";
+import { linkTokenQuery } from "@/lib/link-token";
 
 const BASE = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
 
@@ -95,7 +96,7 @@ export async function saveDriverForm(
 const formsMsg = (name: string, battalionName: string, soldierId: string, incomplete: string[]) => {
   const lines = [`📁 <b>טפסי נהג — ${battalionName}</b>`, ``, `${name}, נדרש למלא ולחתום על טפסי תיק הנהג ולשלוח צילומי רישיון.`];
   if (incomplete.length > 0) lines.push(``, `⚠️ טרם הושלם:`, ...incomplete.map((x) => `• ${x}`));
-  lines.push(``, `👉 <a href="${BASE}/driver-form/${soldierId}">לחץ כאן להשלמה</a>`);
+  lines.push(``, `👉 <a href="${BASE}/driver-form/${soldierId}${linkTokenQuery("driver-form", soldierId)}">לחץ כאן להשלמה</a>`);
   return lines.join("\n");
 };
 

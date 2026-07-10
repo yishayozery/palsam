@@ -34,6 +34,7 @@ export default function SignaturePad({
   const [whatsappText, setWhatsappText] = useState<string | null>(null);
   const [soldierPhone, setSoldierPhone] = useState<string | null>(null);
   const [transferId, setTransferId] = useState<string | null>(null);
+  const [docTokenQuery, setDocTokenQuery] = useState<string>("");
   const [telegramSent, setTelegramSent] = useState<boolean | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const needsAck = !!(weaponsAgreement || signatureClause);
@@ -131,6 +132,7 @@ export default function SignaturePad({
             setWhatsappText(share.whatsappText);
             setSoldierPhone(share.soldierPhone);
             setTransferId(share.transferId);
+            setDocTokenQuery(share.docTokenQuery ?? "");
           }
         } catch {}
       }
@@ -175,8 +177,8 @@ export default function SignaturePad({
         )}
 
         {transferId && (() => {
-          const pdfUrl = `${window.location.origin}/api/transfer-doc/${transferId}/pdf`;
-          const docUrl = `${window.location.origin}/transfer-doc/${transferId}`;
+          const pdfUrl = `${window.location.origin}/api/transfer-doc/${transferId}/pdf${docTokenQuery}`;
+          const docUrl = `${window.location.origin}/transfer-doc/${transferId}${docTokenQuery}`;
           const pdfWaText = `שלום ${soldierName}, מצורף אישור החתמת ציוד.\nלהורדת התעודה כ-PDF:\n${pdfUrl}`;
           const pdfWaUrl = normalizedPhone
             ? `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(pdfWaText)}`

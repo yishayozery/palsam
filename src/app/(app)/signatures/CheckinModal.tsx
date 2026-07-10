@@ -52,7 +52,7 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
   // בחירת מחסן יעד (למפ"מ שלא מוגדר על מחסן)
   const [targetHolderId, setTargetHolderId] = useState(defaultToHolderId ?? "");
   // מסך הצלחה אחרי זיכוי
-  const [doneData, setDoneData] = useState<{ transferId: string; soldierName: string; soldierPhone: string | null } | null>(null);
+  const [doneData, setDoneData] = useState<{ transferId: string; soldierName: string; soldierPhone: string | null; docTokenQuery?: string } | null>(null);
   // חתימת המחסנאי המקבל (המקבל חותם על הזיכוי)
   const [receiverSig, setReceiverSig] = useState("");
 
@@ -193,7 +193,7 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
 
   if (doneData) {
     const normalizedPhone = doneData.soldierPhone?.replace(/\D/g, "").replace(/^0/, "972") ?? "";
-    const docUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/transfer-doc/${doneData.transferId}`;
+    const docUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/transfer-doc/${doneData.transferId}${doneData.docTokenQuery ?? ""}`;
     const waText = `שלום ${doneData.soldierName}, מצורף אישור זיכוי ציוד:\n${docUrl}`;
     const waUrl = normalizedPhone
       ? `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(waText)}`

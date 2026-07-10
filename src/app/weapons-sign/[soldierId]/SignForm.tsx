@@ -4,8 +4,9 @@ import { useState, useTransition } from "react";
 import SigPadInline from "@/app/(app)/signatures/SigPadInline";
 import { signWeaponsAgreement } from "./actions";
 
-export default function SignForm({ soldierId, fullName, personalNumber, clauses, footer }: {
+export default function SignForm({ soldierId, token, fullName, personalNumber, clauses, footer }: {
   soldierId: string;
+  token: string;
   fullName: string;
   personalNumber: string;
   clauses: string[];
@@ -24,7 +25,7 @@ export default function SignForm({ soldierId, fullName, personalNumber, clauses,
     if (!pn.replace(/\D/g, "")) { setError("נא למלא מספר אישי"); return; }
     if (!sig) { setError("נא לחתום בתיבה"); return; }
     start(async () => {
-      const res = await signWeaponsAgreement(soldierId, name, pn, sig);
+      const res = await signWeaponsAgreement(soldierId, token, name, pn, sig);
       if (res.error) { setError(res.error); return; }
       setDone(true);
     });

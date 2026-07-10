@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
 import SoldierEquipmentButton from "./SoldierEquipmentButton";
 import { saveSoldierCertifications } from "../certifications/actions";
-import { saveSoldier, toggleSoldier, requestOpenCallup } from "./actions";
+import { saveSoldier, toggleSoldier, requestOpenCallup, unlinkTelegram } from "./actions";
 
 type SignedSerial = {
   id: string; itemName: string; sku: string | null; serialNumber: string; lotQuantity: number | null;
@@ -273,7 +273,7 @@ export default function SoldiersTable({
                     {s.isCommander && <span title="מפקד">⭐ </span>}
                     {s.fullName}
                     {s.telegramLinked
-                      ? <span className="text-[10px] text-sky-600 mr-1" title="מחובר לבוט טלגרם">📲</span>
+                      ? <button type="button" onClick={() => { if (confirm(`לנתק את ${s.fullName} מהבוט? יוכל/תוכל להתחבר מחדש עם המספר האישי ממכשיר חדש.`)) startTransition(async () => { await unlinkTelegram(s.id); router.refresh(); }); }} className="text-[10px] text-sky-600 mr-1 hover:text-rose-600" title="מחובר לבוט — לחץ לניתוק">📲</button>
                       : <span className="text-[10px] text-slate-300 mr-1" title="לא מחובר לטלגרם">📵</span>}
                     {s.inactive && <span className="text-[10px] text-rose-500 mr-1">(לא פעיל)</span>}
                   </div>

@@ -3,6 +3,7 @@ import SignaturePad from "./SignaturePad";
 import EditableItemList from "./EditableItemList";
 import CenteredWithRedirect from "./CenteredWithRedirect";
 import { WEAPONS_AGREEMENT_TITLE, WEAPONS_AGREEMENT_CLAUSES, WEAPONS_AGREEMENT_FOOTER } from "@/lib/weapons-agreement-text";
+import { linkTokenQuery } from "@/lib/link-token";
 
 export const dynamic = "force-dynamic";
 
@@ -59,8 +60,9 @@ export default async function PublicSignPage({
   }
   if (sig.status === "SIGNED") {
     const base = process.env.NEXT_PUBLIC_APP_URL || "";
-    const pdfUrl = sig.transferId ? `${base}/api/transfer-doc/${sig.transferId}/pdf` : null;
-    const docUrl = sig.transferId ? `${base}/transfer-doc/${sig.transferId}` : null;
+    const docTok = sig.transferId ? linkTokenQuery("transfer-doc", sig.transferId) : "";
+    const pdfUrl = sig.transferId ? `${base}/api/transfer-doc/${sig.transferId}/pdf${docTok}` : null;
+    const docUrl = sig.transferId ? `${base}/transfer-doc/${sig.transferId}${docTok}` : null;
     const soldierPhone = sig.soldier?.phone ?? sig.signerUser?.phone ?? null;
     const normalizedPhone = soldierPhone?.replace(/\D/g, "").replace(/^0/, "972") ?? "";
     const pdfWaText = pdfUrl

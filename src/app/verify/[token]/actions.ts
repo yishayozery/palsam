@@ -26,6 +26,11 @@ export async function submitVerification(
   // חסימת דיווח כפול — אלא אם הספירה מאפשרת תיקון ע"י המדווח בקצה
   if (req.respondedAt && !req.session?.correctByReporter) return { error: "כבר דווח" };
 
+  // 🔒 אימות שכל itemId שייך לבקשה של ה-token — מונע עדכון פריטי-אימות של בקשות/גדודים אחרים
+  const ownItems = await prisma.verificationItem.findMany({ where: { requestId: req.id }, select: { id: true } });
+  const ownIds = new Set(ownItems.map((i) => i.id));
+  if (responses.some((r) => !ownIds.has(r.itemId))) return { error: "בקשה לא תקינה" };
+
   // 1. עדכון תגובות החייל על ה-VerificationItem
   await prisma.$transaction(
     responses.map((r) =>

@@ -1,12 +1,16 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { FORM_ORDER, DRIVER_FORMS, type FormType } from "@/lib/driverForms";
+import { verifyLink } from "@/lib/link-token";
 import PublicDriverForms from "./PublicDriverForms";
 
 export const dynamic = "force-dynamic";
 
-export default async function PublicDriverFormPage({ params }: { params: Promise<{ soldierId: string }> }) {
+export default async function PublicDriverFormPage({ params, searchParams }: { params: Promise<{ soldierId: string }>; searchParams: Promise<{ t?: string }> }) {
   const { soldierId } = await params;
+  const { t: tok } = await searchParams;
+  // 🔒 גישה מותרת רק עם טוקן חתום — מונע צפייה/העלאה לחיילים אקראיים
+  if (!verifyLink("driver-form", soldierId, tok)) notFound();
   const soldier = await prisma.soldier.findUnique({
     where: { id: soldierId },
     select: {
@@ -52,6 +56,7 @@ export default async function PublicDriverFormPage({ params }: { params: Promise
             <p className="text-sm text-slate-700 mt-1 font-medium">{soldier.fullName} · מ.א {soldier.personalNumber ?? "—"}</p>
           </div>
           <PublicDriverForms
+            token={tok ?? ""}
             soldier={{
               id: soldier.id, fullName: soldier.fullName,
               firstName: nameParts.slice(0, -1).join(" "), lastName: nameParts.slice(-1)[0] ?? "",

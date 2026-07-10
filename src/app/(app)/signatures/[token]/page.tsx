@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import QRCode from "qrcode";
 import { requireUser } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
+import { linkTokenQuery } from "@/lib/link-token";
 import { PageHeader, Card, Badge } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ export default async function SignatureTokenPage({
 
   const signed = sig.status === "SIGNED";
 
-  const docUrl = sig.transferId ? `${base}/transfer-doc/${sig.transferId}` : null;
+  const docUrl = sig.transferId ? `${base}/transfer-doc/${sig.transferId}${linkTokenQuery("transfer-doc", sig.transferId)}` : null;
   const soldierPhone = sig.soldier?.phone ?? sig.signerUser?.phone ?? null;
   const certWaText = docUrl
     ? encodeURIComponent(

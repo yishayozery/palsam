@@ -13,7 +13,7 @@ type Soldier = {
 type FormRec = { formType: FormType; data: Record<string, unknown>; filledAt: string | null; validUntil: string | null };
 type Photos = { civFront: boolean; civBack: boolean; milFront: boolean };
 
-export default function PublicDriverForms({ soldier, forms, photos }: { soldier: Soldier; forms: FormRec[]; photos: Photos }) {
+export default function PublicDriverForms({ soldier, forms, photos, token }: { soldier: Soldier; forms: FormRec[]; photos: Photos; token: string }) {
   const [open, setOpen] = useState<FormType | null>(null);
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
 
@@ -46,9 +46,9 @@ export default function PublicDriverForms({ soldier, forms, photos }: { soldier:
       <div className="border border-slate-200 rounded-xl p-3">
         <div className="text-sm font-medium text-slate-800 mb-2">🪪 צילומי רישיון</div>
         <div className="grid grid-cols-3 gap-2">
-          <PhotoSlot label="אזרחי — קדימה" soldierId={soldier.id} field="civFront" had={photos.civFront} />
-          <PhotoSlot label="אזרחי — אחורה" soldierId={soldier.id} field="civBack" had={photos.civBack} />
-          <PhotoSlot label="צבאי — קדימה" soldierId={soldier.id} field="milFront" had={photos.milFront} />
+          <PhotoSlot label="אזרחי — קדימה" soldierId={soldier.id} token={token} field="civFront" had={photos.civFront} />
+          <PhotoSlot label="אזרחי — אחורה" soldierId={soldier.id} token={token} field="civBack" had={photos.civBack} />
+          <PhotoSlot label="צבאי — קדימה" soldierId={soldier.id} token={token} field="milFront" had={photos.milFront} />
         </div>
       </div>
 
@@ -62,7 +62,7 @@ export default function PublicDriverForms({ soldier, forms, photos }: { soldier:
               <span className={`text-sm ${st.cls}`}>{st.icon} {st.label}</span>
             </button>
             {open === rec.formType && (
-              <PublicFiller formType={rec.formType} rec={rec} soldier={soldier} prefillCtx={prefillCtx}
+              <PublicFiller formType={rec.formType} rec={rec} soldier={soldier} token={token} prefillCtx={prefillCtx}
                 onSaved={() => { setOpen(null); setDoneMsg("הטופס נשלח בהצלחה! תודה."); }} />
             )}
           </div>
@@ -73,9 +73,9 @@ export default function PublicDriverForms({ soldier, forms, photos }: { soldier:
 }
 
 function PublicFiller({
-  formType, rec, soldier, prefillCtx, onSaved,
+  formType, rec, soldier, token, prefillCtx, onSaved,
 }: {
-  formType: FormType; rec: FormRec; soldier: Soldier;
+  formType: FormType; rec: FormRec; soldier: Soldier; token: string;
   prefillCtx: Parameters<typeof prefillValue>[1]; onSaved: () => void;
 }) {
   const def = DRIVER_FORMS[formType];
@@ -99,7 +99,7 @@ function PublicFiller({
       ? { number: values.licenseNumber as string, grade: values.licenseGrade as string, expiry: values.licenseExpiry as string }
       : undefined;
     start(async () => {
-      const r = await submitDriverFormPublic(soldier.id, formType, values, { signatureData: sig, signerName: soldier.fullName, signerPersonalNumber: soldier.personalNumber }, license);
+      const r = await submitDriverFormPublic(soldier.id, token, formType, values, { signatureData: sig, signerName: soldier.fullName, signerPersonalNumber: soldier.personalNumber }, license);
       if (r.error) { setErr(r.error); return; }
       onSaved();
     });
@@ -131,14 +131,14 @@ function PublicFiller({
   );
 }
 
-function PhotoSlot({ label, soldierId, field, had }: { label: string; soldierId: string; field: "civFront" | "civBack" | "milFront"; had: boolean }) {
+function PhotoSlot({ label, soldierId, token, field, had }: { label: string; soldierId: string; token: string; field: "civFront" | "civBack" | "milFront"; had: boolean }) {
   const [preview, setPreview] = useState<string | null>(null);
   const [saved, setSaved] = useState(had);
   const [pending, start] = useTransition();
   async function onFile(f: File) {
     const data = await fileImage(f, 1100, 0.6);
     setPreview(data);
-    start(async () => { await savePublicLicensePhotos(soldierId, { [field]: data }); setSaved(true); });
+    start(async () => { await savePublicLicensePhotos(soldierId, token, { [field]: data }); setSaved(true); });
   }
   return (
     <label className="cursor-pointer border-2 border-dashed rounded-lg p-2 text-center flex flex-col items-center justify-center gap-1 min-h-[84px] hover:bg-slate-50 border-slate-300">

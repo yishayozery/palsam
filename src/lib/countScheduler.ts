@@ -125,6 +125,8 @@ export async function generatePendingTasks(now: Date = new Date()): Promise<numb
   // 🧹 ניקוי retention — מונע התנפחות DB מספירות יומיות. מוחק סשנים שהושלמו
   //    מלפני 90+ יום (+ שורות/בקשות-אימות בקסקדה, ומשימות/פערים ידנית).
   await cleanupOldCounts(now).catch(() => {});
+  // 🧹 ניקוי טבלאות ארעיות — טוקני שיגור פגי-תוקף + מכות rate-limit ישנות
+  await cleanupEphemeral(now).catch(() => {});
 
   // עדכון משימות OVERDUE + שליחת התראות
   const overdueTasks = await prisma.countTask.findMany({
@@ -164,6 +166,14 @@ export async function cleanupOldCounts(now: Date = new Date()): Promise<number> 
   // מחיקת הסשן מוחקת בקסקדה CountLine + VerificationRequest (+ VerificationItem)
   const del = await prisma.countSession.deleteMany({ where: { id: { in: ids } } });
   return del.count;
+}
+
+/** ניקוי טבלאות ארעיות (retention דטרמיניסטי) — טוקני שיגור פגי-תוקף + מכות rate-limit ישנות. */
+export async function cleanupEphemeral(now: Date = new Date()): Promise<{ tokens: number; rateHits: number }> {
+  const tokens = await prisma.dispatchToken.deleteMany({ where: { expiresAt: { lt: now } } }).catch(() => ({ count: 0 }));
+  const rateCutoff = new Date(now.getTime() - 24 * 3600 * 1000);
+  const rateHits = await prisma.rateLimitHit.deleteMany({ where: { createdAt: { lt: rateCutoff } } }).catch(() => ({ count: 0 }));
+  return { tokens: tokens.count, rateHits: rateHits.count };
 }
 
 /** שליחת הודעת טלגרם לאחראי על משימת ספירה חדשה */

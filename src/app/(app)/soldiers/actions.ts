@@ -5,6 +5,18 @@ import { prisma } from "@/lib/prisma";
 import { requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 
+/** ניתוק קישור הטלגרם של חייל (שלישות) — כדי לאפשר חיבור-מחדש ממכשיר חדש. */
+export async function unlinkTelegram(soldierId: string) {
+  const user = await requireCapability("soldiers.roster");
+  const bId = user.battalionId!;
+  const s = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true } });
+  if (!s || s.battalionId !== bId) return { error: "חייל לא נמצא" };
+  await prisma.soldier.update({ where: { id: soldierId }, data: { telegramChatId: null } });
+  await audit(user.id, "UNLINK_TELEGRAM", "Soldier", soldierId);
+  revalidatePath("/soldiers");
+  return { ok: true };
+}
+
 export async function saveCompanyRole(formData: FormData) {
   const user = await requireCapability("company.manage");
   const bId = user.battalionId!;

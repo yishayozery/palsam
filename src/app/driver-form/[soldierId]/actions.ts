@@ -2,12 +2,16 @@
 
 import { prisma } from "@/lib/prisma";
 import { type FormType, DEFAULT_VALIDITY_DAYS } from "@/lib/driverForms";
+import { verifyLink } from "@/lib/link-token";
 
-/** שמירת צילומי רישיון ע"י הנהג דרך הבוט (ציבורי). כל תמונה בנפרד. */
+/** שמירת צילומי רישיון ע"י הנהג דרך הבוט (ציבורי, מאובטח בטוקן חתום). כל תמונה בנפרד. */
 export async function savePublicLicensePhotos(
   soldierId: string,
+  token: string,
   photos: { civFront?: string; civBack?: string; milFront?: string },
 ) {
+  // 🔒 אימות טוקן חתום — מונע העלאת צילומים לחייל אקראי
+  if (!verifyLink("driver-form", soldierId, token)) return { error: "קישור לא תקין" };
   const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { id: true } });
   if (!soldier) return { error: "לא נמצא" };
   await prisma.soldier.update({
@@ -24,11 +28,14 @@ export async function savePublicLicensePhotos(
 /** מילוי טופס תיק נהג ע"י הנהג עצמו דרך קישור הבוט (ציבורי — לפי soldierId cuid בלתי-ניחוש). */
 export async function submitDriverFormPublic(
   soldierId: string,
+  token: string,
   formType: FormType,
   data: Record<string, unknown>,
   signature: { signatureData?: string; signerName?: string; signerPersonalNumber?: string },
   license?: { number?: string; grade?: string; expiry?: string },
 ) {
+  // 🔒 אימות טוקן חתום — מונע מילוי טפסים בשם חייל אקראי
+  if (!verifyLink("driver-form", soldierId, token)) return { error: "קישור לא תקין" };
   const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { id: true, battalionId: true } });
   if (!soldier) return { error: "לא נמצא" };
   const bId = soldier.battalionId;

@@ -1,15 +1,19 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { verifyLink } from "@/lib/link-token";
 
-/** חתימת נוהל שמירת נשק דרך לינק ישיר (ציבורי, מפתח = מזהה החייל). */
+/** חתימת נוהל שמירת נשק דרך לינק ישיר (ציבורי, מאובטח בטוקן חתום). */
 export async function signWeaponsAgreement(
   soldierId: string,
+  token: string,
   fullName: string,
   personalNumber: string,
   signatureData: string,
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
+    // 🔒 אימות טוקן חתום — מונע חתימה על חייל אקראי
+    if (!verifyLink("weapons-sign", soldierId, token)) return { error: "קישור לא תקין" };
     if (!signatureData.startsWith("data:image/")) return { error: "חתימה חסרה — נא לחתום בתיבה" };
     const s = await prisma.soldier.findUnique({
       where: { id: soldierId },

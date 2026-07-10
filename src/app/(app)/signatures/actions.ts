@@ -280,7 +280,7 @@ export async function updateSoldierPhone(soldierId: string, phone: string): Prom
 /** מחזיר את ה-summary של חייל אחרי חתימה - לשליחה ב-WhatsApp. ציבורי דרך token. */
 export async function getPostSignatureShareData(
   token: string,
-): Promise<{ ok: true; summary: SoldierEquipmentSummary; whatsappText: string; soldierPhone: string | null; transferId: string | null } | { ok: false; error: string }> {
+): Promise<{ ok: true; summary: SoldierEquipmentSummary; whatsappText: string; soldierPhone: string | null; transferId: string | null; docTokenQuery: string } | { ok: false; error: string }> {
   try {
     const sig = await prisma.signature.findUnique({
       where: { token },
@@ -294,7 +294,8 @@ export async function getPostSignatureShareData(
     const whatsappText = formatSoldierSummaryForWhatsApp(summary, {
       headerTitle: "📋 סיכום ציוד חתום על החייל (לאחר חתימה)",
     });
-    return { ok: true, summary, whatsappText, soldierPhone: summary.soldier.phone, transferId: sig.transferId };
+    const { linkTokenQuery } = await import("@/lib/link-token");
+    return { ok: true, summary, whatsappText, soldierPhone: summary.soldier.phone, transferId: sig.transferId, docTokenQuery: sig.transferId ? linkTokenQuery("transfer-doc", sig.transferId) : "" };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "שגיאה" };
   }
@@ -1011,7 +1012,7 @@ export async function checkinBatch(payload: {
   qtyItems: { itemTypeId: string; statusId: string; quantity: number }[];
   toHolderId: string;
   receiverSignature?: string; // חתימת המחסנאי המקבל (base64)
-}): Promise<{ ok: true; transferId: string; soldierName: string; soldierPhone: string | null } | { ok: false; error: string }> {
+}): Promise<{ ok: true; transferId: string; soldierName: string; soldierPhone: string | null; docTokenQuery: string } | { ok: false; error: string }> {
   const user = await requireUser();
   if (!can(user, "signatures.manage")) return { ok: false, error: "אין הרשאה" };
   const bId = user.battalionId!;
@@ -1150,7 +1151,8 @@ export async function checkinBatch(payload: {
 
     revalidatePath("/signatures");
     revalidatePath("/my-equipment");
-    return { ok: true, transferId, soldierName: soldier.fullName, soldierPhone: soldier.phone };
+    const { linkTokenQuery } = await import("@/lib/link-token");
+    return { ok: true, transferId, soldierName: soldier.fullName, soldierPhone: soldier.phone, docTokenQuery: linkTokenQuery("transfer-doc", transferId) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "שגיאה בזיכוי" };
   }

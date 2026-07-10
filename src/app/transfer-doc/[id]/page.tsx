@@ -2,15 +2,21 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PrintButton from "@/components/PrintButton";
 import { TRANSFER_TYPE, TRANSFER_STATUS } from "@/lib/labels";
+import { verifyLink } from "@/lib/link-token";
 
 export const dynamic = "force-dynamic";
 
 export default async function PublicTransferDocPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ t?: string }>;
 }) {
   const { id } = await params;
+  const { t: tok } = await searchParams;
+  // 🔒 גישה ציבורית מותרת רק עם טוקן חתום — מונע מנייה/ניחוש של תעודות
+  if (!verifyLink("transfer-doc", id, tok)) notFound();
 
   const t = await prisma.transfer.findUnique({
     where: { id },

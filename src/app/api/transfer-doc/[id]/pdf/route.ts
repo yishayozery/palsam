@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildTransferPdfBuffer } from "@/lib/email-pdf";
+import { verifyLink } from "@/lib/link-token";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  // 🔒 גישה ציבורית מותרת רק עם טוקן חתום
+  const tok = req.nextUrl.searchParams.get("t");
+  if (!verifyLink("transfer-doc", id, tok)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 403 });
+  }
 
   const t = await prisma.transfer.findUnique({
     where: { id },
