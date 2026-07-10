@@ -2,8 +2,8 @@ name: 💾 גיבוי יומי DB
 
 on:
   schedule:
-    # כל יום ב-02:00 UTC (05:00 ישראל)
-    - cron: '0 2 * * *'
+    # פעמיים ביום: 09:00 ו-21:00 UTC = 12:00 ו-00:00 בישראל (קיץ; בחורף זז שעה)
+    - cron: '0 9,21 * * *'
   workflow_dispatch: # מאפשר הרצה ידנית
 
 jobs:
@@ -57,3 +57,20 @@ jobs:
         run: |
           aws s3 cp "${FILENAME}" "s3://${S3_BUCKET}/palsam-backups/${FILENAME}"
           echo "✓ הועלה ל-S3"
+
+      # עדכון מסך הגיבויים באפליקציה (BackupRun) — רק אם הוגדר CRON_SECRET (אותו ערך כמו ב-Vercel)
+      - name: בדיקה אם CRON_SECRET מוגדר
+        id: check_cron
+        env:
+          CS: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -n "$CS" ]; then echo "enabled=true" >> $GITHUB_OUTPUT; else echo "enabled=false" >> $GITHUB_OUTPUT; fi
+
+      - name: 'עדכון דשבורד הגיבויים ב-/backups'
+        if: steps.check_cron.outputs.enabled == 'true'
+        env:
+          CS: ${{ secrets.CRON_SECRET }}
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X GET "https://www.palmy.co.il/api/cron/backup" -H "Authorization: Bearer $CS")
+          echo "dashboard ping → HTTP $code"
+          test "$code" = "200"
