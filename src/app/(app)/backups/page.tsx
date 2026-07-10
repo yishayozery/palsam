@@ -30,14 +30,27 @@ export default async function BackupsPage() {
 
   const okRuns = runs.filter((r) => r.status === "OK");
   const lastOk = okRuns[0] ?? null;
+  // חיווי בריאות — גיבוי פעמיים ביום (כל ~12ש'); מתריע אם עברו 14+ שעות מאז גיבוי תקין
+  const hoursSinceOk = lastOk ? (Date.now() - lastOk.createdAt.getTime()) / 3600000 : Infinity;
+  const healthy = hoursSinceOk < 14;
+  const lastFailed = runs[0] && runs[0].status !== "OK";
 
   return (
     <div>
       <PageHeader
         title="💾 גיבויים"
-        subtitle="גיבוי אוטומטי יומי + ידני בכל עת · שכבת שחזור נוספת מעל Neon PITR"
+        subtitle="גיבוי אוטומטי פעמיים ביום (12:00 ו-00:00) + ידני בכל עת · שכבת שחזור מעל Neon PITR"
         action={<BackupNowButton />}
       />
+
+      <div className={`rounded-xl p-3 mb-4 text-sm font-medium border ${healthy ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-300 text-rose-800"}`}>
+        {healthy
+          ? `✅ הגיבויים תקינים — הגיבוי האחרון לפני ${hoursSinceOk < 1 ? "פחות משעה" : `${Math.floor(hoursSinceOk)} שעות`}.`
+          : lastOk
+            ? `⚠️ לא בוצע גיבוי תקין כבר ${Math.floor(hoursSinceOk)} שעות! בדוק שה-cron החיצוני פועל, או לחץ "גבה עכשיו".`
+            : `⚠️ עדיין לא בוצע אף גיבוי תקין. הגדר את ה-cron החיצוני או לחץ "גבה עכשיו".`}
+        {lastFailed && " · הריצה האחרונה נכשלה."}
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         <Card className="p-4">
