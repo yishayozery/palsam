@@ -169,10 +169,15 @@ export async function POST(
       return NextResponse.json({ ok: true });
     }
 
-    // 🚗 רכבים — תת-תפריט המרכז את כל אפשרויות הרכב
+    // 🚗 רכבים — תת-תפריט המרכז את כל אפשרויות הרכב + קישורים שימושיים
     if (cmd === "/vehicles") {
+      const links = await prisma.vehicleLink.findMany({
+        where: { battalionId, visibleToSoldier: true, active: true },
+        orderBy: { sortOrder: "asc" }, select: { name: true, url: true },
+      });
+      const linkLines = links.length ? "\n\n🔗 <b>קישורים:</b>\n" + links.map((l) => `• <a href="${l.url}">${l.name}</a>`).join("\n") : "";
       await sendTelegramMessage(token, chatId,
-        "🚗 <b>רכבים</b>\nבחר/י פעולה:",
+        `🚗 <b>רכבים</b>\nבחר/י פעולה:${linkLines}`,
         buildVehicleKeyboard(canManageTeam, isDriver));
       return NextResponse.json({ ok: true });
     }

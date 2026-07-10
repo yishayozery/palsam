@@ -144,6 +144,8 @@ model Battalion {
   attendanceFollowupSentOn    String? // YYYY-MM-DD — נשלחה תזכורת חוזרת היום (מונע כפילות)
   attendanceReportWindowDow   Json?   // 7 מספרים (א׳..שבת) — כמה ימים קדימה מותר לדווח בכל יום בשבוע
   attendanceReportOverrides   AttendanceReportOverride[]
+  vehicleFuelCards            VehicleFuelCard[]
+  vehicleLinks                VehicleLink[]
   tripLink                    String? // קישור "פתיחת משימת נסיעה" שנשלח לנהגים בבוט עם השיבוץ למשימה
   drivingProcedureText        String? // נוסח נוהל נהיגה לחתימת נהגים (מוצג בבוט + קצין רכב)
   drivingProcedureUpdatedAt   DateTime? // מתי עודכן הנוסח — חתימה מלפני התאריך נחשבת לא-תקפה (גרסה חדשה → חתימה מחדש)
@@ -601,6 +603,7 @@ model Soldier {
   company        Holder?   @relation(fields: [companyId], references: [id])
   dutyRound      Int?      // סבב תעסוקה — לשיבוץ החלפות סבב ברמת פלוגה
   isAttendanceReporter Boolean @default(false) // נאמן כ"א — מדווח נוכחות (פלוגה, או המחלקה שלו אם משויך)
+  fuelCards      VehicleFuelCard[]
   // שיוך משני — מחסן שהחייל גם משתייך אליו (למשל חייל ארמון שגם בפלוגה א')
   secondaryHolderId String?
   secondaryHolder   Holder? @relation("SoldierSecondary", fields: [secondaryHolderId], references: [id])
@@ -2336,5 +2339,38 @@ model AttendanceReportOverride {
   createdAt   DateTime  @default(now())
 
   @@unique([battalionId, date])
+  @@index([battalionId])
+}
+
+/** כרטיס דלק שנמשך ע"י חייל — מעקב מי מחזיק, מספר כרטיס, מתי נמשך והוחזר. */
+model VehicleFuelCard {
+  id          String    @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  soldierId   String
+  soldier     Soldier   @relation(fields: [soldierId], references: [id], onDelete: Cascade)
+  cardNumber  String    // מספר הכרטיס
+  checkoutAt  DateTime  @default(now()) // תאריך משיכה
+  returnedAt  DateTime? // תאריך החזרה (null = פתוח אצל החייל)
+  note        String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  @@index([battalionId, returnedAt])
+  @@index([soldierId])
+}
+
+/** קישור שימושי לקצין רכב (למשל מוסך/צמיגים) — מוצג לחייל בבוט לפי שם, הלינק שתול. */
+model VehicleLink {
+  id               String    @id @default(cuid())
+  battalionId      String
+  battalion        Battalion @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  name             String    // שם הקישור (מוצג)
+  url              String    // הלינק עצמו (שתול)
+  visibleToSoldier Boolean   @default(true) // האם להציג לחייל בבוט
+  sortOrder        Int       @default(0)
+  active           Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+
   @@index([battalionId])
 }

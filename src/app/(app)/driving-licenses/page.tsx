@@ -10,6 +10,8 @@ import LicenseEditor from "./LicenseEditor";
 import VehicleTypeLicenseEditor from "./VehicleTypeLicenseEditor";
 import RefreshDaysSettings from "./RefreshDaysSettings";
 import DriverFileSettings from "./DriverFileSettings";
+import FuelCardsManager from "./FuelCardsManager";
+import VehicleLinksManager from "./VehicleLinksManager";
 import { FORM_ORDER, FORM_TITLES, DEFAULT_VALIDITY_DAYS } from "@/lib/driverForms";
 
 export const dynamic = "force-dynamic";
@@ -77,10 +79,24 @@ export default async function DrivingLicensesPage({
   const photoSet = new Set(withPhoto.map((s) => s.id));
   const valMap = new Map(validities.map((v) => [v.formType, v.validityDays]));
 
+  const fuelCards = tab === "fuelcards"
+    ? (await prisma.vehicleFuelCard.findMany({
+        where: { battalionId: bId },
+        orderBy: [{ returnedAt: "asc" }, { checkoutAt: "desc" }], take: 300,
+        select: { id: true, cardNumber: true, checkoutAt: true, returnedAt: true, note: true, soldier: { select: { id: true, fullName: true } } },
+      })).map((c) => ({ id: c.id, cardNumber: c.cardNumber, soldierId: c.soldier.id, soldierName: c.soldier.fullName, checkoutAt: c.checkoutAt.toISOString(), returnedAt: c.returnedAt ? c.returnedAt.toISOString() : null, note: c.note }))
+    : [];
+  const vehicleLinks = tab === "links"
+    ? await prisma.vehicleLink.findMany({ where: { battalionId: bId }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, url: true, visibleToSoldier: true } })
+    : [];
+  const soldierOpts = soldiers.map((s) => ({ id: s.id, name: s.fullName }));
+
   const TABS = [
     { key: "soldiers", label: "רשיונות והיתרים" },
     { key: "types", label: "סוגי הרשאות" },
     { key: "vehicles", label: "שיוך רכבים" },
+    { key: "fuelcards", label: "⛽ כרטיסי דלק" },
+    { key: "links", label: "🔗 קישורים" },
     { key: "driverfile", label: "📁 תיק נהג" },
   ] as const;
 
@@ -133,6 +149,10 @@ export default async function DrivingLicensesPage({
           canEdit={canEditLicenses}
         />
       )}
+
+      {tab === "fuelcards" && <FuelCardsManager cards={fuelCards} soldiers={soldierOpts} />}
+
+      {tab === "links" && <VehicleLinksManager links={vehicleLinks} />}
 
       {tab === "soldiers" && (
         <LicenseEditor
