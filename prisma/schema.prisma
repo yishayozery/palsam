@@ -2351,6 +2351,9 @@ model VehicleFuelCard {
   soldier     Soldier   @relation(fields: [soldierId], references: [id], onDelete: Cascade)
   cardNumber  String    // מספר הכרטיס
   checkoutAt  DateTime  @default(now()) // תאריך משיכה
+  signatureData String?  // חתימת החייל על הקבלה (data URL) — נחתם על המובייל של קצין הרכב
+  signerName    String?  // שם החותם
+  signedAt      DateTime? // מתי נחתם
   returnedAt  DateTime? // תאריך החזרה (null = פתוח אצל החייל)
   note        String?
   createdById String?

@@ -1,11 +1,34 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useRef, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addFuelCard, returnFuelCard, deleteFuelCard } from "./vehicle-actions";
 
-type Card = { id: string; cardNumber: string; soldierName: string; soldierId: string; checkoutAt: string; returnedAt: string | null; note: string | null };
+type Card = { id: string; cardNumber: string; soldierName: string; soldierId: string; checkoutAt: string; returnedAt: string | null; note: string | null; signed: boolean };
 type Opt = { id: string; name: string };
+
+/** משטח חתימה קומפקטי — החייל חותם על המובייל של קצין הרכב. */
+function SigPad({ onChange }: { onChange: (dataUrl: string) => void }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  useEffect(() => {
+    const c = ref.current!; const ctx = c.getContext("2d")!;
+    ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.strokeStyle = "#1e293b";
+    const pos = (e: PointerEvent) => { const r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * (c.width / r.width), y: (e.clientY - r.top) * (c.height / r.height) }; };
+    const down = (e: PointerEvent) => { drawing.current = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); c.setPointerCapture(e.pointerId); };
+    const move = (e: PointerEvent) => { if (!drawing.current) return; const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); };
+    const up = () => { if (drawing.current) { drawing.current = false; onChange(c.toDataURL("image/png")); } };
+    c.addEventListener("pointerdown", down); c.addEventListener("pointermove", move); c.addEventListener("pointerup", up); c.addEventListener("pointerleave", up);
+    return () => { c.removeEventListener("pointerdown", down); c.removeEventListener("pointermove", move); c.removeEventListener("pointerup", up); c.removeEventListener("pointerleave", up); };
+  }, [onChange]);
+  const clear = () => { const c = ref.current!; c.getContext("2d")!.clearRect(0, 0, c.width, c.height); onChange(""); };
+  return (
+    <div>
+      <canvas ref={ref} width={340} height={110} className="w-full border-2 border-dashed border-slate-300 rounded-lg bg-white touch-none" />
+      <button type="button" onClick={clear} className="text-xs text-slate-400 hover:text-rose-600 mt-1">🧹 נקה חתימה</button>
+    </div>
+  );
+}
 
 function fmt(d: string) { return new Intl.DateTimeFormat("he-IL", { timeZone: "Asia/Jerusalem", dateStyle: "short" }).format(new Date(d)); }
 function daysAgo(d: string) { return Math.floor((Date.now() - new Date(d).getTime()) / 86400000); }
@@ -15,6 +38,7 @@ export default function FuelCardsManager({ cards, soldiers }: { cards: Card[]; s
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [sig, setSig] = useState("");
 
   const open = cards.filter((c) => !c.returnedAt);
   const closed = cards.filter((c) => c.returnedAt);
@@ -25,6 +49,7 @@ export default function FuelCardsManager({ cards, soldiers }: { cards: Card[]; s
     start(async () => {
       const r = await addFuelCard(fd);
       if (r?.error) { setErr(r.error); return; }
+      setSig("");
       router.refresh();
       (document.getElementById("fuel-form") as HTMLFormElement)?.reset();
     });
@@ -50,8 +75,13 @@ export default function FuelCardsManager({ cards, soldiers }: { cards: Card[]; s
             <label className="block text-xs font-semibold text-slate-600 mb-1">מספר כרטיס</label>
             <input name="cardNumber" required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
           </div>
-          <button disabled={pending} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50">
-            {pending ? "…" : "➕ משיכה"}
+          <div className="sm:col-span-4">
+            <label className="block text-xs font-semibold text-slate-600 mb-1">✍️ חתימת החייל שקיבל (על המכשיר — אופציונלי)</label>
+            <SigPad onChange={setSig} />
+            <input type="hidden" name="signatureData" value={sig} />
+          </div>
+          <button disabled={pending} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 sm:col-span-4">
+            {pending ? "…" : sig ? "➕ משיכה + חתימה" : "➕ משיכה"}
           </button>
         </form>
         {err && <p className="text-rose-600 text-sm mt-2">{err}</p>}
@@ -70,7 +100,7 @@ export default function FuelCardsManager({ cards, soldiers }: { cards: Card[]; s
               <tbody className="divide-y divide-slate-100">
                 {open.map((c) => (
                   <tr key={c.id} className="hover:bg-slate-50">
-                    <td className="px-3 py-2 font-medium text-slate-800">{c.soldierName}</td>
+                    <td className="px-3 py-2 font-medium text-slate-800">{c.soldierName} {c.signed ? <span title="נחתם ✍️" className="text-emerald-600">✍️</span> : <span title="ללא חתימה" className="text-slate-300 text-xs">◌</span>}</td>
                     <td className="px-3 py-2 font-mono">{c.cardNumber}</td>
                     <td className="px-3 py-2 text-slate-500">{fmt(c.checkoutAt)} <span className={`text-xs ${daysAgo(c.checkoutAt) > 3 ? "text-rose-500 font-bold" : "text-slate-400"}`}>({daysAgo(c.checkoutAt)} י׳)</span></td>
                     <td className="px-3 py-2 text-left whitespace-nowrap">

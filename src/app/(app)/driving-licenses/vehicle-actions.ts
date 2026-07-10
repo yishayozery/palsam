@@ -18,10 +18,15 @@ export async function addFuelCard(formData: FormData) {
   const soldierId = String(formData.get("soldierId") || "");
   const cardNumber = String(formData.get("cardNumber") || "").trim();
   const note = String(formData.get("note") || "").trim() || null;
+  const signatureData = String(formData.get("signatureData") || "").trim() || null;
   if (!soldierId || !cardNumber) return { error: "חסר חייל / מספר כרטיס" };
-  const s = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true } });
+  const s = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true, fullName: true } });
   if (!s || s.battalionId !== bId) return { error: "חייל לא נמצא" };
-  await prisma.vehicleFuelCard.create({ data: { battalionId: bId, soldierId, cardNumber, note, createdById: user.id } });
+  const signed = signatureData?.startsWith("data:image/") ? signatureData : null;
+  await prisma.vehicleFuelCard.create({
+    data: { battalionId: bId, soldierId, cardNumber, note, createdById: user.id,
+      signatureData: signed, signerName: signed ? s.fullName : null, signedAt: signed ? new Date() : null },
+  });
   await audit(user.id, "ADD_FUEL_CARD", "Soldier", soldierId, { cardNumber });
   revalidatePath("/driving-licenses");
   return { ok: true };
