@@ -32,6 +32,30 @@ export async function addFuelCard(formData: FormData) {
   return { ok: true };
 }
 
+/** שליחת לינק חתימה מרחוק לחייל (בוט טלגרם) + החזרת הלינק לשיתוף ידני. */
+export async function sendFuelSignLink(cardId: string): Promise<{ ok?: boolean; error?: string; link?: string; telegramSent?: boolean }> {
+  const { bId } = await guard();
+  const card = await prisma.vehicleFuelCard.findUnique({
+    where: { id: cardId },
+    select: { battalionId: true, signedAt: true, cardNumber: true, soldier: { select: { fullName: true, telegramChatId: true } } },
+  });
+  if (!card || card.battalionId !== bId) return { error: "לא נמצא" };
+  if (card.signedAt) return { error: "כבר נחתם" };
+  const { linkTokenQuery } = await import("@/lib/link-token");
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+  const link = `${base}/fuel-sign/${cardId}${linkTokenQuery("fuel-sign", cardId)}`;
+  let telegramSent = false;
+  if (card.soldier.telegramChatId) {
+    const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { telegramBotToken: true } });
+    if (battalion?.telegramBotToken) {
+      const { sendTelegramMessage } = await import("@/lib/telegram");
+      await sendTelegramMessage(battalion.telegramBotToken, card.soldier.telegramChatId,
+        `⛽ <b>חתימה על קבלת כרטיס דלק</b>\n\n${card.soldier.fullName}, קיבלת כרטיס ${card.cardNumber}.\n👉 <a href="${link}">לחץ כאן לחתימה על הקבלה</a>`).then(() => { telegramSent = true; }).catch(() => {});
+    }
+  }
+  return { ok: true, link, telegramSent };
+}
+
 /** החזרת כרטיס (סוגר את הכרטיס — רושם תאריך החזרה). */
 export async function returnFuelCard(id: string) {
   const { user, bId } = await guard();

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PREFIXES = ["/login", "/about", "/sign", "/invite", "/magic", "/_next", "/favicon", "/api/sign", "/api/telegram", "/api/cron", "/api/dispatch-open", "/my-equipment", "/offline", "/verify", "/dispatch-open", "/bot/dispatch", "/transfer-doc", "/counts/share", "/driver-form", "/weapons-sign"];
+const PUBLIC_PREFIXES = ["/login", "/about", "/sign", "/invite", "/magic", "/_next", "/favicon", "/api/sign", "/api/telegram", "/api/cron", "/api/dispatch-open", "/my-equipment", "/offline", "/verify", "/dispatch-open", "/bot/dispatch", "/transfer-doc", "/counts/share", "/driver-form", "/weapons-sign", "/fuel-sign"];
 const GEO_EXEMPT_PREFIXES = ["/api/telegram", "/api/cron"];
 const ALLOWED_COUNTRIES = new Set(["IL"]);
 

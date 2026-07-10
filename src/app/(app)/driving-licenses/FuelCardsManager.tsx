@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { addFuelCard, returnFuelCard, deleteFuelCard } from "./vehicle-actions";
+import { addFuelCard, returnFuelCard, deleteFuelCard, sendFuelSignLink } from "./vehicle-actions";
 
 type Card = { id: string; cardNumber: string; soldierName: string; soldierId: string; checkoutAt: string; returnedAt: string | null; note: string | null; signed: boolean };
 type Opt = { id: string; name: string };
@@ -104,6 +104,15 @@ export default function FuelCardsManager({ cards, soldiers }: { cards: Card[]; s
                     <td className="px-3 py-2 font-mono">{c.cardNumber}</td>
                     <td className="px-3 py-2 text-slate-500">{fmt(c.checkoutAt)} <span className={`text-xs ${daysAgo(c.checkoutAt) > 3 ? "text-rose-500 font-bold" : "text-slate-400"}`}>({daysAgo(c.checkoutAt)} י׳)</span></td>
                     <td className="px-3 py-2 text-left whitespace-nowrap">
+                      {!c.signed && (
+                        <button onClick={() => start(async () => {
+                          const r = await sendFuelSignLink(c.id);
+                          if (r.error) { alert(r.error); return; }
+                          if (r.telegramSent) alert("✅ נשלח לחייל בטלגרם לחתימה");
+                          else if (r.link) { await navigator.clipboard?.writeText(r.link).catch(() => {}); alert("החייל לא מחובר לבוט — הלינק הועתק, שלח/י בוואטסאפ:\n" + r.link); }
+                        })} disabled={pending}
+                          className="text-xs bg-indigo-600 text-white rounded px-2.5 py-1 hover:bg-indigo-700 disabled:opacity-50 ml-1">🔗 שלח לחתימה</button>
+                      )}
                       <button onClick={() => start(async () => { await returnFuelCard(c.id); router.refresh(); })} disabled={pending}
                         className="text-xs bg-slate-800 text-white rounded px-2.5 py-1 hover:bg-slate-900 disabled:opacity-50">↩️ החזרה</button>
                       <button onClick={() => { if (confirm("למחוק את הרשומה?")) start(async () => { await deleteFuelCard(c.id); router.refresh(); }); }} disabled={pending}
