@@ -35,7 +35,7 @@ export default async function BackupsPage() {
     <div>
       <PageHeader
         title="💾 גיבויים"
-        subtitle="גיבוי אוטומטי פעמיים ביום (12:00 ו-00:00 שעון ישראל) · שכבת שחזור נוספת מעל Neon PITR"
+        subtitle="גיבוי אוטומטי יומי + ידני בכל עת · שכבת שחזור נוספת מעל Neon PITR"
         action={<BackupNowButton />}
       />
 

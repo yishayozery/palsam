@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generatePendingTasks } from "@/lib/countScheduler";
+import { runBackup } from "@/lib/backup";
 
 export async function GET(req: Request) {
   const expected = process.env.CRON_SECRET || "";
@@ -16,7 +17,9 @@ export async function GET(req: Request) {
 
   try {
     const created = await generatePendingTasks();
-    return NextResponse.json({ ok: true, createdTasks: created });
+    // גיבוי יומי (מקופל לתוך הקרון הקיים — Hobby מוגבל ל-2 crons)
+    const backup = await runBackup().catch(() => null);
+    return NextResponse.json({ ok: true, createdTasks: created, backup });
   } catch {
     return NextResponse.json({ ok: false, error: "internal error" }, { status: 500 });
   }
