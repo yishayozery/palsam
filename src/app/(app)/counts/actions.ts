@@ -656,10 +656,11 @@ export async function registerTelegramWebhook() {
     body: JSON.stringify({
       commands: [
         { command: "start", description: "הרשמה למערכת" },
-        { command: "status", description: "📋 טפסים להחתמה — סטטוס שלבים" },
-        { command: "equipment", description: "📦 רשימת ציוד חתום" },
-        { command: "counts", description: "📊 ספירות מלאי" },
-        { command: "info", description: "ℹ️ מידע כללי" },
+        { command: "status", description: "🔫 נשקייה — טפסים + צל\"ם סריאלי" },
+        { command: "equipment", description: "📦 הציוד שלי" },
+        { command: "vehicles", description: "🚗 רכבים — משימות/תיק נהג/הסמכות/דלק" },
+        { command: "reports", description: "📊 דיווחי כ\"א וספירות" },
+        { command: "info", description: "🕐 ארוחות ותפילות ומידע" },
         { command: "help", description: "❓ עזרה ותפריט" },
       ],
     }),

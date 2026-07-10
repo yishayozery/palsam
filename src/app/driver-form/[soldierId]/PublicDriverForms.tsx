@@ -142,7 +142,7 @@ function PhotoSlot({ label, soldierId, token, field, had }: { label: string; sol
   }
   return (
     <label className="cursor-pointer border-2 border-dashed rounded-lg p-2 text-center flex flex-col items-center justify-center gap-1 min-h-[84px] hover:bg-slate-50 border-slate-300">
-      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
+      <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
       {preview ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={preview} alt="" className="h-12 w-full object-cover rounded" />
