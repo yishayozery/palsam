@@ -266,11 +266,12 @@ export async function POST(
       const openUrl = `${baseUrl}/dispatch-open/${dispatchToken}`;
 
       await sendTelegramMessage(token, chatId,
-        `🚗 <b>שבצ"ק חדש</b>\n\n` +
-        `לחץ על הכפתור למטה לפתיחת הטופס בטלגרם,\n` +
+        `🚗 <b>פתיחת משימה (שבצ"ק)</b>\n\n` +
+        `שיירה עם רכב אחד או יותר — בדיוק כמו במערכת: רכבי מערכת/חוץ, שבצ"ק קבוע, תפקידים ונהג.\n` +
+        `לחץ על הכפתור למטה לפתיחת הטופס,\n` +
         `או <a href="${openUrl}">לחץ כאן לפתיחה בדפדפן</a> 🔗\n\n` +
         `<i>🔒 הקישור תקף ל-24 שעות</i>`, {
-        inline_keyboard: [[{ text: "📝 פתח טופס שבצ\"ק", web_app: { url: webAppUrl } }]],
+        inline_keyboard: [[{ text: "📝 פתח טופס משימה", web_app: { url: webAppUrl } }]],
       });
       return NextResponse.json({ ok: true });
     }
