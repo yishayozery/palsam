@@ -4,6 +4,7 @@ import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import { toggleCompanyLock } from "../../attendance/actions";
+import RosterAttendanceSettings from "./RosterAttendanceSettings";
 
 type Company = { id: string; name: string; total: number; reported: number; shmp: number; shmpReported: number; locked: boolean };
 type StatusCard = { id: string; name: string; color: string; icon: string; isPresent: boolean; count: number; pns: string[] };
@@ -14,7 +15,7 @@ type AggRow = { id: string; name: string; pn: string; company: string; cells: st
 
 export default function ControlClient({
   date, companies, statuses, notReported, totals,
-  employments, selectedEmploymentId, range, days, aggRows, canManageEmployment,
+  employments, selectedEmploymentId, range, days, aggRows, canManageEmployment, attendanceSettings,
 }: {
   date: string;
   companies: Company[];
@@ -27,6 +28,11 @@ export default function ControlClient({
   days: string[];
   aggRows: AggRow[];
   canManageEmployment: boolean;
+  attendanceSettings: {
+    companies: { companyId: string; companyName: string; soldiers: { id: string; name: string; squadName: string | null; isReporter: boolean }[] }[];
+    window: number[];
+    overrides: { id: string; date: string; daysForward: number; note: string | null }[];
+  };
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -80,7 +86,8 @@ export default function ControlClient({
         <div className="text-sm text-slate-600">
           דיווחו: <b>{totals.reported}</b>/{totals.soldiers} חיילים · <b>{totals.companiesReported}</b>/{totals.companiesTotal} פלוגות
         </div>
-        <div className="mr-auto flex gap-2">
+        <div className="mr-auto flex gap-2 flex-wrap">
+          <RosterAttendanceSettings companies={attendanceSettings.companies} window={attendanceSettings.window} overrides={attendanceSettings.overrides} />
           <button onClick={() => lockAll(true)} disabled={pending} className="text-xs bg-rose-600 text-white rounded-lg px-3 py-1.5 hover:bg-rose-700 disabled:opacity-50">🔒 נעל הכל</button>
           <button onClick={() => lockAll(false)} disabled={pending} className="text-xs border border-slate-300 text-slate-600 rounded-lg px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50">🔓 פתח הכל</button>
         </div>

@@ -31,7 +31,7 @@ export default async function RosterControlPage({
 
   const [companies, soldiers, statuses, employments, callups] = await Promise.all([
     prisma.holder.findMany({ where: { battalionId: bId, kind: "COMPANY", active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.soldier.findMany({ where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } }, orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }], select: { id: true, fullName: true, personalNumber: true, companyId: true } }),
+    prisma.soldier.findMany({ where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } }, orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }], select: { id: true, fullName: true, personalNumber: true, companyId: true, isAttendanceReporter: true, squad: { select: { name: true } } } }),
     prisma.attendanceStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, color: true, icon: true, isPresent: true } }),
     prisma.employment.findMany({ where: { battalionId: bId }, orderBy: [{ active: "desc" }, { startDate: "desc" }], select: { id: true, name: true, startDate: true, endDate: true, active: true } }),
     prisma.callupPeriod.findMany({ where: { soldier: { battalionId: bId } }, select: { soldierId: true, startDate: true, endDate: true } }),
@@ -141,6 +141,17 @@ export default async function RosterControlPage({
 
   const totalReported = soldiers.filter((s) => statusBySoldierDay.has(s.id)).length;
 
+  // הגדרות נוכחות — נאמני כ"א + חלון דיווח עתידי
+  const [batWin, overrides] = await Promise.all([
+    prisma.battalion.findUnique({ where: { id: bId }, select: { attendanceReportWindowDow: true } }),
+    prisma.attendanceReportOverride.findMany({ where: { battalionId: bId }, orderBy: { date: "asc" }, select: { id: true, date: true, daysForward: true, note: true } }),
+  ]);
+  const reportWindow = Array.isArray(batWin?.attendanceReportWindowDow) ? (batWin!.attendanceReportWindowDow as unknown[]).map((n) => Number(n) || 0) : [0, 0, 0, 0, 0, 0, 0];
+  const reporterCompanies = companies.map((c) => ({
+    companyId: c.id, companyName: c.name,
+    soldiers: soldiers.filter((s) => s.companyId === c.id).map((s) => ({ id: s.id, name: s.fullName, squadName: s.squad?.name ?? null, isReporter: s.isAttendanceReporter })),
+  })).filter((c) => c.soldiers.length > 0);
+
   return (
     <div>
       <PageHeader helpKey="roster" title="🎛️ מסך שליטה — שלישות" subtitle="נעילת דיווחים · פילוח יומי · רצף נוכחות מצטבר לפי תעסוקה · הצלבת שמ״פ" />
@@ -156,6 +167,7 @@ export default async function RosterControlPage({
         range={{ start: rangeStart, end: rangeEnd, manual: !!(validFrom && validTo) }}
         days={days}
         aggRows={aggRows}
+        attendanceSettings={{ companies: reporterCompanies, window: reportWindow, overrides: overrides.map((o) => ({ id: o.id, date: iso(o.date), daysForward: o.daysForward, note: o.note })) }}
       />
     </div>
   );

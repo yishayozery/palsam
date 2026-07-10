@@ -63,10 +63,12 @@ export async function saveAttendance(
       entries = entries.filter((e) => !isBlocked(e));
     }
 
-    // 🚫 דיווח ביצוע בפועל (record) — רק על היום הנוכחי ואחורה. אין דיווח עתידי.
+    // 🚫 דיווח ביצוע בפועל (record) — עד לתאריך המקסימלי לפי חלון-הדיווח של השלישות (ברירת מחדל: היום).
     const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
-    entries = entries.filter((e) => !(e.type === "record" && e.date > todayIL));
-    if (entries.length === 0) return { error: "לא ניתן לדווח ביצוע על יום עתידי — רק על היום הנוכחי" };
+    const { maxReportableDate } = await import("@/lib/attendanceWindow");
+    const maxDate = await maxReportableDate(user.battalionId!, todayIL);
+    entries = entries.filter((e) => !(e.type === "record" && e.date > maxDate));
+    if (entries.length === 0) return { error: `לא ניתן לדווח ביצוע מעבר לחלון המותר (עד ${maxDate})` };
 
     const departureAlerts: { soldierId: string; statusName: string }[] = [];
 
@@ -244,4 +246,63 @@ export async function toggleCompanyLock(
   } catch (e) {
     return { error: e instanceof Error ? e.message : "שגיאה" };
   }
+}
+
+// ===================== הגדרות דיווח נוכחות (שלישות) =====================
+
+async function requireRoster() {
+  const user = await requireUser();
+  if (!can(user, "soldiers.roster") && !user.isAdmin) throw new Error("רק השלישות");
+  return user;
+}
+
+/** סימון/ביטול נאמן כ"א לחייל. */
+export async function toggleAttendanceReporter(soldierId: string): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireRoster();
+    const s = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true, isAttendanceReporter: true } });
+    if (!s || s.battalionId !== user.battalionId) return { error: "חייל לא נמצא" };
+    await prisma.soldier.update({ where: { id: soldierId }, data: { isAttendanceReporter: !s.isAttendanceReporter } });
+    revalidatePath("/roster/control");
+    return { ok: true };
+  } catch (e) { return { error: e instanceof Error ? e.message : "שגיאה" }; }
+}
+
+/** שמירת חלון-הדיווח: 7 מספרים (א׳..שבת) — כמה ימים קדימה מותר לדווח בכל יום. */
+export async function saveReportWindow(dow: number[]): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireRoster();
+    const clean = Array.from({ length: 7 }, (_, i) => Math.max(0, Math.min(14, Math.floor(Number(dow[i] ?? 0)) || 0)));
+    await prisma.battalion.update({ where: { id: user.battalionId! }, data: { attendanceReportWindowDow: clean } });
+    revalidatePath("/roster/control");
+    return { ok: true };
+  } catch (e) { return { error: e instanceof Error ? e.message : "שגיאה" }; }
+}
+
+/** חריגת תאריך (לפני חג) — ביום X מותר לדווח N ימים קדימה. */
+export async function saveReportOverride(date: string, daysForward: number, note: string): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireRoster();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "תאריך לא תקין" };
+    const d = new Date(date + "T00:00:00Z");
+    const fwd = Math.max(0, Math.min(30, Math.floor(daysForward) || 0));
+    await prisma.attendanceReportOverride.upsert({
+      where: { battalionId_date: { battalionId: user.battalionId!, date: d } },
+      update: { daysForward: fwd, note: note.trim() || null },
+      create: { battalionId: user.battalionId!, date: d, daysForward: fwd, note: note.trim() || null },
+    });
+    revalidatePath("/roster/control");
+    return { ok: true };
+  } catch (e) { return { error: e instanceof Error ? e.message : "שגיאה" }; }
+}
+
+export async function deleteReportOverride(id: string): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireRoster();
+    const o = await prisma.attendanceReportOverride.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!o || o.battalionId !== user.battalionId) return { error: "לא נמצא" };
+    await prisma.attendanceReportOverride.delete({ where: { id } });
+    revalidatePath("/roster/control");
+    return { ok: true };
+  } catch (e) { return { error: e instanceof Error ? e.message : "שגיאה" }; }
 }
