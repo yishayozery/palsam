@@ -74,11 +74,14 @@ export default function WarehouseReportClient({
     let rows: (string | number)[][];
     let fname: string;
     if (mode === "summary") {
-      // טבלת-ציר: פלוגה × סוג פריט + שורת מחסן + סה"כ
-      rows = [["פלוגה", ...pivot.cols, "סה\"כ"]];
-      for (const r of pivot.compRows) rows.push([r.label, ...pivot.cols.map((c) => r.counts[c] ?? 0), r.total]);
-      if (pivot.whHasAny) rows.push(["מחסן (לא חתום)", ...pivot.cols.map((c) => pivot.whRow.counts[c] ?? 0), pivot.whRow.total]);
-      rows.push(["סה\"כ", ...pivot.cols.map((c) => pivot.colTotals[c]), pivot.grandTotal]);
+      // טבלת-ציר: פריט (שורות) × פלוגה (עמודות) + עמודת מחסן + סה"כ
+      const compLabels = pivot.compRows.map((r) => r.label);
+      const header = ["פריט", ...compLabels, ...(pivot.whHasAny ? ["מחסן (לא חתום)"] : []), "סה\"כ"];
+      rows = [header];
+      for (const col of pivot.cols) {
+        rows.push([col, ...pivot.compRows.map((r) => r.counts[col] ?? 0), ...(pivot.whHasAny ? [pivot.whRow.counts[col] ?? 0] : []), pivot.colTotals[col]]);
+      }
+      rows.push(["סה\"כ", ...pivot.compRows.map((r) => r.total), ...(pivot.whHasAny ? [pivot.whRow.total] : []), pivot.grandTotal]);
       fname = `סיכום-פלוגתי-${selectedName}.csv`;
     } else {
       rows = [["מחסן", "פלוגה", "מספר ברזל", "שם חייל", "מ.א", "פריט", "סריאל / אצווה", "כמות", "תפוגה", "סטטוס", "מיקום"]];
@@ -174,44 +177,44 @@ export default function WarehouseReportClient({
       {filtered.length === 0 && stockTotal === 0 ? (
         <Card className="p-6 text-center text-slate-400 text-sm">אין ציוד חתום במחסן זה.</Card>
       ) : mode === "summary" ? (
-        /* ===== תצוגה מצומצמת — טבלת-ציר: פלוגה × סוג פריט ===== */
+        /* ===== תצוגה מצומצמת — טבלת-ציר: פריט (שורות) × פלוגה (עמודות) ===== */
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="text-sm border-separate" style={{ borderSpacing: 0 }}>
               <thead>
                 <tr className="bg-slate-100 text-slate-600 text-xs">
-                  <th className="sticky right-0 z-10 bg-slate-100 px-3 py-2 text-right font-medium border-b border-slate-200">פלוגה</th>
-                  {pivot.cols.map((col) => (
-                    <th key={col} className="px-2 py-2 text-center font-medium border-b border-slate-200 whitespace-nowrap min-w-[52px]">{col}</th>
+                  <th className="sticky right-0 z-10 bg-slate-100 px-3 py-2 text-right font-medium border-b border-slate-200">פריט</th>
+                  {pivot.compRows.map((r) => (
+                    <th key={r.label} className="px-2 py-2 text-center font-medium border-b border-slate-200 whitespace-nowrap min-w-[52px]">
+                      🪖 {r.label}
+                      <div className="text-[9px] text-slate-400 font-normal">({r.soldiers})</div>
+                    </th>
                   ))}
+                  {pivot.whHasAny && (
+                    <th className="px-2 py-2 text-center font-medium border-b border-slate-200 whitespace-nowrap min-w-[52px] bg-teal-50 text-teal-800">🏬 מחסן</th>
+                  )}
                   <th className="px-3 py-2 text-center font-bold border-b border-slate-200 border-r-2 border-r-slate-200 bg-slate-50">סה״כ</th>
                 </tr>
               </thead>
               <tbody>
-                {pivot.compRows.map((r) => (
-                  <tr key={r.label} className="hover:bg-slate-50">
-                    <td className="sticky right-0 z-10 bg-white px-3 py-1.5 font-bold text-slate-800 whitespace-nowrap border-b border-slate-100">🪖 {r.label} <span className="text-[10px] text-slate-400 font-normal">({r.soldiers})</span></td>
-                    {pivot.cols.map((col) => (
-                      <td key={col} className="px-2 py-1.5 text-center border-b border-slate-100">{r.counts[col] ? <span className="font-medium text-slate-800">{r.counts[col]}</span> : <span className="text-slate-200">·</span>}</td>
+                {pivot.cols.map((col) => (
+                  <tr key={col} className="hover:bg-slate-50">
+                    <td className="sticky right-0 z-10 bg-white px-3 py-1.5 font-bold text-slate-800 whitespace-nowrap border-b border-slate-100">{col}</td>
+                    {pivot.compRows.map((r) => (
+                      <td key={r.label} className="px-2 py-1.5 text-center border-b border-slate-100">{r.counts[col] ? <span className="font-medium text-slate-800">{r.counts[col]}</span> : <span className="text-slate-200">·</span>}</td>
                     ))}
-                    <td className="px-3 py-1.5 text-center font-bold text-slate-800 border-b border-slate-100 border-r-2 border-r-slate-200 bg-slate-50/60">{r.total}</td>
+                    {pivot.whHasAny && (
+                      <td className="px-2 py-1.5 text-center border-b border-slate-100 bg-teal-50/60 text-teal-800">{pivot.whRow.counts[col] ? <span className="font-medium">{pivot.whRow.counts[col]}</span> : <span className="text-teal-200">·</span>}</td>
+                    )}
+                    <td className="px-3 py-1.5 text-center font-bold text-slate-800 border-b border-slate-100 border-r-2 border-r-slate-200 bg-slate-50/60">{pivot.colTotals[col]}</td>
                   </tr>
                 ))}
-                {/* שורת מחסן — מה שלא חתום */}
-                {pivot.whHasAny && (
-                  <tr className="bg-teal-50/60">
-                    <td className="sticky right-0 z-10 bg-teal-50 px-3 py-1.5 font-bold text-teal-800 whitespace-nowrap border-b border-teal-100">🏬 {pivot.whRow.label}</td>
-                    {pivot.cols.map((col) => (
-                      <td key={col} className="px-2 py-1.5 text-center border-b border-teal-100 text-teal-800">{pivot.whRow.counts[col] ? <span className="font-medium">{pivot.whRow.counts[col]}</span> : <span className="text-teal-200">·</span>}</td>
-                    ))}
-                    <td className="px-3 py-1.5 text-center font-bold text-teal-800 border-b border-teal-100 border-r-2 border-r-slate-200">{pivot.whRow.total}</td>
-                  </tr>
-                )}
               </tbody>
               <tfoot>
                 <tr className="bg-slate-100 font-bold text-slate-800 border-t-2 border-slate-300">
                   <td className="sticky right-0 z-10 bg-slate-100 px-3 py-2">סה״כ</td>
-                  {pivot.cols.map((col) => <td key={col} className="px-2 py-2 text-center">{pivot.colTotals[col]}</td>)}
+                  {pivot.compRows.map((r) => <td key={r.label} className="px-2 py-2 text-center">{r.total}</td>)}
+                  {pivot.whHasAny && <td className="px-2 py-2 text-center bg-teal-50 text-teal-800">{pivot.whRow.total}</td>}
                   <td className="px-3 py-2 text-center border-r-2 border-r-slate-200">{pivot.grandTotal}</td>
                 </tr>
               </tfoot>
