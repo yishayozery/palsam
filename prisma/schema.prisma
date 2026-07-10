@@ -2356,6 +2356,7 @@ model VehicleFuelCard {
   signatureData String?  // חתימת החייל על הקבלה (data URL) — נחתם על המובייל של קצין הרכב
   signerName    String?  // שם החותם
   signedAt      DateTime? // מתי נחתם
+  signLinkSentAt DateTime? // מתי נשלחה בקשת חתימה מרחוק (בוט/וואטסאפ) — למעקב סטטוס ושליחה חוזרת
   returnedAt  DateTime? // תאריך החזרה (null = פתוח אצל החייל)
   note        String?
   createdById String?

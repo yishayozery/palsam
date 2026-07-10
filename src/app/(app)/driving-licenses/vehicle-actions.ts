@@ -53,6 +53,8 @@ export async function sendFuelSignLink(cardId: string): Promise<{ ok?: boolean; 
         `⛽ <b>חתימה על קבלת כרטיס דלק</b>\n\n${card.soldier.fullName}, קיבלת כרטיס ${card.cardNumber}.\n👉 <a href="${link}">לחץ כאן לחתימה על הקבלה</a>`).then(() => { telegramSent = true; }).catch(() => {});
     }
   }
+  await prisma.vehicleFuelCard.update({ where: { id: cardId }, data: { signLinkSentAt: new Date() } });
+  revalidatePath("/driving-licenses");
   return { ok: true, link, telegramSent };
 }
 

@@ -83,8 +83,8 @@ export default async function DrivingLicensesPage({
     ? (await prisma.vehicleFuelCard.findMany({
         where: { battalionId: bId },
         orderBy: [{ returnedAt: "asc" }, { checkoutAt: "desc" }], take: 300,
-        select: { id: true, cardNumber: true, checkoutAt: true, returnedAt: true, note: true, signatureData: true, soldier: { select: { id: true, fullName: true } } },
-      })).map((c) => ({ id: c.id, cardNumber: c.cardNumber, soldierId: c.soldier.id, soldierName: c.soldier.fullName, checkoutAt: c.checkoutAt.toISOString(), returnedAt: c.returnedAt ? c.returnedAt.toISOString() : null, note: c.note, signed: !!c.signatureData }))
+        select: { id: true, cardNumber: true, checkoutAt: true, returnedAt: true, note: true, signatureData: true, signedAt: true, signLinkSentAt: true, soldier: { select: { id: true, fullName: true, telegramChatId: true } } },
+      })).map((c) => ({ id: c.id, cardNumber: c.cardNumber, soldierId: c.soldier.id, soldierName: c.soldier.fullName, soldierConnected: !!c.soldier.telegramChatId, checkoutAt: c.checkoutAt.toISOString(), returnedAt: c.returnedAt ? c.returnedAt.toISOString() : null, note: c.note, signed: !!c.signatureData, signLinkSentAt: c.signLinkSentAt ? c.signLinkSentAt.toISOString() : null }))
     : [];
   const vehicleLinks = tab === "links"
     ? await prisma.vehicleLink.findMany({ where: { battalionId: bId }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, url: true, visibleToSoldier: true } })
