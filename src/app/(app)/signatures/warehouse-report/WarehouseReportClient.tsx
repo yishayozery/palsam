@@ -74,14 +74,14 @@ export default function WarehouseReportClient({
     let rows: (string | number)[][];
     let fname: string;
     if (mode === "summary") {
-      // טבלת-ציר: פריט (שורות) × פלוגה (עמודות) + עמודת מחסן + סה"כ
+      // טבלת-ציר: פריט (שורות) × פלוגה (עמודות) + סה"כ (ללא עמודת מחסן — מופיע בתצוגה המפורטת)
       const compLabels = pivot.compRows.map((r) => r.label);
-      const header = ["פריט", ...compLabels, ...(pivot.whHasAny ? ["מחסן (לא חתום)"] : []), "סה\"כ"];
-      rows = [header];
+      rows = [["פריט", ...compLabels, "סה\"כ"]];
       for (const col of pivot.cols) {
-        rows.push([col, ...pivot.compRows.map((r) => r.counts[col] ?? 0), ...(pivot.whHasAny ? [pivot.whRow.counts[col] ?? 0] : []), pivot.colTotals[col]]);
+        const compVals = pivot.compRows.map((r) => r.counts[col] ?? 0);
+        rows.push([col, ...compVals, compVals.reduce((n, v) => n + v, 0)]);
       }
-      rows.push(["סה\"כ", ...pivot.compRows.map((r) => r.total), ...(pivot.whHasAny ? [pivot.whRow.total] : []), pivot.grandTotal]);
+      rows.push(["סה\"כ", ...pivot.compRows.map((r) => r.total), pivot.compRows.reduce((n, r) => n + r.total, 0)]);
       fname = `סיכום-פלוגתי-${selectedName}.csv`;
     } else {
       rows = [["מחסן", "פלוגה", "מספר ברזל", "שם חייל", "מ.א", "פריט", "סריאל / אצווה", "כמות", "תפוגה", "סטטוס", "מיקום"]];
@@ -190,9 +190,6 @@ export default function WarehouseReportClient({
                       <div className="text-[9px] text-slate-400 font-normal">({r.soldiers})</div>
                     </th>
                   ))}
-                  {pivot.whHasAny && (
-                    <th className="px-2 py-2 text-center font-medium border-b border-slate-200 whitespace-nowrap min-w-[52px] bg-teal-50 text-teal-800">🏬 מחסן</th>
-                  )}
                   <th className="px-3 py-2 text-center font-bold border-b border-slate-200 border-r-2 border-r-slate-200 bg-slate-50">סה״כ</th>
                 </tr>
               </thead>
@@ -203,10 +200,7 @@ export default function WarehouseReportClient({
                     {pivot.compRows.map((r) => (
                       <td key={r.label} className="px-2 py-1.5 text-center border-b border-slate-100">{r.counts[col] ? <span className="font-medium text-slate-800">{r.counts[col]}</span> : <span className="text-slate-200">·</span>}</td>
                     ))}
-                    {pivot.whHasAny && (
-                      <td className="px-2 py-1.5 text-center border-b border-slate-100 bg-teal-50/60 text-teal-800">{pivot.whRow.counts[col] ? <span className="font-medium">{pivot.whRow.counts[col]}</span> : <span className="text-teal-200">·</span>}</td>
-                    )}
-                    <td className="px-3 py-1.5 text-center font-bold text-slate-800 border-b border-slate-100 border-r-2 border-r-slate-200 bg-slate-50/60">{pivot.colTotals[col]}</td>
+                    <td className="px-3 py-1.5 text-center font-bold text-slate-800 border-b border-slate-100 border-r-2 border-r-slate-200 bg-slate-50/60">{pivot.compRows.reduce((n, r) => n + (r.counts[col] ?? 0), 0)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -214,8 +208,7 @@ export default function WarehouseReportClient({
                 <tr className="bg-slate-100 font-bold text-slate-800 border-t-2 border-slate-300">
                   <td className="sticky right-0 z-10 bg-slate-100 px-3 py-2">סה״כ</td>
                   {pivot.compRows.map((r) => <td key={r.label} className="px-2 py-2 text-center">{r.total}</td>)}
-                  {pivot.whHasAny && <td className="px-2 py-2 text-center bg-teal-50 text-teal-800">{pivot.whRow.total}</td>}
-                  <td className="px-3 py-2 text-center border-r-2 border-r-slate-200">{pivot.grandTotal}</td>
+                  <td className="px-3 py-2 text-center border-r-2 border-r-slate-200">{pivot.compRows.reduce((n, r) => n + r.total, 0)}</td>
                 </tr>
               </tfoot>
             </table>
