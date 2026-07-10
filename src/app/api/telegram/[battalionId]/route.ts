@@ -11,6 +11,17 @@ export async function POST(
   try {
     const { battalionId } = await params;
 
+    // 🔒 אימות שהבקשה באמת מטלגרם — רק אם הוגדר TELEGRAM_WEBHOOK_SECRET (opt-in,
+    //    כדי לא לשבור בוטים קיימים). לאחר הגדרת ה-env + רישום ה-webhook עם secret_token,
+    //    כל POST מזויף (בלי ה-header התואם) נדחה.
+    const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+    if (expectedSecret) {
+      const provided = req.headers.get("x-telegram-bot-api-secret-token");
+      if (provided !== expectedSecret) {
+        return NextResponse.json({ ok: false }, { status: 401 });
+      }
+    }
+
     const battalion = await prisma.battalion.findUnique({
       where: { id: battalionId },
       select: {
