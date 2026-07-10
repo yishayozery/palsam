@@ -191,9 +191,14 @@ export async function POST(
         where: { battalionId, visibleToSoldier: true, active: true },
         orderBy: { sortOrder: "asc" }, select: { name: true, url: true },
       });
-      const linkLines = links.length ? "\n\n🔗 <b>קישורים:</b>\n" + links.map((l) => `• <a href="${l.url}">${l.name}</a>`).join("\n") : "";
+      const linkLines = links.length ? "\n\n🔗 <b>קישורים שימושיים:</b>\n" + links.map((l) => `• <a href="${l.url}">${l.name}</a>`).join("\n") : "";
       await sendTelegramMessage(token, chatId,
-        `🚗 <b>רכבים</b>\nבחר/י פעולה:${linkLines}`,
+        `🚗 <b>רכבים</b>\n\nבחר/י מהתפריט שנפתח למטה 👇\n` +
+        `• 🚗 <b>משימות ושבצ"ק</b> — פתיחת משימה/נסיעה\n` +
+        `• 📁 <b>תיק נהג</b> — מילוי וחתימה על טפסים\n` +
+        `• 🪪 <b>בדיקת הסמכות</b> — ההסמכות שלי / בדיקת מ.א\n` +
+        `• ⛽ <b>כרטיסי הדלק שלי</b>` +
+        linkLines,
         buildVehicleKeyboard(canManageTeam, isDriver));
       return NextResponse.json({ ok: true });
     }
