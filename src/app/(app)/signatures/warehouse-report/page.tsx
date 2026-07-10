@@ -22,10 +22,12 @@ export default async function WarehouseReportPage({ searchParams }: { searchPara
   const selectedId = (sp.warehouse && warehouses.some((w) => w.id === sp.warehouse)) ? sp.warehouse
     : (user.holderId && warehouses.some((w) => w.id === user.holderId)) ? user.holderId
     : warehouses[0]?.id;
+  // מחסן רכבים: רכבים מפוזרים בפלוגות (currentHolder=פלוגה) — לא "יושבים" במחסן, לכן מציגים לפי הפלוגה המחזיקה
+  const isVehicleWh = warehouses.find((w) => w.id === selectedId)?.warehouseType === "VEHICLES";
 
-  // פריטים סריאליים חתומים במחסן זה
+  // פריטים סריאליים חתומים במחסן זה (למחסן רכבים — כל הרכבים החתומים על חייל, בכל הגדוד)
   const units = selectedId ? await prisma.serialUnit.findMany({
-    where: { battalionId: bId, currentHolderId: selectedId, signedSoldierId: { not: null } },
+    where: { battalionId: bId, signedSoldierId: { not: null }, ...(isVehicleWh ? { itemType: { category: { warehouseType: "VEHICLES" } }, dischargedAt: null } : { currentHolderId: selectedId }) },
     select: {
       id: true,
       serialNumber: true,
@@ -73,6 +75,23 @@ export default async function WarehouseReportPage({ searchParams }: { searchPara
     if (!u.signedSoldier) continue;
     ensure(u.signedSoldier.id, u.signedSoldier.fullName, u.signedSoldier.personalNumber, u.signedSoldier.company?.name ?? "— ללא פלוגה —", u.signedSoldier.companyId ?? null)
       .items.push({ name: u.itemType.name, serial: u.serialNumber, serialUnitId: u.id, locId: u.equipmentLocationId, status: u.status?.name ?? null, location: u.equipmentLocation?.name || u.physicalLocation || null, expiry: u.expiryDate ? u.expiryDate.toISOString().slice(0, 10) : null });
+  }
+  // 🚗 מחסן רכבים: רכבים מפוזרים המוחזקים ברמת פלוגה (currentHolder=פלוגה, לא חתומים על חייל) — שורה לכל פלוגה
+  if (isVehicleWh) {
+    const heldByCompany = await prisma.serialUnit.findMany({
+      where: { battalionId: bId, dischargedAt: null, signedSoldierId: null, itemType: { category: { warehouseType: "VEHICLES" } }, currentHolder: { kind: "COMPANY" } },
+      select: {
+        id: true, serialNumber: true, physicalLocation: true, expiryDate: true, equipmentLocationId: true,
+        itemType: { select: { name: true } }, status: { select: { name: true } }, equipmentLocation: { select: { name: true } },
+        currentHolder: { select: { id: true, name: true } },
+      },
+      orderBy: { itemType: { name: "asc" } },
+    });
+    for (const u of heldByCompany) {
+      const cid = u.currentHolder!.id, cname = u.currentHolder!.name;
+      ensure(`veh-${cid}`, "— מוחזק ע\"י הפלוגה —", null, cname, cid)
+        .items.push({ name: u.itemType.name, serial: u.serialNumber, serialUnitId: u.id, locId: u.equipmentLocationId, status: u.status?.name ?? null, location: u.equipmentLocation?.name || u.physicalLocation || null, expiry: u.expiryDate ? u.expiryDate.toISOString().slice(0, 10) : null });
+    }
   }
   // qty net per (soldier, itemName)
   const qtyNet = new Map<string, number>();
