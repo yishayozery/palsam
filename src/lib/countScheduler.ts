@@ -173,6 +173,9 @@ export async function cleanupEphemeral(now: Date = new Date()): Promise<{ tokens
   const tokens = await prisma.dispatchToken.deleteMany({ where: { expiresAt: { lt: now } } }).catch(() => ({ count: 0 }));
   const rateCutoff = new Date(now.getTime() - 24 * 3600 * 1000);
   const rateHits = await prisma.rateLimitHit.deleteMany({ where: { createdAt: { lt: rateCutoff } } }).catch(() => ({ count: 0 }));
+  // אתגרי חיבור-בוט שלא הושלמו — מוחקים אחרי שעה
+  const bindCutoff = new Date(now.getTime() - 3600 * 1000);
+  await prisma.telegramBindChallenge.deleteMany({ where: { createdAt: { lt: bindCutoff } } }).catch(() => {});
   return { tokens: tokens.count, rateHits: rateHits.count };
 }
 

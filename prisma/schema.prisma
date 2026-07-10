@@ -2306,3 +2306,18 @@ model BackupRun {
 
   @@index([createdAt])
 }
+
+/**
+ * אתגר חיבור-בוט דו-שלבי (זמני): החייל הקליד מ.א, וממתין לשיתוף מספר טלפון לאימות.
+ * מונע חטיפת זהות — נדרשים גם מ.א וגם המכשיר עם המספר האמיתי. מתנקה אחרי אימות/תפוגה.
+ */
+model TelegramBindChallenge {
+  id             String   @id @default(cuid())
+  battalionId    String
+  chatId         String
+  personalNumber String
+  createdAt      DateTime @default(now())
+
+  @@unique([battalionId, chatId])
+  @@index([createdAt])
+}

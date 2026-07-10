@@ -2,15 +2,21 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireCapability } from "@/lib/guard";
+import { requireCapability, requireUser } from "@/lib/guard";
+import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 
-/** ניתוק קישור הטלגרם של חייל (שלישות) — כדי לאפשר חיבור-מחדש ממכשיר חדש. */
+/** ניתוק קישור הטלגרם של חייל — מפקדים ישירים (company.manage) על הפלוגה שלהם, או שלישות/אדמין. */
 export async function unlinkTelegram(soldierId: string) {
-  const user = await requireCapability("soldiers.roster");
+  const user = await requireUser();
+  const isCmd = can(user, "company.manage");
+  const isRoster = can(user, "soldiers.roster") || user.isAdmin;
+  if (!isCmd && !isRoster) return { error: "אין הרשאה" };
   const bId = user.battalionId!;
-  const s = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true } });
+  const s = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true, companyId: true } });
   if (!s || s.battalionId !== bId) return { error: "חייל לא נמצא" };
+  // מפקד ללא הרשאת שלישות — רק על חיילי הפלוגה/מחלקות שלו
+  if (!isRoster && user.holderId && s.companyId !== user.holderId) return { error: "מחוץ להרשאה שלך" };
   await prisma.soldier.update({ where: { id: soldierId }, data: { telegramChatId: null } });
   await audit(user.id, "UNLINK_TELEGRAM", "Soldier", soldierId);
   revalidatePath("/soldiers");

@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { sendTelegramMessage, answerCallbackQuery, editMessageText, MAIN_KEYBOARD, buildMainKeyboard } from "@/lib/telegram";
 import { linkTokenQuery } from "@/lib/link-token";
+import { normalizePhone } from "@/lib/phone";
 
 export async function POST(
   req: NextRequest,
@@ -62,6 +63,12 @@ export async function POST(
 
     const chatId = String(message.chat.id);
 
+    // --- שיתוף מספר טלפון (שלב 2 בחיבור המאובטח) ---
+    if (message.contact) {
+      await handleContactShare(token, chatId, message, battalionId);
+      return NextResponse.json({ ok: true });
+    }
+
     // --- Photo handling: armory test proof upload ---
     if (message.photo?.length > 0) {
       await handlePhotoUpload(token, chatId, message.photo, battalionId);
@@ -105,20 +112,12 @@ export async function POST(
           select: { id: true, fullName: true, telegramChatId: true },
         });
         if (target) {
-          // 🔒 חסימת חטיפת זהות: אם המ.א כבר מחובר למכשיר אחר — לא לאפשר קשירה-מחדש (רק ניתוק ע"י שלישות)
-          if (target.telegramChatId && target.telegramChatId !== chatId) {
-            await sendTelegramMessage(token, chatId, `⛔ המספר האישי ${startParam} כבר מחובר למכשיר אחר.\nאם זה אתה — פנה/י לשלישות לניתוק וחיבור מחדש.`);
-            await sendTelegramMessage(token, target.telegramChatId, `⚠️ מישהו ניסה לחבר את המספר האישי שלך למכשיר אחר. אם זה לא אתה — דווח/י לשלישות.`).catch(() => {});
+          if (target.telegramChatId === chatId) {
+            await sendTelegramMessage(token, chatId, `כבר מחובר/ת, ${target.fullName}! ✅`, MAIN_KEYBOARD);
             return NextResponse.json({ ok: true });
           }
-          if (target.telegramChatId !== chatId) {
-            await prisma.soldier.update({ where: { id: target.id }, data: { telegramChatId: chatId } });
-          }
-          await sendTelegramMessage(
-            token, chatId,
-            `מעולה, ${target.fullName}! ✅\nהתחברת בהצלחה למערכת PALMY.\n\n${HELP_TEXT}`,
-            MAIN_KEYBOARD,
-          );
+          // 🔐 חיבור דו-שלבי: שומרים את המ.א וממתינים לשיתוף מספר טלפון לאימות
+          await startBindChallenge(token, chatId, battalionId, startParam, target.fullName);
           return NextResponse.json({ ok: true });
         }
         // מספר לא נמצא — ממשיך להודעת הרישום הרגילה
@@ -359,30 +358,80 @@ export async function POST(
       return NextResponse.json({ ok: true });
     }
 
-    // 🔒 חסימת חטיפת זהות: אם המ.א כבר מחובר למכשיר אחר — לא לאפשר קשירה-מחדש (רק ניתוק ע"י שלישות)
-    if (target.telegramChatId && target.telegramChatId !== chatId) {
-      await sendTelegramMessage(token, chatId, `⛔ המספר האישי ${personalNumber} כבר מחובר למכשיר אחר.\nאם זה אתה — פנה/י לשלישות לניתוק וחיבור מחדש.`);
-      await sendTelegramMessage(token, target.telegramChatId, `⚠️ מישהו ניסה לחבר את המספר האישי שלך למכשיר אחר. אם זה לא אתה — דווח/י לשלישות.`).catch(() => {});
-      return NextResponse.json({ ok: true });
-    }
-
-    await prisma.soldier.update({
-      where: { id: target.id },
-      data: { telegramChatId: chatId },
-    });
-
-    await sendTelegramMessage(
-      token,
-      chatId,
-      `מעולה, ${target.fullName}! ✅\nהתחברת בהצלחה למערכת PALMY.\n\n${HELP_TEXT}`,
-      MAIN_KEYBOARD,
-    );
-
+    // 🔐 חיבור דו-שלבי: שומרים את המ.א וממתינים לשיתוף מספר טלפון לאימות
+    await startBindChallenge(token, chatId, battalionId, personalNumber, target.fullName);
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("[Telegram webhook error]", e);
     return NextResponse.json({ ok: true });
   }
+}
+
+// --- חיבור דו-שלבי לבוט: מ.א (שלב 1) + אימות מספר טלפון (שלב 2) ---
+const SHARE_CONTACT_KEYBOARD = {
+  keyboard: [[{ text: "📱 שתף מספר לאימות", request_contact: true }]],
+  resize_keyboard: true,
+  one_time_keyboard: true,
+};
+
+/** שלב 1: שומר את המ.א שהוקש וממתין לשיתוף מספר טלפון. */
+async function startBindChallenge(token: string, chatId: string, battalionId: string, personalNumber: string, fullName: string) {
+  await prisma.telegramBindChallenge.upsert({
+    where: { battalionId_chatId: { battalionId, chatId } },
+    update: { personalNumber, createdAt: new Date() },
+    create: { battalionId, chatId, personalNumber },
+  });
+  await sendTelegramMessage(
+    token, chatId,
+    `כמעט שם, ${fullName}! 🔐\nלאימות זהות — שתף/י את מספר הטלפון שלך בלחיצה על הכפתור למטה.\n(רק המספר שלך; חייב להתאים למספר הרשום במערכת)`,
+    SHARE_CONTACT_KEYBOARD,
+  );
+}
+
+/** שלב 2: מקבל מספר משותף, מאמת מול המ.א, ומחבר רק אם תואם. */
+async function handleContactShare(
+  token: string, chatId: string,
+  message: { contact?: { phone_number?: string; user_id?: number }; from?: { id?: number } },
+  battalionId: string,
+) {
+  const contact = message.contact;
+  const fromId = message.from?.id;
+  // חייב לשתף את המספר של עצמו (לא איש קשר אחר / מועבר)
+  if (!contact?.phone_number || (contact.user_id != null && fromId != null && String(contact.user_id) !== String(fromId))) {
+    await sendTelegramMessage(token, chatId, "⚠️ יש לשתף את <b>המספר שלך</b> דרך הכפתור, לא איש קשר אחר.");
+    return;
+  }
+  const challenge = await prisma.telegramBindChallenge.findUnique({ where: { battalionId_chatId: { battalionId, chatId } } });
+  if (!challenge) {
+    await sendTelegramMessage(token, chatId, "כדי להתחבר — שלח/י קודם את <b>המספר האישי</b> שלך.");
+    return;
+  }
+  const soldier = await prisma.soldier.findFirst({
+    where: { battalionId, personalNumber: challenge.personalNumber },
+    select: { id: true, fullName: true, phone: true, telegramChatId: true },
+  });
+  await prisma.telegramBindChallenge.delete({ where: { battalionId_chatId: { battalionId, chatId } } }).catch(() => {});
+  if (!soldier) {
+    await sendTelegramMessage(token, chatId, "מספר אישי לא נמצא. התחל/י מחדש עם המספר האישי.");
+    return;
+  }
+  const shared = normalizePhone(contact.phone_number);
+  const onFile = normalizePhone(soldier.phone);
+  if (!onFile) {
+    await sendTelegramMessage(token, chatId, "⛔ אין מספר טלפון רשום עבורך במערכת.\nפנה/י למפקד/שלישות להוספת המספר, ואז נסה/י שוב.");
+    return;
+  }
+  if (shared !== onFile) {
+    await sendTelegramMessage(token, chatId, `⛔ המספר ששיתפת אינו תואם למספר האישי ${challenge.personalNumber} במערכת.\nאם החלפת מספר — פנה/י למפקד/שלישות לעדכון.`);
+    return;
+  }
+  // ✅ שני השלבים אומתו — מחברים
+  const prevChat = soldier.telegramChatId;
+  await prisma.soldier.update({ where: { id: soldier.id }, data: { telegramChatId: chatId } });
+  if (prevChat && prevChat !== chatId) {
+    await sendTelegramMessage(token, prevChat, "ℹ️ החשבון שלך חובר למכשיר חדש (מאומת בטלפון). אם זה לא אתה — דווח/י לשלישות.").catch(() => {});
+  }
+  await sendTelegramMessage(token, chatId, `מעולה, ${soldier.fullName}! ✅\nהתחברת בהצלחה (מאומת בטלפון) למערכת PALMY.\n\n${HELP_TEXT}`, MAIN_KEYBOARD);
 }
 
 // --- Callback handler for inline verification buttons ---
