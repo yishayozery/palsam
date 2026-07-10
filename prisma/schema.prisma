@@ -885,6 +885,8 @@ model ItemType {
   signMode       SignMode         @default(COMPANY) // החתמת פלוגה (ברירת מחדל) או חייל ישיר (נשק)
   isSensitive    Boolean          @default(false)
   trackLocation  Boolean          @default(false)
+  // האם החייל רשאי לעדכן בעצמו (בבוט) את מיקום הפריט החתום עליו
+  allowLocationUpdate Boolean      @default(false)
   // האם הפריט יש לו תאריך תפוגה — אם כן, חובה להזין תאריך תפוגה בקבלה למלאי
   trackExpiry    Boolean          @default(false)
   expiryAlertDays Int?            // התראה X ימים לפני פקיעת תוקף (רק לפריטי trackExpiry)

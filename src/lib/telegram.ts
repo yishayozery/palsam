@@ -74,28 +74,32 @@ export async function editMessageText(
   });
 }
 
-/** תפריט דינמי — קומפקטי (ללא כפתור עזרה; ההסבר נשלח ברישום). "דיווח נוכחות"/"מנה צוות" רק למי שרשאי. */
-export function buildMainKeyboard(canReportAttendance = false, canManageTeam = false, isDriver = false) {
-  void isDriver; // אפשרויות הרכב אוחדו תחת תפריט "🚗 רכבים"
+/**
+ * תפריט דינמי — קומפקטי (ללא כפתור עזרה; ההסבר נשלח ברישום).
+ * "דיווחי כ"א וספירות" מוצג רק אם יש משהו לעשות (ספירה פתוחה או הרשאת דיווח כ"א).
+ * מינוי צוות בוטל — נעשה רק דרך המערכת.
+ */
+export function buildMainKeyboard(showReportsButton = false, _unused = false, isDriver = false) {
+  void isDriver; void _unused; // אפשרויות הרכב אוחדו תחת תפריט "🚗 רכבים"
   const rows: { text: string }[][] = [
-    [{ text: "📋 טפסים להחתמה" }, { text: "📦 הציוד שלי" }],
-    [{ text: "📊 ספירות מלאי" }, { text: "🚗 רכבים" }],
+    [{ text: "🔫 נשקייה" }, { text: "📦 הציוד שלי" }],
   ];
-  const extra: { text: string }[] = [];
-  if (canReportAttendance) extra.push({ text: "🗓️ דיווח כ\"א (דוח 1)" });
-  extra.push({ text: "🕐 ארוחות ותפילות" });
-  if (canManageTeam) extra.push({ text: "👥 מנה צוות" });
-  rows.push(extra);
+  if (showReportsButton) rows.push([{ text: "📊 דיווחי כ\"א וספירות" }, { text: "🚗 רכבים" }]);
+  else rows.push([{ text: "🚗 רכבים" }]);
+  rows.push([{ text: "🕐 ארוחות ותפילות" }]);
   return { keyboard: rows, resize_keyboard: true, is_persistent: true };
 }
 
-/** תת-תפריט רכבים — כל האפשרויות תחת "🚗 רכבים". */
-export function buildVehicleKeyboard(canManageTeam = false, isDriver = false) {
-  const rows: { text: string }[][] = [[{ text: "🚗 משימות ושבצ\"ק" }]];
-  if (isDriver) rows.push([{ text: "📁 תיק נהג" }]);
-  if (canManageTeam) rows.push([{ text: "🪪 בדיקת הסמכות" }]);
-  rows.push([{ text: "⬅️ חזרה לתפריט" }]);
+/** תת-תפריט רכבים — כל האפשרויות תחת "🚗 רכבים" (זמינות לכולם). */
+export function buildVehicleKeyboard(_canManageTeam = false, _isDriver = false) {
+  void _canManageTeam; void _isDriver;
+  const rows: { text: string }[][] = [
+    [{ text: "🚗 משימות ושבצ\"ק" }],
+    [{ text: "📁 תיק נהג" }, { text: "🪪 בדיקת הסמכות" }],
+    [{ text: "⛽ כרטיסי הדלק שלי" }],
+    [{ text: "⬅️ חזרה לתפריט" }],
+  ];
   return { keyboard: rows, resize_keyboard: true, is_persistent: true };
 }
 
-export const MAIN_KEYBOARD = buildMainKeyboard(false);
+export const MAIN_KEYBOARD = buildMainKeyboard(true);

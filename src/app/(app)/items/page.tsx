@@ -153,7 +153,7 @@ export default async function ItemsPage({
                         <CatalogManager
                           categories={categories.map((c) => ({ id: c.id, name: c.name }))}
                           locations={locOptions}
-                          edit={{ id: i.id, sku: i.sku ?? "", name: i.name, categoryId: i.categoryId ?? "", trackingMethod: i.trackingMethod, unit: i.unit, association: i.association, signMode: i.signMode, imageData: i.imageData, homeLocationId: i.homeLocationId, trackExpiry: i.trackExpiry, expiryAlertDays: i.expiryAlertDays, maxPerSoldier: i.maxPerSoldier }}
+                          edit={{ id: i.id, sku: i.sku ?? "", name: i.name, categoryId: i.categoryId ?? "", trackingMethod: i.trackingMethod, unit: i.unit, association: i.association, signMode: i.signMode, imageData: i.imageData, homeLocationId: i.homeLocationId, trackExpiry: i.trackExpiry, expiryAlertDays: i.expiryAlertDays, maxPerSoldier: i.maxPerSoldier, allowLocationUpdate: i.allowLocationUpdate }}
                         />
                         {i.active ? (
                           <form action={archiveItemType}>

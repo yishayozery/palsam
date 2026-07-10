@@ -19,6 +19,7 @@ export type EditData = {
   trackExpiry?: boolean;
   expiryAlertDays?: number | null;
   maxPerSoldier?: number | null;
+  allowLocationUpdate?: boolean;
 };
 
 function compressImage(file: File): Promise<string> {
@@ -133,6 +134,14 @@ export default function CatalogManager({ categories, locations = [], edit }: { c
                 <input type="number" name="maxPerSoldier" min={1} defaultValue={edit?.maxPerSoldier ?? ""} placeholder="ריק = ללא הגבלה"
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
                 <p className="text-[11px] text-slate-500 mt-0.5">מקסימום יחידות מסוג זה שחייל יכול להיות חתום עליהן (למשל נשק/אמל״ר = 1). ריק = ללא הגבלה. חוסם החתמה בחריגה.</p>
+              </div>
+
+              <div className="bg-sky-50 border border-sky-200 rounded-lg p-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" name="allowLocationUpdate" defaultChecked={edit?.allowLocationUpdate ?? false} className="w-4 h-4" />
+                  <span className="font-medium">📍 מיקום ניתן לעדכון ע״י החייל</span>
+                </label>
+                <p className="text-[11px] text-slate-500 mr-6 mt-0.5">אם מסומן — החייל יוכל לעדכן בבוט (ב״הציוד שלי״) את מיקום הפריט החתום עליו, מתוך מיקומי הפלוגה.</p>
               </div>
 
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">

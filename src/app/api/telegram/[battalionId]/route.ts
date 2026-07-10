@@ -83,24 +83,26 @@ export async function POST(
 
     // Map Hebrew keyboard buttons to commands
     const CMD_MAP: Record<string, string> = {
-      "📋 טפסים להחתמה": "/status",
-      "📋 תהליך חתימת נשק": "/status",
+      "🔫 נשקייה": "/status",
       "📦 הציוד שלי": "/equipment",
       "🚗 רכבים": "/vehicles",
       "⬅️ חזרה לתפריט": "/menu",
       "🚗 משימות ושבצ\"ק": "/dispatch",
       "🚗 שיבוץ לרכב": "/dispatch",
-      "📊 ספירות מלאי": "/counts",
+      "📊 דיווחי כ\"א וספירות": "/reports",
       "🗓️ דיווח כ\"א (דוח 1)": "/attendance",
       "🗓️ דיווח נוכחות": "/attendance",
+      "⛽ כרטיסי הדלק שלי": "/myfuel",
       "🕐 ארוחות ותפילות": "/info",
-      "👥 מנה צוות": "/team",
       "🪪 בדיקת הסמכות": "/license",
       "🪪 בדיקת רישיון": "/license",
       "📁 תיק נהג": "/driverforms",
       "📁 טפסי נהג": "/driverforms",
       "❓ עזרה": "/help",
       // backward compat — old button labels
+      "📋 טפסים להחתמה": "/status",
+      "📋 תהליך חתימת נשק": "/status",
+      "📊 ספירות מלאי": "/reports",
       "📊 סטטוס": "/status",
       "📦 ציוד חתום": "/equipment",
       "🚗 שבצ\"ק": "/dispatch",
@@ -161,7 +163,21 @@ export async function POST(
     const canManageTeam = !!(mgr && (mgr.holderId || (mgr.assignedHolders?.length ?? 0) > 0));
     // נהג = יש רישיון/היתר, ריענון, רישיון אזרחי או טופס תיק נהג — מקבל כפתור טפסי נהג קבוע
     const isDriver = !!soldier && ((soldier._count?.drivingLicenses ?? 0) > 0 || (soldier._count?.driverForms ?? 0) > 0 || !!soldier.drivingRefresherDate || !!soldier.civilianLicenseNumber);
-    const keyboard = buildMainKeyboard(canAttendance, canManageTeam, isDriver);
+    // "דיווחי כ"א וספירות" — מוצג רק אם יש הרשאת דיווח כ"א או ספירה פתוחה משויכת
+    let hasOpenCounts = false;
+    if (soldier) {
+      hasOpenCounts = (await prisma.countTask.count({
+        where: {
+          battalionId, status: { in: ["PENDING", "IN_PROGRESS", "OVERDUE"] },
+          OR: [
+            { assignedUser: { soldier: { telegramChatId: chatId } } },
+            { holder: { users: { some: { soldier: { telegramChatId: chatId } } } } },
+          ],
+        },
+      })) > 0;
+    }
+    const showReports = canAttendance || hasOpenCounts;
+    const keyboard = buildMainKeyboard(showReports, canManageTeam, isDriver);
 
     // /help
     if (cmd === "/help") {
@@ -188,19 +204,15 @@ export async function POST(
     }
 
     // /team — מינוי צוות: הבוט שולח לינק כניסה חד-פעמי מאובטח (הפעולה עצמה מאחורי login)
-    if (cmd === "/team") {
-      if (!mgr || !canManageTeam) {
-        await sendTelegramMessage(token, chatId, "👥 מינוי צוות זמין למפקדי יחידה (מפ / קצין מחסן) בלבד.", keyboard);
-        return NextResponse.json({ ok: true });
+    // 📊 דיווחי כ"א וספירות — מיזוג: דיווח נוכחות (למי שרשאי) + ספירות מלאי פתוחות
+    if (cmd === "/reports") {
+      if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
+      if (canAttendance) {
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+        await sendTelegramMessage(token, chatId,
+          `🗓️ <b>דיווח כ"א (דוח 1) — ${battalion.name}</b>\n\nדווח/י את נוכחות ${soldier.company?.name || "הפלוגה"} להיום:\n\n👉 <a href="${baseUrl}/attendance">לחץ כאן לדיווח</a>`);
       }
-      const magic = nanoid(40);
-      await prisma.appUser.update({
-        where: { id: mgr.id },
-        data: { magicToken: magic, magicTokenExp: new Date(Date.now() + 10 * 60 * 1000) },
-      });
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
-      await sendTelegramMessage(token, chatId,
-        `👥 <b>מינוי צוות</b>\n\nלחץ/י כדי להיכנס ולמנות רספ״ים / סגנים / מפקדי מחלקות:\n\n👉 <a href="${baseUrl}/magic/${magic}">כניסה מאובטחת</a>\n\n<i>🔒 הקישור אישי, חד-פעמי, ותקף ל-10 דקות בלבד.</i>`, keyboard);
+      await handleCounts(token, chatId, soldier, battalionId);
       return NextResponse.json({ ok: true });
     }
 
@@ -282,73 +294,33 @@ export async function POST(
       return NextResponse.json({ ok: true });
     }
 
-    // 📁 טפסי נהג — הנהג ממלא/חותם על טפסי תיק הנהג שלו
+    // 📁 טפסי נהג — זמין לכולם (מילוי/חתימה על טפסי תיק הנהג)
     if (cmd === "/driverforms") {
       if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
-      if (!isDriver) { await sendTelegramMessage(token, chatId, "📁 אין לך טפסי נהג. אם אתה נהג — פנה/י לקצין הרכב.", keyboard); return NextResponse.json({ ok: true }); }
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
       await sendTelegramMessage(token, chatId,
         `📁 <b>טפסי נהג — ${battalion.name}</b>\n\n${soldier.fullName}, למילוי וחתימה על טפסי תיק הנהג שלך:\n\n👉 <a href="${baseUrl}/driver-form/${soldier.id}${linkTokenQuery("driver-form", soldier.id)}">לחץ כאן למילוי הטפסים</a>`, keyboard);
       return NextResponse.json({ ok: true });
     }
 
-    // 🪪 בדיקת רישיון — "/license" מציג הסבר; "רישיון <מ.א>" מבצע בדיקה
+    // ⛽ כרטיסי הדלק שלי — הכרטיסים הפתוחים שהחייל מחזיק (נמצאים במסך רכבים, לא ציוד מחסן)
+    if (cmd === "/myfuel") {
+      if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
+      await handleMyFuel(token, chatId, soldier, buildVehicleKeyboard());
+      return NextResponse.json({ ok: true });
+    }
+
+    // 🪪 בדיקת הסמכות — זמין לכולם. "/license" מציג את ההסמכות שלי + הסבר; "רישיון <מ.א>" בודק אחר
     if (cmd === "/license") {
-      if (!mgr) { await sendTelegramMessage(token, chatId, "🪪 בדיקת רישיון זמינה לבעלי תפקיד (קצין רכב / מפקדים).", keyboard); return NextResponse.json({ ok: true }); }
-      await sendTelegramMessage(token, chatId, "🪪 <b>בדיקת רישיון נהג</b>\n\nשלח/י:\n<code>רישיון &lt;מספר אישי&gt;</code>\n\nלדוגמה: <code>רישיון 1234567</code>", keyboard);
+      if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
+      await handleLicenseCheck(token, chatId, battalionId, soldier.personalNumber ?? "", "self");
+      await sendTelegramMessage(token, chatId, "🪪 לבדיקת הסמכות של חייל אחר — שלח/י:\n<code>רישיון &lt;מספר אישי&gt;</code>\nלדוגמה: <code>רישיון 1234567</code>", keyboard);
       return NextResponse.json({ ok: true });
     }
     const licMatch = text.match(/^(?:רישיון|בדיקת רישיון)\s+(\d{5,})/);
     if (licMatch) {
-      if (!mgr) { await sendTelegramMessage(token, chatId, "🪪 בדיקת רישיון זמינה לבעלי תפקיד בלבד.", keyboard); return NextResponse.json({ ok: true }); }
-      const pn = licMatch[1];
-      const target = await prisma.soldier.findFirst({
-        where: { battalionId, personalNumber: pn },
-        select: {
-          fullName: true, drivingRefresherDate: true, drivingProcedureSignedAt: true, civilianLicenseExpiry: true, civilianLicenseGrade: true,
-          company: { select: { name: true } },
-          drivingLicenses: { select: { licenseTypeId: true, licenseType: { select: { name: true, kind: true } } } },
-          driverFileApprovedAt: true,
-        },
-      });
-      if (!target) { await sendTelegramMessage(token, chatId, `🪪 לא נמצא חייל עם מ.א ${pn}.`, keyboard); return NextResponse.json({ ok: true }); }
-
-      const [bat, vtl] = await Promise.all([
-        prisma.battalion.findUnique({ where: { id: battalionId }, select: { drivingRefreshDays: true } }),
-        prisma.vehicleTypeLicense.findMany({ where: { itemType: { battalionId } }, select: { licenseTypeId: true, itemType: { select: { id: true, name: true } } } }),
-      ]);
-      const has = new Set(target.drivingLicenses.map((l) => l.licenseTypeId));
-      const byVehicle = new Map<string, { name: string; required: string[] }>();
-      for (const r of vtl) { const v = byVehicle.get(r.itemType.id) ?? { name: r.itemType.name, required: [] }; v.required.push(r.licenseTypeId); byVehicle.set(r.itemType.id, v); }
-      const allowed = [...byVehicle.values()].filter((v) => v.required.every((id) => has.has(id))).map((v) => v.name);
-
-      const refreshDays = bat?.drivingRefreshDays ?? 180;
-      let refreshLine = "❌ לא בוצע ריענון";
-      if (target.drivingRefresherDate) {
-        const exp = new Date(target.drivingRefresherDate); exp.setDate(exp.getDate() + refreshDays);
-        const days = Math.ceil((exp.getTime() - Date.now()) / 86400000);
-        refreshLine = days < 0 ? `🔴 ריענון פג (${target.drivingRefresherDate.toISOString().slice(0, 10)})` : `🟢 ריענון תקף — ${target.drivingRefresherDate.toISOString().slice(0, 10)} (עוד ${days} י׳)`;
-      }
-      let civLine = "—";
-      if (target.civilianLicenseExpiry) {
-        const d = Math.ceil((target.civilianLicenseExpiry.getTime() - Date.now()) / 86400000);
-        civLine = `${target.civilianLicenseExpiry.toISOString().slice(0, 10)} ${d < 0 ? "🔴 פג" : d < 30 ? `🟡 עוד ${d} י׳` : "🟢"}`;
-      }
-      const licNames = target.drivingLicenses.filter((l) => l.licenseType.kind === "LICENSE").map((l) => l.licenseType.name);
-      const permitNames = target.drivingLicenses.filter((l) => l.licenseType.kind !== "LICENSE").map((l) => l.licenseType.name);
-
-      const msg = [
-        `🪪 <b>${target.fullName}</b> · ${target.company?.name ?? "—"} (מ.א ${pn})`, ``,
-        `רישיונות: ${licNames.join(", ") || "—"}${target.civilianLicenseGrade ? ` (${target.civilianLicenseGrade})` : ""}`,
-        `היתרים: ${permitNames.join(", ") || "—"}`,
-        `תוקף רישיון אזרחי: ${civLine}`,
-        refreshLine,
-        `תיק נהג: ${target.driverFileApprovedAt ? "✅ מאושר" : "⚠️ לא מאושר"}`,
-        ``,
-        `🚗 <b>מורשה לנהוג ב:</b>`,
-        allowed.length ? allowed.map((n) => `• ${n}`).join("\n") : "— אין רכב שהוא מורשה לנהוג בו",
-      ].join("\n");
-      await sendTelegramMessage(token, chatId, msg, keyboard);
+      if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
+      await handleLicenseCheck(token, chatId, battalionId, licMatch[1], "other", keyboard);
       return NextResponse.json({ ok: true });
     }
 
@@ -483,6 +455,40 @@ async function handleCallback(
     }
     await answerCallbackQuery(token, callback.id, "נחתם! ✅");
     await editMessageText(token, chatId, messageId, `✅ <b>חתמת על נוהל הנהיגה</b>\nתודה, ${soldier.fullName}.`);
+    return;
+  }
+
+  // עדכון מיקום — שלב 1: בחירת פריט → הצגת רשימת מיקומים אפשריים (פלוגת החייל)
+  if (data.startsWith("setloc:")) {
+    const serialUnitId = data.split(":")[1];
+    const unit = await prisma.serialUnit.findFirst({
+      where: { id: serialUnitId, signedSoldier: { telegramChatId: chatId }, itemType: { allowLocationUpdate: true } },
+      select: { serialNumber: true, itemType: { select: { name: true } }, signedSoldier: { select: { companyId: true } } },
+    });
+    if (!unit) { await answerCallbackQuery(token, callback.id, "לא ניתן לעדכן פריט זה"); return; }
+    const holderId = unit.signedSoldier?.companyId;
+    const locs = holderId ? await prisma.equipmentLocation.findMany({ where: { holderId, active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }) : [];
+    if (locs.length === 0) { await answerCallbackQuery(token, callback.id, "אין מיקומים מוגדרים לפלוגה"); return; }
+    await answerCallbackQuery(token, callback.id, "");
+    await editMessageText(token, chatId, messageId, `📍 <b>${unit.itemType.name} · ${unit.serialNumber}</b>\nבחר/י מיקום חדש:`, {
+      inline_keyboard: locs.map((l) => [{ text: l.name, callback_data: `putloc:${serialUnitId}:${l.id}` }]),
+    });
+    return;
+  }
+
+  // עדכון מיקום — שלב 2: קביעת המיקום שנבחר
+  if (data.startsWith("putloc:")) {
+    const [, serialUnitId, locId] = data.split(":");
+    const unit = await prisma.serialUnit.findFirst({
+      where: { id: serialUnitId, signedSoldier: { telegramChatId: chatId }, itemType: { allowLocationUpdate: true } },
+      select: { serialNumber: true, itemType: { select: { name: true } }, signedSoldier: { select: { companyId: true } } },
+    });
+    if (!unit) { await answerCallbackQuery(token, callback.id, "שגיאה"); return; }
+    const loc = await prisma.equipmentLocation.findFirst({ where: { id: locId, holderId: unit.signedSoldier?.companyId ?? undefined, active: true }, select: { name: true } });
+    if (!loc) { await answerCallbackQuery(token, callback.id, "מיקום לא תקין"); return; }
+    await prisma.serialUnit.update({ where: { id: serialUnitId }, data: { equipmentLocationId: locId } });
+    await answerCallbackQuery(token, callback.id, "המיקום עודכן ✅");
+    await editMessageText(token, chatId, messageId, `✅ <b>המיקום עודכן</b>\n${unit.itemType.name} · ${unit.serialNumber}\n📍 ${loc.name}`);
     return;
   }
 
@@ -761,13 +767,13 @@ async function handleCallback(
 
 const HELP_TEXT = `📋 <b>מה כל כפתור עושה:</b>
 
-📋 <b>טפסים להחתמה</b> — מה הסטטוס שלך? מראה אילו שלבים הושלמו (אישור מפקד, מבחן ארמון, חתימה על נוהל) ומה עוד צריך לעשות כדי לחתום על נשק
+🔫 <b>נשקייה</b> — שלבי החתמת הנשק (אישור מפקד, מבחן ארמון, חתימה על נוהל) + רשימת הצל"ם הסריאלי שחתום עליך מול הארמון
 
-📦 <b>הציוד שלי</b> — רשימת כל הציוד החתום עליך (נשק, אפודים, ציוד אישי וכו׳)
+📦 <b>הציוד שלי</b> — כל הציוד החתום עליך, מחולק לסריאלי/אצוות מול כמותי (עם מיקום). פריט עם ✏️ — ניתן לעדכן לו מיקום
 
-🚗 <b>שיבוץ לרכב</b> — יצירת שבצ"ק חדש: בחירת רכב, תאריך, שעה וחיילים
+🚗 <b>רכבים</b> — משימות ושבצ"ק · תיק נהג · בדיקת הסמכות · כרטיסי הדלק שלי · קישורים שימושיים
 
-📊 <b>ספירות מלאי</b> — משימות ספירה פתוחות עם לינק לביצוע
+📊 <b>דיווחי כ"א וספירות</b> — דיווח נוכחות (למי שרשאי) + משימות ספירה פתוחות (מופיע רק כשיש מה לעשות)
 
 🕐 <b>ארוחות ותפילות</b> — זמני ארוחות, תפילות ומידע כללי שהמפקד הגדיר
 
@@ -796,12 +802,12 @@ type BattalionCtx = {
 
 async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, battalion: BattalionCtx) {
   const lines: string[] = [];
-  lines.push(`📊 <b>סטטוס — ${soldier.fullName}</b>`);
+  lines.push(`🔫 <b>נשקייה — ${soldier.fullName}</b>`);
   if (soldier.company) lines.push(`📍 ${soldier.company.name}`);
   lines.push("");
 
   // Weapon signing status
-  lines.push("<b>🔫 טפסים להחתמה:</b>");
+  lines.push("<b>📋 טפסים להחתמה:</b>");
 
   const step1 = soldier.weaponsApprovedAt;
   lines.push(`${step1 ? "✅" : "⬜"} אישור מג״ד/סמג״ד${step1 ? ` (${fmtDate(step1)})` : ""}`);
@@ -826,27 +832,22 @@ async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, 
   lines.push("");
   lines.push(allDone ? "✅ <b>כל השלבים הושלמו — ניתן לחתום על נשק</b>" : "⏳ <b>יש שלבים שלא הושלמו</b>");
 
-  // Signed items count (serial + quantity)
-  const [signedSerialCount, signedQtyLines] = await Promise.all([
-    prisma.serialUnit.count({ where: { signedSoldierId: soldier.id } }),
-    prisma.transferLine.findMany({
-      where: {
-        transfer: { status: "COMPLETED", type: { in: ["SIGNOUT", "CHECKIN"] }, toSoldierId: soldier.id },
-        serialUnitId: null,
-      },
-      select: { itemTypeId: true, quantity: true, transfer: { select: { type: true } } },
-    }),
-  ]);
-  const qtyTypesMap = new Map<string, number>();
-  for (const l of signedQtyLines) {
-    const sign = l.transfer.type === "SIGNOUT" ? 1 : -1;
-    qtyTypesMap.set(l.itemTypeId, (qtyTypesMap.get(l.itemTypeId) ?? 0) + sign * l.quantity);
-  }
-  const signedQtyCount = Array.from(qtyTypesMap.values()).filter((q) => q > 0).length;
-  const signedCount = signedSerialCount + signedQtyCount;
+  // צל"ם סריאלי חתום מול הארמון — רשימה מלאה (נשק, אמל"ח, כוונות וכו')
+  const serialItems = await prisma.serialUnit.findMany({
+    where: { signedSoldierId: soldier.id },
+    select: { serialNumber: true, lotQuantity: true, itemType: { select: { name: true } } },
+    orderBy: { itemType: { name: "asc" } },
+  });
   lines.push("");
-  lines.push(`📦 פריטים חתומים: <b>${signedCount}</b>`);
-  if (signedCount > 0) lines.push("לחץ <b>📦 ציוד חתום</b> לרשימה מלאה");
+  if (serialItems.length > 0) {
+    lines.push(`<b>🔫 צל"ם סריאלי חתום (${serialItems.length}):</b>`);
+    for (const item of serialItems) {
+      const lot = item.lotQuantity && item.lotQuantity > 1 ? ` (אצווה ×${item.lotQuantity})` : "";
+      lines.push(`• ${item.itemType.name} — <code>${item.serialNumber}</code>${lot}`);
+    }
+  } else {
+    lines.push("🔫 אין צל\"ם סריאלי חתום כרגע.");
+  }
 
   // Driving refresher
   if (soldier.drivingRefresherDate) {
@@ -890,8 +891,8 @@ async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, 
 async function handleEquipment(token: string, chatId: string, soldier: SoldierCtx) {
   const [serialItems, qtyLines] = await Promise.all([
     prisma.serialUnit.findMany({
-      where: { signedSoldierId: soldier.id },
-      select: { id: true, serialNumber: true, lotQuantity: true, itemType: { select: { name: true } }, equipmentLocation: { select: { name: true } } },
+      where: { signedSoldierId: soldier.id, itemType: { category: { warehouseType: { not: "VEHICLES" } } } },
+      select: { id: true, serialNumber: true, lotQuantity: true, itemType: { select: { name: true, allowLocationUpdate: true } }, equipmentLocation: { select: { name: true } } },
       orderBy: { itemType: { name: "asc" } },
     }),
     prisma.transferLine.findMany({
@@ -926,7 +927,8 @@ async function handleEquipment(token: string, chatId: string, soldier: SoldierCt
     for (const item of serialItems) {
       const lot = item.lotQuantity && item.lotQuantity > 1 ? ` (אצווה ×${item.lotQuantity})` : "";
       const loc = item.equipmentLocation ? ` · 📍 ${item.equipmentLocation.name}` : "";
-      lines.push(`• ${item.itemType.name} — <code>${item.serialNumber}</code>${lot}${loc}`);
+      const editable = item.itemType.allowLocationUpdate ? " ✏️" : "";
+      lines.push(`• ${item.itemType.name} — <code>${item.serialNumber}</code>${lot}${loc}${editable}`);
     }
   }
 
@@ -941,7 +943,89 @@ async function handleEquipment(token: string, chatId: string, soldier: SoldierCt
   lines.push("");
   lines.push(`סה״כ: <b>${serialItems.length + qtyItems.length}</b> פריטים`);
 
+  // פריטים שהחייל רשאי לעדכן להם מיקום — כפתורי inline לעדכון
+  const editableItems = serialItems.filter((i) => i.itemType.allowLocationUpdate);
   await sendTelegramMessage(token, chatId, lines.join("\n"));
+  if (editableItems.length > 0) {
+    await sendTelegramMessage(token, chatId, "✏️ <b>עדכון מיקום</b> — בחר/י פריט לעדכון:", {
+      inline_keyboard: editableItems.map((i) => [{ text: `📍 ${i.itemType.name} · ${i.serialNumber}`, callback_data: `setloc:${i.id}` }]),
+    });
+  }
+}
+
+/** ⛽ כרטיסי הדלק הפתוחים של החייל (מסך רכבים — לא ציוד מחסן). */
+async function handleMyFuel(token: string, chatId: string, soldier: SoldierCtx, keyboard: unknown) {
+  const cards = await prisma.vehicleFuelCard.findMany({
+    where: { soldierId: soldier.id, returnedAt: null },
+    orderBy: { checkoutAt: "desc" },
+    select: { cardNumber: true, checkoutAt: true, signedAt: true },
+  });
+  if (cards.length === 0) {
+    await sendTelegramMessage(token, chatId, `⛽ <b>${soldier.fullName}</b> — אין לך כרטיסי דלק פתוחים.`, keyboard as never);
+    return;
+  }
+  const lines = [`⛽ <b>כרטיסי דלק — ${soldier.fullName}</b>`, ""];
+  for (const c of cards) {
+    const days = Math.floor((Date.now() - new Date(c.checkoutAt).getTime()) / 86400000);
+    const sig = c.signedAt ? "✍️" : "◌";
+    lines.push(`${sig} כרטיס <code>${c.cardNumber}</code> — נמשך ${fmtDate(c.checkoutAt)} (${days} י׳)`);
+  }
+  lines.push("");
+  lines.push("<i>✍️ = נחתם · ◌ = ממתין לחתימה</i>");
+  await sendTelegramMessage(token, chatId, lines.join("\n"), keyboard as never);
+}
+
+/** 🪪 בדיקת הסמכות נהיגה — לעצמי (self) או לחייל אחר (other). */
+async function handleLicenseCheck(token: string, chatId: string, battalionId: string, pn: string, mode: "self" | "other", keyboard?: unknown) {
+  if (!pn) { await sendTelegramMessage(token, chatId, "🪪 אין לך מספר אישי רשום.", keyboard as never); return; }
+  const target = await prisma.soldier.findFirst({
+    where: { battalionId, personalNumber: pn },
+    select: {
+      fullName: true, drivingRefresherDate: true, civilianLicenseExpiry: true, civilianLicenseGrade: true,
+      company: { select: { name: true } },
+      drivingLicenses: { select: { licenseTypeId: true, licenseType: { select: { name: true, kind: true } } } },
+      driverFileApprovedAt: true,
+    },
+  });
+  if (!target) { await sendTelegramMessage(token, chatId, `🪪 לא נמצא חייל עם מ.א ${pn}.`, keyboard as never); return; }
+
+  const [bat, vtl] = await Promise.all([
+    prisma.battalion.findUnique({ where: { id: battalionId }, select: { drivingRefreshDays: true } }),
+    prisma.vehicleTypeLicense.findMany({ where: { itemType: { battalionId } }, select: { licenseTypeId: true, itemType: { select: { id: true, name: true } } } }),
+  ]);
+  const has = new Set(target.drivingLicenses.map((l) => l.licenseTypeId));
+  const byVehicle = new Map<string, { name: string; required: string[] }>();
+  for (const r of vtl) { const v = byVehicle.get(r.itemType.id) ?? { name: r.itemType.name, required: [] }; v.required.push(r.licenseTypeId); byVehicle.set(r.itemType.id, v); }
+  const allowed = [...byVehicle.values()].filter((v) => v.required.every((id) => has.has(id))).map((v) => v.name);
+
+  const refreshDays = bat?.drivingRefreshDays ?? 180;
+  let refreshLine = "❌ לא בוצע ריענון";
+  if (target.drivingRefresherDate) {
+    const exp = new Date(target.drivingRefresherDate); exp.setDate(exp.getDate() + refreshDays);
+    const days = Math.ceil((exp.getTime() - Date.now()) / 86400000);
+    refreshLine = days < 0 ? `🔴 ריענון פג (${target.drivingRefresherDate.toISOString().slice(0, 10)})` : `🟢 ריענון תקף — ${target.drivingRefresherDate.toISOString().slice(0, 10)} (עוד ${days} י׳)`;
+  }
+  let civLine = "—";
+  if (target.civilianLicenseExpiry) {
+    const d = Math.ceil((target.civilianLicenseExpiry.getTime() - Date.now()) / 86400000);
+    civLine = `${target.civilianLicenseExpiry.toISOString().slice(0, 10)} ${d < 0 ? "🔴 פג" : d < 30 ? `🟡 עוד ${d} י׳` : "🟢"}`;
+  }
+  const licNames = target.drivingLicenses.filter((l) => l.licenseType.kind === "LICENSE").map((l) => l.licenseType.name);
+  const permitNames = target.drivingLicenses.filter((l) => l.licenseType.kind !== "LICENSE").map((l) => l.licenseType.name);
+
+  const header = mode === "self" ? `🪪 <b>ההסמכות שלי — ${target.fullName}</b>` : `🪪 <b>${target.fullName}</b> · ${target.company?.name ?? "—"} (מ.א ${pn})`;
+  const msg = [
+    header, ``,
+    `רישיונות: ${licNames.join(", ") || "—"}${target.civilianLicenseGrade ? ` (${target.civilianLicenseGrade})` : ""}`,
+    `היתרים: ${permitNames.join(", ") || "—"}`,
+    `תוקף רישיון אזרחי: ${civLine}`,
+    refreshLine,
+    `תיק נהג: ${target.driverFileApprovedAt ? "✅ מאושר" : "⚠️ לא מאושר"}`,
+    ``,
+    `🚗 <b>מורשה לנהוג ב:</b>`,
+    allowed.length ? allowed.map((n) => `• ${n}`).join("\n") : "— אין רכב שהוא מורשה לנהוג בו",
+  ].join("\n");
+  await sendTelegramMessage(token, chatId, msg, keyboard as never);
 }
 
 async function handleCounts(token: string, chatId: string, soldier: SoldierCtx, battalionId: string) {
