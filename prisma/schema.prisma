@@ -2288,3 +2288,21 @@ model SupportQuestion {
 
   @@index([battalionId, status])
 }
+
+/**
+ * ריצת גיבוי — תיעוד כל גיבוי אוטומטי (פעמיים ביום). גלובלי (לא פר-גדוד).
+ * data מכיל snapshot JSON כ-fallback ב-DB; מנוקה לריצות ישנות (נשמר רק לאחרונות).
+ */
+model BackupRun {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  status    String   // "OK" | "FAIL"
+  target    String   // "BLOB" | "DB"
+  sizeBytes Int      @default(0)
+  rowCounts Json?    // { SerialUnit: 129, Signature: 230, ... }
+  blobUrl   String?  // URL אם הועלה ל-Vercel Blob
+  data      String?  // snapshot JSON (fallback ב-DB)
+  error     String?
+
+  @@index([createdAt])
+}

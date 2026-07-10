@@ -16,6 +16,7 @@ export type NavItem = {
 export const NAV: NavItem[] = [
   // ===== אדמין-על =====
   { href: "/admin/battalions", label: "ניהול גדודים", icon: "🏛️", group: "ניהול-על", superAdminOnly: true },
+  { href: "/backups", label: "גיבויים", icon: "💾", group: "ניהול-על", superAdminOnly: true },
 
   // ===== מבצעי =====
   { href: "/dashboard", label: "דשבורד", icon: "📊", group: "מבצעי", screen: "dashboard" },
