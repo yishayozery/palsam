@@ -142,6 +142,8 @@ model Battalion {
   attendanceDeadline          String? // שעת גג לדיווח נוכחות (HH:mm) — תזכורת חוזרת חצי שעה לפני
   attendanceInitialSentOn     String? // YYYY-MM-DD (שעון ישראל) — נשלחה תזכורת פתיחה היום (מונע כפילות)
   attendanceFollowupSentOn    String? // YYYY-MM-DD — נשלחה תזכורת חוזרת היום (מונע כפילות)
+  attendanceReportWindowDow   Json?   // 7 מספרים (א׳..שבת) — כמה ימים קדימה מותר לדווח בכל יום בשבוע
+  attendanceReportOverrides   AttendanceReportOverride[]
   tripLink                    String? // קישור "פתיחת משימת נסיעה" שנשלח לנהגים בבוט עם השיבוץ למשימה
   drivingProcedureText        String? // נוסח נוהל נהיגה לחתימת נהגים (מוצג בבוט + קצין רכב)
   drivingProcedureUpdatedAt   DateTime? // מתי עודכן הנוסח — חתימה מלפני התאריך נחשבת לא-תקפה (גרסה חדשה → חתימה מחדש)
@@ -598,6 +600,7 @@ model Soldier {
   companyId      String?
   company        Holder?   @relation(fields: [companyId], references: [id])
   dutyRound      Int?      // סבב תעסוקה — לשיבוץ החלפות סבב ברמת פלוגה
+  isAttendanceReporter Boolean @default(false) // נאמן כ"א — מדווח נוכחות (פלוגה, או המחלקה שלו אם משויך)
   // שיוך משני — מחסן שהחייל גם משתייך אליו (למשל חייל ארמון שגם בפלוגה א')
   secondaryHolderId String?
   secondaryHolder   Holder? @relation("SoldierSecondary", fields: [secondaryHolderId], references: [id])
@@ -2320,4 +2323,18 @@ model TelegramBindChallenge {
 
   @@unique([battalionId, chatId])
   @@index([createdAt])
+}
+
+/** חריגת חלון-דיווח נוכחות לתאריך ספציפי (למשל לפני חג — לדווח כמה ימים קדימה). */
+model AttendanceReportOverride {
+  id          String    @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  date        DateTime  @db.Date // היום שבו מדווחים
+  daysForward Int       // כמה ימים קדימה מותר לדווח מהתאריך הזה
+  note        String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([battalionId, date])
+  @@index([battalionId])
 }

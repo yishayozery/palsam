@@ -28,28 +28,18 @@ type Reporter = {
 };
 
 async function reportersFor(battalionId: string): Promise<Reporter[]> {
-  const [reps, squadCmds] = await Promise.all([
-    prisma.appUser.findMany({
-      where: { battalionId, active: true, role: "COMPANY_REP", soldier: { is: { telegramChatId: { not: null } } } },
-      select: { holderId: true, holder: { select: { name: true } }, soldier: { select: { telegramChatId: true } } },
-    }),
-    prisma.userSquad.findMany({
-      where: { squad: { battalionId }, user: { active: true, soldier: { is: { telegramChatId: { not: null } } } } },
-      select: { squadId: true, squad: { select: { companyId: true, name: true, company: { select: { name: true } } } }, user: { select: { soldier: { select: { telegramChatId: true } } } } },
-    }),
-  ]);
-
+  // 🗓️ נאמני כ"א בלבד — חיילים שסומנו isAttendanceReporter (מדווחים גם מהבית).
+  //    היקף: אם משויכים למחלקה — המחלקה שלהם; אחרת — כל הפלוגה.
+  const trustees = await prisma.soldier.findMany({
+    where: { battalionId, isAttendanceReporter: true, dischargedAt: null, telegramChatId: { not: null } },
+    select: { telegramChatId: true, companyId: true, squadId: true, company: { select: { name: true } }, squad: { select: { name: true, company: { select: { name: true } } } } },
+  });
   const out: Reporter[] = [];
-  for (const r of reps) {
-    if (r.holderId && r.soldier?.telegramChatId) {
-      out.push({ chatId: r.soldier.telegramChatId, label: r.holder?.name || "הפלוגה", kind: "company", companyId: r.holderId, squadId: null });
-    }
-  }
-  for (const c of squadCmds) {
-    const chatId = c.user.soldier?.telegramChatId;
-    if (chatId) {
-      out.push({ chatId, label: `${c.squad.company?.name || "פלוגה"} / ${c.squad.name}`, kind: "squad", companyId: c.squad.companyId, squadId: c.squadId });
-    }
+  for (const t of trustees) {
+    const chatId = t.telegramChatId;
+    if (!chatId) continue;
+    if (t.squadId) out.push({ chatId, label: `${t.squad?.company?.name || "פלוגה"} / ${t.squad?.name || "מחלקה"}`, kind: "squad", companyId: t.companyId, squadId: t.squadId });
+    else if (t.companyId) out.push({ chatId, label: t.company?.name || "הפלוגה", kind: "company", companyId: t.companyId, squadId: null });
   }
   return out;
 }

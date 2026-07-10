@@ -91,6 +91,7 @@ export async function POST(
       "🚗 משימות ושבצ\"ק": "/dispatch",
       "🚗 שיבוץ לרכב": "/dispatch",
       "📊 ספירות מלאי": "/counts",
+      "🗓️ דיווח כ\"א (דוח 1)": "/attendance",
       "🗓️ דיווח נוכחות": "/attendance",
       "🕐 ארוחות ותפילות": "/info",
       "👥 מנה צוות": "/team",
@@ -148,11 +149,14 @@ export async function POST(
         drivingRefresherDate: true,
         civilianLicenseNumber: true,
         company: { select: { name: true } },
+        squadId: true,
+        isAttendanceReporter: true,
         appUser: { select: { id: true, role: true, holderId: true, assignedHolders: { select: { holderId: true } } } },
         _count: { select: { drivingLicenses: true, driverForms: true } },
       },
     });
-    const canAttendance = soldier?.appUser?.role === "COMPANY_REP";
+    // מדווח נוכחות = רס"פ (COMPANY_REP) או נאמן כ"א שסומן
+    const canAttendance = soldier?.appUser?.role === "COMPANY_REP" || !!soldier?.isAttendanceReporter;
     const mgr = soldier?.appUser;
     const canManageTeam = !!(mgr && (mgr.holderId || (mgr.assignedHolders?.length ?? 0) > 0));
     // נהג = יש רישיון/היתר, ריענון, רישיון אזרחי או טופס תיק נהג — מקבל כפתור טפסי נהג קבוע

@@ -96,6 +96,7 @@ export async function saveSoldier(formData: FormData): Promise<string | undefine
   const companyRoleId = String(formData.get("companyRoleId") || "").trim() || null;
   const dutyRoundRaw = String(formData.get("dutyRound") || "").trim();
   const dutyRound = dutyRoundRaw ? (Math.min(3, Math.max(1, parseInt(dutyRoundRaw, 10) || 0)) || null) : null;
+  const isAttendanceReporter = formData.get("isAttendanceReporter") === "on" || formData.get("isAttendanceReporter") === "true";
   let companyId = String(formData.get("companyId") || "") || null;
   // 🛡️ פלוגת חייל חייבת להיות holder מסוג COMPANY — לעולם לא מחסן.
   // (מנע באג: מנהל מחסן שערך חייל בלי לבחור פלוגה — הפלוגה נדרסה לשם המחסן שלו.)
@@ -125,7 +126,7 @@ export async function saveSoldier(formData: FormData): Promise<string | undefine
 
   const cleanPhone = phone ? phone.replace(/-/g, "") : null;
 
-  const data = { fullName, personalNumber, phone: cleanPhone, platoon, companyId, squadId, companyRoleId, dutyRound };
+  const data = { fullName, personalNumber, phone: cleanPhone, platoon, companyId, squadId, companyRoleId, dutyRound, isAttendanceReporter };
   if (id) {
     await prisma.soldier.update({ where: { id }, data });
   } else {

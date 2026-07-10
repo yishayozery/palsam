@@ -31,6 +31,7 @@ export type SoldierRow = {
   roleName: string | null;
   isCommander: boolean;
   dutyRound: number | null;
+  isAttendanceReporter: boolean;
   certIds: string[];
   drivingNames: string[];
   drivingStatus: "none" | "ok" | "warning" | "expired" | "missing";
@@ -509,6 +510,10 @@ function SoldierEditModal({
               <option value="3">סבב 3</option>
             </select>
           </Field>
+          <label className="flex items-center gap-2 text-sm text-slate-700 bg-slate-50 rounded-lg px-3 py-2 cursor-pointer">
+            <input type="checkbox" name="isAttendanceReporter" defaultChecked={!!row?.isAttendanceReporter} className="w-4 h-4 rounded accent-sky-600" />
+            🗓️ נאמן כ&quot;א — מדווח נוכחות (מקבל תזכורת בבוט, גם מהבית)
+          </label>
           {err && <div className="text-sm text-rose-600 bg-rose-50 rounded-lg px-3 py-2">{err}</div>}
           {row && (
             <button type="button" onClick={() => onToggleActive(row.id, row.inactive)}

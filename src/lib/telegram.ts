@@ -82,7 +82,7 @@ export function buildMainKeyboard(canReportAttendance = false, canManageTeam = f
     [{ text: "📊 ספירות מלאי" }, { text: "🚗 רכבים" }],
   ];
   const extra: { text: string }[] = [];
-  if (canReportAttendance) extra.push({ text: "🗓️ דיווח נוכחות" });
+  if (canReportAttendance) extra.push({ text: "🗓️ דיווח כ\"א (דוח 1)" });
   extra.push({ text: "🕐 ארוחות ותפילות" });
   if (canManageTeam) extra.push({ text: "👥 מנה צוות" });
   rows.push(extra);
