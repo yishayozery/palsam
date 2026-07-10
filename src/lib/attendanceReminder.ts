@@ -23,7 +23,7 @@ type Reporter = {
   chatId: string;
   label: string;               // "פלוגה" או "פלוגה / מחלקה"
   kind: "company" | "squad";
-  companyId: string;
+  companyId: string | null;
   squadId: string | null;
 };
 
