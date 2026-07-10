@@ -15,9 +15,23 @@ export default function RosterAttendanceSettings({ companies, window, overrides 
   const [open, setOpen] = useState<"reporters" | "window" | null>(null);
   const [win, setWin] = useState<number[]>(() => Array.from({ length: 7 }, (_, i) => window[i] ?? 0));
   const [ovDate, setOvDate] = useState(""); const [ovFwd, setOvFwd] = useState(2); const [ovNote, setOvNote] = useState("");
-  const [q, setQ] = useState("");
+  // בוררים מדורגים: פלוגה → מחלקה → חייל
+  const [selComp, setSelComp] = useState(""); const [selSquad, setSelSquad] = useState(""); const [selSol, setSelSol] = useState("");
 
   const reporterCount = companies.reduce((n, c) => n + c.soldiers.filter((s) => s.isReporter).length, 0);
+  const SQUAD_NONE = "— ללא מחלקה —";
+  const activeComp = companies.find((c) => c.companyId === selComp);
+  const squadsOf = (c: Comp | undefined) => c ? [...new Set(c.soldiers.map((s) => s.squadName || SQUAD_NONE))].sort((a, b) => a.localeCompare(b, "he")) : [];
+  const addableSoldiers = (activeComp?.soldiers ?? [])
+    .filter((s) => !s.isReporter && (!selSquad || (s.squadName || SQUAD_NONE) === selSquad));
+  // כיסוי: פלוגה ללא נאמן, ומחלקות ללא נאמן בתוך פלוגה שיש בה נאמן
+  const coverage = companies.map((c) => {
+    const squads = [...new Set(c.soldiers.map((s) => s.squadName || SQUAD_NONE))];
+    const squadGaps = squads.filter((sq) => !c.soldiers.some((s) => (s.squadName || SQUAD_NONE) === sq && s.isReporter));
+    const hasAny = c.soldiers.some((s) => s.isReporter);
+    return { id: c.companyId, name: c.companyName, hasAny, squadGaps };
+  });
+  const compsNoReporter = coverage.filter((c) => !c.hasAny);
 
   return (
     <>
@@ -35,29 +49,70 @@ export default function RosterAttendanceSettings({ companies, window, overrides 
               <h3 className="font-bold">🗓️ נאמני כ״א</h3>
               <button onClick={() => setOpen(null)} className="text-slate-300 text-xl">✕</button>
             </div>
-            <div className="p-4">
-              <p className="text-xs text-slate-500 mb-2">מי שמסומן מקבל את תזכורת הבוקר בבוט ויכול לדווח נוכחות (גם מהבית). היקף: המחלקה שלו אם משויך, אחרת כל הפלוגה.</p>
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="חפש/י שם…" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm mb-3" />
-              {companies.map((c) => {
-                const sols = c.soldiers.filter((s) => !q || s.name.includes(q));
-                if (!sols.length) return null;
-                return (
-                  <div key={c.companyId} className="mb-3">
-                    <div className="text-sm font-bold text-slate-700 mb-1">🪖 {c.companyName}</div>
-                    <div className="space-y-1">
-                      {sols.map((s) => (
-                        <label key={s.id} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-slate-50 cursor-pointer">
-                          <input type="checkbox" checked={s.isReporter} disabled={pending}
-                            onChange={() => start(async () => { await toggleAttendanceReporter(s.id); router.refresh(); })}
-                            className="w-4 h-4 rounded accent-sky-600" />
-                          <span className={s.isReporter ? "font-medium text-slate-800" : "text-slate-600"}>{s.name}</span>
-                          {s.squadName && <span className="text-[10px] text-slate-400">· {s.squadName}</span>}
-                        </label>
-                      ))}
-                    </div>
+            <div className="p-4 space-y-4">
+              <p className="text-xs text-slate-500">נאמן כ״א מקבל את תזכורת הבוקר בבוט ויכול לדווח נוכחות (גם מהבית). היקף: המחלקה שלו אם נבחרה מחלקה, אחרת כל הפלוגה.</p>
+
+              {/* כיסוי — מי עדיין ללא נאמן */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <div className="text-xs font-bold text-slate-600 mb-2">📊 כיסוי נאמנים</div>
+                {compsNoReporter.length > 0 && (
+                  <div className="mb-2">
+                    <span className="text-[11px] text-rose-600 font-semibold">פלוגות ללא נאמן: </span>
+                    {compsNoReporter.map((c) => <span key={c.id} className="inline-block text-[11px] bg-rose-100 text-rose-700 rounded px-2 py-0.5 ml-1 mb-1">⚠️ {c.name}</span>)}
                   </div>
-                );
-              })}
+                )}
+                <div className="flex flex-wrap gap-1.5">
+                  {coverage.map((c) => (
+                    <span key={c.id} title={c.squadGaps.length ? `מחלקות ללא נאמן: ${c.squadGaps.join(", ")}` : "מכוסה"}
+                      className={`text-[11px] rounded px-2 py-0.5 ${c.hasAny ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                      {c.hasAny ? "✅" : "⚠️"} {c.name}{c.hasAny && c.squadGaps.length > 0 ? ` · ${c.squadGaps.length} מחלקות חסרות` : ""}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* הוספת נאמן — פלוגה → מחלקה → חייל */}
+              <div className="border border-slate-200 rounded-xl p-3">
+                <div className="text-xs font-bold text-slate-600 mb-2">➕ שיבוץ נאמן</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <select value={selComp} onChange={(e) => { setSelComp(e.target.value); setSelSquad(""); setSelSol(""); }} className="rounded-lg border border-slate-300 px-2 py-2 text-sm bg-white">
+                    <option value="">פלוגה…</option>
+                    {companies.map((c) => <option key={c.companyId} value={c.companyId}>{c.companyName}</option>)}
+                  </select>
+                  <select value={selSquad} onChange={(e) => { setSelSquad(e.target.value); setSelSol(""); }} disabled={!selComp} className="rounded-lg border border-slate-300 px-2 py-2 text-sm bg-white disabled:bg-slate-50">
+                    <option value="">כל המחלקה…</option>
+                    {squadsOf(activeComp).map((sq) => <option key={sq} value={sq}>{sq}</option>)}
+                  </select>
+                  <select value={selSol} onChange={(e) => setSelSol(e.target.value)} disabled={!selComp} className="rounded-lg border border-slate-300 px-2 py-2 text-sm bg-white disabled:bg-slate-50">
+                    <option value="">חייל…</option>
+                    {addableSoldiers.map((s) => <option key={s.id} value={s.id}>{s.name}{s.squadName ? ` · ${s.squadName}` : ""}</option>)}
+                  </select>
+                </div>
+                <button disabled={!selSol || pending} onClick={() => start(async () => { await toggleAttendanceReporter(selSol); setSelSol(""); router.refresh(); })}
+                  className="mt-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">{pending ? "…" : "➕ סמן כנאמן"}</button>
+              </div>
+
+              {/* נאמנים נוכחיים */}
+              <div>
+                <div className="text-xs font-bold text-slate-600 mb-2">🗓️ נאמנים משובצים ({reporterCount})</div>
+                {reporterCount === 0 ? <p className="text-xs text-slate-400">אין נאמנים משובצים עדיין.</p> : companies.map((c) => {
+                  const reps = c.soldiers.filter((s) => s.isReporter);
+                  if (!reps.length) return null;
+                  return (
+                    <div key={c.companyId} className="mb-2">
+                      <div className="text-xs font-bold text-slate-700 mb-1">🪖 {c.companyName}</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {reps.map((s) => (
+                          <span key={s.id} className="inline-flex items-center gap-1 text-xs bg-sky-100 text-sky-800 rounded-full pl-1 pr-2 py-0.5">
+                            {s.name}{s.squadName && <span className="text-[10px] text-sky-500">· {s.squadName}</span>}
+                            <button onClick={() => start(async () => { await toggleAttendanceReporter(s.id); router.refresh(); })} disabled={pending} className="text-sky-500 hover:text-rose-600 font-bold">✕</button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
