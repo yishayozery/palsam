@@ -76,19 +76,25 @@ export async function editMessageText(
 
 /** תפריט דינמי — קומפקטי (ללא כפתור עזרה; ההסבר נשלח ברישום). "דיווח נוכחות"/"מנה צוות" רק למי שרשאי. */
 export function buildMainKeyboard(canReportAttendance = false, canManageTeam = false, isDriver = false) {
+  void isDriver; // אפשרויות הרכב אוחדו תחת תפריט "🚗 רכבים"
   const rows: { text: string }[][] = [
     [{ text: "📋 טפסים להחתמה" }, { text: "📦 הציוד שלי" }],
-    [{ text: "🚗 משימות ושבצ\"ק" }, { text: "📊 ספירות מלאי" }],
+    [{ text: "📊 ספירות מלאי" }, { text: "🚗 רכבים" }],
   ];
   const extra: { text: string }[] = [];
   if (canReportAttendance) extra.push({ text: "🗓️ דיווח נוכחות" });
   extra.push({ text: "🕐 ארוחות ותפילות" });
   if (canManageTeam) extra.push({ text: "👥 מנה צוות" });
   rows.push(extra);
-  const last: { text: string }[] = [];
-  if (isDriver) last.push({ text: "📁 טפסי נהג" });
-  if (canManageTeam) last.push({ text: "🪪 בדיקת רישיון" });
-  if (last.length) rows.push(last);
+  return { keyboard: rows, resize_keyboard: true, is_persistent: true };
+}
+
+/** תת-תפריט רכבים — כל האפשרויות תחת "🚗 רכבים". */
+export function buildVehicleKeyboard(canManageTeam = false, isDriver = false) {
+  const rows: { text: string }[][] = [[{ text: "🚗 משימות ושבצ\"ק" }]];
+  if (isDriver) rows.push([{ text: "📁 תיק נהג" }]);
+  if (canManageTeam) rows.push([{ text: "🪪 בדיקת הסמכות" }]);
+  rows.push([{ text: "⬅️ חזרה לתפריט" }]);
   return { keyboard: rows, resize_keyboard: true, is_persistent: true };
 }
 

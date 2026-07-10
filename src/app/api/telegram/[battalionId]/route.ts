@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
-import { sendTelegramMessage, answerCallbackQuery, editMessageText, MAIN_KEYBOARD, buildMainKeyboard } from "@/lib/telegram";
+import { sendTelegramMessage, answerCallbackQuery, editMessageText, MAIN_KEYBOARD, buildMainKeyboard, buildVehicleKeyboard } from "@/lib/telegram";
 import { linkTokenQuery } from "@/lib/link-token";
 import { normalizePhone } from "@/lib/phone";
 
@@ -86,13 +86,17 @@ export async function POST(
       "📋 טפסים להחתמה": "/status",
       "📋 תהליך חתימת נשק": "/status",
       "📦 הציוד שלי": "/equipment",
+      "🚗 רכבים": "/vehicles",
+      "⬅️ חזרה לתפריט": "/menu",
       "🚗 משימות ושבצ\"ק": "/dispatch",
       "🚗 שיבוץ לרכב": "/dispatch",
       "📊 ספירות מלאי": "/counts",
       "🗓️ דיווח נוכחות": "/attendance",
       "🕐 ארוחות ותפילות": "/info",
       "👥 מנה צוות": "/team",
+      "🪪 בדיקת הסמכות": "/license",
       "🪪 בדיקת רישיון": "/license",
+      "📁 תיק נהג": "/driverforms",
       "📁 טפסי נהג": "/driverforms",
       "❓ עזרה": "/help",
       // backward compat — old button labels
@@ -158,6 +162,19 @@ export async function POST(
     // /help
     if (cmd === "/help") {
       await sendTelegramMessage(token, chatId, HELP_TEXT, keyboard);
+      return NextResponse.json({ ok: true });
+    }
+
+    // 🚗 רכבים — תת-תפריט המרכז את כל אפשרויות הרכב
+    if (cmd === "/vehicles") {
+      await sendTelegramMessage(token, chatId,
+        "🚗 <b>רכבים</b>\nבחר/י פעולה:",
+        buildVehicleKeyboard(canManageTeam, isDriver));
+      return NextResponse.json({ ok: true });
+    }
+    // חזרה לתפריט הראשי
+    if (cmd === "/menu") {
+      await sendTelegramMessage(token, chatId, "🏠 תפריט ראשי", keyboard);
       return NextResponse.json({ ok: true });
     }
 
