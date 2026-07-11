@@ -32,8 +32,8 @@ type SelectedEmployment = EmploymentOption & {
 type CallupPeriod = { id: string; soldierId: string; startDate: string; endDate: string | null };
 
 export default function AttendanceClient({
-  companies, selectedCompanyId, soldiers, squads, companyRoles, statuses, days, plans, records, mode, canManage, canManageEmployment, startDate,
-  employments, selectedEmployment, callupPeriods,
+  companies, selectedCompanyId, soldiers, squads, companyRoles, statuses, days, plans, records, mode, canManage, startDate,
+  selectedEmployment, callupPeriods,
 }: {
   companies: { id: string; name: string }[];
   selectedCompanyId: string;
@@ -107,6 +107,13 @@ export default function AttendanceClient({
     return m;
   }, [data]);
 
+  // מפת התכנון (plan) — תמיד, לצורך "העתק תכנון → ביצוע"
+  const planMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const d of plans) m.set(`${d.soldierId}:${d.date}`, d.statusId);
+    return m;
+  }, [plans]);
+
   const getStatus = useCallback(
     (soldierId: string, date: string): string | null => {
       const key = `${soldierId}:${date}`;
@@ -169,6 +176,21 @@ export default function AttendanceClient({
     if (onlyShmap) list = list.filter((s) => !!getActiveCallup(s.id));
     return list;
   }, [soldiers, selectedSquadId, selectedRoleId, onlyShmap, getActiveCallup]);
+
+  // 📋 העתקת תכנון היום → ביצוע בפועל (של אותו יום) — אחרי filteredSoldiers כדי לא לשבור את React Compiler
+  async function copyPlanToActual() {
+    const entries = filteredSoldiers
+      .filter((s) => !isShmapLocked(s.id, todayStr))
+      .map((s) => ({ soldierId: s.id, date: todayStr, statusId: planMap.get(`${s.id}:${todayStr}`) ?? null, type: "record" as const }))
+      .filter((e) => !!e.statusId);
+    if (entries.length === 0) { alert("אין תכנון מוגדר להיום להעתקה."); return; }
+    if (!confirm(`להעתיק את התכנון של ${entries.length} חיילים לביצוע בפועל של היום (${todayStr})?\nפעולה זו תדרוס דיווח קיים.`)) return;
+    setSaving(true);
+    await saveAttendance(entries);
+    setPendingChanges(new Map());
+    setSaving(false);
+    router.refresh();
+  }
 
   // Group soldiers by company → squad
   const isAllCompanies = selectedCompanyId === "__all__";
@@ -426,51 +448,10 @@ export default function AttendanceClient({
 
   return (
     <>
-      {/* Employment selector */}
-      {employments.length > 0 && (
-        <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-slate-700">תעסוקה:</label>
-            <select
-              value={selectedEmployment?.id ?? ""}
-              onChange={(e) => {
-                const empId = e.target.value;
-                if (!empId) {
-                  const params = new URLSearchParams({ companyId: selectedCompanyId, start: startDate, mode });
-                  router.push("?" + params.toString());
-                } else {
-                  const emp = employments.find((x) => x.id === empId);
-                  const params: Record<string, string> = { companyId: selectedCompanyId, mode, employmentId: empId };
-                  if (emp) params.start = emp.startDate;
-                  router.push("?" + new URLSearchParams(params).toString());
-                }
-              }}
-              className="rounded-lg border-2 border-slate-300 px-3 py-1.5 text-sm min-w-[200px]"
-            >
-              <option value="">ללא תעסוקה</option>
-              {employments.map((emp) => (
-                <option key={emp.id} value={emp.id}>{emp.name}</option>
-              ))}
-            </select>
-          </div>
-          {/* ניהול תעסוקות + עריכת תקני פלוגות — שלישות בלבד */}
-          {canManageEmployment && (
-            <div className="flex items-center gap-3">
-              <a href="/employment" className="text-xs text-blue-600 hover:text-blue-800 underline">
-                ניהול תעסוקות
-              </a>
-              {selectedEmployment && (
-                <a href={`/employment/${selectedEmployment.id}`} className="text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-2 py-1 rounded-lg font-medium">
-                  ⚙️ תקני פלוגות
-                </a>
-              )}
-            </div>
-          )}
-          {!canManageEmployment && selectedEmployment && (
-            <a href={`/employment/${selectedEmployment.id}`} className="text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-2 py-1 rounded-lg font-medium">
-              📋 תקני פלוגות
-            </a>
-          )}
+      {/* בחירת תעסוקה + ניהול תקנים עברו למסך שליטת שלישות. כאן רק תכנון/דיווח נוכחות. */}
+      {selectedEmployment && (
+        <div className="flex items-center gap-2 mb-4 text-sm">
+          <span className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 rounded-lg px-3 py-1.5 font-medium">📊 תעסוקה: {selectedEmployment.name}</span>
         </div>
       )}
 
@@ -489,6 +470,13 @@ export default function AttendanceClient({
         <div className={`text-xs rounded-lg px-3 py-1.5 ${mode === "plan" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}>
           {mode === "plan" ? "מתכננים מראש את מצב הנוכחות" : "מדווחים על מצב בפועל"}
         </div>
+        {mode === "record" && canManage && (
+          <button onClick={copyPlanToActual} disabled={saving}
+            className="text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 font-medium disabled:opacity-50"
+            title="ממלא את הביצוע של היום לפי התכנון שהוגדר">
+            📋 העתק תכנון → ביצוע (היום)
+          </button>
+        )}
       </div>
 
       {/* Dashboard */}
