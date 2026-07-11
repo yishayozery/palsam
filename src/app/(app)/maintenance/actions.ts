@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 import { findTanaHolder, findDefectiveStatusId, findOkStatusId } from "@/lib/tana";
 import { adjustQuantity } from "@/lib/inventory";
+import { FAULT_STAGE_KEYS, CLOSED_STAGE } from "@/lib/vehicleFault";
 
 /**
  * שליחת פריט סריאלי לטנא (סימון כתקול + העברה).
@@ -210,6 +211,115 @@ export async function saveVehicleMaintenance(formData: FormData): Promise<{ ok?:
     await audit(user.id, "SAVE_VEHICLE_MAINTENANCE", "SerialUnit", vehicleSerialUnitId, { nextDate: nextDateRaw || null });
     revalidatePath("/maintenance");
     return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+// ===================== תיק תקלה/טיפול לרכב (מחזור סטטוסים) =====================
+
+async function notifyFaultSoldier(faultId: string, bId: string) {
+  const fault = await prisma.vehicleFault.findUnique({
+    where: { id: faultId },
+    select: { faultNumber: true, description: true, stage: true, vehicleSerialUnit: { select: { serialNumber: true, itemType: { select: { name: true } }, signedSoldier: { select: { fullName: true, telegramChatId: true } } } } },
+  });
+  const chat = fault?.vehicleSerialUnit.signedSoldier?.telegramChatId;
+  if (!fault || !chat) return false;
+  const battalion = await prisma.battalion.findUnique({ where: { id: bId }, select: { telegramBotToken: true } });
+  if (!battalion?.telegramBotToken) return false;
+  const { stageInfo } = await import("@/lib/vehicleFault");
+  const { sendTelegramMessage } = await import("@/lib/telegram");
+  const v = fault.vehicleSerialUnit;
+  await sendTelegramMessage(battalion.telegramBotToken, chat,
+    `🔧 <b>תקלה #${fault.faultNumber} — רכב שחתום עליך</b>\n🚙 ${v.itemType.name} · ${v.serialNumber}\n📋 ${fault.description}\nסטטוס: ${stageInfo(fault.stage).short}`).catch(() => {});
+  return true;
+}
+
+/** דיווח תקלה חדשה על רכב — פותח תיק תקלה עם מספר רץ. */
+export async function reportVehicleFault(formData: FormData): Promise<{ ok?: boolean; error?: string; faultNumber?: number }> {
+  try {
+    const user = await requireUser();
+    const bId = user.battalionId!;
+    const vehicleSerialUnitId = String(formData.get("vehicleSerialUnitId") || "");
+    const description = String(formData.get("description") || "").trim();
+    const notify = formData.get("notify") === "on" || formData.get("notify") === "true";
+    if (!vehicleSerialUnitId || !description) return { error: "חסר רכב / תיאור תקלה" };
+    const unit = await prisma.serialUnit.findUnique({ where: { id: vehicleSerialUnitId }, select: { battalionId: true } });
+    if (!unit || unit.battalionId !== bId) return { error: "רכב לא נמצא" };
+
+    const fault = await prisma.$transaction(async (tx) => {
+      const last = await tx.vehicleFault.findFirst({ where: { battalionId: bId }, orderBy: { faultNumber: "desc" }, select: { faultNumber: true } });
+      const faultNumber = (last?.faultNumber ?? 0) + 1;
+      const f = await tx.vehicleFault.create({ data: { battalionId: bId, faultNumber, vehicleSerialUnitId, description, stage: "reported", openedById: user.id } });
+      await tx.vehicleFaultEvent.create({ data: { faultId: f.id, stage: "reported", note: description, createdById: user.id, createdByName: user.fullName } });
+      return f;
+    });
+    // סימון הרכב כתקול
+    const defId = await findDefectiveStatusId(bId);
+    if (defId) await prisma.serialUnit.update({ where: { id: vehicleSerialUnitId }, data: { statusId: defId } });
+    await audit(user.id, "REPORT_VEHICLE_FAULT", "VehicleFault", fault.id, { faultNumber: fault.faultNumber });
+    if (notify) await notifyFaultSoldier(fault.id, bId);
+    revalidatePath("/maintenance");
+    return { ok: true, faultNumber: fault.faultNumber };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** קידום שלב בתיק תקלה + הערה. שלב "delivered" סוגר את התיק ומחזיר את הרכב לתקין. */
+export async function advanceVehicleFault(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireUser();
+    const bId = user.battalionId!;
+    const faultId = String(formData.get("faultId") || "");
+    const stage = String(formData.get("stage") || "");
+    const note = String(formData.get("note") || "").trim() || null;
+    if (!faultId || !FAULT_STAGE_KEYS.includes(stage)) return { error: "שלב לא תקין" };
+    const fault = await prisma.vehicleFault.findUnique({ where: { id: faultId }, select: { battalionId: true, vehicleSerialUnitId: true } });
+    if (!fault || fault.battalionId !== bId) return { error: "תיק לא נמצא" };
+
+    const closing = stage === CLOSED_STAGE;
+    await prisma.$transaction(async (tx) => {
+      await tx.vehicleFault.update({ where: { id: faultId }, data: { stage, closedAt: closing ? new Date() : null } });
+      await tx.vehicleFaultEvent.create({ data: { faultId, stage, note, createdById: user.id, createdByName: user.fullName } });
+    });
+    if (closing) { const okId = await findOkStatusId(bId); if (okId) await prisma.serialUnit.update({ where: { id: fault.vehicleSerialUnitId }, data: { statusId: okId } }); }
+    await audit(user.id, "ADVANCE_VEHICLE_FAULT", "VehicleFault", faultId, { stage });
+    revalidatePath("/maintenance");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** הוספת הערה לתיק תקלה (בלי שינוי שלב). */
+export async function addVehicleFaultNote(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireUser();
+    const bId = user.battalionId!;
+    const faultId = String(formData.get("faultId") || "");
+    const note = String(formData.get("note") || "").trim();
+    if (!faultId || !note) return { error: "חסרה הערה" };
+    const fault = await prisma.vehicleFault.findUnique({ where: { id: faultId }, select: { battalionId: true } });
+    if (!fault || fault.battalionId !== bId) return { error: "תיק לא נמצא" };
+    await prisma.vehicleFaultEvent.create({ data: { faultId, stage: "note", note, createdById: user.id, createdByName: user.fullName } });
+    revalidatePath("/maintenance");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/** שליחת פרטי התקלה לחייל החתום בטלגרם. */
+export async function sendFaultToSoldier(formData: FormData): Promise<{ ok?: boolean; error?: string; sent?: boolean }> {
+  try {
+    const user = await requireUser();
+    const bId = user.battalionId!;
+    const faultId = String(formData.get("faultId") || "");
+    const fault = await prisma.vehicleFault.findUnique({ where: { id: faultId }, select: { battalionId: true } });
+    if (!fault || fault.battalionId !== bId) return { error: "תיק לא נמצא" };
+    const sent = await notifyFaultSoldier(faultId, bId);
+    return { ok: true, sent };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "שגיאה" };
   }

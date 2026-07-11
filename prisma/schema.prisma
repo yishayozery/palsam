@@ -148,6 +148,7 @@ model Battalion {
   vehicleLinks                VehicleLink[]
   vehicleMaintenances         VehicleMaintenance[]
   botNotificationRules        BotNotificationRule[]
+  vehicleFaults               VehicleFault[]
   tripLink                    String? // קישור "פתיחת משימת נסיעה" שנשלח לנהגים בבוט עם השיבוץ למשימה
   drivingProcedureText        String? // נוסח נוהל נהיגה לחתימת נהגים (מוצג בבוט + קצין רכב)
   drivingProcedureUpdatedAt   DateTime? // מתי עודכן הנוסח — חתימה מלפני התאריך נחשבת לא-תקפה (גרסה חדשה → חתימה מחדש)
@@ -1050,6 +1051,7 @@ model SerialUnit {
   ymachGaps     YmachGap[]    @relation("YmachGapSerialUnit")
   verificationItems VerificationItem[] @relation("SerialUnitVerifications")
   maintenance   VehicleMaintenance? @relation("VehicleMaintenanceUnit")
+  faults        VehicleFault[]      @relation("VehicleFaultUnit")
 
   @@unique([itemTypeId, serialNumber])
   @@index([battalionId])
@@ -2428,4 +2430,38 @@ model BotNotificationRule {
 
   @@unique([battalionId, key])
   @@index([battalionId])
+}
+
+/** תיק תקלה/טיפול לרכב — מספר תקלה רץ + מחזור סטטוסים (תקול→משיכה→טיפול→החזרה). */
+model VehicleFault {
+  id                  String     @id @default(cuid())
+  battalionId         String
+  battalion           Battalion  @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  faultNumber         Int        // מספר תקלה רץ בגדוד
+  vehicleSerialUnitId String
+  vehicleSerialUnit   SerialUnit @relation("VehicleFaultUnit", fields: [vehicleSerialUnitId], references: [id], onDelete: Cascade)
+  description         String     // תיאור התקלה
+  stage              String     @default("reported") // מפתח השלב הנוכחי במחזור
+  openedById         String?
+  openedAt           DateTime   @default(now())
+  closedAt           DateTime?  // מלא כשהתקלה נסגרה (נמסר לפלוגה)
+  events             VehicleFaultEvent[]
+
+  @@unique([battalionId, faultNumber])
+  @@index([battalionId, closedAt])
+  @@index([vehicleSerialUnitId])
+}
+
+/** אירוע בתיק התקלה — מעבר שלב או הערה. */
+model VehicleFaultEvent {
+  id          String       @id @default(cuid())
+  faultId     String
+  fault       VehicleFault @relation(fields: [faultId], references: [id], onDelete: Cascade)
+  stage       String       // השלב אליו עברו, או "note" להערה בלבד
+  note        String?
+  createdById String?
+  createdByName String?
+  createdAt   DateTime     @default(now())
+
+  @@index([faultId])
 }

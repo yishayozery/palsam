@@ -4,16 +4,19 @@ import { useState, useMemo, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, EmptyState } from "@/components/ui";
-import { saveVehicleMaintenance } from "./actions";
+import { saveVehicleMaintenance, reportVehicleFault, advanceVehicleFault, addVehicleFaultNote, sendFaultToSoldier } from "./actions";
+import { FAULT_STAGES, stageInfo, stageIndex, CLOSED_STAGE } from "@/lib/vehicleFault";
 
 export type Maint = { serviceType: string | null; location: string | null; hours: string | null; contactName: string | null; contactPhone: string | null; notes: string | null };
+export type FaultEvent = { stage: string; note: string | null; by: string | null; at: string };
+export type Fault = { id: string; faultNumber: number; stage: string; description: string; hasSignedSoldier: boolean; events: FaultEvent[] };
 export type VehRow = {
   id: string; num: number; typeName: string; serial: string;
   statusName: string; statusTone: "ok" | "wear" | "loss";
   holderLabel: string; atTana: boolean; sentByOfficer: boolean;
   signedSoldier: string | null; physicalLocation: string | null; reason: string | null;
   recurringDays: number | null;
-  nextMaintDate: string | null; maint: Maint | null;
+  nextMaintDate: string | null; maint: Maint | null; fault: Fault | null;
 };
 export type TypeRow = { typeName: string; total: number; ok: number; defectiveAtTana: number; signedToSoldier: number };
 export type HistEvent = { date: string; kind: "in" | "out"; from: string; to: string; reason: string | null; transferId: string; gapDays: number | null };
@@ -32,6 +35,8 @@ export default function MaintenanceTabs({ vehicles, byType, history, canEdit }: 
   const [compFilter, setCompFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [editVeh, setEditVeh] = useState<VehRow | null>(null);
+  const [faultVeh, setFaultVeh] = useState<VehRow | null>(null);
+  const [reportVeh, setReportVeh] = useState<VehRow | null>(null);
 
   const compOptions = useMemo(() => [...new Set(vehicles.map((v) => v.holderLabel))].sort((a, b) => a.localeCompare(b, "he")), [vehicles]);
   const statusOptions = useMemo(() => [...new Set(vehicles.map((v) => v.statusName))].sort((a, b) => a.localeCompare(b, "he")), [vehicles]);
@@ -44,7 +49,7 @@ export default function MaintenanceTabs({ vehicles, byType, history, canEdit }: 
       (!onlyRepair || isInRepair(v)) &&
       (!compFilter || v.holderLabel === compFilter) &&
       (!statusFilter || v.statusName === statusFilter) &&
-      (!s || v.typeName.includes(s) || v.serial.includes(s) || v.holderLabel.includes(s) || (v.signedSoldier ?? "").includes(s) || v.statusName.includes(s)),
+      (!s || v.typeName.includes(s) || v.serial.includes(s) || v.holderLabel.includes(s) || (v.signedSoldier ?? "").includes(s) || v.statusName.includes(s) || (v.fault ? `#${v.fault.faultNumber}`.includes(s) || v.fault.description.includes(s) : false)),
     );
   }, [vehicles, q, onlyRepair, compFilter, statusFilter]);
 
@@ -95,7 +100,7 @@ export default function MaintenanceTabs({ vehicles, byType, history, canEdit }: 
                 <table className="min-w-full text-sm">
                   <thead className="sticky top-0 z-10"><tr className="bg-slate-100 text-slate-500 text-xs [&>th]:sticky [&>th]:top-0 [&>th]:bg-slate-100">
                     <th className="px-2 py-2 text-center w-10">#</th><th className="px-3 py-2 text-right">רכב</th><th className="px-3 py-2 text-right">מ.ס.</th>
-                    <th className="px-3 py-2 text-right">סטטוס</th><th className="px-3 py-2 text-right">שייכות</th><th className="px-3 py-2 text-right">חייל חתום</th>
+                    <th className="px-3 py-2 text-right">סטטוס</th><th className="px-3 py-2 text-right">🔧 תקלה/טיפול</th><th className="px-3 py-2 text-right">שייכות</th><th className="px-3 py-2 text-right">חייל חתום</th>
                     <th className="px-3 py-2 text-right">מיקום</th><th className="px-3 py-2 text-right">🗓️ טיפול הבא</th><th className="px-3 py-2 text-right">תקלה אחרונה</th>
                   </tr></thead>
                   <tbody className="divide-y divide-slate-100">
@@ -107,6 +112,16 @@ export default function MaintenanceTabs({ vehicles, byType, history, canEdit }: 
                         </td>
                         <td className="px-3 py-2 font-mono text-xs">{v.serial}</td>
                         <td className="px-3 py-2"><Badge className={toneCls[v.statusTone]}>{v.statusName}</Badge></td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {v.fault ? (
+                            <button onClick={() => setFaultVeh(v)} className="inline-flex items-center gap-1 hover:opacity-80">
+                              <span className="text-[10px] font-mono text-slate-400">#{v.fault.faultNumber}</span>
+                              <Badge className={stageInfo(v.fault.stage).tone}>{stageInfo(v.fault.stage).short}</Badge>
+                            </button>
+                          ) : canEdit ? (
+                            <button onClick={() => setReportVeh(v)} className="text-xs text-rose-600 border border-rose-200 rounded px-2 py-0.5 hover:bg-rose-50">＋ דיווח תקלה</button>
+                          ) : <span className="text-slate-300 text-xs">—</span>}
+                        </td>
                         <td className="px-3 py-2 text-xs whitespace-nowrap">{v.atTana ? <span className="text-orange-700 font-medium">🔧 בטנא{v.sentByOfficer && <span className="text-[10px] text-blue-700 mr-1">(קצין רכב)</span>}</span> : v.holderLabel}</td>
                         <td className="px-3 py-2 text-xs text-blue-700 whitespace-nowrap">{v.signedSoldier ?? "—"}</td>
                         <td className="px-3 py-2 text-xs text-slate-600 whitespace-nowrap">{v.physicalLocation ?? "—"}</td>
@@ -199,6 +214,105 @@ export default function MaintenanceTabs({ vehicles, byType, history, canEdit }: 
       )}
 
       {editVeh && <MaintModal veh={editVeh} onClose={() => setEditVeh(null)} />}
+      {reportVeh && <ReportFaultModal veh={reportVeh} onClose={() => setReportVeh(null)} />}
+      {faultVeh?.fault && <FaultModal veh={faultVeh} onClose={() => setFaultVeh(null)} />}
+    </div>
+  );
+}
+
+/** דיווח תקלה חדשה — פותח תיק עם מספר רץ. */
+function ReportFaultModal({ veh, onClose }: { veh: VehRow; onClose: () => void }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
+  function submit(fd: FormData) {
+    setErr(null); fd.set("vehicleSerialUnitId", veh.id);
+    start(async () => { const r = await reportVehicleFault(fd); if (r?.error) { setErr(r.error); return; } onClose(); router.refresh(); });
+  }
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md my-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b"><h3 className="font-bold text-slate-800">🔴 דיווח תקלה — {veh.typeName} · {veh.serial}</h3><button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-xl">✕</button></div>
+        <form action={submit} className="p-4 space-y-3">
+          <label className="text-sm block">תיאור התקלה
+            <textarea name="description" rows={3} required placeholder="מה התקלה?" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
+          </label>
+          {veh.signedSoldier && (
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" name="notify" className="w-4 h-4 accent-sky-600" /> 📤 לשלוח לחייל החתום ({veh.signedSoldier}) בטלגרם
+            </label>
+          )}
+          {err && <p className="text-rose-600 text-sm">{err}</p>}
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={onClose} className="text-sm text-slate-600 px-4 py-2 hover:bg-slate-50 rounded-lg">ביטול</button>
+            <button disabled={pending} className="text-sm bg-rose-600 text-white rounded-lg px-5 py-2 font-medium hover:bg-rose-700 disabled:opacity-50">{pending ? "…" : "🔴 פתח תקלה"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/** ניהול תיק תקלה — מחזור סטטוסים, הערות, שליחה לחייל, היסטוריה. */
+function FaultModal({ veh, onClose }: { veh: VehRow; onClose: () => void }) {
+  const router = useRouter();
+  const f = veh.fault!;
+  const [pending, start] = useTransition();
+  const [note, setNote] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const curIdx = stageIndex(f.stage);
+  const nextStage = FAULT_STAGES[curIdx + 1];
+
+  const run = (fn: () => Promise<{ error?: string }>) => start(async () => { setMsg(null); const r = await fn(); if (r?.error) { setMsg(r.error); return; } setNote(""); router.refresh(); onClose(); });
+  function advance(stageKey: string) { const fd = new FormData(); fd.set("faultId", f.id); fd.set("stage", stageKey); if (note.trim()) fd.set("note", note.trim()); run(() => advanceVehicleFault(fd)); }
+  function saveNote() { if (!note.trim()) return; const fd = new FormData(); fd.set("faultId", f.id); fd.set("note", note.trim()); run(() => addVehicleFaultNote(fd)); }
+  async function sendSoldier() { setMsg(null); const fd = new FormData(); fd.set("faultId", f.id); start(async () => { const r = await sendFaultToSoldier(fd); setMsg(r.error ?? (r.sent ? "✅ נשלח לחייל בטלגרם" : "החייל לא מחובר לבוט")); }); }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg my-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="font-bold text-slate-800">🔧 תקלה #{f.faultNumber} — {veh.typeName} · {veh.serial}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-xl">✕</button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="bg-slate-50 rounded-lg p-3 text-sm"><b>תיאור:</b> {f.description}</div>
+
+          {/* מחוון שלבים */}
+          <div className="flex flex-wrap gap-1">
+            {FAULT_STAGES.map((s, i) => (
+              <span key={s.key} className={`text-[10px] rounded px-1.5 py-0.5 ${i === curIdx ? s.tone + " font-bold ring-2 ring-offset-1 ring-slate-300" : i < curIdx ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"}`}>{i < curIdx ? "✓ " : ""}{s.short}</span>
+            ))}
+          </div>
+
+          {/* הערה + פעולות */}
+          <div>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="הערה / פירוט (אופציונלי)…" className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm mb-2" />
+            <div className="flex flex-wrap gap-2">
+              {nextStage && <button onClick={() => advance(nextStage.key)} disabled={pending} className="text-sm bg-slate-800 text-white rounded-lg px-3 py-1.5 hover:bg-slate-900 disabled:opacity-50">➡️ {nextStage.short}</button>}
+              {f.stage !== CLOSED_STAGE && <button onClick={() => advance(CLOSED_STAGE)} disabled={pending} className="text-sm bg-emerald-600 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-700 disabled:opacity-50">✅ סגור (נמסר)</button>}
+              <button onClick={saveNote} disabled={pending || !note.trim()} className="text-sm bg-white border border-slate-300 text-slate-700 rounded-lg px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50">💬 הוסף הערה</button>
+              {f.hasSignedSoldier && <button onClick={sendSoldier} disabled={pending} className="text-sm bg-indigo-600 text-white rounded-lg px-3 py-1.5 hover:bg-indigo-700 disabled:opacity-50">📤 שלח לחייל</button>}
+            </div>
+            {msg && <p className="text-xs mt-2 text-slate-600">{msg}</p>}
+          </div>
+
+          {/* היסטוריית התיק */}
+          <div>
+            <div className="text-xs font-bold text-slate-500 mb-1">📜 יומן התיק</div>
+            <div className="space-y-1 max-h-52 overflow-y-auto">
+              {[...f.events].reverse().map((e, i) => (
+                <div key={i} className="text-xs border-r-2 border-slate-200 pr-2 py-0.5">
+                  <span className="text-slate-400">{new Date(e.at).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                  {e.stage !== "note" && <span className="font-medium text-slate-700"> · {stageInfo(e.stage).short}</span>}
+                  {e.note && <span className="text-slate-600"> — {e.note}</span>}
+                  {e.by && <span className="text-slate-400"> ({e.by})</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

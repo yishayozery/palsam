@@ -218,9 +218,17 @@ export default async function MaintenancePage({
   });
   const maintBy = new Map(maintList.map((m) => [m.vehicleSerialUnitId, m]));
 
+  // תיקי תקלה פתוחים (מחזור סטטוסים)
+  const openFaults = await prisma.vehicleFault.findMany({
+    where: { battalionId: bId, closedAt: null },
+    include: { events: { orderBy: { createdAt: "asc" }, select: { stage: true, note: true, createdByName: true, createdAt: true } } },
+  });
+  const faultBy = new Map(openFaults.map((f) => [f.vehicleSerialUnitId, f]));
+
   // ===== נתונים לרכיב הטאבים (מספור + חיפוש + היסטוריה) =====
   const vehiclesData: VehRow[] = filteredVehicles.map((v, i) => {
     const m = maintBy.get(v.id);
+    const f = faultBy.get(v.id);
     return {
     id: v.id, num: i + 1, typeName: v.itemType.name, serial: v.serialNumber,
     statusName: v.status.name,
@@ -234,6 +242,11 @@ export default async function MaintenancePage({
     recurringDays: recurringByVehicle.get(v.id) ?? null,
     nextMaintDate: m?.nextDate ? m.nextDate.toISOString().slice(0, 10) : null,
     maint: m ? { serviceType: m.serviceType, location: m.location, hours: m.hours, contactName: m.contactName, contactPhone: m.contactPhone, notes: m.notes } : null,
+    fault: f ? {
+      id: f.id, faultNumber: f.faultNumber, stage: f.stage, description: f.description,
+      hasSignedSoldier: !!v.signedSoldier,
+      events: f.events.map((e) => ({ stage: e.stage, note: e.note, by: e.createdByName ?? null, at: e.createdAt.toISOString() })),
+    } : null,
   }; });
   const byTypeData: TypeRow[] = [...byType.values()].sort((a, b) => b.total - a.total)
     .map((s) => ({ typeName: s.typeName, total: s.total, ok: s.ok, defectiveAtTana: s.defectiveAtTana, signedToSoldier: s.signedToSoldier }));
