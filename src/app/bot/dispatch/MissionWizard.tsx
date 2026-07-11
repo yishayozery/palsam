@@ -136,23 +136,25 @@ export default function MissionWizard({ data, onSubmit }: { data: WData; onSubmi
   );
 
   const addButtons = (label = "") => (
-    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-      {label && <span style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>{label}</span>}
-      <button onClick={addSystem} style={{ fontSize: 13, background: "#1e293b", color: "#fff", border: "none", borderRadius: 9, padding: "9px 12px" }}>+ רכב מהמערכת</button>
-      <button onClick={addExternal} style={{ fontSize: 13, background: "#d97706", color: "#fff", border: "none", borderRadius: 9, padding: "9px 12px" }}>+ רכב חוץ</button>
-      {templates.length > 0 && (
-        <select value="" onChange={(e) => { addTemplate(e.target.value); e.target.value = ""; }} style={{ fontSize: 13, borderRadius: 9, border: `1px solid ${C.border}`, background: C.card, padding: "9px 10px" }}>
-          <option value="">+ שבצ&quot;ק קבוע</option>
-          {templates.map((t) => <option key={t.id} value={t.id}>{t.name} · {t.vehicleTypeName}</option>)}
-        </select>
-      )}
+    <div style={{ background: label ? C.card : "transparent", border: label ? `1px dashed ${C.border}` : "none", borderRadius: 10, padding: label ? 10 : 0 }}>
+      {label && <div style={{ fontSize: 13, color: C.text, fontWeight: 700, marginBottom: 8 }}>{label}</div>}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        <button onClick={addSystem} style={{ fontSize: 13, background: "#1e293b", color: "#fff", border: "none", borderRadius: 9, padding: "9px 12px" }}>🚗 רכב מהמערכת</button>
+        <button onClick={addExternal} style={{ fontSize: 13, background: "#d97706", color: "#fff", border: "none", borderRadius: 9, padding: "9px 12px" }}>🔶 רכב חוץ</button>
+        {templates.length > 0 && (
+          <select value="" onChange={(e) => { addTemplate(e.target.value); e.target.value = ""; }} style={{ fontSize: 13, borderRadius: 9, border: `1px solid ${C.accent}`, background: C.card, color: C.accent, fontWeight: 600, padding: "9px 10px" }}>
+            <option value="">🔁 טען משבצ&quot;ק קבוע (רכב+צוות)</option>
+            {templates.map((t) => <option key={t.id} value={t.id}>{t.name} · {t.vehicleTypeName}</option>)}
+          </select>
+        )}
+      </div>
     </div>
   );
 
   const row = rows[Math.min(vehIdx, rows.length - 1)];
 
   return (
-    <div dir="rtl" style={{ fontFamily: "system-ui, sans-serif", background: C.bg, color: C.text, minHeight: "100vh", maxWidth: 480, margin: "0 auto", padding: 16, paddingBottom: 88 }}>
+    <div dir="rtl" style={{ fontFamily: "system-ui, sans-serif", background: C.bg, color: C.text, minHeight: "100vh", maxWidth: 480, margin: "0 auto", padding: 16, paddingBottom: 120 }}>
       <div style={{ textAlign: "center", marginBottom: 12 }}>
         <h2 style={{ fontSize: 19, fontWeight: 700, margin: 0 }}>🚗 פתיחת משימה</h2>
         {data.battalionName && <p style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{data.battalionName}</p>}
@@ -257,17 +259,24 @@ export default function MissionWizard({ data, onSubmit }: { data: WData; onSubmi
                 })}
                 {row.soldiers.length === 0 && <div style={{ fontSize: 12, color: "#dc2626", padding: "4px 0" }}>⚠️ אין חיילים ברכב זה — הוסף/י לפחות אחד</div>}
                 <div style={{ background: C.bg, borderRadius: 9, padding: 8, marginTop: 6 }}>
-                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 חיפוש חייל…" style={{ ...inp, marginBottom: 6 }} />
-                  <select value="" onChange={(e) => { addSoldier(row.key, e.target.value); e.target.value = ""; }} style={{ ...inp, appearance: "auto" }}>
-                    <option value="">+ הוסף חייל</option>
-                    {availSoldiers(row).slice(0, 60).map((s) => <option key={s.id} value={s.id}>{presentSet.has(s.id) ? "" : "⚠️ "}{s.name}{s.pn ? ` (${s.pn})` : ""}</option>)}
-                  </select>
-                  <button onClick={() => addExternalSoldier(row.key)} style={{ fontSize: 12, color: "#b45309", background: "none", border: "1px solid #fcd34d", borderRadius: 8, padding: "6px 10px", marginTop: 6 }}>+ חייל חוץ</button>
+                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="➕ הקלד/י שם או מ.א להוספת חייל…" style={inp} />
+                  {search.trim() && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6, maxHeight: 190, overflowY: "auto" }}>
+                      {availSoldiers(row).slice(0, 25).map((s) => (
+                        <button key={s.id} onClick={() => { addSoldier(row.key, s.id); setSearch(""); }}
+                          style={{ textAlign: "right", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 13, color: C.text }}>
+                          ➕ {presentSet.has(s.id) ? "" : "⚠️ "}<b>{s.name}</b>{s.pn ? <span style={{ color: C.muted }}> · {s.pn}</span> : ""}{s.company ? <span style={{ color: C.muted, fontSize: 11 }}> · {s.company}</span> : ""}
+                        </button>
+                      ))}
+                      {availSoldiers(row).length === 0 && <span style={{ fontSize: 12, color: C.muted, padding: 4 }}>אין תוצאות תואמות</span>}
+                    </div>
+                  )}
+                  <button onClick={() => addExternalSoldier(row.key)} style={{ fontSize: 12, color: "#b45309", background: "none", border: "1px solid #fcd34d", borderRadius: 8, padding: "6px 10px", marginTop: 8 }}>+ חייל חוץ (לא במערכת)</button>
                 </div>
               </div>
 
               {/* רכב נוסף / הבא */}
-              {addButtons("➕ רכב נוסף:")}
+              {addButtons("➕ להוסיף רכב נוסף לשיירה?")}
             </>
           )}
         </div>
