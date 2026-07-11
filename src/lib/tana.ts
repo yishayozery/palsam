@@ -13,8 +13,12 @@ export async function findTanaHolder(battalionId: string) {
   });
 }
 
-/** מוצא סטטוס "תקול" — עדיפות לסטטוס עם isWear=true; fallback לראשון שלא ברירת מחדל */
+/** מוצא סטטוס "תקול" — עדיפות לסטטוס בשם "תקול", אח"כ isWear=true; fallback לראשון שלא ברירת מחדל */
 export async function findDefectiveStatusId(battalionId: string): Promise<string | null> {
+  const named = await prisma.itemStatus.findFirst({
+    where: { battalionId, active: true, name: { contains: "תקול" } },
+  });
+  if (named) return named.id;
   const wear = await prisma.itemStatus.findFirst({
     where: { battalionId, active: true, isWear: true },
     orderBy: { sortOrder: "asc" },

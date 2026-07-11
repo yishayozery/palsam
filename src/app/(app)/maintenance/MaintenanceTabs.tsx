@@ -303,11 +303,17 @@ function FaultModal({ veh, onClose, onHistory }: { veh: VehRow; onClose: () => v
             <b>תיאור:</b> {f.description}
           </div>
 
-          {/* מחוון שלבים */}
-          <div className="flex flex-wrap gap-1">
-            {FAULT_STAGES.map((s, i) => (
-              <span key={s.key} className={`text-[10px] rounded px-1.5 py-0.5 ${i === curIdx ? s.tone + " font-bold ring-2 ring-offset-1 ring-slate-300" : i < curIdx ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"}`}>{i < curIdx ? "✓ " : ""}{s.short}</span>
-            ))}
+          {/* מחוון שלבים — לחיץ: אפשר לקפוץ לכל שלב (תקלה קצרה/טיפול מהיר) */}
+          <div>
+            <div className="flex flex-wrap gap-1">
+              {FAULT_STAGES.map((s, i) => (
+                <button key={s.key} onClick={() => advance(s.key)} disabled={pending} title="לחץ/י לעדכון לשלב זה"
+                  className={`text-[10px] rounded px-1.5 py-0.5 hover:ring-2 hover:ring-slate-300 disabled:opacity-50 ${i === curIdx ? s.tone + " font-bold ring-2 ring-offset-1 ring-slate-400" : i < curIdx ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"}`}>
+                  {i < curIdx ? "✓ " : ""}{s.short}
+                </button>
+              ))}
+            </div>
+            <div className="text-[10px] text-slate-400 mt-1">לחיצה על שלב = עדכון ישיר אליו (אפשר לדלג).</div>
           </div>
 
           {/* הערה + פעולות */}
