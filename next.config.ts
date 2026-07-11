@@ -27,8 +27,9 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   // 🛡️ Referrer מצומצם - לא מגלה איזה דף נכנסת ממנו לאתר אחר
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  // 🛡️ אוסר הרשאות לדפדפן (מצלמה, מיקום, מיקרופון) כברירת מחדל
-  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), interest-cohort=()" },
+  // 🛡️ הרשאות דפדפן: מצלמה מותרת למקור עצמו (צילום רישיון/מבחן/ספירה) — לא לצד ג'.
+  //    מיקרופון/מיקום חסומים. camera=() חסם מצלמה גם באפליקציה עצמה (מסך שחור ב-WebView).
+  { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), interest-cohort=()" },
   // 🛡️ XSS legacy protection (לדפדפנים ישנים)
   { key: "X-XSS-Protection", value: "1; mode=block" },
   // 🛡️ DNS prefetch control
