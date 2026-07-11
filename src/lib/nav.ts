@@ -59,6 +59,7 @@ export const NAV: NavItem[] = [
 
   // ===== ניהול =====
   { href: "/profile", label: "הגדרות גדוד", icon: "🏛️", group: "ניהול", screen: "settings" },
+  { href: "/notifications", label: "הודעות בוט", icon: "🔔", group: "ניהול", adminOnly: true },
   { href: "/setup-checklist", label: "צ'קליסט הקמה", icon: "📋", group: "ניהול", adminOnly: true },
 
   // ===== עזרה =====
