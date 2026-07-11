@@ -2,10 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
-import { PageHeader, Card, Badge, Table, Th, Td, EmptyState } from "@/components/ui";
+import { PageHeader, Card } from "@/components/ui";
 import { findTanaHolder } from "@/lib/tana";
 import ReturnFromTanaModal from "./ReturnFromTanaModal";
 import ExcludeOfficerToggle from "./ExcludeOfficerToggle";
+import MaintenanceTabs, { type VehRow, type TypeRow, type VehHist } from "./MaintenanceTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -171,17 +172,34 @@ export default async function MaintenancePage({
   const totalOk = filteredVehicles.filter((v) => v.currentHolderId !== tana.id && !v.status.isWear && !v.status.isLoss).length;
   const totalDefectiveOutOfTana = filteredVehicles.filter((v) => v.currentHolderId !== tana.id && v.status.isWear).length;
 
-  // היסטוריית תעודות (רכבים בלבד) — 30 אחרונות
-  const recentHistory = await prisma.transfer.findMany({
-    where: {
-      battalionId: bId,
-      OR: [{ fromHolderId: tana.id }, { toHolderId: tana.id }],
-      lines: { some: { serialUnit: { itemType: { category: { warehouseType: "VEHICLES" } } } } },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 30,
-    include: { fromHolder: true, toHolder: true, createdBy: { select: { fullName: true } }, _count: { select: { lines: true } } },
-  });
+  // שמות holders (למקור/יעד בהיסטוריה)
+  const allHolders = await prisma.holder.findMany({ where: { battalionId: bId }, select: { id: true, name: true } });
+  const holderName = new Map(allHolders.map((h) => [h.id, h.name]));
+
+  // התרעת "חזרה מהירה" — רכב שחזר לטנא תוך פחות מ-5 ימים מהיציאה הקודמת (בעיה חוזרת)
+  const RECUR_DAYS = 5;
+  const recurringByVehicle = new Map<string, number>();
+  type Ev = { date: Date; kind: "in" | "out"; from: string; to: string; reason: string | null; transferId: string; gapDays: number | null };
+  const historyEventsByVehicle = new Map<string, Ev[]>();
+  for (const [vid, hist] of vehicleHistory) {
+    const asc = [...hist].reverse(); // סדר עולה לזיווג
+    let lastOut: Date | null = null;
+    const events: Ev[] = [];
+    for (const l of asc) {
+      const t = l.transfer;
+      const kind: "in" | "out" = t.toHolderId === tana.id ? "in" : "out";
+      let gapDays: number | null = null;
+      if (kind === "in" && lastOut) {
+        const days = (t.createdAt.getTime() - lastOut.getTime()) / 86400000;
+        if (days >= 0 && days < RECUR_DAYS) gapDays = Math.max(0, Math.round(days));
+      }
+      events.push({ date: t.createdAt, kind, from: holderName.get(t.fromHolderId ?? "") ?? "—", to: holderName.get(t.toHolderId ?? "") ?? "—", reason: t.reason, transferId: t.id, gapDays });
+      if (kind === "out") lastOut = t.createdAt;
+    }
+    const lastIn = [...events].reverse().find((e) => e.kind === "in");
+    if (lastIn?.gapDays != null) recurringByVehicle.set(vid, lastIn.gapDays);
+    historyEventsByVehicle.set(vid, events.reverse()); // תצוגה: חדש קודם
+  }
 
   // יעדים אפשריים להחזרה (למודאל)
   const holders = await prisma.holder.findMany({
@@ -192,6 +210,36 @@ export default async function MaintenancePage({
 
   // רכבים שכעת בטנא (למודאל החזרה) — סינון לפי הצ'קבוקס
   const vehiclesAtTana = filteredVehicles.filter((v) => v.currentHolderId === tana.id);
+
+  // ===== נתונים לרכיב הטאבים (מספור + חיפוש + היסטוריה) =====
+  const vehiclesData: VehRow[] = filteredVehicles.map((v, i) => ({
+    id: v.id, num: i + 1, typeName: v.itemType.name, serial: v.serialNumber,
+    statusName: v.status.name,
+    statusTone: v.status.isLoss ? "loss" : v.status.isWear ? "wear" : "ok",
+    holderLabel: v.currentHolder ? `${v.currentHolder.kind === "COMPANY" ? "🪖" : "🏪"} ${v.currentHolder.name}` : "—",
+    atTana: v.currentHolderId === tana.id,
+    sentByOfficer: v.currentHolderId === tana.id && sentByOfficerSet.has(v.id),
+    signedSoldier: v.signedSoldier?.fullName ?? null,
+    physicalLocation: v.location ? `${v.location.column}-${v.location.row}` : (v.physicalLocation ?? null),
+    reason: vehicleReasons.get(v.id) ?? null,
+    recurringDays: recurringByVehicle.get(v.id) ?? null,
+  }));
+  const byTypeData: TypeRow[] = [...byType.values()].sort((a, b) => b.total - a.total)
+    .map((s) => ({ typeName: s.typeName, total: s.total, ok: s.ok, defectiveAtTana: s.defectiveAtTana, signedToSoldier: s.signedToSoldier }));
+  const numByVid = new Map(vehiclesData.map((v) => [v.id, v.num]));
+  const vehByVid = new Map(filteredVehicles.map((v) => [v.id, v]));
+  const historyData: VehHist[] = [...historyEventsByVehicle.entries()]
+    .filter(([vid]) => vehByVid.has(vid))
+    .map(([vid, events]) => {
+      const v = vehByVid.get(vid)!;
+      return {
+        id: vid, num: numByVid.get(vid) ?? 0, typeName: v.itemType.name, serial: v.serialNumber,
+        hasRecurring: events.some((e) => e.gapDays != null),
+        events: events.map((e) => ({ date: e.date.toISOString(), kind: e.kind, from: e.from, to: e.to, reason: e.reason, transferId: e.transferId, gapDays: e.gapDays })),
+      };
+    })
+    .sort((a, b) => (b.hasRecurring ? 1 : 0) - (a.hasRecurring ? 1 : 0) || a.num - b.num);
+  const recurringCount = vehiclesData.filter((v) => v.recurringDays != null).length;
 
   return (
     <div>
@@ -218,7 +266,7 @@ export default async function MaintenancePage({
       />
 
       {/* ===== דשבורד עליון ===== */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-4">
         <Card className="p-3 bg-emerald-50 border-emerald-200">
           <div className="text-[10px] text-slate-500">סך תקינים בשטח</div>
           <div className="text-2xl font-bold text-emerald-700">{totalOk}</div>
@@ -228,8 +276,12 @@ export default async function MaintenancePage({
           <div className="text-2xl font-bold text-amber-700">{totalDefectiveOutOfTana}</div>
         </Card>
         <Card className="p-3 bg-orange-50 border-orange-200">
-          <div className="text-[10px] text-slate-500">בטנא לתיקון (תעודה פתוחה)</div>
+          <div className="text-[10px] text-slate-500">בטנא לתיקון</div>
           <div className="text-2xl font-bold text-orange-700">{totalAtTana}</div>
+        </Card>
+        <Card className="p-3 bg-rose-50 border-rose-200">
+          <div className="text-[10px] text-slate-500">🔁 חזרות מהירות (&lt;5 ימים)</div>
+          <div className="text-2xl font-bold text-rose-700">{recurringCount}</div>
         </Card>
         <Card className="p-3 bg-emerald-50 border-emerald-200">
           <div className="text-[10px] text-slate-500">סך רכבים שתוקנו</div>
@@ -241,111 +293,11 @@ export default async function MaintenancePage({
         </Card>
       </div>
 
-      {/* ===== טבלת כל הרכבים ===== */}
-      <h2 className="font-bold text-slate-700 mb-2">🚙 כל הרכבים ({filteredVehicles.length})</h2>
       {excludeOfficerOn && (
         <p className="text-xs text-blue-700 mb-2">🔍 מוסתרים {allVehicles.length - filteredVehicles.length} רכבים שנשלחו לטנא ע״י קצין הרכב</p>
       )}
-      <Card className="mb-6">
-        {filteredVehicles.length === 0 ? (
-          <EmptyState>אין רכבים</EmptyState>
-        ) : (
-          <Table>
-            <thead>
-              <tr><Th>רכב</Th><Th>מ.ס.</Th><Th>סטטוס</Th><Th>שייכות נוכחית</Th><Th>חייל חתום</Th><Th>מיקום פיזי</Th><Th>תקלה אחרונה</Th></tr>
-            </thead>
-            <tbody>
-              {filteredVehicles.map((v) => {
-                const reason = vehicleReasons.get(v.id);
-                const isAtTana = v.currentHolderId === tana.id;
-                const sentByOfficer = isAtTana && sentByOfficerSet.has(v.id);
-                const statusColor = v.status.isLoss ? "bg-rose-100 text-rose-800"
-                  : v.status.isWear ? "bg-amber-100 text-amber-800"
-                  : "bg-emerald-100 text-emerald-800";
-                return (
-                  <tr key={v.id} className={isAtTana ? "bg-orange-50" : ""}>
-                    <Td className="font-medium">🚙 {v.itemType.name}</Td>
-                    <Td className="font-mono text-xs">{v.serialNumber}</Td>
-                    <Td><Badge className={statusColor}>{v.status.name}</Badge></Td>
-                    <Td className="text-xs">
-                      {isAtTana ? (
-                        <span className="text-orange-700 font-medium">
-                          🔧 בטנא {sentByOfficer && <span className="text-[10px] text-blue-700 mr-1">(ע״י קצין רכב)</span>}
-                        </span>
-                      ) : v.currentHolder ? (
-                        <>{v.currentHolder.kind === "COMPANY" ? "🪖" : "🏪"} {v.currentHolder.name}</>
-                      ) : "—"}
-                    </Td>
-                    <Td className="text-xs text-blue-700">{v.signedSoldier?.fullName ?? "—"}</Td>
-                    <Td className="text-xs text-slate-600">
-                      {v.location ? `${v.location.column}-${v.location.row}` : (v.physicalLocation ?? "—")}
-                    </Td>
-                    <Td className="text-xs text-rose-700 max-w-xs truncate">
-                      <span title={reason ?? ""}>{reason ?? (v.status.isWear ? "סומן כתקול ללא הסבר" : "—")}</span>
-                    </Td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </Table>
-        )}
-      </Card>
 
-      {/* ===== פירוט לפי סוג רכב ===== */}
-      <h2 className="font-bold text-slate-700 mb-2">📊 פירוט לפי סוג רכב</h2>
-      <Card className="mb-6">
-        {byType.size === 0 ? (
-          <EmptyState>אין רכבים צבאיים בגדוד</EmptyState>
-        ) : (
-          <Table>
-            <thead>
-              <tr><Th>סוג רכב</Th><Th>סה״כ</Th><Th>תקין (בשטח)</Th><Th>בטנא לתיקון</Th><Th>חתום על חייל</Th></tr>
-            </thead>
-            <tbody>
-              {[...byType.values()].sort((a, b) => b.total - a.total).map((s) => (
-                <tr key={s.typeName}>
-                  <Td className="font-medium">🚙 {s.typeName}</Td>
-                  <Td className="text-center font-bold">{s.total}</Td>
-                  <Td className="text-center text-emerald-700">{s.ok}</Td>
-                  <Td className="text-center text-orange-700">{s.defectiveAtTana}</Td>
-                  <Td className="text-center text-blue-700">{s.signedToSoldier}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
-      </Card>
-
-      {/* ===== היסטוריית תעודות (רכבים בלבד) ===== */}
-      <h2 className="font-bold text-slate-700 mb-2 mt-6">📜 היסטוריית תעודות רכבים (טנא)</h2>
-      <Card>
-        {recentHistory.length === 0 ? (
-          <EmptyState>אין תעודות עדיין</EmptyState>
-        ) : (
-          <Table>
-            <thead>
-              <tr><Th>תאריך</Th><Th>סוג</Th><Th>מאת</Th><Th>אל</Th><Th>שורות</Th><Th>סיבה</Th><Th></Th></tr>
-            </thead>
-            <tbody>
-              {recentHistory.map((t) => (
-                <tr key={t.id}>
-                  <Td className="text-xs text-slate-500">{t.createdAt.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</Td>
-                  <Td>
-                    <Badge className={t.toHolderId === tana.id ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}>
-                      {t.toHolderId === tana.id ? "🔧 כניסה לטנא" : "✓ יציאה מטנא"}
-                    </Badge>
-                  </Td>
-                  <Td className="text-xs">{t.fromHolder?.name ?? "—"}</Td>
-                  <Td className="text-xs">{t.toHolder?.name ?? "—"}</Td>
-                  <Td className="text-center">{t._count.lines}</Td>
-                  <Td className="text-xs text-slate-600 max-w-xs truncate">{t.reason ?? "—"}</Td>
-                  <Td><Link href={`/transfers/${t.id}/document`} className="text-xs text-blue-600 hover:underline">תעודה</Link></Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
-      </Card>
+      <MaintenanceTabs vehicles={vehiclesData} byType={byTypeData} history={historyData} />
     </div>
   );
 }
