@@ -146,6 +146,8 @@ model Battalion {
   attendanceReportOverrides   AttendanceReportOverride[]
   vehicleFuelCards            VehicleFuelCard[]
   vehicleLinks                VehicleLink[]
+  vehicleMaintenances         VehicleMaintenance[]
+  botNotificationRules        BotNotificationRule[]
   tripLink                    String? // קישור "פתיחת משימת נסיעה" שנשלח לנהגים בבוט עם השיבוץ למשימה
   drivingProcedureText        String? // נוסח נוהל נהיגה לחתימת נהגים (מוצג בבוט + קצין רכב)
   drivingProcedureUpdatedAt   DateTime? // מתי עודכן הנוסח — חתימה מלפני התאריך נחשבת לא-תקפה (גרסה חדשה → חתימה מחדש)
@@ -1047,6 +1049,7 @@ model SerialUnit {
   countLines    CountLine[]
   ymachGaps     YmachGap[]    @relation("YmachGapSerialUnit")
   verificationItems VerificationItem[] @relation("SerialUnitVerifications")
+  maintenance   VehicleMaintenance? @relation("VehicleMaintenanceUnit")
 
   @@unique([itemTypeId, serialNumber])
   @@index([battalionId])
@@ -2378,5 +2381,51 @@ model VehicleLink {
   active           Boolean   @default(true)
   createdAt        DateTime  @default(now())
 
+  @@index([battalionId])
+}
+
+/** תוכנית טיפולים לרכב (בבעלות קצין רכב) — תאריך הטיפול הבא + פרטי המוסך. אחד לרכב. */
+model VehicleMaintenance {
+  id                  String     @id @default(cuid())
+  battalionId         String
+  battalion           Battalion  @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  vehicleSerialUnitId String     @unique
+  vehicleSerialUnit   SerialUnit @relation("VehicleMaintenanceUnit", fields: [vehicleSerialUnitId], references: [id], onDelete: Cascade)
+  nextDate            DateTime?  // יום הטיפול הבא
+  serviceType         String?    // סוג הטיפול (למשל: טיפול 10,000 ק"מ)
+  location            String?    // מיקום הטיפול (מוסך)
+  hours               String?    // שעות
+  contactName         String?    // איש קשר
+  contactPhone        String?    // טלפון איש קשר
+  notes               String?
+  lastServiceDate     DateTime?  // טיפול אחרון שבוצע
+  reminderSentFor     DateTime?  // עבור איזה nextDate כבר נשלחה תזכורת (מניעת כפילות)
+  createdById         String?
+  updatedById         String?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  @@index([battalionId, nextDate])
+}
+
+/**
+ * רישום הודעות/תזכורות בוט מתוזמנות — מסך שליטה מרכזי.
+ * key ייחודי לגדוד; enabled + daysBefore + recipients קובעים אם/מתי/למי לשלוח.
+ */
+model BotNotificationRule {
+  id           String    @id @default(cuid())
+  battalionId  String
+  battalion    Battalion @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  key          String    // מזהה קבוע: maintenance-reminder / attendance-morning / counts-overdue ...
+  name         String    // שם תצוגה
+  description  String?    // מה נשלח
+  enabled      Boolean   @default(true)
+  daysBefore   Int       @default(1) // כמה ימים לפני (לתזכורות מבוססות-תאריך)
+  recipients   String    @default("") // תגיות נמענים מופרדות בפסיק (vehicle-officer,signed-holder,...)
+  updatedById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([battalionId, key])
   @@index([battalionId])
 }

@@ -171,3 +171,46 @@ export async function returnFromTana(formData: FormData): Promise<{ ok?: boolean
     return { error: e instanceof Error ? e.message.replace(/^Error:\s*/, "") : "שגיאה" };
   }
 }
+
+// ===================== תוכנית טיפולים לרכב =====================
+
+/** שמירת/עדכון תוכנית הטיפול לרכב (תאריך הבא + פרטי מוסך). ריק = ניקוי. */
+export async function saveVehicleMaintenance(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireUser();
+    const bId = user.battalionId!;
+    const vehicleSerialUnitId = String(formData.get("vehicleSerialUnitId") || "");
+    if (!vehicleSerialUnitId) return { error: "חסר רכב" };
+    const unit = await prisma.serialUnit.findUnique({ where: { id: vehicleSerialUnitId }, select: { battalionId: true } });
+    if (!unit || unit.battalionId !== bId) return { error: "רכב לא נמצא" };
+
+    const nextDateRaw = String(formData.get("nextDate") || "").trim();
+    const nextDate = nextDateRaw ? new Date(nextDateRaw + "T00:00:00.000Z") : null;
+    const serviceType = String(formData.get("serviceType") || "").trim() || null;
+    const location = String(formData.get("location") || "").trim() || null;
+    const hours = String(formData.get("hours") || "").trim() || null;
+    const contactName = String(formData.get("contactName") || "").trim() || null;
+    const contactPhone = String(formData.get("contactPhone") || "").trim() || null;
+    const notes = String(formData.get("notes") || "").trim() || null;
+
+    // אם הכל ריק — מוחקים את הרשומה
+    if (!nextDate && !serviceType && !location && !hours && !contactName && !contactPhone && !notes) {
+      await prisma.vehicleMaintenance.deleteMany({ where: { vehicleSerialUnitId } });
+      revalidatePath("/maintenance");
+      return { ok: true };
+    }
+
+    await prisma.vehicleMaintenance.upsert({
+      where: { vehicleSerialUnitId },
+      update: { nextDate, serviceType, location, hours, contactName, contactPhone, notes, updatedById: user.id,
+        // אם שינו את התאריך — מאפסים את סימון "נשלחה תזכורת" כדי שתישלח מחדש
+        reminderSentFor: null },
+      create: { battalionId: bId, vehicleSerialUnitId, nextDate, serviceType, location, hours, contactName, contactPhone, notes, createdById: user.id },
+    });
+    await audit(user.id, "SAVE_VEHICLE_MAINTENANCE", "SerialUnit", vehicleSerialUnitId, { nextDate: nextDateRaw || null });
+    revalidatePath("/maintenance");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}

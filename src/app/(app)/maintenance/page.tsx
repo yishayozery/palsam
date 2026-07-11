@@ -211,8 +211,17 @@ export default async function MaintenancePage({
   // רכבים שכעת בטנא (למודאל החזרה) — סינון לפי הצ'קבוקס
   const vehiclesAtTana = filteredVehicles.filter((v) => v.currentHolderId === tana.id);
 
+  // תוכנית טיפולים לרכבים
+  const maintList = await prisma.vehicleMaintenance.findMany({
+    where: { battalionId: bId },
+    select: { vehicleSerialUnitId: true, nextDate: true, serviceType: true, location: true, hours: true, contactName: true, contactPhone: true, notes: true },
+  });
+  const maintBy = new Map(maintList.map((m) => [m.vehicleSerialUnitId, m]));
+
   // ===== נתונים לרכיב הטאבים (מספור + חיפוש + היסטוריה) =====
-  const vehiclesData: VehRow[] = filteredVehicles.map((v, i) => ({
+  const vehiclesData: VehRow[] = filteredVehicles.map((v, i) => {
+    const m = maintBy.get(v.id);
+    return {
     id: v.id, num: i + 1, typeName: v.itemType.name, serial: v.serialNumber,
     statusName: v.status.name,
     statusTone: v.status.isLoss ? "loss" : v.status.isWear ? "wear" : "ok",
@@ -223,7 +232,9 @@ export default async function MaintenancePage({
     physicalLocation: v.location ? `${v.location.column}-${v.location.row}` : (v.physicalLocation ?? null),
     reason: vehicleReasons.get(v.id) ?? null,
     recurringDays: recurringByVehicle.get(v.id) ?? null,
-  }));
+    nextMaintDate: m?.nextDate ? m.nextDate.toISOString().slice(0, 10) : null,
+    maint: m ? { serviceType: m.serviceType, location: m.location, hours: m.hours, contactName: m.contactName, contactPhone: m.contactPhone, notes: m.notes } : null,
+  }; });
   const byTypeData: TypeRow[] = [...byType.values()].sort((a, b) => b.total - a.total)
     .map((s) => ({ typeName: s.typeName, total: s.total, ok: s.ok, defectiveAtTana: s.defectiveAtTana, signedToSoldier: s.signedToSoldier }));
   const numByVid = new Map(vehiclesData.map((v) => [v.id, v.num]));
@@ -297,7 +308,7 @@ export default async function MaintenancePage({
         <p className="text-xs text-blue-700 mb-2">🔍 מוסתרים {allVehicles.length - filteredVehicles.length} רכבים שנשלחו לטנא ע״י קצין הרכב</p>
       )}
 
-      <MaintenanceTabs vehicles={vehiclesData} byType={byTypeData} history={historyData} />
+      <MaintenanceTabs vehicles={vehiclesData} byType={byTypeData} history={historyData} canEdit={isAdmin || !!isTanaRep} />
     </div>
   );
 }
