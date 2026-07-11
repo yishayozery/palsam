@@ -21,7 +21,7 @@ export default function PublicDriverForms({ soldier, forms, photos, token }: { s
     lastName: soldier.lastName, firstName: soldier.firstName, fullName: soldier.fullName, personalNumber: soldier.personalNumber,
     company: soldier.company, role: soldier.role, civLicNumber: soldier.civilianLicenseNumber, civLicGrade: soldier.civilianLicenseGrade, civLicExpiry: soldier.civilianLicenseExpiry,
   };
-  const now = Date.now();
+  const [now] = useState(() => Date.now());
   const statusOf = (r: FormRec) => {
     if (!r.filledAt) return { icon: "⚪", cls: "text-slate-400", label: "טרם מולא" };
     if (r.validUntil && new Date(r.validUntil).getTime() < now) return { icon: "🔴", cls: "text-rose-600", label: "פג — יש למלא שוב" };
@@ -41,6 +41,13 @@ export default function PublicDriverForms({ soldier, forms, photos, token }: { s
   return (
     <div className="space-y-3">
       <p className="text-xs text-slate-500 text-center mb-2">מלא/י וחתום/י על הטפסים ושלח/י צילומי רישיון.</p>
+
+      {/* הנחיה למצלמה — הדפדפן הפנימי של טלגרם חוסם מצלמה */}
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 leading-relaxed">
+        📸 <b>המצלמה נפתחת שחורה?</b> זו מגבלה של הדפדפן הפנימי של טלגרם.
+        לחצו על <b>⋮</b> (שלוש נקודות למעלה) ◄ <b>&quot;פתח בדפדפן&quot;</b> / &quot;Open in Browser&quot;, ושם הצילום יעבוד תקין.
+        <div className="mt-1 text-amber-700">אפשר גם לבחור &quot;גלריה&quot; ולצלם קודם עם אפליקציית המצלמה.</div>
+      </div>
 
       {/* צילומי רישיון */}
       <div className="border border-slate-200 rounded-xl p-3">

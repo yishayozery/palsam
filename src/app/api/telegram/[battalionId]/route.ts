@@ -840,6 +840,23 @@ async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, 
     select: { serialNumber: true, lotQuantity: true, itemType: { select: { name: true } } },
     orderBy: { itemType: { name: "asc" } },
   });
+  // 📝 תעודות הממתינות לחתימת החייל (transfer/העברה/דלק וכו')
+  const pendingSigs = await prisma.signature.findMany({
+    where: { soldierId: soldier.id, status: "PENDING", OR: [{ tokenExpires: null }, { tokenExpires: { gt: new Date() } }] },
+    orderBy: { createdAt: "desc" },
+    select: { token: true, transfer: { select: { reason: true, lines: { select: { itemType: { select: { name: true } } }, take: 3 } } } },
+  });
+  if (pendingSigs.length > 0) {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+    lines.push("");
+    lines.push(`<b>📝 תעודות הממתינות לחתימתך (${pendingSigs.length}):</b>`);
+    for (const s of pendingSigs) {
+      const items = s.transfer?.lines.map((l) => l.itemType.name).filter(Boolean).join(", ");
+      const label = s.transfer?.reason || items || "תעודת ציוד";
+      lines.push(`• <a href="${baseUrl}/sign/${s.token}">✍️ ${label}</a>`);
+    }
+  }
+
   lines.push("");
   if (serialItems.length > 0) {
     lines.push(`<b>🔫 צל"ם סריאלי חתום (${serialItems.length}):</b>`);
