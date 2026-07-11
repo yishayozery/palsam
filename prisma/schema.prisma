@@ -2445,6 +2445,8 @@ model VehicleFault {
   category            VehicleFaultCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   description         String     // תיאור התקלה
   stage              String     @default("reported") // מפתח השלב הנוכחי במחזור
+  originHolderId     String?    // הפלוגה שהרכב חזר אליה כשהתיק נסגר (לפני המשיכה לטנא)
+  atTana             Boolean    @default(false) // האם הרכב עבר פיזית לטנא במסגרת התיק
   openedById         String?
   openedAt           DateTime   @default(now())
   closedAt           DateTime?  // מלא כשהתקלה נסגרה (נמסר לפלוגה)

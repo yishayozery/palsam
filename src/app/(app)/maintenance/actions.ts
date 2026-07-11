@@ -272,14 +272,14 @@ export async function reportVehicleFault(formData: FormData): Promise<{ ok?: boo
     const description = String(formData.get("description") || "").trim();
     const notify = formData.get("notify") === "on" || formData.get("notify") === "true";
     if (!vehicleSerialUnitId || !description) return { error: "חסר רכב / תיאור תקלה" };
-    const unit = await prisma.serialUnit.findUnique({ where: { id: vehicleSerialUnitId }, select: { battalionId: true } });
+    const unit = await prisma.serialUnit.findUnique({ where: { id: vehicleSerialUnitId }, select: { battalionId: true, currentHolderId: true } });
     if (!unit || unit.battalionId !== bId) return { error: "רכב לא נמצא" };
     const categoryId = await resolveCategory(bId, String(formData.get("categoryId") || ""), String(formData.get("newCategory") || ""), user.id);
 
     const fault = await prisma.$transaction(async (tx) => {
       const last = await tx.vehicleFault.findFirst({ where: { battalionId: bId }, orderBy: { faultNumber: "desc" }, select: { faultNumber: true } });
       const faultNumber = (last?.faultNumber ?? 0) + 1;
-      const f = await tx.vehicleFault.create({ data: { battalionId: bId, faultNumber, vehicleSerialUnitId, categoryId, description, stage: "reported", openedById: user.id } });
+      const f = await tx.vehicleFault.create({ data: { battalionId: bId, faultNumber, vehicleSerialUnitId, categoryId, description, stage: "reported", openedById: user.id, originHolderId: unit.currentHolderId } });
       await tx.vehicleFaultEvent.create({ data: { faultId: f.id, stage: "reported", note: description, createdById: user.id, createdByName: user.fullName } });
       return f;
     });
@@ -304,17 +304,45 @@ export async function advanceVehicleFault(formData: FormData): Promise<{ ok?: bo
     const stage = String(formData.get("stage") || "");
     const note = String(formData.get("note") || "").trim() || null;
     if (!faultId || !FAULT_STAGE_KEYS.includes(stage)) return { error: "שלב לא תקין" };
-    const fault = await prisma.vehicleFault.findUnique({ where: { id: faultId }, select: { battalionId: true, vehicleSerialUnitId: true } });
-    if (!fault || fault.battalionId !== bId) return { error: "תיק לא נמצא" };
-
-    const closing = stage === CLOSED_STAGE;
-    await prisma.$transaction(async (tx) => {
-      await tx.vehicleFault.update({ where: { id: faultId }, data: { stage, closedAt: closing ? new Date() : null } });
-      await tx.vehicleFaultEvent.create({ data: { faultId, stage, note, createdById: user.id, createdByName: user.fullName } });
+    const fault = await prisma.vehicleFault.findUnique({
+      where: { id: faultId },
+      select: { battalionId: true, vehicleSerialUnitId: true, faultNumber: true, originHolderId: true, atTana: true,
+        vehicleSerialUnit: { select: { itemTypeId: true, lotQuantity: true, currentHolderId: true, statusId: true } } },
     });
-    if (closing) { const okId = await findOkStatusId(bId); if (okId) await prisma.serialUnit.update({ where: { id: fault.vehicleSerialUnitId }, data: { statusId: okId } }); }
-    await audit(user.id, "ADVANCE_VEHICLE_FAULT", "VehicleFault", faultId, { stage });
+    if (!fault || fault.battalionId !== bId) return { error: "תיק לא נמצא" };
+    const su = fault.vehicleSerialUnit;
+
+    // שלבים בהם הרכב פיזית בטנא
+    const AT_TANA_STAGES = ["pulled", "in-service", "waiting-parts", "post-check", "returning"];
+    const closing = stage === CLOSED_STAGE;
+    const tana = await findTanaHolder(bId);
+    const enterTana = !!tana && AT_TANA_STAGES.includes(stage) && !fault.atTana;
+    const exitTana = closing && fault.atTana;
+    const defId = enterTana ? await findDefectiveStatusId(bId) : null;
+    const okId = closing ? await findOkStatusId(bId) : null;
+    const backTo = fault.originHolderId ?? su.currentHolderId;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.vehicleFault.update({ where: { id: faultId }, data: { stage, closedAt: closing ? new Date() : null, atTana: enterTana ? true : exitTana ? false : fault.atTana } });
+      await tx.vehicleFaultEvent.create({ data: { faultId, stage, note, createdById: user.id, createdByName: user.fullName } });
+      if (enterTana) {
+        await tx.serialUnit.update({ where: { id: fault.vehicleSerialUnitId }, data: { currentHolderId: tana!.id, ...(defId ? { statusId: defId } : {}) } });
+        await tx.transfer.create({ data: { battalionId: bId, type: "ISSUE", status: "COMPLETED", fromHolderId: su.currentHolderId, toHolderId: tana!.id,
+          reason: `משיכה לטנא — תקלה #${fault.faultNumber}`, createdById: user.id, approvedById: user.id, approvedAt: new Date(),
+          lines: { create: { itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: fault.vehicleSerialUnitId, statusId: defId ?? su.statusId } } } });
+      } else if (exitTana) {
+        await tx.serialUnit.update({ where: { id: fault.vehicleSerialUnitId }, data: { ...(backTo ? { currentHolderId: backTo } : {}), ...(okId ? { statusId: okId } : {}) } });
+        await tx.transfer.create({ data: { battalionId: bId, type: "RETURN", status: "COMPLETED", fromHolderId: su.currentHolderId, toHolderId: backTo,
+          reason: `החזרה מהטנא — תקלה #${fault.faultNumber} נסגרה`, createdById: user.id, approvedById: user.id, approvedAt: new Date(),
+          lines: { create: { itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: fault.vehicleSerialUnitId, statusId: okId ?? su.statusId } } } });
+      } else if (closing && okId) {
+        // סגירה בלי שהרכב עבר פיזית לטנא — רק סטטוס לתקין
+        await tx.serialUnit.update({ where: { id: fault.vehicleSerialUnitId }, data: { statusId: okId } });
+      }
+    });
+    await audit(user.id, "ADVANCE_VEHICLE_FAULT", "VehicleFault", faultId, { stage, enterTana, exitTana });
     revalidatePath("/maintenance");
+    revalidatePath("/stock");
     return { ok: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "שגיאה" };
