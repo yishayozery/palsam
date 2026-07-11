@@ -257,7 +257,6 @@ export async function POST(
         return NextResponse.json({ ok: true });
       }
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
-      const webAppUrl = `${baseUrl}/bot/dispatch/${battalionId}`;
 
       const dispatchToken = nanoid(32);
       await prisma.dispatchToken.create({
@@ -265,19 +264,16 @@ export async function POST(
           token: dispatchToken,
           battalionId,
           expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
-          maxUses: 10,
+          maxUses: 20,
         },
       });
       const openUrl = `${baseUrl}/dispatch-open/${dispatchToken}`;
 
       await sendTelegramMessage(token, chatId,
         `🚗 <b>פתיחת משימה (שבצ"ק)</b>\n\n` +
-        `שיירה עם רכב אחד או יותר — בדיוק כמו במערכת: רכבי מערכת/חוץ, שבצ"ק קבוע, תפקידים ונהג.\n` +
-        `לחץ על הכפתור למטה לפתיחת הטופס,\n` +
-        `או <a href="${openUrl}">לחץ כאן לפתיחה בדפדפן</a> 🔗\n\n` +
-        `<i>🔒 הקישור תקף ל-24 שעות</i>`, {
-        inline_keyboard: [[{ text: "📝 פתח טופס משימה", web_app: { url: webAppUrl } }]],
-      });
+        `אשף שלב-אחר-שלב לשיירה — רכב אחד או יותר, בדיוק כמו במערכת (מערכת/חוץ, שבצ"ק קבוע, תפקידים ונהג).\n\n` +
+        `👉 <a href="${openUrl}">לחץ כאן לפתיחת האשף</a>\n\n` +
+        `<i>🔒 הקישור תקף ל-24 שעות</i>`);
       return NextResponse.json({ ok: true });
     }
 
