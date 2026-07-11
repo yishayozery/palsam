@@ -66,6 +66,10 @@ export default function MaintenanceTabs({ vehicles, byType, history, canEdit, fa
       .sort((a, b) => (a.date < b.date ? 1 : -1));
   }, [history, hq, histOnlyRecurring]);
 
+  const historySerials = useMemo(() => new Set(history.map((h) => h.serial)), [history]);
+  // מעבר להיסטוריית טיפולים מסוננת לרכב מסוים
+  const openHistory = (serial: string) => { setHq(serial); setHistOnlyRecurring(false); setTab("history"); setFaultVeh(null); setEditVeh(null); setReportVeh(null); };
+
   const tabCls = (id: typeof tab) => `px-4 py-2 text-sm font-medium whitespace-nowrap ${tab === id ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`;
 
   return (
@@ -117,7 +121,9 @@ export default function MaintenanceTabs({ vehicles, byType, history, canEdit, fa
                         <td className="px-3 py-2 font-medium whitespace-nowrap">🚙 {v.typeName}
                           {v.recurringDays != null && <span title={`חזר לטנא תוך ${v.recurringDays} ימים מהתיקון הקודם`} className="mr-1 text-[10px] bg-rose-600 text-white rounded px-1.5 py-0.5 font-bold">🔁 חזרה {v.recurringDays}י׳</span>}
                         </td>
-                        <td className="px-3 py-2 font-mono text-xs">{v.serial}</td>
+                        <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{v.serial}
+                          {historySerials.has(v.serial) && <button onClick={() => openHistory(v.serial)} title="היסטוריית טיפולים של הרכב" className="mr-1 text-blue-600 hover:text-blue-800">📜</button>}
+                        </td>
                         <td className="px-3 py-2"><Badge className={toneCls[v.statusTone]}>{v.statusName}</Badge></td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           {v.fault ? (
@@ -222,7 +228,7 @@ export default function MaintenanceTabs({ vehicles, byType, history, canEdit, fa
 
       {editVeh && <MaintModal veh={editVeh} onClose={() => setEditVeh(null)} />}
       {reportVeh && <ReportFaultModal veh={reportVeh} cats={faultCategories} onClose={() => setReportVeh(null)} />}
-      {faultVeh?.fault && <FaultModal veh={faultVeh} onClose={() => setFaultVeh(null)} />}
+      {faultVeh?.fault && <FaultModal veh={faultVeh} onClose={() => setFaultVeh(null)} onHistory={() => openHistory(faultVeh.serial)} />}
     </div>
   );
 }
@@ -270,7 +276,7 @@ function ReportFaultModal({ veh, cats, onClose }: { veh: VehRow; cats: FaultCat[
 }
 
 /** ניהול תיק תקלה — מחזור סטטוסים, הערות, שליחה לחייל, היסטוריה. */
-function FaultModal({ veh, onClose }: { veh: VehRow; onClose: () => void }) {
+function FaultModal({ veh, onClose, onHistory }: { veh: VehRow; onClose: () => void; onHistory: () => void }) {
   const router = useRouter();
   const f = veh.fault!;
   const [pending, start] = useTransition();
@@ -316,9 +322,12 @@ function FaultModal({ veh, onClose }: { veh: VehRow; onClose: () => void }) {
             {msg && <p className="text-xs mt-2 text-slate-600">{msg}</p>}
           </div>
 
-          {/* היסטוריית התיק */}
+          {/* קישור להיסטוריית הרכב */}
+          <button onClick={onHistory} className="text-xs text-blue-600 hover:underline">📜 היסטוריית טיפולים של הרכב ({veh.serial}) ←</button>
+
+          {/* היסטוריית התיק הנוכחי */}
           <div>
-            <div className="text-xs font-bold text-slate-500 mb-1">📜 יומן התיק</div>
+            <div className="text-xs font-bold text-slate-500 mb-1">📋 יומן התקלה הנוכחית (#{f.faultNumber})</div>
             <div className="space-y-1 max-h-52 overflow-y-auto">
               {[...f.events].reverse().map((e, i) => (
                 <div key={i} className="text-xs border-r-2 border-slate-200 pr-2 py-0.5">
