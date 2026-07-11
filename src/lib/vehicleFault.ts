@@ -11,5 +11,12 @@ export const FAULT_STAGES: { key: string; label: string; short: string; tone: st
 ];
 export const FAULT_STAGE_KEYS = FAULT_STAGES.map((s) => s.key);
 export const CLOSED_STAGE = "delivered";
+
+/** קטגוריות תקלה ברירת-מחדל (ניתנות לעריכה בגדוד). */
+export const DEFAULT_FAULT_CATEGORIES = [
+  "🔧 מנוע", "🛑 בלמים", "⚡ חשמל", "🛞 צמיגים/גלגלים", "🎛️ היגוי", "⚙️ מסרה/הילוכים",
+  "🚗 מרכב/פחחות", "⛽ מערכת דלק", "🌡️ קירור/מיזוג", "🔩 מתלים/בולמים",
+  "💥 תאונה/נזק", "🗓️ טיפול תקופתי", "❓ לא מאובחן/אחר",
+];
 export function stageInfo(key: string) { return FAULT_STAGES.find((s) => s.key === key) ?? { key, label: key, short: key, tone: "bg-slate-100 text-slate-700" }; }
 export function stageIndex(key: string) { return FAULT_STAGES.findIndex((s) => s.key === key); }

@@ -9,7 +9,8 @@ import { FAULT_STAGES, stageInfo, stageIndex, CLOSED_STAGE } from "@/lib/vehicle
 
 export type Maint = { serviceType: string | null; location: string | null; hours: string | null; contactName: string | null; contactPhone: string | null; notes: string | null };
 export type FaultEvent = { stage: string; note: string | null; by: string | null; at: string };
-export type Fault = { id: string; faultNumber: number; stage: string; description: string; hasSignedSoldier: boolean; events: FaultEvent[] };
+export type Fault = { id: string; faultNumber: number; stage: string; description: string; categoryName: string | null; hasSignedSoldier: boolean; events: FaultEvent[] };
+export type FaultCat = { id: string; name: string };
 export type VehRow = {
   id: string; num: number; typeName: string; serial: string;
   statusName: string; statusTone: "ok" | "wear" | "loss";
@@ -27,13 +28,14 @@ function fmt(d: string) { return new Date(d).toLocaleString("he-IL", { day: "2-d
 
 function daysUntil(d: string) { return Math.ceil((new Date(d + "T00:00:00").getTime() - Date.now()) / 86400000); }
 
-export default function MaintenanceTabs({ vehicles, byType, history, canEdit }: { vehicles: VehRow[]; byType: TypeRow[]; history: VehHist[]; canEdit: boolean }) {
+export default function MaintenanceTabs({ vehicles, byType, history, canEdit, faultCategories }: { vehicles: VehRow[]; byType: TypeRow[]; history: VehHist[]; canEdit: boolean; faultCategories: FaultCat[] }) {
   const [tab, setTab] = useState<"all" | "type" | "history">("all");
   const [q, setQ] = useState("");
   const [hq, setHq] = useState("");
   const [onlyRepair, setOnlyRepair] = useState(false);
   const [compFilter, setCompFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [catFilter, setCatFilter] = useState("");
   const [editVeh, setEditVeh] = useState<VehRow | null>(null);
   const [faultVeh, setFaultVeh] = useState<VehRow | null>(null);
   const [reportVeh, setReportVeh] = useState<VehRow | null>(null);
@@ -49,9 +51,10 @@ export default function MaintenanceTabs({ vehicles, byType, history, canEdit }: 
       (!onlyRepair || isInRepair(v)) &&
       (!compFilter || v.holderLabel === compFilter) &&
       (!statusFilter || v.statusName === statusFilter) &&
+      (!catFilter || v.fault?.categoryName === catFilter) &&
       (!s || v.typeName.includes(s) || v.serial.includes(s) || v.holderLabel.includes(s) || (v.signedSoldier ?? "").includes(s) || v.statusName.includes(s) || (v.fault ? `#${v.fault.faultNumber}`.includes(s) || v.fault.description.includes(s) : false)),
     );
-  }, [vehicles, q, onlyRepair, compFilter, statusFilter]);
+  }, [vehicles, q, onlyRepair, compFilter, statusFilter, catFilter]);
 
   const [histOnlyRecurring, setHistOnlyRecurring] = useState(false);
   // שיטוח היסטוריה לשורות + סינון (מ.ס./סוג/סיבה + חזרות מהירות)
@@ -87,11 +90,15 @@ export default function MaintenanceTabs({ vehicles, byType, history, canEdit }: 
               <option value="">כל הסטטוסים</option>
               {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
+            <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
+              <option value="">כל קטגוריות התקלה</option>
+              {faultCategories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </select>
             <label className={`inline-flex items-center gap-1.5 text-sm rounded-lg px-3 py-2 cursor-pointer border ${onlyRepair ? "bg-orange-100 border-orange-300 text-orange-800 font-medium" : "bg-white border-slate-300 text-slate-600"}`}>
               <input type="checkbox" checked={onlyRepair} onChange={(e) => setOnlyRepair(e.target.checked)} className="accent-orange-600" />
               🔧 רק בטיפול ({inRepairCount})
             </label>
-            {(compFilter || statusFilter || onlyRepair || q) && <button onClick={() => { setQ(""); setCompFilter(""); setStatusFilter(""); setOnlyRepair(false); }} className="text-xs text-slate-500 hover:text-rose-600 underline">נקה</button>}
+            {(compFilter || statusFilter || catFilter || onlyRepair || q) && <button onClick={() => { setQ(""); setCompFilter(""); setStatusFilter(""); setCatFilter(""); setOnlyRepair(false); }} className="text-xs text-slate-500 hover:text-rose-600 underline">נקה</button>}
             <span className="text-xs text-slate-400">{filtered.length} רכבים</span>
           </div>
           <Card>
@@ -214,17 +221,18 @@ export default function MaintenanceTabs({ vehicles, byType, history, canEdit }: 
       )}
 
       {editVeh && <MaintModal veh={editVeh} onClose={() => setEditVeh(null)} />}
-      {reportVeh && <ReportFaultModal veh={reportVeh} onClose={() => setReportVeh(null)} />}
+      {reportVeh && <ReportFaultModal veh={reportVeh} cats={faultCategories} onClose={() => setReportVeh(null)} />}
       {faultVeh?.fault && <FaultModal veh={faultVeh} onClose={() => setFaultVeh(null)} />}
     </div>
   );
 }
 
 /** דיווח תקלה חדשה — פותח תיק עם מספר רץ. */
-function ReportFaultModal({ veh, onClose }: { veh: VehRow; onClose: () => void }) {
+function ReportFaultModal({ veh, cats, onClose }: { veh: VehRow; cats: FaultCat[]; onClose: () => void }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+  const [catId, setCatId] = useState("");
   function submit(fd: FormData) {
     setErr(null); fd.set("vehicleSerialUnitId", veh.id);
     start(async () => { const r = await reportVehicleFault(fd); if (r?.error) { setErr(r.error); return; } onClose(); router.refresh(); });
@@ -234,6 +242,14 @@ function ReportFaultModal({ veh, onClose }: { veh: VehRow; onClose: () => void }
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md my-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b"><h3 className="font-bold text-slate-800">🔴 דיווח תקלה — {veh.typeName} · {veh.serial}</h3><button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-xl">✕</button></div>
         <form action={submit} className="p-4 space-y-3">
+          <label className="text-sm block">קטגוריית תקלה
+            <select name="categoryId" value={catId} onChange={(e) => setCatId(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white">
+              <option value="">— בחר/י קטגוריה —</option>
+              {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              <option value="__other__">➕ אחר (קטגוריה חדשה)…</option>
+            </select>
+          </label>
+          {catId === "__other__" && <input name="newCategory" placeholder="שם קטגוריה חדשה" className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />}
           <label className="text-sm block">תיאור התקלה
             <textarea name="description" rows={3} required placeholder="מה התקלה?" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
           </label>
@@ -276,7 +292,10 @@ function FaultModal({ veh, onClose }: { veh: VehRow; onClose: () => void }) {
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-xl">✕</button>
         </div>
         <div className="p-4 space-y-4">
-          <div className="bg-slate-50 rounded-lg p-3 text-sm"><b>תיאור:</b> {f.description}</div>
+          <div className="bg-slate-50 rounded-lg p-3 text-sm">
+            {f.categoryName && <div className="mb-1"><span className="text-[11px] bg-slate-200 text-slate-700 rounded px-2 py-0.5">{f.categoryName}</span></div>}
+            <b>תיאור:</b> {f.description}
+          </div>
 
           {/* מחוון שלבים */}
           <div className="flex flex-wrap gap-1">

@@ -235,6 +235,34 @@ async function notifyFaultSoldier(faultId: string, bId: string) {
   return true;
 }
 
+/** יצירת קטגוריות תקלה ברירת-מחדל אם אין. */
+export async function ensureFaultCategories(battalionId: string) {
+  const cnt = await prisma.vehicleFaultCategory.count({ where: { battalionId } });
+  if (cnt > 0) return;
+  const { DEFAULT_FAULT_CATEGORIES } = await import("@/lib/vehicleFault");
+  await prisma.vehicleFaultCategory.createMany({
+    data: DEFAULT_FAULT_CATEGORIES.map((name, i) => ({ battalionId, name, sortOrder: i })),
+    skipDuplicates: true,
+  });
+}
+
+/** הוספת קטגוריית תקלה חדשה (מ"אחר"). מחזיר את ה-id. */
+async function resolveCategory(bId: string, categoryIdRaw: string, newName: string, userId: string): Promise<string | null> {
+  const categoryId = categoryIdRaw === "__other__" ? "" : categoryIdRaw;
+  if (categoryId) {
+    const c = await prisma.vehicleFaultCategory.findFirst({ where: { id: categoryId, battalionId: bId }, select: { id: true } });
+    return c?.id ?? null;
+  }
+  const name = newName.trim();
+  if (!name) return null;
+  const existing = await prisma.vehicleFaultCategory.findFirst({ where: { battalionId: bId, name }, select: { id: true } });
+  if (existing) return existing.id;
+  const max = await prisma.vehicleFaultCategory.aggregate({ where: { battalionId: bId }, _max: { sortOrder: true } });
+  const created = await prisma.vehicleFaultCategory.create({ data: { battalionId: bId, name, sortOrder: (max._max.sortOrder ?? 0) + 1 } });
+  await audit(userId, "CREATE_FAULT_CATEGORY", "VehicleFaultCategory", created.id, { name });
+  return created.id;
+}
+
 /** דיווח תקלה חדשה על רכב — פותח תיק תקלה עם מספר רץ. */
 export async function reportVehicleFault(formData: FormData): Promise<{ ok?: boolean; error?: string; faultNumber?: number }> {
   try {
@@ -246,11 +274,12 @@ export async function reportVehicleFault(formData: FormData): Promise<{ ok?: boo
     if (!vehicleSerialUnitId || !description) return { error: "חסר רכב / תיאור תקלה" };
     const unit = await prisma.serialUnit.findUnique({ where: { id: vehicleSerialUnitId }, select: { battalionId: true } });
     if (!unit || unit.battalionId !== bId) return { error: "רכב לא נמצא" };
+    const categoryId = await resolveCategory(bId, String(formData.get("categoryId") || ""), String(formData.get("newCategory") || ""), user.id);
 
     const fault = await prisma.$transaction(async (tx) => {
       const last = await tx.vehicleFault.findFirst({ where: { battalionId: bId }, orderBy: { faultNumber: "desc" }, select: { faultNumber: true } });
       const faultNumber = (last?.faultNumber ?? 0) + 1;
-      const f = await tx.vehicleFault.create({ data: { battalionId: bId, faultNumber, vehicleSerialUnitId, description, stage: "reported", openedById: user.id } });
+      const f = await tx.vehicleFault.create({ data: { battalionId: bId, faultNumber, vehicleSerialUnitId, categoryId, description, stage: "reported", openedById: user.id } });
       await tx.vehicleFaultEvent.create({ data: { faultId: f.id, stage: "reported", note: description, createdById: user.id, createdByName: user.fullName } });
       return f;
     });

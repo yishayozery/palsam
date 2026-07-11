@@ -218,10 +218,15 @@ export default async function MaintenancePage({
   });
   const maintBy = new Map(maintList.map((m) => [m.vehicleSerialUnitId, m]));
 
-  // תיקי תקלה פתוחים (מחזור סטטוסים)
+  // קטגוריות תקלה (זריעת ברירות-מחדל) + תיקי תקלה פתוחים
+  const { ensureFaultCategories } = await import("./actions");
+  await ensureFaultCategories(bId);
+  const faultCategories = await prisma.vehicleFaultCategory.findMany({
+    where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true },
+  });
   const openFaults = await prisma.vehicleFault.findMany({
     where: { battalionId: bId, closedAt: null },
-    include: { events: { orderBy: { createdAt: "asc" }, select: { stage: true, note: true, createdByName: true, createdAt: true } } },
+    include: { category: { select: { name: true } }, events: { orderBy: { createdAt: "asc" }, select: { stage: true, note: true, createdByName: true, createdAt: true } } },
   });
   const faultBy = new Map(openFaults.map((f) => [f.vehicleSerialUnitId, f]));
 
@@ -244,6 +249,7 @@ export default async function MaintenancePage({
     maint: m ? { serviceType: m.serviceType, location: m.location, hours: m.hours, contactName: m.contactName, contactPhone: m.contactPhone, notes: m.notes } : null,
     fault: f ? {
       id: f.id, faultNumber: f.faultNumber, stage: f.stage, description: f.description,
+      categoryName: f.category?.name ?? null,
       hasSignedSoldier: !!v.signedSoldier,
       events: f.events.map((e) => ({ stage: e.stage, note: e.note, by: e.createdByName ?? null, at: e.createdAt.toISOString() })),
     } : null,
@@ -321,7 +327,7 @@ export default async function MaintenancePage({
         <p className="text-xs text-blue-700 mb-2">🔍 מוסתרים {allVehicles.length - filteredVehicles.length} רכבים שנשלחו לטנא ע״י קצין הרכב</p>
       )}
 
-      <MaintenanceTabs vehicles={vehiclesData} byType={byTypeData} history={historyData} canEdit={isAdmin || !!isTanaRep} />
+      <MaintenanceTabs vehicles={vehiclesData} byType={byTypeData} history={historyData} canEdit={isAdmin || !!isTanaRep} faultCategories={faultCategories} />
     </div>
   );
 }

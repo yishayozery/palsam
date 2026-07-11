@@ -149,6 +149,7 @@ model Battalion {
   vehicleMaintenances         VehicleMaintenance[]
   botNotificationRules        BotNotificationRule[]
   vehicleFaults               VehicleFault[]
+  vehicleFaultCategories      VehicleFaultCategory[]
   tripLink                    String? // קישור "פתיחת משימת נסיעה" שנשלח לנהגים בבוט עם השיבוץ למשימה
   drivingProcedureText        String? // נוסח נוהל נהיגה לחתימת נהגים (מוצג בבוט + קצין רכב)
   drivingProcedureUpdatedAt   DateTime? // מתי עודכן הנוסח — חתימה מלפני התאריך נחשבת לא-תקפה (גרסה חדשה → חתימה מחדש)
@@ -2440,6 +2441,8 @@ model VehicleFault {
   faultNumber         Int        // מספר תקלה רץ בגדוד
   vehicleSerialUnitId String
   vehicleSerialUnit   SerialUnit @relation("VehicleFaultUnit", fields: [vehicleSerialUnitId], references: [id], onDelete: Cascade)
+  categoryId          String?
+  category            VehicleFaultCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   description         String     // תיאור התקלה
   stage              String     @default("reported") // מפתח השלב הנוכחי במחזור
   openedById         String?
@@ -2450,6 +2453,21 @@ model VehicleFault {
   @@unique([battalionId, faultNumber])
   @@index([battalionId, closedAt])
   @@index([vehicleSerialUnitId])
+}
+
+/** קטגוריית תקלת רכב — טבלה ניתנת לעריכה (מגיעה עם ברירות מחדל + "אחר"). */
+model VehicleFaultCategory {
+  id          String    @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  name        String
+  sortOrder   Int       @default(0)
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  faults      VehicleFault[]
+
+  @@unique([battalionId, name])
+  @@index([battalionId])
 }
 
 /** אירוע בתיק התקלה — מעבר שלב או הערה. */
