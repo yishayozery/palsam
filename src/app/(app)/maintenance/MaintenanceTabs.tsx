@@ -35,16 +35,14 @@ export default function MaintenanceTabs({ vehicles, byType, history }: { vehicle
     return history.filter((h) => h.typeName.includes(s) || h.serial.includes(s));
   }, [history, hq]);
 
-  const TabBtn = ({ id, label }: { id: typeof tab; label: string }) => (
-    <button onClick={() => setTab(id)} className={`px-4 py-2 text-sm font-medium whitespace-nowrap ${tab === id ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>{label}</button>
-  );
+  const tabCls = (id: typeof tab) => `px-4 py-2 text-sm font-medium whitespace-nowrap ${tab === id ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`;
 
   return (
     <div>
-      <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden mb-3">
-        <TabBtn id="all" label={`🚙 כל הרכבים (${vehicles.length})`} />
-        <TabBtn id="type" label="📊 לפי סוג" />
-        <TabBtn id="history" label="📜 היסטוריית טיפולים" />
+      <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden mb-3 max-w-full overflow-x-auto">
+        <button onClick={() => setTab("all")} className={tabCls("all")}>🚙 כל הרכבים ({vehicles.length})</button>
+        <button onClick={() => setTab("type")} className={tabCls("type")}>📊 לפי סוג</button>
+        <button onClick={() => setTab("history")} className={tabCls("history")}>📜 היסטוריית טיפולים</button>
       </div>
 
       {/* ===== כל הרכבים ===== */}
