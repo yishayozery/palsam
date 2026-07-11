@@ -22,12 +22,16 @@ export default function MaintenanceTabs({ vehicles, byType, history }: { vehicle
   const [tab, setTab] = useState<"all" | "type" | "history">("all");
   const [q, setQ] = useState("");
   const [hq, setHq] = useState("");
+  const [onlyRepair, setOnlyRepair] = useState(false);
 
+  const inRepairCount = useMemo(() => vehicles.filter((v) => v.atTana).length, [vehicles]);
   const filtered = useMemo(() => {
     const s = q.trim();
-    if (!s) return vehicles;
-    return vehicles.filter((v) => v.typeName.includes(s) || v.serial.includes(s) || v.holderLabel.includes(s) || (v.signedSoldier ?? "").includes(s) || v.statusName.includes(s));
-  }, [vehicles, q]);
+    return vehicles.filter((v) =>
+      (!onlyRepair || v.atTana) &&
+      (!s || v.typeName.includes(s) || v.serial.includes(s) || v.holderLabel.includes(s) || (v.signedSoldier ?? "").includes(s) || v.statusName.includes(s)),
+    );
+  }, [vehicles, q, onlyRepair]);
 
   const filteredHist = useMemo(() => {
     const s = hq.trim();
@@ -48,8 +52,14 @@ export default function MaintenanceTabs({ vehicles, byType, history }: { vehicle
       {/* ===== כל הרכבים ===== */}
       {tab === "all" && (
         <>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 חיפוש לפי סוג / מ.ס. / שייכות / חייל / סטטוס…"
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-3" />
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 חיפוש לפי סוג / מ.ס. / שייכות / חייל / סטטוס…"
+              className="flex-1 min-w-[180px] border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <label className={`inline-flex items-center gap-1.5 text-sm rounded-lg px-3 py-2 cursor-pointer border ${onlyRepair ? "bg-orange-100 border-orange-300 text-orange-800 font-medium" : "bg-white border-slate-300 text-slate-600"}`}>
+              <input type="checkbox" checked={onlyRepair} onChange={(e) => setOnlyRepair(e.target.checked)} className="accent-orange-600" />
+              🔧 רק בטיפול ({inRepairCount})
+            </label>
+          </div>
           <Card>
             {filtered.length === 0 ? <EmptyState>אין רכבים תואמים</EmptyState> : (
               <div className="overflow-x-auto">
