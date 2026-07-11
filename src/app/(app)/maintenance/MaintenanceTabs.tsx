@@ -29,22 +29,34 @@ export default function MaintenanceTabs({ vehicles, byType, history, canEdit }: 
   const [q, setQ] = useState("");
   const [hq, setHq] = useState("");
   const [onlyRepair, setOnlyRepair] = useState(false);
+  const [compFilter, setCompFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [editVeh, setEditVeh] = useState<VehRow | null>(null);
 
-  const inRepairCount = useMemo(() => vehicles.filter((v) => v.atTana).length, [vehicles]);
+  const compOptions = useMemo(() => [...new Set(vehicles.map((v) => v.holderLabel))].sort((a, b) => a.localeCompare(b, "he")), [vehicles]);
+  const statusOptions = useMemo(() => [...new Set(vehicles.map((v) => v.statusName))].sort((a, b) => a.localeCompare(b, "he")), [vehicles]);
+  // "בטיפול" = נמצא בטנא וגם לא תקין
+  const isInRepair = (v: VehRow) => v.atTana && v.statusTone !== "ok";
+  const inRepairCount = useMemo(() => vehicles.filter(isInRepair).length, [vehicles]);
   const filtered = useMemo(() => {
     const s = q.trim();
     return vehicles.filter((v) =>
-      (!onlyRepair || v.atTana) &&
+      (!onlyRepair || isInRepair(v)) &&
+      (!compFilter || v.holderLabel === compFilter) &&
+      (!statusFilter || v.statusName === statusFilter) &&
       (!s || v.typeName.includes(s) || v.serial.includes(s) || v.holderLabel.includes(s) || (v.signedSoldier ?? "").includes(s) || v.statusName.includes(s)),
     );
-  }, [vehicles, q, onlyRepair]);
+  }, [vehicles, q, onlyRepair, compFilter, statusFilter]);
 
-  const filteredHist = useMemo(() => {
+  const [histOnlyRecurring, setHistOnlyRecurring] = useState(false);
+  // שיטוח היסטוריה לשורות + סינון (מ.ס./סוג/סיבה + חזרות מהירות)
+  const histRows = useMemo(() => {
     const s = hq.trim();
-    if (!s) return history;
-    return history.filter((h) => h.typeName.includes(s) || h.serial.includes(s));
-  }, [history, hq]);
+    const rows = history.flatMap((h) => h.events.map((e) => ({ num: h.num, typeName: h.typeName, serial: h.serial, ...e })));
+    return rows
+      .filter((r) => (!histOnlyRecurring || r.gapDays != null) && (!s || r.serial.includes(s) || r.typeName.includes(s) || (r.reason ?? "").includes(s)))
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+  }, [history, hq, histOnlyRecurring]);
 
   const tabCls = (id: typeof tab) => `px-4 py-2 text-sm font-medium whitespace-nowrap ${tab === id ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`;
 
@@ -60,18 +72,28 @@ export default function MaintenanceTabs({ vehicles, byType, history, canEdit }: 
       {tab === "all" && (
         <>
           <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 חיפוש לפי סוג / מ.ס. / שייכות / חייל / סטטוס…"
-              className="flex-1 min-w-[180px] border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 חיפוש חופשי…"
+              className="flex-1 min-w-[150px] border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <select value={compFilter} onChange={(e) => setCompFilter(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
+              <option value="">כל השייכות</option>
+              {compOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
+              <option value="">כל הסטטוסים</option>
+              {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
             <label className={`inline-flex items-center gap-1.5 text-sm rounded-lg px-3 py-2 cursor-pointer border ${onlyRepair ? "bg-orange-100 border-orange-300 text-orange-800 font-medium" : "bg-white border-slate-300 text-slate-600"}`}>
               <input type="checkbox" checked={onlyRepair} onChange={(e) => setOnlyRepair(e.target.checked)} className="accent-orange-600" />
               🔧 רק בטיפול ({inRepairCount})
             </label>
+            {(compFilter || statusFilter || onlyRepair || q) && <button onClick={() => { setQ(""); setCompFilter(""); setStatusFilter(""); setOnlyRepair(false); }} className="text-xs text-slate-500 hover:text-rose-600 underline">נקה</button>}
+            <span className="text-xs text-slate-400">{filtered.length} רכבים</span>
           </div>
           <Card>
             {filtered.length === 0 ? <EmptyState>אין רכבים תואמים</EmptyState> : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
-                  <thead><tr className="bg-slate-100 text-slate-500 text-xs">
+                  <thead className="sticky top-0 z-10"><tr className="bg-slate-100 text-slate-500 text-xs [&>th]:sticky [&>th]:top-0 [&>th]:bg-slate-100">
                     <th className="px-2 py-2 text-center w-10">#</th><th className="px-3 py-2 text-right">רכב</th><th className="px-3 py-2 text-right">מ.ס.</th>
                     <th className="px-3 py-2 text-right">סטטוס</th><th className="px-3 py-2 text-right">שייכות</th><th className="px-3 py-2 text-right">חייל חתום</th>
                     <th className="px-3 py-2 text-right">מיקום</th><th className="px-3 py-2 text-right">🗓️ טיפול הבא</th><th className="px-3 py-2 text-right">תקלה אחרונה</th>
@@ -138,38 +160,40 @@ export default function MaintenanceTabs({ vehicles, byType, history, canEdit }: 
       {/* ===== היסטוריית טיפולים — מקושרת למספר הרכב ===== */}
       {tab === "history" && (
         <>
-          <input value={hq} onChange={(e) => setHq(e.target.value)} placeholder="🔍 חיפוש רכב לפי סוג / מ.ס.…"
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-3" />
-          {filteredHist.length === 0 ? <Card><EmptyState>אין היסטוריית טיפולים</EmptyState></Card> : (
-            <div className="space-y-3">
-              {filteredHist.map((h) => (
-                <Card key={h.id} className="overflow-hidden">
-                  <div className={`px-4 py-2 border-b flex items-center justify-between ${h.hasRecurring ? "bg-rose-50 border-rose-100" : "bg-slate-50 border-slate-100"}`}>
-                    <div className="font-bold text-slate-700 text-sm">
-                      <span className="text-slate-400 font-mono ml-1">#{h.num}</span> 🚙 {h.typeName} · <span className="font-mono">{h.serial}</span>
-                    </div>
-                    {h.hasRecurring && <span className="text-[10px] bg-rose-600 text-white rounded px-2 py-0.5 font-bold">🔁 חזרה מהירה</span>}
-                    <span className="text-xs text-slate-400">{h.events.length} אירועים</span>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <tbody className="divide-y divide-slate-100">
-                        {h.events.map((e, i) => (
-                          <tr key={i} className={e.gapDays != null ? "bg-rose-50" : ""}>
-                            <td className="px-3 py-1.5 text-xs text-slate-500 whitespace-nowrap">{fmt(e.date)}</td>
-                            <td className="px-3 py-1.5 whitespace-nowrap"><Badge className={e.kind === "in" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}>{e.kind === "in" ? "🔧 כניסה לטנא" : "✓ יציאה"}</Badge>
-                              {e.gapDays != null && <span title="חזרה לטנא זמן קצר אחרי תיקון" className="mr-1 text-[10px] bg-rose-600 text-white rounded px-1.5 py-0.5 font-bold">חזר תוך {e.gapDays}י׳</span>}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs text-slate-600 max-w-[220px] truncate"><span title={e.reason ?? ""}>{e.reason ?? "—"}</span></td>
-                            <td className="px-3 py-1.5"><Link href={`/transfers/${e.transferId}/document`} className="text-xs text-blue-600 hover:underline">תעודה</Link></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              ))}
-            </div>
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <input value={hq} onChange={(e) => setHq(e.target.value)} placeholder="🔍 חיפוש לפי מ.ס. / סוג / סיבת תקלה…"
+              className="flex-1 min-w-[180px] border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <label className={`inline-flex items-center gap-1.5 text-sm rounded-lg px-3 py-2 cursor-pointer border ${histOnlyRecurring ? "bg-rose-100 border-rose-300 text-rose-800 font-medium" : "bg-white border-slate-300 text-slate-600"}`}>
+              <input type="checkbox" checked={histOnlyRecurring} onChange={(e) => setHistOnlyRecurring(e.target.checked)} className="accent-rose-600" />
+              🔁 רק חזרות מהירות
+            </label>
+          </div>
+          {histRows.length === 0 ? <Card><EmptyState>אין היסטוריית טיפולים</EmptyState></Card> : (
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="sticky top-0 z-10"><tr className="bg-slate-100 text-slate-500 text-xs [&>th]:sticky [&>th]:top-0 [&>th]:bg-slate-100">
+                    <th className="px-2 py-2 text-center w-10">#</th><th className="px-3 py-2 text-right">רכב</th><th className="px-3 py-2 text-right">מ.ס.</th>
+                    <th className="px-3 py-2 text-right">תאריך</th><th className="px-3 py-2 text-right">אירוע</th><th className="px-3 py-2 text-right">סיבה / תקלה</th><th className="px-3 py-2"></th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {histRows.map((r, i) => (
+                      <tr key={i} className={r.gapDays != null ? "bg-rose-50" : "hover:bg-slate-50"}>
+                        <td className="px-2 py-1.5 text-center text-slate-400 font-mono">{r.num}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap">🚙 {r.typeName}</td>
+                        <td className="px-3 py-1.5 font-mono text-xs">{r.serial}</td>
+                        <td className="px-3 py-1.5 text-xs text-slate-500 whitespace-nowrap">{fmt(r.date)}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap"><Badge className={r.kind === "in" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}>{r.kind === "in" ? "🔧 כניסה לטנא" : "✓ יציאה"}</Badge>
+                          {r.gapDays != null && <span title="חזרה לטנא זמן קצר אחרי תיקון" className="mr-1 text-[10px] bg-rose-600 text-white rounded px-1.5 py-0.5 font-bold">חזר תוך {r.gapDays}י׳</span>}
+                        </td>
+                        <td className="px-3 py-1.5 text-xs text-slate-600 max-w-[240px] truncate"><span title={r.reason ?? ""}>{r.reason ?? "—"}</span></td>
+                        <td className="px-3 py-1.5"><Link href={`/transfers/${r.transferId}/document`} className="text-xs text-blue-600 hover:underline">תעודה</Link></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           )}
         </>
       )}
