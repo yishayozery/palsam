@@ -603,27 +603,6 @@ export default function SignoutModal({
                   </select>
                 </div>
               )}
-              <div>
-                <label className="block text-[11px] text-slate-600 mb-0.5">אופן חתימה</label>
-                <div className="flex gap-1.5 text-xs flex-wrap">
-                  {(["ONSITE", "QR", "LINK"] as const).map((m) => (
-                    <label key={m} className={`flex-1 min-w-[5rem] text-center px-2 py-1.5 rounded-lg border-2 cursor-pointer transition ${!retroactive && method === m ? "border-slate-800 bg-slate-100" : "border-slate-200"}`}>
-                      <input type="radio" checked={!retroactive && method === m} onChange={() => { setRetroactive(false); setMethod(m); }} className="hidden" />
-                      {m === "ONSITE" ? "✍️ שרבוט (כאן)" : m === "QR" ? "📱 QR" : "💬 WhatsApp"}
-                    </label>
-                  ))}
-                  <label className={`flex-1 min-w-[6rem] text-center px-2 py-1.5 rounded-lg border-2 cursor-pointer transition ${retroactive ? "border-amber-500 bg-amber-50 text-amber-800 font-medium" : "border-slate-200"}`}>
-                    <input type="radio" checked={retroactive} onChange={() => { setRetroactive(true); setMethod("LINK"); }} className="hidden" />
-                    🕓 חתימה בדיעבד
-                  </label>
-                </div>
-                <p className="text-[10px] text-slate-500 mt-1">
-                  {retroactive ? "🕓 הפריט יירשם על החייל ויירד מהמלאי מיד; תישלח לו בקשת חתימה בטלגרם. עד שיחתום — יופיע ב״ממתינים לחתימה״." :
-                   method === "ONSITE" ? "✍️ החייל יחתום ישירות במכשיר הזה" :
-                   method === "QR" ? "📱 ייפתח QR שהחייל יסרוק במכשיר שלו" :
-                   "💬 ייפתח לינק שתשלח לחייל בוואטסאפ"}
-                </p>
-              </div>
             </div>
           </div>
 
@@ -925,6 +904,28 @@ export default function SignoutModal({
 
         {/* footer */}
         <div className="border-t border-slate-200 p-3 bg-white shrink-0">
+          {/* אופן חתימה — בפוטר כדי שיהיה תמיד גלוי (גם במובייל) */}
+          {soldierId && (
+            <div className="mb-2">
+              <div className="flex gap-1.5 text-xs flex-wrap">
+                {(["ONSITE", "QR"] as const).map((m) => (
+                  <label key={m} className={`flex-1 min-w-[5rem] text-center px-2 py-1.5 rounded-lg border-2 cursor-pointer transition ${!retroactive && method === m ? "border-slate-800 bg-slate-100" : "border-slate-200"}`}>
+                    <input type="radio" checked={!retroactive && method === m} onChange={() => { setRetroactive(false); setMethod(m); }} className="hidden" />
+                    {m === "ONSITE" ? "✍️ שרבוט (כאן)" : "📱 QR"}
+                  </label>
+                ))}
+                <label className={`flex-1 min-w-[7rem] text-center px-2 py-1.5 rounded-lg border-2 cursor-pointer transition ${retroactive ? "border-amber-500 bg-amber-50 text-amber-800 font-medium" : "border-slate-200"}`}>
+                  <input type="radio" checked={retroactive} onChange={() => { setRetroactive(true); setMethod("LINK"); }} className="hidden" />
+                  🕓 חתימה בדיעבד
+                </label>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1">
+                {retroactive ? "🕓 הפריט יירשם על החייל ויירד מהמלאי מיד; התעודה ממתינה ותישלח לו בקשת חתימה בטלגרם. עד שיחתום — יופיע ב״ממתינים לחתימה״." :
+                 method === "ONSITE" ? "✍️ החייל יחתום ישירות במכשיר הזה" :
+                 "📱 ייפתח QR שהחייל יסרוק במכשיר שלו"}
+              </p>
+            </div>
+          )}
           {error && <div className="text-sm text-rose-700 font-medium mb-2">⚠️ {error}</div>}
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => { setError(null); }} disabled={busy}
