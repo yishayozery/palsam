@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireCapability } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import PrintButton from "@/components/PrintButton";
+import ArmoryTestViewer from "./ArmoryTestViewer";
 import { WEAPONS_AGREEMENT_TITLE, WEAPONS_AGREEMENT_CLAUSES, WEAPONS_AGREEMENT_FOOTER } from "@/lib/weapons-agreement-text";
 
 export const dynamic = "force-dynamic";
@@ -41,10 +42,12 @@ export default async function WeaponsAgreementPage({
           {soldier.armoryTestProofAt && (
             <div className="text-center text-xs text-slate-400 mb-3">הועלה: {soldier.armoryTestProofAt.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}</div>
           )}
-          <div className="border border-slate-200 rounded-lg p-2 bg-slate-50 flex justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={soldier.armoryTestProofImage} alt="צילום מבחן ארמון" className="max-w-full max-h-[70vh] object-contain rounded" />
-          </div>
+          <ArmoryTestViewer
+            soldierId={soldier.id}
+            image={soldier.armoryTestProofImage}
+            soldierName={soldier.fullName}
+            initialVerified={soldier.armoryTestVerified}
+          />
         </div>
       </div>
     );

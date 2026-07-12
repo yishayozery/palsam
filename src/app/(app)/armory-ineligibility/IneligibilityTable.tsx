@@ -7,7 +7,7 @@ import IneligibilityActions from "./IneligibilityActions";
 type Row = {
   id: string; name: string; pn: string | null; phone: string | null;
   company: string; enlisted: boolean; approved: boolean; test: boolean;
-  agreement: boolean; missing: string[]; isFullyEligible: boolean;
+  testVerified: boolean | null; agreement: boolean; missing: string[]; isFullyEligible: boolean;
   weaponsCount: number;
 };
 
@@ -78,8 +78,13 @@ export default function IneligibilityTable({ rows, armoryTestUrl }: { rows: Row[
                   <Td>
                     {r.test ? "✅" : "❌"}
                     {r.test && (
+                      <span className="block text-[10px]" title={r.testVerified === true ? "מ\"א אומת ב-OCR" : r.testVerified === false ? "לא זוהתה התאמה — דרוש אימות ידני" : "טרם אומת — לחץ 'צפה' להרצת אימות"}>
+                        {r.testVerified === true ? "🟢 אומת" : r.testVerified === false ? "🟡 דרוש אימות" : "⚪ לא נבדק"}
+                      </span>
+                    )}
+                    {r.test && (
                       <a href={`/weapons-agreement/${r.id}?tab=test`} target="_blank" rel="noopener noreferrer"
-                        className="block text-[10px] text-blue-600 hover:underline">צפה</a>
+                        className="block text-[10px] text-blue-600 hover:underline">צפה / אמת</a>
                     )}
                     {!r.test && armoryTestUrl && (
                       <a href={armoryTestUrl} target="_blank" rel="noopener noreferrer"

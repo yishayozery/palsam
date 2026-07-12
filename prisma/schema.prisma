@@ -624,6 +624,9 @@ model Soldier {
   // דגל 2: חייל העלה צילום מסך של מבחן נוהל הארמון
   armoryTestProofImage String? // data URL של הצילום
   armoryTestProofAt    DateTime?
+  // אימות OCR של הצילום — true=מ"א תואם, false=לא זוהתה התאמה (דרוש אימות ידני), null=טרם נבדק
+  armoryTestVerified   Boolean?
+  armoryTestOcrText    String?  // הטקסט שחולץ מהתמונה (לתיעוד/דיבוג)
   // דגל 3: חתימה דיגיטלית על נוהל שמירת נשק (נחתם בארמון בזמן קבלת הנשק הראשון)
   weaponsAgreementSignedAt   DateTime?
   weaponsAgreementSignature  String? // data URL של החתימה
