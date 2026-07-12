@@ -4,9 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { verifyLink } from "@/lib/link-token";
 import { revalidatePath } from "next/cache";
 
-/** דיווח נוכחות ע"י נאמן כ"א דרך לינק ציבורי מאובטח (ללא התחברות). */
+/** דיווח/תכנון נוכחות ע"י נאמן כ"א דרך לינק ציבורי מאובטח (ללא התחברות). */
 export async function submitAttendanceReport(
-  soldierId: string, token: string, date: string,
+  soldierId: string, token: string, date: string, type: "plan" | "record",
   entries: { soldierId: string; statusId: string | null }[],
 ): Promise<{ ok?: boolean; error?: string; count?: number }> {
   if (!verifyLink("attendance-report", soldierId, token)) return { error: "קישור לא תקין" };
@@ -18,11 +18,15 @@ export async function submitAttendanceReport(
   const canReport = reporter.isAttendanceReporter || reporter.appUser?.role === "COMPANY_REP";
   if (!canReport) return { error: "אין לך הרשאת דיווח נוכחות" };
 
-  // חלון דיווח — לא מעבר למותר
   const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
-  const { maxReportableDate } = await import("@/lib/attendanceWindow");
-  const maxDate = await maxReportableDate(reporter.battalionId, todayIL);
-  if (date > maxDate) return { error: `לא ניתן לדווח מעבר לחלון המותר (עד ${maxDate})` };
+  // דיווח בפועל — עד לחלון המותר; תכנון — קדימה בלבד
+  if (type === "record") {
+    const { maxReportableDate } = await import("@/lib/attendanceWindow");
+    const maxDate = await maxReportableDate(reporter.battalionId, todayIL);
+    if (date > maxDate) return { error: `דיווח בפועל — לא ניתן מעבר לחלון המותר (עד ${maxDate})` };
+  } else {
+    if (date < todayIL) return { error: "תכנון הוא קדימה בלבד (מהיום והלאה)" };
+  }
 
   // היקף — המחלקה של הנאמן אם משויך, אחרת כל הפלוגה
   const scopeWhere = reporter.squadId ? { squadId: reporter.squadId } : { companyId: reporter.companyId };
@@ -36,15 +40,12 @@ export async function submitAttendanceReport(
   let count = 0;
   for (const e of entries) {
     if (!allowed.has(e.soldierId)) continue;
-    if (e.statusId) {
-      await prisma.attendanceRecord.upsert({
-        where: { soldierId_date: { soldierId: e.soldierId, date: dateObj } },
-        update: { statusId: e.statusId, updatedById: upBy },
-        create: { soldierId: e.soldierId, date: dateObj, statusId: e.statusId, updatedById: upBy },
-      });
-      count++;
+    if (type === "plan") {
+      if (e.statusId) { await prisma.attendancePlan.upsert({ where: { soldierId_date: { soldierId: e.soldierId, date: dateObj } }, update: { statusId: e.statusId, updatedById: upBy }, create: { soldierId: e.soldierId, date: dateObj, statusId: e.statusId, updatedById: upBy } }); count++; }
+      else await prisma.attendancePlan.deleteMany({ where: { soldierId: e.soldierId, date: dateObj } });
     } else {
-      await prisma.attendanceRecord.deleteMany({ where: { soldierId: e.soldierId, date: dateObj } });
+      if (e.statusId) { await prisma.attendanceRecord.upsert({ where: { soldierId_date: { soldierId: e.soldierId, date: dateObj } }, update: { statusId: e.statusId, updatedById: upBy }, create: { soldierId: e.soldierId, date: dateObj, statusId: e.statusId, updatedById: upBy } }); count++; }
+      else await prisma.attendanceRecord.deleteMany({ where: { soldierId: e.soldierId, date: dateObj } });
     }
   }
   revalidatePath("/attendance");

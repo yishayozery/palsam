@@ -5,10 +5,11 @@ import AttendanceReportClient from "./AttendanceReportClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function AttendanceReportPage({ params, searchParams }: { params: Promise<{ soldierId: string }>; searchParams: Promise<{ t?: string }> }) {
+export default async function AttendanceReportPage({ params, searchParams }: { params: Promise<{ soldierId: string }>; searchParams: Promise<{ t?: string; date?: string; mode?: string }> }) {
   const { soldierId } = await params;
-  const { t: tok } = await searchParams;
+  const { t: tok, date: dateParam, mode: modeParam } = await searchParams;
   if (!verifyLink("attendance-report", soldierId, tok)) notFound();
+  const mode: "plan" | "record" = modeParam === "plan" ? "plan" : "record";
 
   const reporter = await prisma.soldier.findUnique({
     where: { id: soldierId },
@@ -30,23 +31,29 @@ export default async function AttendanceReportPage({ params, searchParams }: { p
     orderBy: { sortOrder: "asc" }, select: { id: true, name: true, icon: true, color: true, isPresent: true },
   });
   const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
-  const records = await prisma.attendanceRecord.findMany({
-    where: { date: new Date(todayIL + "T00:00:00.000Z"), soldierId: { in: soldiers.map((s) => s.id) } },
-    select: { soldierId: true, statusId: true },
-  });
+  const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayIL;
+  const sids = soldiers.map((s) => s.id);
+  const dateObj = new Date(date + "T00:00:00.000Z");
+  const [records, plans] = await Promise.all([
+    prisma.attendanceRecord.findMany({ where: { date: dateObj, soldierId: { in: sids } }, select: { soldierId: true, statusId: true } }),
+    prisma.attendancePlan.findMany({ where: { date: dateObj, soldierId: { in: sids } }, select: { soldierId: true, statusId: true } }),
+  ]);
 
   const scopeName = reporter.squadId ? (reporter.squad?.name ?? "המחלקה") : (reporter.company?.name ?? "הפלוגה");
   return (
     <AttendanceReportClient
       soldierId={reporter.id}
       token={tok ?? ""}
-      date={todayIL}
+      date={date}
+      today={todayIL}
+      mode={mode}
       scopeName={scopeName}
       battalionName={reporter.battalion?.name ?? ""}
       reporterName={reporter.fullName}
       soldiers={soldiers.map((s) => ({ id: s.id, name: s.fullName, pn: s.personalNumber, squad: s.squad?.name ?? null }))}
       statuses={statuses}
       records={records.map((r) => ({ soldierId: r.soldierId, statusId: r.statusId }))}
+      plans={plans.map((r) => ({ soldierId: r.soldierId, statusId: r.statusId }))}
     />
   );
 }
