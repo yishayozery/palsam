@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
-import { sendTelegramMessage, answerCallbackQuery, editMessageText, MAIN_KEYBOARD, buildMainKeyboard, buildVehicleKeyboard } from "@/lib/telegram";
+import { sendTelegramMessage, answerCallbackQuery, editMessageText, MAIN_KEYBOARD, buildMainKeyboard, buildVehicleKeyboard, buildTasksKeyboard } from "@/lib/telegram";
 import { linkTokenQuery } from "@/lib/link-token";
 import { normalizePhone } from "@/lib/phone";
 
@@ -89,9 +89,12 @@ export async function POST(
       "⬅️ חזרה לתפריט": "/menu",
       "🚗 משימות ושבצ\"ק": "/dispatch",
       "🚗 שיבוץ לרכב": "/dispatch",
-      "📊 דיווחי כ\"א וספירות": "/reports",
+      "📋 משימות": "/tasks",
+      "📋 משימות 🔴": "/tasks",
+      "📊 ספירות מלאי": "/counts",
       "🗓️ דיווח כ\"א (דוח 1)": "/attendance",
       "🗓️ דיווח נוכחות": "/attendance",
+      "📝 תעודות לחתימה": "/pendingsigns",
       "⛽ כרטיסי הדלק שלי": "/myfuel",
       "🕐 ארוחות ותפילות": "/info",
       "🪪 בדיקת הסמכות": "/license",
@@ -102,7 +105,7 @@ export async function POST(
       // backward compat — old button labels
       "📋 טפסים להחתמה": "/status",
       "📋 תהליך חתימת נשק": "/status",
-      "📊 ספירות מלאי": "/reports",
+      "📊 דיווחי כ\"א וספירות": "/tasks",
       "📊 סטטוס": "/status",
       "📦 ציוד חתום": "/equipment",
       "🚗 שבצ\"ק": "/dispatch",
@@ -163,21 +166,21 @@ export async function POST(
     const canManageTeam = !!(mgr && (mgr.holderId || (mgr.assignedHolders?.length ?? 0) > 0));
     // נהג = יש רישיון/היתר, ריענון, רישיון אזרחי או טופס תיק נהג — מקבל כפתור טפסי נהג קבוע
     const isDriver = !!soldier && ((soldier._count?.drivingLicenses ?? 0) > 0 || (soldier._count?.driverForms ?? 0) > 0 || !!soldier.drivingRefresherDate || !!soldier.civilianLicenseNumber);
-    // "דיווחי כ"א וספירות" — מוצג רק אם יש הרשאת דיווח כ"א או ספירה פתוחה משויכת
+    // "📋 משימות" — מוצג אם יש ספירה פתוחה / הרשאת דיווח כ"א / תעודה לחתימה. 🔴 = יש פעולה ממתינה.
     let hasOpenCounts = false;
+    let hasPendingSigs = false;
     if (soldier) {
-      hasOpenCounts = (await prisma.countTask.count({
-        where: {
-          battalionId, status: { in: ["PENDING", "IN_PROGRESS", "OVERDUE"] },
-          OR: [
-            { assignedUser: { soldier: { telegramChatId: chatId } } },
-            { holder: { users: { some: { soldier: { telegramChatId: chatId } } } } },
-          ],
-        },
-      })) > 0;
+      [hasOpenCounts, hasPendingSigs] = await Promise.all([
+        prisma.countTask.count({
+          where: { battalionId, status: { in: ["PENDING", "IN_PROGRESS", "OVERDUE"] },
+            OR: [{ assignedUser: { soldier: { telegramChatId: chatId } } }, { holder: { users: { some: { soldier: { telegramChatId: chatId } } } } }] },
+        }).then((n) => n > 0),
+        prisma.signature.count({ where: { soldierId: soldier.id, status: "PENDING", OR: [{ tokenExpires: null }, { tokenExpires: { gt: new Date() } }] } }).then((n) => n > 0),
+      ]);
     }
-    const showReports = canAttendance || hasOpenCounts;
-    const keyboard = buildMainKeyboard(showReports, canManageTeam, isDriver);
+    const showTasks = canAttendance || hasOpenCounts || hasPendingSigs;
+    const tasksPending = hasOpenCounts || hasPendingSigs; // פעולה שממתינה למשתמש (🔴)
+    const keyboard = buildMainKeyboard(showTasks, tasksPending, isDriver);
 
     // /help
     if (cmd === "/help") {
@@ -208,16 +211,21 @@ export async function POST(
       return NextResponse.json({ ok: true });
     }
 
-    // /team — מינוי צוות: הבוט שולח לינק כניסה חד-פעמי מאובטח (הפעולה עצמה מאחורי login)
-    // 📊 דיווחי כ"א וספירות — מיזוג: דיווח נוכחות (למי שרשאי) + ספירות מלאי פתוחות
-    if (cmd === "/reports") {
+    // 📋 משימות — תת-תפריט: ספירות · דיווח כ"א · תעודות לחתימה
+    if (cmd === "/tasks" || cmd === "/reports") {
       if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
-      if (canAttendance) {
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
-        await sendTelegramMessage(token, chatId,
-          `🗓️ <b>דיווח כ"א (דוח 1) — ${battalion.name}</b>\n\nדווח/י את נוכחות ${soldier.company?.name || "הפלוגה"} להיום:\n\n👉 <a href="${baseUrl}/attendance">לחץ כאן לדיווח</a>`);
-      }
-      await handleCounts(token, chatId, soldier, battalionId);
+      const parts = ["📋 <b>משימות</b>\n\nבחר/י מהתפריט למטה 👇"];
+      parts.push("• 📊 <b>ספירות מלאי</b>" + (hasOpenCounts ? " 🔴" : ""));
+      if (canAttendance) parts.push("• 🗓️ <b>דיווח כ\"א (דוח 1)</b>");
+      parts.push("• 📝 <b>תעודות לחתימה</b>" + (hasPendingSigs ? " 🔴" : ""));
+      await sendTelegramMessage(token, chatId, parts.join("\n"), buildTasksKeyboard(canAttendance));
+      return NextResponse.json({ ok: true });
+    }
+
+    // 📝 תעודות הממתינות לחתימת החייל
+    if (cmd === "/pendingsigns") {
+      if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
+      await handlePendingSigns(token, chatId, soldier, buildTasksKeyboard(canAttendance));
       return NextResponse.json({ ok: true });
     }
 
@@ -797,7 +805,7 @@ const HELP_TEXT = `📋 <b>מה כל כפתור עושה:</b>
 
 🚗 <b>רכבים</b> — משימות ושבצ"ק · תיק נהג · בדיקת הסמכות · כרטיסי הדלק שלי · קישורים שימושיים
 
-📊 <b>דיווחי כ"א וספירות</b> — דיווח נוכחות (למי שרשאי) + משימות ספירה פתוחות (מופיע רק כשיש מה לעשות)
+📋 <b>משימות</b> — ספירות מלאי · דיווח כ"א (דוח 1) · תעודות לחתימה (🔴 = יש פעולה שממתינה לך)
 
 🕐 <b>ארוחות ותפילות</b> — זמני ארוחות, תפילות ומידע כללי שהמפקד הגדיר
 
@@ -1067,6 +1075,24 @@ async function handleLicenseCheck(token: string, chatId: string, battalionId: st
     allowed.length ? allowed.map((n) => `• ${n}`).join("\n") : "— אין רכב שהוא מורשה לנהוג בו",
   ].join("\n");
   await sendTelegramMessage(token, chatId, msg, keyboard as never);
+}
+
+/** 📝 רשימת תעודות הממתינות לחתימת החייל (עם לינקים לחתימה). */
+async function handlePendingSigns(token: string, chatId: string, soldier: SoldierCtx, keyboard: unknown) {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+  const sigs = await prisma.signature.findMany({
+    where: { soldierId: soldier.id, status: "PENDING", OR: [{ tokenExpires: null }, { tokenExpires: { gt: new Date() } }] },
+    orderBy: { createdAt: "desc" },
+    select: { token: true, transfer: { select: { reason: true, lines: { select: { itemType: { select: { name: true } } }, take: 3 } } } },
+  });
+  if (sigs.length === 0) { await sendTelegramMessage(token, chatId, `📝 <b>${soldier.fullName}</b> — אין תעודות הממתינות לחתימתך ✅`, keyboard as never); return; }
+  const lines = [`📝 <b>תעודות הממתינות לחתימתך (${sigs.length}):</b>`, ""];
+  for (const s of sigs) {
+    const items = s.transfer?.lines.map((l) => l.itemType.name).filter(Boolean).join(", ");
+    const label = s.transfer?.reason || items || "תעודת ציוד";
+    lines.push(`• <a href="${baseUrl}/sign/${s.token}">✍️ ${label}</a>`);
+  }
+  await sendTelegramMessage(token, chatId, lines.join("\n"), keyboard as never);
 }
 
 async function handleCounts(token: string, chatId: string, soldier: SoldierCtx, battalionId: string) {

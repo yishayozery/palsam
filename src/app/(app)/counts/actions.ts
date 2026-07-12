@@ -659,7 +659,7 @@ export async function registerTelegramWebhook() {
         { command: "status", description: "🔫 נשקייה — טפסים + צל\"ם סריאלי" },
         { command: "equipment", description: "📦 הציוד שלי" },
         { command: "vehicles", description: "🚗 רכבים — משימות/תיק נהג/הסמכות/דלק" },
-        { command: "reports", description: "📊 דיווחי כ\"א וספירות" },
+        { command: "tasks", description: "📋 משימות — ספירות/כ\"א/תעודות לחתימה" },
         { command: "info", description: "🕐 ארוחות ותפילות ומידע" },
         { command: "help", description: "❓ עזרה ותפריט" },
       ],

@@ -79,14 +79,24 @@ export async function editMessageText(
  * "דיווחי כ"א וספירות" מוצג רק אם יש משהו לעשות (ספירה פתוחה או הרשאת דיווח כ"א).
  * מינוי צוות בוטל — נעשה רק דרך המערכת.
  */
-export function buildMainKeyboard(showReportsButton = false, _unused = false, isDriver = false) {
-  void isDriver; void _unused; // אפשרויות הרכב אוחדו תחת תפריט "🚗 רכבים"
+export function buildMainKeyboard(showTasks = false, tasksPending = false, isDriver = false) {
+  void isDriver; // אפשרויות הרכב אוחדו תחת תפריט "🚗 רכבים"
   const rows: { text: string }[][] = [
     [{ text: "🔫 נשקייה" }, { text: "📦 הציוד שלי" }],
   ];
-  if (showReportsButton) rows.push([{ text: "📊 דיווחי כ\"א וספירות" }, { text: "🚗 רכבים" }]);
+  // "📋 משימות" — ספירות / דיווח כ"א / תעודות לחתימה. 🔴 = יש פעולה שממתינה למשתמש.
+  if (showTasks) rows.push([{ text: tasksPending ? "📋 משימות 🔴" : "📋 משימות" }, { text: "🚗 רכבים" }]);
   else rows.push([{ text: "🚗 רכבים" }]);
   rows.push([{ text: "🕐 ארוחות ותפילות" }]);
+  return { keyboard: rows, resize_keyboard: true, is_persistent: true };
+}
+
+/** תת-תפריט "משימות" — ספירות · דיווח כ"א · תעודות לחתימה. */
+export function buildTasksKeyboard(canAttendance = false) {
+  const rows: { text: string }[][] = [[{ text: "📊 ספירות מלאי" }]];
+  if (canAttendance) rows.push([{ text: "🗓️ דיווח כ\"א (דוח 1)" }]);
+  rows.push([{ text: "📝 תעודות לחתימה" }]);
+  rows.push([{ text: "⬅️ חזרה לתפריט" }]);
   return { keyboard: rows, resize_keyboard: true, is_persistent: true };
 }
 
