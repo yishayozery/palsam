@@ -1,5 +1,11 @@
 import { prisma } from "./prisma";
 import { sendTelegramMessage } from "./telegram";
+import { signLink } from "./link-token";
+
+/** לינק דיווח נוכחות מאובטח (ללא התחברות) לנאמן לפי מזהה החייל שלו. */
+function reportLink(baseUrl: string, soldierId: string): string {
+  return `${baseUrl}/attendance-report/${soldierId}?t=${signLink("attendance-report", soldierId)}`;
+}
 
 /**
  * תזכורות דיווח נוכחות (ביצוע):
@@ -20,6 +26,7 @@ const MORNING_START = 6 * 60;      // 06:00
 const MORNING_END = 12 * 60;       // 12:00
 
 type Reporter = {
+  soldierId: string;
   chatId: string;
   label: string;               // "פלוגה" או "פלוגה / מחלקה"
   kind: "company" | "squad";
@@ -32,14 +39,14 @@ async function reportersFor(battalionId: string): Promise<Reporter[]> {
   //    היקף: אם משויכים למחלקה — המחלקה שלהם; אחרת — כל הפלוגה.
   const trustees = await prisma.soldier.findMany({
     where: { battalionId, isAttendanceReporter: true, dischargedAt: null, telegramChatId: { not: null } },
-    select: { telegramChatId: true, companyId: true, squadId: true, company: { select: { name: true } }, squad: { select: { name: true, company: { select: { name: true } } } } },
+    select: { id: true, telegramChatId: true, companyId: true, squadId: true, company: { select: { name: true } }, squad: { select: { name: true, company: { select: { name: true } } } } },
   });
   const out: Reporter[] = [];
   for (const t of trustees) {
     const chatId = t.telegramChatId;
     if (!chatId) continue;
-    if (t.squadId) out.push({ chatId, label: `${t.squad?.company?.name || "פלוגה"} / ${t.squad?.name || "מחלקה"}`, kind: "squad", companyId: t.companyId, squadId: t.squadId });
-    else if (t.companyId) out.push({ chatId, label: t.company?.name || "הפלוגה", kind: "company", companyId: t.companyId, squadId: null });
+    if (t.squadId) out.push({ soldierId: t.id, chatId, label: `${t.squad?.company?.name || "פלוגה"} / ${t.squad?.name || "מחלקה"}`, kind: "squad", companyId: t.companyId, squadId: t.squadId });
+    else if (t.companyId) out.push({ soldierId: t.id, chatId, label: t.company?.name || "הפלוגה", kind: "company", companyId: t.companyId, squadId: null });
   }
   return out;
 }
@@ -58,9 +65,10 @@ export async function sendAttendanceInitial(todayYmd: string): Promise<number> {
     await prisma.battalion.update({ where: { id: b.id }, data: { attendanceInitialSentOn: todayYmd } });
     for (const rep of reporters) {
       const scope = rep.kind === "squad" ? rep.label : (rep.label !== "הפלוגה" ? rep.label : "הפלוגה");
+      const link = reportLink(baseUrl, rep.soldierId);
       const text = b.attendanceReminderText?.trim()
-        ? `🗓️ <b>${b.attendanceReminderText.trim()}</b>\n\n👉 <a href="${baseUrl}/attendance">לחץ כאן לדיווח נוכחות</a>`
-        : `🗓️ <b>בוקר טוב!</b>\nנא לדווח את נוכחות ${scope} להיום.\n\n👉 <a href="${baseUrl}/attendance">לחץ כאן לדיווח</a>`;
+        ? `🗓️ <b>${b.attendanceReminderText.trim()}</b>\n\n👉 <a href="${link}">פתח דיווח נוכחות</a> (בלי התחברות — הרשימה תופיע ישר)`
+        : `🗓️ <b>בוקר טוב!</b>\nנא לדווח את נוכחות ${scope} להיום.\n\n👉 <a href="${link}">פתח דיווח נוכחות</a> (בלי התחברות — הרשימה תופיע ישר)`;
       try { await sendTelegramMessage(b.telegramBotToken!, rep.chatId, text); sent++; } catch { /* non-fatal */ }
     }
   }
@@ -111,7 +119,8 @@ export async function sendAttendanceFollowup(nowMin: number, today: Date, todayY
         : soldiers.filter((s) => s.companyId === rep.companyId && (!s.squadId || !commandedSquadIds.has(s.squadId)));
       const missing = scope.filter((s) => !reportedSet.has(s.id)).length;
       if (missing === 0) continue;
-      const text = `⏰ <b>תזכורת דיווח נוכחות</b>\nטרם דווחה נוכחות ${rep.label} — נותרו <b>${missing}</b> חיילים.\nשעת גג לדיווח: <b>${deadlineLabel}</b>.\n\n👉 <a href="${baseUrl}/attendance">לחץ כאן לדיווח</a>`;
+      const link = reportLink(baseUrl, rep.soldierId);
+      const text = `⏰ <b>תזכורת דיווח נוכחות</b>\nטרם דווחה נוכחות ${rep.label} — נותרו <b>${missing}</b> חיילים.\nשעת גג לדיווח: <b>${deadlineLabel}</b>.\n\n👉 <a href="${link}">פתח דיווח נוכחות</a>`;
       try { await sendTelegramMessage(b.telegramBotToken!, rep.chatId, text); sent++; } catch { /* non-fatal */ }
     }
   }

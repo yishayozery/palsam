@@ -1,9 +1,14 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { verifyLink } from "@/lib/link-token";
+import { maxReportableDate } from "@/lib/attendanceWindow";
 import AttendanceReportClient from "./AttendanceReportClient";
 
 export const dynamic = "force-dynamic";
+
+function addDaysYmd(ymd: string, n: number): string {
+  return new Date(new Date(ymd + "T00:00:00.000Z").getTime() + n * 86400000).toISOString().slice(0, 10);
+}
 
 export default async function AttendanceReportPage({ params, searchParams }: { params: Promise<{ soldierId: string }>; searchParams: Promise<{ t?: string; date?: string; mode?: string }> }) {
   const { soldierId } = await params;
@@ -32,11 +37,22 @@ export default async function AttendanceReportPage({ params, searchParams }: { p
   });
   const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
   const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayIL;
+
+  // חלון דיווח: ביצוע — עד התאריך המותר בגדוד להיום; תכנון — קדימה (עד שבועיים ב-chips).
+  const maxDate = mode === "record" ? await maxReportableDate(reporter.battalionId, todayIL) : addDaysYmd(todayIL, 13);
+  const windowDates: string[] = [];
+  for (let d = todayIL; d <= maxDate && windowDates.length < 21; d = addDaysYmd(d, 1)) windowDates.push(d);
+  // ודא שהתאריך הנבחר נמצא בחלון (למשל אם נבחר עבר בתכנון) — מוסיפים אם חסר
+  if (!windowDates.includes(date)) windowDates.unshift(date);
+
   const sids = soldiers.map((s) => s.id);
   const dateObj = new Date(date + "T00:00:00.000Z");
-  const [records, plans] = await Promise.all([
+  const yesterdayYmd = addDaysYmd(date, -1);
+  const yObj = new Date(yesterdayYmd + "T00:00:00.000Z");
+  const [records, plans, yesterday] = await Promise.all([
     prisma.attendanceRecord.findMany({ where: { date: dateObj, soldierId: { in: sids } }, select: { soldierId: true, statusId: true } }),
     prisma.attendancePlan.findMany({ where: { date: dateObj, soldierId: { in: sids } }, select: { soldierId: true, statusId: true } }),
+    prisma.attendanceRecord.findMany({ where: { date: yObj, soldierId: { in: sids } }, select: { soldierId: true, statusId: true } }),
   ]);
 
   const scopeName = reporter.squadId ? (reporter.squad?.name ?? "המחלקה") : (reporter.company?.name ?? "הפלוגה");
@@ -47,6 +63,7 @@ export default async function AttendanceReportPage({ params, searchParams }: { p
       date={date}
       today={todayIL}
       mode={mode}
+      windowDates={windowDates}
       scopeName={scopeName}
       battalionName={reporter.battalion?.name ?? ""}
       reporterName={reporter.fullName}
@@ -54,6 +71,7 @@ export default async function AttendanceReportPage({ params, searchParams }: { p
       statuses={statuses}
       records={records.map((r) => ({ soldierId: r.soldierId, statusId: r.statusId }))}
       plans={plans.map((r) => ({ soldierId: r.soldierId, statusId: r.statusId }))}
+      yesterday={yesterday.map((r) => ({ soldierId: r.soldierId, statusId: r.statusId }))}
     />
   );
 }
