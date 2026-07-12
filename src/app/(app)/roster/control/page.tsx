@@ -34,7 +34,7 @@ export default async function RosterControlPage({
     prisma.soldier.findMany({ where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } }, orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }], select: { id: true, fullName: true, personalNumber: true, companyId: true, isAttendanceReporter: true, squad: { select: { name: true } } } }),
     prisma.attendanceStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, color: true, icon: true, isPresent: true } }),
     prisma.employment.findMany({ where: { battalionId: bId }, orderBy: [{ active: "desc" }, { startDate: "desc" }], select: { id: true, name: true, startDate: true, endDate: true, active: true } }),
-    prisma.callupPeriod.findMany({ where: { soldier: { battalionId: bId } }, select: { soldierId: true, startDate: true, endDate: true } }),
+    prisma.callupPeriod.findMany({ where: { soldier: { battalionId: bId } }, orderBy: { startDate: "desc" }, select: { id: true, soldierId: true, startDate: true, endDate: true } }),
   ]);
 
   // ── טווח מצטבר: from/to ידני > תעסוקה נבחרת > תעסוקה פעילה > 14 ימים אחרונים ──
@@ -141,6 +141,21 @@ export default async function RosterControlPage({
 
   const totalReported = soldiers.filter((s) => statusBySoldierDay.has(s.id)).length;
 
+  // 🟣 שמ"פ — לכל חייל התקופה הרלוונטית (פתוחה אם יש, אחרת האחרונה) — לניהול במסך השלישות
+  const curCallup = new Map<string, { id: string; start: string; end: string | null }>();
+  for (const c of callups) { // ממוין startDate desc
+    const rec = { id: c.id, start: iso(c.startDate), end: c.endDate ? iso(c.endDate) : null };
+    const cur = curCallup.get(c.soldierId);
+    if (!cur) curCallup.set(c.soldierId, rec);
+    else if (!c.endDate && cur.end) curCallup.set(c.soldierId, rec); // מעדיפים תקופה פתוחה
+  }
+  const shmpSoldiers = soldiers.map((s) => ({
+    id: s.id, name: s.fullName,
+    company: s.companyId ? (companyName.get(s.companyId) ?? "—") : "—",
+    squad: s.squad?.name ?? null,
+    callup: curCallup.get(s.id) ?? null,
+  }));
+
   // הגדרות נוכחות — נאמני כ"א + חלון דיווח עתידי
   const [batWin, overrides] = await Promise.all([
     prisma.battalion.findUnique({ where: { id: bId }, select: { attendanceReportWindowDow: true } }),
@@ -167,6 +182,8 @@ export default async function RosterControlPage({
         range={{ start: rangeStart, end: rangeEnd, manual: !!(validFrom && validTo) }}
         days={days}
         aggRows={aggRows}
+        shmpSoldiers={shmpSoldiers}
+        today={todayStr}
         attendanceSettings={{ companies: reporterCompanies, window: reportWindow, overrides: overrides.map((o) => ({ id: o.id, date: iso(o.date), daysForward: o.daysForward, note: o.note })) }}
       />
     </div>

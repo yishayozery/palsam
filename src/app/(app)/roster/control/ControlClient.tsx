@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import { toggleCompanyLock } from "../../attendance/actions";
 import RosterAttendanceSettings from "./RosterAttendanceSettings";
+import ShmapPanel from "./ShmapPanel";
 
 type Company = { id: string; name: string; total: number; reported: number; shmp: number; shmpReported: number; locked: boolean };
 type StatusCard = { id: string; name: string; color: string; icon: string; isPresent: boolean; count: number; pns: string[] };
@@ -15,7 +16,7 @@ type AggRow = { id: string; name: string; pn: string; company: string; cells: st
 
 export default function ControlClient({
   date, companies, statuses, notReported, totals,
-  employments, selectedEmploymentId, range, days, aggRows, canManageEmployment, attendanceSettings,
+  employments, selectedEmploymentId, range, days, aggRows, canManageEmployment, attendanceSettings, shmpSoldiers, today,
 }: {
   date: string;
   companies: Company[];
@@ -28,6 +29,8 @@ export default function ControlClient({
   days: string[];
   aggRows: AggRow[];
   canManageEmployment: boolean;
+  today: string;
+  shmpSoldiers: { id: string; name: string; company: string; squad: string | null; callup: { id: string; start: string; end: string | null } | null }[];
   attendanceSettings: {
     companies: { companyId: string; companyName: string; soldiers: { id: string; name: string; squadName: string | null; isReporter: boolean }[] }[];
     window: number[];
@@ -92,6 +95,9 @@ export default function ControlClient({
           <button onClick={() => lockAll(false)} disabled={pending} className="text-xs border border-slate-300 text-slate-600 rounded-lg px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50">🔓 פתח הכל</button>
         </div>
       </Card>
+
+      {/* 🟣 ניהול שמ״פ — פתיחה/סגירה מרוכזת + עריכת תאריכים */}
+      <ShmapPanel soldiers={shmpSoldiers} today={today} />
 
       {/* סרגל תעסוקה — בחירה + ניהול + תקני פלוגות (שלישות) */}
       {employments.length > 0 && (

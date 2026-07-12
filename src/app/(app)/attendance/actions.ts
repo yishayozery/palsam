@@ -201,6 +201,60 @@ export async function deleteCallup(
   }
 }
 
+/** 🟣 פתיחת שמ"פ למספר חיילים בבת אחת (שלישות). מדלג על מי שכבר בשמ"פ פתוח. */
+export async function openCallupBulk(soldierIds: string[], startDate: string): Promise<{ ok?: boolean; opened?: number; skipped?: number; error?: string }> {
+  try {
+    const user = await requireUser();
+    if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return { error: "תאריך לא תקין" };
+    const start = new Date(startDate + "T00:00:00Z");
+    let opened = 0, skipped = 0;
+    for (const sid of soldierIds) {
+      const existing = await prisma.callupPeriod.findFirst({ where: { soldierId: sid, endDate: null } });
+      if (existing) { skipped++; continue; }
+      await prisma.callupPeriod.create({ data: { soldierId: sid, startDate: start, createdById: user.id } });
+      opened++;
+    }
+    revalidatePath("/roster/control"); revalidatePath("/attendance");
+    return { ok: true, opened, skipped };
+  } catch (e) { return { error: e instanceof Error ? e.message : "שגיאה" }; }
+}
+
+/** סגירת שמ"פ למספר חיילים בבת אחת. סוגר את התקופה הפתוחה של כל חייל. */
+export async function closeCallupBulk(soldierIds: string[], endDate: string): Promise<{ ok?: boolean; closed?: number; skipped?: number; error?: string }> {
+  try {
+    const user = await requireUser();
+    if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return { error: "תאריך לא תקין" };
+    const end = new Date(endDate + "T00:00:00Z");
+    let closed = 0, skipped = 0;
+    for (const sid of soldierIds) {
+      const period = await prisma.callupPeriod.findFirst({ where: { soldierId: sid, endDate: null } });
+      if (!period) { skipped++; continue; }
+      await prisma.callupPeriod.update({ where: { id: period.id }, data: { endDate: end, closedById: user.id, closedAt: new Date() } });
+      closed++;
+    }
+    revalidatePath("/roster/control"); revalidatePath("/attendance");
+    return { ok: true, closed, skipped };
+  } catch (e) { return { error: e instanceof Error ? e.message : "שגיאה" }; }
+}
+
+/** עריכת תאריכי תקופת שמ"פ (התחלה/סיום) — משפיע על אילו ימים נחשבים "בשמ"פ" בנוכחות. */
+export async function updateCallupDates(callupId: string, startDate: string, endDate: string | null): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireUser();
+    if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return { error: "תאריך התחלה לא תקין" };
+    if (endDate && (!/^\d{4}-\d{2}-\d{2}$/.test(endDate) || endDate < startDate)) return { error: "תאריך סיום לא תקין" };
+    await prisma.callupPeriod.update({
+      where: { id: callupId },
+      data: { startDate: new Date(startDate + "T00:00:00Z"), endDate: endDate ? new Date(endDate + "T00:00:00Z") : null },
+    });
+    revalidatePath("/roster/control"); revalidatePath("/attendance");
+    return { ok: true };
+  } catch (e) { return { error: e instanceof Error ? e.message : "שגיאה" }; }
+}
+
 export async function assignSquad(
   soldierId: string,
   squadId: string | null,
