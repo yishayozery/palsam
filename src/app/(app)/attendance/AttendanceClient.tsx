@@ -32,7 +32,7 @@ type SelectedEmployment = EmploymentOption & {
 type CallupPeriod = { id: string; soldierId: string; startDate: string; endDate: string | null };
 
 export default function AttendanceClient({
-  companies, selectedCompanyId, soldiers, squads, companyRoles, statuses, days, plans, records, mode, canManage, startDate,
+  companies, selectedCompanyId, soldiers, squads, companyRoles, statuses, days, plans, records, mode, canManage, canManageEmployment, startDate,
   selectedEmployment, callupPeriods,
 }: {
   companies: { id: string; name: string }[];
@@ -99,6 +99,16 @@ export default function AttendanceClient({
     return periods.find((p) => !p.endDate) ?? null;
   }, [callupMap]);
 
+  // שלישות (עורך תעסוקות) — היחיד שרשאי לשנות ימים שהחייל מחוץ לשמ"פ.
+  const isPersonnel = canManageEmployment;
+  // חייל מנוהל-שמ"פ = יש לו לפחות תקופת שמ"פ אחת. בימים שאינו בשמ"פ פעיל — נעול ("לא בשמ"פ").
+  const hasCallup = useCallback((soldierId: string): boolean => (callupMap.get(soldierId)?.length ?? 0) > 0, [callupMap]);
+  const isOutsideShmap = useCallback((soldierId: string, date: string): boolean =>
+    hasCallup(soldierId) && !isInShmap(soldierId, date), [hasCallup, isInShmap]);
+  // נעילת "לא בשמ"פ" — חלה על כל מי שאינו שלישות (נאמן/מ"פ/מפלג לא יכולים לשנות).
+  const isNoShmapLocked = useCallback((soldierId: string, date: string): boolean =>
+    !isPersonnel && isOutsideShmap(soldierId, date), [isPersonnel, isOutsideShmap]);
+
   const data = mode === "plan" ? plans : records;
 
   const dataMap = useMemo(() => {
@@ -132,6 +142,7 @@ export default function AttendanceClient({
     if (!canManage) return;
     if (isFuture(date)) return;
     if (isShmapLocked(soldierId, date)) return;
+    if (isNoShmapLocked(soldierId, date)) return;
     const current = getStatus(soldierId, date);
     const idx = current ? statuses.findIndex((s) => s.id === current) : -1;
     const next = idx + 1 < statuses.length ? statuses[idx + 1].id : null;
@@ -146,6 +157,7 @@ export default function AttendanceClient({
     if (!canManage) return;
     if (isFuture(date)) return;
     if (isShmapLocked(soldierId, date)) return;
+    if (isNoShmapLocked(soldierId, date)) return;
     setPendingChanges((prev) => {
       const m = new Map(prev);
       m.set(`${soldierId}:${date}`, statusId);
@@ -739,6 +751,9 @@ export default function AttendanceClient({
             <span className="text-sm">{s.icon}</span> {s.name}
           </span>
         ))}
+        <span className="inline-flex items-center gap-1 text-[11px] rounded-lg px-2 py-1 font-medium bg-slate-100 text-slate-500 border border-slate-200" title={'ימים שהחייל אינו בשמ"פ פעיל — נעול, שינוי רק ע"י שלישות'}>
+          <span className="text-sm">⊘</span> לא בשמ״פ
+        </span>
       </div>
 
       {/* Matrix */}
@@ -855,22 +870,25 @@ export default function AttendanceClient({
                         const future = isFuture(d.date);
                         const locked = isShmapLocked(soldier.id, d.date);
                         const inShmapDay = isInShmap(soldier.id, d.date);
+                        const outside = isOutsideShmap(soldier.id, d.date);   // חייל-שמ"פ ביום שאינו פעיל
+                        const noShmap = isNoShmapLocked(soldier.id, d.date);  // נעול למי שאינו שלישות
                         const statusId = getStatus(soldier.id, d.date);
                         const status = statusId ? statuses.find((s) => s.id === statusId) : null;
                         const isPending = pendingChanges.has(`${soldier.id}:${d.date}`);
                         const isWeekend = d.isShabbat || d.isHoliday;
+                        const blocked = afterDischarge || locked || future || noShmap;
                         return (
                           <td
                             key={d.date}
-                            onClick={() => !afterDischarge && !locked && !future && cycleStatus(soldier.id, d.date)}
-                            onContextMenu={(e) => !afterDischarge && !locked && !future && handleContextMenu(e, soldier.id, d.date)}
+                            onClick={() => !blocked && cycleStatus(soldier.id, d.date)}
+                            onContextMenu={(e) => !blocked && handleContextMenu(e, soldier.id, d.date)}
                             className={`text-center select-none transition-colors border-l border-slate-50
-                              ${afterDischarge || locked || future ? "cursor-not-allowed" : "cursor-pointer hover:bg-slate-100"}
-                              ${future ? "bg-slate-100/70 opacity-40" : locked ? "bg-purple-100/60" : afterDischarge ? "bg-slate-200/50" : ""}
+                              ${blocked ? "cursor-not-allowed" : "cursor-pointer hover:bg-slate-100"}
+                              ${future ? "bg-slate-100/70 opacity-40" : locked ? "bg-purple-100/60" : afterDischarge ? "bg-slate-200/50" : outside ? "bg-slate-100/70" : ""}
                               ${inShmapDay && !locked && !future ? "bg-purple-50/40" : ""}
-                              ${d.date === today && !afterDischarge && !locked ? "bg-blue-50" : isWeekend && !afterDischarge && !locked && !future ? "bg-slate-50/50" : ""}
+                              ${d.date === today && !afterDischarge && !locked && !outside ? "bg-blue-50" : isWeekend && !afterDischarge && !locked && !future && !outside ? "bg-slate-50/50" : ""}
                               ${isPending ? "ring-2 ring-inset ring-amber-400" : ""}`}
-                            title={future ? `יום עתידי — לא ניתן לדווח (דיווח רק על היום הנוכחי)` : afterDischarge ? `${soldier.fullName} — שוחרר` : locked ? `${soldier.fullName} — נעול (שמ"פ סגור)` : inShmapDay ? `${soldier.fullName} — בשמ"פ — ${d.date}${status ? ` — ${status.name}` : ""}` : `${soldier.fullName} — ${d.date}${status ? ` — ${status.name}` : ""}`}
+                            title={future ? `יום עתידי — לא ניתן לדווח (דיווח רק על היום הנוכחי)` : afterDischarge ? `${soldier.fullName} — שוחרר` : locked ? `${soldier.fullName} — נעול (שמ"פ סגור)` : outside ? `${soldier.fullName} — לא בשמ"פ — ${d.date}${isPersonnel ? " · לחץ לשינוי (שלישות)" : " · נעול — שינוי רק ע\"י שלישות"}${status ? ` — ${status.name}` : ""}` : inShmapDay ? `${soldier.fullName} — בשמ"פ — ${d.date}${status ? ` — ${status.name}` : ""}` : `${soldier.fullName} — ${d.date}${status ? ` — ${status.name}` : ""}`}
                           >
                             {afterDischarge ? (
                               <span className="text-slate-300 text-[9px]">—</span>
@@ -881,6 +899,8 @@ export default function AttendanceClient({
                                 title={status.name}>
                                 {status.icon || "●"}
                               </span>
+                            ) : outside ? (
+                              <span className="text-slate-400 text-[11px] leading-none" title="לא בשמ&quot;פ">⊘</span>
                             ) : (
                               <span className="text-slate-200">·</span>
                             )}
