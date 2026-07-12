@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { TRANSFER_TYPE } from "@/lib/labels";
 import StockTable from "./StockTable";
+import WarehouseSwitcher from "../signatures/WarehouseSwitcher";
 import StatusChangeModal from "./StatusChangeModal";
 import SendToTanaModal from "../maintenance/SendToTanaModal";
 import ExchangeDefectiveModal from "./ExchangeDefectiveModal";
@@ -21,22 +22,27 @@ const ASSOC: Record<string, string> = {
 export default async function StockPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; category?: string; warehouse?: string }>;
+  searchParams: Promise<{ q?: string; category?: string; warehouse?: string; wh?: string }>;
 }) {
   const user = await requireCapability("warehouse.operate");
   const bId = user.battalionId!;
-  const { q = "", category = "", warehouse = "" } = await searchParams;
+  const { q = "", category = "", warehouse = "", wh: whParam = "" } = await searchParams;
 
-  // סקופ — משתמש לא-אדמין עם מחסנים רואה רק את טיפוסי המחסנים שלו
-  const myWarehouseTypes: string[] = [];
-  if (!user.isAdmin && user.holderIds?.length) {
-    const myHolders = await prisma.holder.findMany({
-      where: { id: { in: user.holderIds }, kind: "WAREHOUSE" },
-      select: { warehouseType: true },
-    });
-    for (const h of myHolders) if (h.warehouseType) myWarehouseTypes.push(h.warehouseType);
-  }
-  const isScoped = !user.isAdmin && myWarehouseTypes.length > 0;
+  // סקופ — משתמש לא-אדמין עם מחסנים רואה רק את מחסניו. אם יש לו 2+ מחסנים — בורר "מחסן פעיל"
+  // מאפשר לצמצם לתצוגת מחסן בודד (?wh=), אחרת מוצג האיחוד של כל מחסניו.
+  const myWarehouses = (!user.isAdmin && user.holderIds?.length)
+    ? await prisma.holder.findMany({
+        where: { id: { in: user.holderIds }, kind: "WAREHOUSE" },
+        select: { id: true, name: true, warehouseType: true }, orderBy: { name: "asc" },
+      })
+    : [];
+  const activeHolderId: string | null = whParam && myWarehouses.some((w) => w.id === whParam) ? whParam : null;
+  // היקף ה-holderIds לשאילתות מלאי — מחסן בודד אם נבחר, אחרת כל מחסני המשתמש
+  const scopeIds: string[] = activeHolderId ? [activeHolderId] : (user.holderIds ?? []);
+  // טיפוסי המחסן הרלוונטיים — מצטמצמים למחסן הפעיל אם נבחר
+  const scopeWarehouses = activeHolderId ? myWarehouses.filter((w) => w.id === activeHolderId) : myWarehouses;
+  const myWarehouseTypes = scopeWarehouses.map((w) => w.warehouseType).filter((t): t is NonNullable<typeof t> => !!t);
+  const isScoped = !user.isAdmin && myWarehouses.length > 0;
 
   // קווי העברה במצב PENDING (מלאי במעבר)
   const transitLines = await prisma.transferLine.findMany({
@@ -52,10 +58,10 @@ export default async function StockPage({
     where: { battalionId: bId, kind: "WAREHOUSE", active: true }, select: { id: true },
   }).then((rows) => rows.map((r) => r.id));
   const balanceHolderScope = isScoped
-    ? { holderId: { in: user.holderIds } }
+    ? { holderId: { in: scopeIds } }
     : { holderId: { in: allWarehouseIds } };
   const serialHolderScope = isScoped
-    ? { currentHolderId: { in: user.holderIds } }
+    ? { currentHolderId: { in: scopeIds } }
     : { currentHolderId: { in: allWarehouseIds } };
 
   const items = await prisma.itemType.findMany({
@@ -67,8 +73,8 @@ export default async function StockPage({
       ...(isScoped ? {
         OR: [
           { category: { warehouseType: { in: myWarehouseTypes as never[] } } },
-          { stockBalances: { some: { holderId: { in: user.holderIds }, quantity: { gt: 0 } } } },
-          { serialUnits: { some: { currentHolderId: { in: user.holderIds } } } },
+          { stockBalances: { some: { holderId: { in: scopeIds }, quantity: { gt: 0 } } } },
+          { serialUnits: { some: { currentHolderId: { in: scopeIds } } } },
         ],
       } : {}),
     },
@@ -120,7 +126,7 @@ export default async function StockPage({
     defectiveStatusId: string; defectiveStatusName: string; available: number;
   }>> = {};
   const defectiveAtMyWarehouseAll = isScoped
-    ? allDefectiveStocks.filter((b) => b.holder?.kind === "WAREHOUSE" && user.holderIds.includes(b.holderId)).map((b) => ({
+    ? allDefectiveStocks.filter((b) => b.holder?.kind === "WAREHOUSE" && scopeIds.includes(b.holderId)).map((b) => ({
         itemTypeId: b.itemTypeId, itemName: b.itemType.name, sku: b.itemType.sku, unit: b.itemType.unit,
         defectiveStatusId: b.statusId, defectiveStatusName: b.status.name, available: b.quantity,
       }))
@@ -161,7 +167,7 @@ export default async function StockPage({
 
   // 🆕 דשבורד מספרים למחסן: סריאליים, אצוות, סטטוסים
   const myItemSerials = items.flatMap((i) => i.serialUnits.filter((u) => isScoped
-    ? u.currentHolderId && user.holderIds.includes(u.currentHolderId)
+    ? u.currentHolderId && scopeIds.includes(u.currentHolderId)
     : u.currentHolder?.kind === "WAREHOUSE"));
   const totalSerials = myItemSerials.filter((u) => !u.lotQuantity || u.lotQuantity === 1).length;
   const totalLots = myItemSerials.filter((u) => u.lotQuantity && u.lotQuantity > 1).length;
@@ -174,10 +180,14 @@ export default async function StockPage({
         helpKey="stock"
         title={isScoped ? "מלאי המחסן" : "מלאי הגדוד"}
         subtitle={isScoped
-          ? `המלאי במחסניך בלבד (${myWarehouseTypes.length} מחסנים)`
+          ? (activeHolderId ? `מלאי מחסן: ${scopeWarehouses[0]?.name ?? ""}` : `המלאי במחסניך (${myWarehouses.length} מחסנים)`)
           : "הצהרת הכמויות שהגדוד חתום עליהן מול החטיבה"}
         action={
           <div className="flex gap-2 flex-wrap items-center">
+            <WarehouseSwitcher
+              warehouses={myWarehouses.map((w) => ({ id: w.id, name: w.name }))}
+              activeId={activeHolderId} allowAll allLabel="כל מחסניי" label="תצוגה"
+            />
             {/* 🤝 קישור לעמוד עבודה מול החטיבה (קבלה / זיכוי / החלפת בלאי) */}
             <Link href="/locations"
               className="bg-white border border-slate-300 text-slate-700 rounded-lg px-3 py-2 text-xs md:text-sm font-medium hover:bg-slate-50">
@@ -346,10 +356,10 @@ export default async function StockPage({
         items={items.map((i) => {
           // 🛡️ סקופ במחסן: רק יחידות במחסנים של המשתמש
           const warehouseScopedBalances = i.stockBalances.filter((b) => isScoped
-            ? user.holderIds.includes(b.holderId)
+            ? scopeIds.includes(b.holderId)
             : b.holder?.kind === "WAREHOUSE");
           const warehouseScopedSerials = i.serialUnits.filter((u) => isScoped
-            ? u.currentHolderId && user.holderIds.includes(u.currentHolderId)
+            ? u.currentHolderId && scopeIds.includes(u.currentHolderId)
             : u.currentHolder?.kind === "WAREHOUSE");
 
           const qtyStock = warehouseScopedBalances.reduce((s, b) => s + b.quantity, 0);
