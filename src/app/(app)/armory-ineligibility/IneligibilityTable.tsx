@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card, Badge, Table, Th, Td, EmptyState } from "@/components/ui";
 import IneligibilityActions from "./IneligibilityActions";
+import { approveArmoryTestManually, clearArmoryTestProof } from "../weapons-agreement/[soldierId]/actions";
 
 type Row = {
   id: string; name: string; pn: string | null; phone: string | null;
@@ -12,13 +14,22 @@ type Row = {
 };
 
 export default function IneligibilityTable({ rows, armoryTestUrl }: { rows: Row[]; armoryTestUrl: string | null }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
   const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<"all" | "eligible" | "ineligible">("all");
+  const [filter, setFilter] = useState<"all" | "eligible" | "ineligible" | "needsReview">("all");
+
+  function approveTest(id: string) { start(async () => { await approveArmoryTestManually(id); router.refresh(); }); }
+  function deleteTest(id: string) {
+    if (!confirm("למחוק את צילום המבחן? החייל יידרש להעלות מחדש.")) return;
+    start(async () => { await clearArmoryTestProof(id); router.refresh(); });
+  }
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
       if (filter === "eligible" && !r.isFullyEligible) return false;
       if (filter === "ineligible" && r.isFullyEligible) return false;
+      if (filter === "needsReview" && !(r.test && r.testVerified !== true)) return false;
       if (q.trim()) {
         const s = q.trim().toLowerCase();
         return r.name.toLowerCase().includes(s) || (r.pn ?? "").includes(s) || r.company.toLowerCase().includes(s);
@@ -29,6 +40,7 @@ export default function IneligibilityTable({ rows, armoryTestUrl }: { rows: Row[
 
   const eligible = rows.filter((r) => r.isFullyEligible).length;
   const ineligible = rows.length - eligible;
+  const needsReview = rows.filter((r) => r.test && r.testVerified !== true).length;
 
   return (
     <>
@@ -46,6 +58,11 @@ export default function IneligibilityTable({ rows, armoryTestUrl }: { rows: Row[
           <FilterChip active={filter === "ineligible"} onClick={() => setFilter("ineligible")} color="rose">
             ❌ לא זכאים ({ineligible})
           </FilterChip>
+          {needsReview > 0 && (
+            <FilterChip active={filter === "needsReview"} onClick={() => setFilter("needsReview")} color="amber">
+              🟡 מבחן לאימות ({needsReview})
+            </FilterChip>
+          )}
         </div>
       </Card>
 
@@ -78,13 +95,21 @@ export default function IneligibilityTable({ rows, armoryTestUrl }: { rows: Row[
                   <Td>
                     {r.test ? "✅" : "❌"}
                     {r.test && (
-                      <span className="block text-[10px]" title={r.testVerified === true ? "מ\"א אומת ב-OCR" : r.testVerified === false ? "לא זוהתה התאמה — דרוש אימות ידני" : "טרם אומת — לחץ 'צפה' להרצת אימות"}>
+                      <span className="block text-[10px]" title={r.testVerified === true ? "השם אומת ב-OCR / אושר ידנית" : r.testVerified === false ? "לא זוהתה התאמת שם — דרוש אימות ידני" : "טרם אומת — לחץ 'צפה' להרצת אימות"}>
                         {r.testVerified === true ? "🟢 אומת" : r.testVerified === false ? "🟡 דרוש אימות" : "⚪ לא נבדק"}
                       </span>
                     )}
                     {r.test && (
                       <a href={`/weapons-agreement/${r.id}?tab=test`} target="_blank" rel="noopener noreferrer"
                         className="block text-[10px] text-blue-600 hover:underline">צפה / אמת</a>
+                    )}
+                    {r.test && r.testVerified !== true && (
+                      <div className="flex gap-1 mt-0.5">
+                        <button disabled={pending} onClick={() => approveTest(r.id)}
+                          className="text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-700 rounded px-1.5 py-0.5 disabled:opacity-50" title="אשר ידנית">✅ אשר</button>
+                        <button disabled={pending} onClick={() => deleteTest(r.id)}
+                          className="text-[10px] bg-rose-50 border border-rose-200 text-rose-700 rounded px-1.5 py-0.5 disabled:opacity-50" title="מחק ובקש העלאה מחדש">🗑️</button>
+                      </div>
                     )}
                     {!r.test && armoryTestUrl && (
                       <a href={armoryTestUrl} target="_blank" rel="noopener noreferrer"
@@ -122,12 +147,13 @@ export default function IneligibilityTable({ rows, armoryTestUrl }: { rows: Row[
 
 function FilterChip({ children, active, onClick, color = "slate" }: {
   children: React.ReactNode; active: boolean; onClick: () => void;
-  color?: "slate" | "emerald" | "rose";
+  color?: "slate" | "emerald" | "rose" | "amber";
 }) {
   const map = {
     slate: active ? "bg-slate-800 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700",
     emerald: active ? "bg-emerald-700 text-white" : "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200",
     rose: active ? "bg-rose-700 text-white" : "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200",
+    amber: active ? "bg-amber-600 text-white" : "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300",
   };
   return <button onClick={onClick} className={`rounded-full px-3 py-1 ${map[color]}`}>{children}</button>;
 }
