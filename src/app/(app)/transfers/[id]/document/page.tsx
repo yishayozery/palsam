@@ -83,11 +83,11 @@ export default async function TransferDocumentPage({
         <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
           <div>
             <span className="text-slate-500">מאת:</span>{" "}
-            <span className="font-medium">{t.fromHolder?.name ?? "חטיבה (גורם חיצוני)"}</span>
+            <span className="font-medium">{t.type === "EXTERNAL_IN" && t.externalName ? `🌐 ${t.externalName}` : t.fromHolder?.name ?? "חטיבה (גורם חיצוני)"}</span>
           </div>
           <div>
             <span className="text-slate-500">אל:</span>{" "}
-            <span className="font-medium">{t.toSoldier?.fullName ?? t.toHolder?.name ?? "חטיבה (גורם חיצוני)"}</span>
+            <span className="font-medium">{t.type === "EXTERNAL_OUT" && t.externalName ? `🌐 ${t.externalName}` : t.toSoldier?.fullName ?? t.toHolder?.name ?? "חטיבה (גורם חיצוני)"}</span>
           </div>
           <div>
             <span className="text-slate-500">סטטוס:</span>{" "}
@@ -97,6 +97,19 @@ export default async function TransferDocumentPage({
             <div><span className="text-slate-500">הערה:</span> {t.reason}</div>
           )}
         </div>
+
+        {/* 🌐 פרטי הגורם החיצוני */}
+        {t.externalName && (
+          <div className="mb-6 border border-indigo-200 bg-indigo-50/50 rounded-lg p-3 text-sm print:bg-white">
+            <div className="font-bold text-indigo-800 mb-1">🌐 פרטי הגורם החיצוני</div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              <div><span className="text-slate-500">שם מלא:</span> <span className="font-medium">{t.externalName}</span></div>
+              {t.recipientPersonalId && <div><span className="text-slate-500">מ.א:</span> <span className="font-mono">{t.recipientPersonalId}</span></div>}
+              {t.externalPhone && <div><span className="text-slate-500">נייד:</span> <span className="font-mono">{t.externalPhone}</span></div>}
+              {t.externalUnit && <div><span className="text-slate-500">שייכות:</span> <span>{t.externalUnit}</span></div>}
+            </div>
+          </div>
+        )}
 
         {/* טבלת פריטים */}
         <table className="w-full text-sm text-right border border-slate-300 mb-6">
@@ -141,11 +154,19 @@ export default async function TransferDocumentPage({
           <div className="border-t border-slate-400 pt-2">
             <div className="text-slate-500">מקבל / מאשר</div>
             <div className="font-medium mt-1">
-              {t.approvedBy?.fullName ?? t.signatures[0]?.soldier?.fullName ?? t.signatures[0]?.signerUser?.fullName ?? "________________"}
+              {t.externalName ?? t.approvedBy?.fullName ?? t.signatures[0]?.soldier?.fullName ?? t.signatures[0]?.signerUser?.fullName ?? "________________"}
               {t.approvedAt && (
                 <span className="text-slate-400"> · {t.approvedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</span>
               )}
             </div>
+            {/* חתימת גורם חיצוני */}
+            {t.externalSignature && (
+              <div className="mt-3 border border-slate-200 rounded-lg p-2 bg-slate-50">
+                <div className="text-[10px] text-slate-500 mb-1">חתימת הגורם החיצוני:</div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={t.externalSignature} alt="חתימת גורם חיצוני" className="max-h-24 object-contain" />
+              </div>
+            )}
             {/* חתימה דיגיטלית — אם קיימת */}
             {t.signatures[0]?.signatureData && (
               <div className="mt-3 border border-slate-200 rounded-lg p-2 bg-slate-50">

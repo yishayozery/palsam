@@ -54,6 +54,8 @@ enum TransferType {
   RETURN // החזרה: פלוגה ◄ מחסן
   SIGNOUT // החתמת חייל
   CHECKIN // זיכוי חייל
+  EXTERNAL_OUT // החתמת חוץ — מסירת ציוד לגורם חיצוני (מכל מחסן)
+  EXTERNAL_IN // זיכוי חוץ — קבלת ציוד חזרה מגורם חיצוני
 }
 
 enum TransferStatus {
@@ -1017,6 +1019,7 @@ model SerialUnit {
   currentHolder    Holder?          @relation("SerialUnitHolder", fields: [currentHolderId], references: [id])
   signedSoldierId  String?
   signedSoldier    Soldier?         @relation("SerialUnitSignedSoldier", fields: [signedSoldierId], references: [id])
+  externalHolderName String? // 🆕 כשהיחידה חתומה על גורם חוץ — שם הגורם (currentHolderId=null)
   physicalLocation String? // ⚠️ Deprecated — שדה טקסט חופשי ישן. השתמש ב-equipmentLocationId
   // 🆕 מיקום ציוד מהרשימה המוגדרת (במקום טקסט חופשי)
   equipmentLocationId String?
@@ -1119,11 +1122,15 @@ model Transfer {
 
   reason String?
   notes  String?
-  // עבור העברות מול גורם חיצוני (חטיבה / יחידה אחרת)
+  // עבור העברות מול גורם חיצוני (חטיבה / יחידה אחרת). externalUnit = שייכות.
   externalUnit    String?
   externalContact String?
   // מספר אישי של מקבל המסירה (אם הגדוד דורש זאת)
   recipientPersonalId String?
+  // 🆕 החתמת/זיכוי חוץ — פרטי הגורם החיצוני + חתימתו על התעודה
+  externalName      String? // שם מלא של מקבל/מוסר החוץ
+  externalPhone     String? // נייד
+  externalSignature String? // data URL של חתימת הגורם החיצוני
 
   createdById  String
   createdBy    AppUser  @relation("TransferCreatedBy", fields: [createdById], references: [id])

@@ -10,6 +10,8 @@ import CompanySignModal from "./CompanySignModal";
 import CheckinModal from "./CheckinModal";
 import SoldierTransferModal from "./SoldierTransferModal";
 import WarehouseSwitcher from "./WarehouseSwitcher";
+import ExternalSignModal from "./ExternalSignModal";
+import ExternalCheckinModal from "./ExternalCheckinModal";
 
 import CompanyCheckinModal from "./CompanyCheckinModal";
 import { ROLE_LABELS } from "@/lib/rbac";
@@ -300,7 +302,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
   const companyTransfers = await prisma.transfer.findMany({
     where: {
       battalionId: bId,
-      type: { in: ["ISSUE", "RETURN", "SIGNOUT", "CHECKIN"] },
+      type: { in: ["ISSUE", "RETURN", "SIGNOUT", "CHECKIN", "EXTERNAL_OUT", "EXTERNAL_IN"] },
       // למפ"מ — כל ההיסטוריה; לאחרים — קשורות למחסניהם
       ...(isMafam ? {} : { OR: [{ fromHolderId: { in: user.holderIds } }, { toHolderId: { in: user.holderIds } }] }),
     },
@@ -315,6 +317,13 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
 
   const isArmory = !!(activeHolderId && await prisma.holder.findFirst({ where: { id: activeHolderId, warehouseType: "ARMORY" } }));
   const activeWarehouseName = myWarehouses.find((w) => w.id === activeHolderId)?.name ?? null;
+
+  // 🌐 ציוד שנמצא כרגע אצל גורמי חוץ (סריאלי) — לזיכוי חוץ ולמעקב
+  const externalHeld = await prisma.serialUnit.findMany({
+    where: { battalionId: bId, externalHolderName: { not: null } },
+    include: { itemType: { select: { name: true } }, status: { select: { name: true } } },
+    orderBy: [{ externalHolderName: "asc" }, { itemType: { name: "asc" } }],
+  });
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
 
   _step = "render-start";
@@ -328,6 +337,21 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
           canSign ? (
             <div className="flex gap-2 flex-wrap items-center">
               <WarehouseSwitcher warehouses={myWarehouses.map((w) => ({ id: w.id, name: w.name }))} activeId={activeHolderId} />
+              {!isCompanyRep && activeHolderId && (
+                <ExternalSignModal
+                  warehouseId={activeHolderId}
+                  warehouseName={activeWarehouseName}
+                  units={availableUnits.map((u) => ({ id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber, statusId: u.statusId, lotQuantity: u.lotQuantity }))}
+                  balances={warehouseBalances.map((b) => ({ itemTypeId: b.itemTypeId, itemName: b.itemType.name, unit: b.itemType.unit, statusId: b.statusId, status: b.status.name, quantity: b.quantity }))}
+                />
+              )}
+              {!isCompanyRep && externalHeld.length > 0 && (
+                <ExternalCheckinModal
+                  warehouses={(myWarehouses.length > 0 ? myWarehouses.map((w) => ({ id: w.id, name: w.name })) : allWarehouses)}
+                  defaultWarehouseId={activeHolderId}
+                  held={externalHeld.map((u) => ({ id: u.id, itemName: u.itemType.name, serial: u.serialNumber, holder: u.externalHolderName!, status: u.status.name }))}
+                />
+              )}
               {/* החתמת פלוגה — רק למפ"מ ולקצין מחסן (לא לרס"פ פלוגה) */}
               {!isCompanyRep && <CompanySignModal
                 companies={companiesForSign.map((c) => ({
@@ -598,13 +622,15 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                       t.type === "ISSUE" ? "bg-blue-100 text-blue-800" :
                       t.type === "RETURN" ? "bg-emerald-100 text-emerald-800" :
                       t.type === "SIGNOUT" ? "bg-purple-100 text-purple-800" :
+                      t.type === "EXTERNAL_OUT" ? "bg-indigo-100 text-indigo-800" :
+                      t.type === "EXTERNAL_IN" ? "bg-teal-100 text-teal-800" :
                       "bg-slate-100 text-slate-700"
                     }>
-                      {t.type === "ISSUE" ? "📤 הקצאה" : t.type === "RETURN" ? "↩️ החזרה" : t.type === "SIGNOUT" ? "✍️ החתמת חייל" : "🔄 זיכוי"}
+                      {t.type === "ISSUE" ? "📤 הקצאה" : t.type === "RETURN" ? "↩️ החזרה" : t.type === "SIGNOUT" ? "✍️ החתמת חייל" : t.type === "EXTERNAL_OUT" ? "🌐 החתמת חוץ" : t.type === "EXTERNAL_IN" ? "🌐 זיכוי חוץ" : "🔄 זיכוי"}
                     </Badge>
                   </Td>
-                  <Td>{t.fromHolder?.name ?? "—"}</Td>
-                  <Td>{t.toSoldier?.fullName ?? t.toHolder?.name ?? "—"}</Td>
+                  <Td>{t.type === "EXTERNAL_IN" && t.externalName ? `🌐 ${t.externalName}` : t.fromHolder?.name ?? "—"}</Td>
+                  <Td>{t.type === "EXTERNAL_OUT" && t.externalName ? `🌐 ${t.externalName}` : t.toSoldier?.fullName ?? t.toHolder?.name ?? "—"}</Td>
                   <Td className="text-center">{t._count.lines}</Td>
                   <Td>
                     <Badge className={

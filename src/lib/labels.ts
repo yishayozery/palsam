@@ -25,6 +25,8 @@ export const TRANSFER_TYPE: Record<TransferType, string> = {
   RETURN: "החזרה למחסן",
   SIGNOUT: "החתמת חייל",
   CHECKIN: "זיכוי חייל",
+  EXTERNAL_OUT: "החתמת חוץ (גורם חיצוני)",
+  EXTERNAL_IN: "זיכוי חוץ (גורם חיצוני)",
 };
 
 export const TRANSFER_STATUS: Record<TransferStatus, string> = {
