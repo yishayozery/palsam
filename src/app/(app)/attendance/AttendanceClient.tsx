@@ -138,20 +138,6 @@ export default function AttendanceClient({
   const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
   const isFuture = (date: string) => mode === "record" && date > todayStr;
 
-  function cycleStatus(soldierId: string, date: string) {
-    if (!canManage) return;
-    if (isFuture(date)) return;
-    if (isShmapLocked(soldierId, date)) return;
-    if (isNoShmapLocked(soldierId, date)) return;
-    const current = getStatus(soldierId, date);
-    const idx = current ? statuses.findIndex((s) => s.id === current) : -1;
-    const next = idx + 1 < statuses.length ? statuses[idx + 1].id : null;
-    setPendingChanges((prev) => {
-      const m = new Map(prev);
-      m.set(`${soldierId}:${date}`, next);
-      return m;
-    });
-  }
 
   function setStatusDirectly(soldierId: string, date: string, statusId: string | null) {
     if (!canManage) return;
@@ -880,7 +866,7 @@ export default function AttendanceClient({
                         return (
                           <td
                             key={d.date}
-                            onClick={() => !blocked && cycleStatus(soldier.id, d.date)}
+                            onClick={(e) => !blocked && handleContextMenu(e, soldier.id, d.date)}
                             onContextMenu={(e) => !blocked && handleContextMenu(e, soldier.id, d.date)}
                             className={`text-center select-none transition-colors border-l border-slate-50
                               ${blocked ? "cursor-not-allowed" : "cursor-pointer hover:bg-slate-100"}

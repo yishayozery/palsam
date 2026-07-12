@@ -62,7 +62,7 @@ export default function AttendanceReportClient({
     const p = new URLSearchParams({ t: token, date, mode, ...patch });
     router.push(`?${p.toString()}`);
   };
-  function setMark(sid: string, statusId: string | null) { setMarks((m) => ({ ...m, [sid]: statusId })); }
+  function setStatus(sid: string, statusId: string) { setMarks((m) => ({ ...m, [sid]: m[sid] === statusId ? null : statusId })); }
   function toggleExtra(d: string) { setExtraDates((cur) => cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d]); }
   function copyFromPlan() {
     const next: Record<string, string | null> = { ...marks };
@@ -70,6 +70,13 @@ export default function AttendanceReportClient({
     for (const s of soldiers) { const ps = planMap[s.id]; if (ps) { next[s.id] = ps; n++; } }
     setMarks(next);
     setErr(n === 0 ? "אין תכנון ליום זה להעתקה" : null);
+  }
+  function copyFromYesterday() { // שכפול הדיווח מאתמול ליום הנוכחי
+    const next: Record<string, string | null> = { ...marks };
+    let n = 0;
+    for (const s of soldiers) { const ys = yestMap[s.id]; if (ys) { next[s.id] = ys; n++; } }
+    setMarks(next);
+    setErr(n === 0 ? "אין דיווח מאתמול להעתקה" : null);
   }
   function fillRest(statusId: string) { // מילוי מהיר לכל מי שלא סומן (למשל "כולם נמצאים")
     setMarks((m) => { const next = { ...m }; for (const s of soldiers) if (!next[s.id]) next[s.id] = statusId; return next; });
@@ -127,9 +134,13 @@ export default function AttendanceReportClient({
           </div>
         ) : (
           <>
+            {/* יום הדיווח — בולט */}
+            <div className="rounded-lg px-3 py-2 mb-2 text-center font-bold text-sm" style={{ background: accent + "18", color: accent, border: `1px solid ${accent}55` }}>
+              📅 {isPlan ? "מתכנן" : "מדווח"} על: {dateLabel}{date === today ? " (היום)" : ""}
+            </div>
             {/* תאריך ראשי + חיפוש */}
             <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <input type="date" value={date} min={isPlan ? today : undefined} onChange={(e) => nav({ date: e.target.value })} className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white" />
+              <input type="date" value={date} onChange={(e) => nav({ date: e.target.value })} className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white" />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 חייל…" className="flex-1 min-w-[100px] border border-slate-300 rounded-lg px-3 py-2 text-sm" />
             </div>
 
@@ -170,11 +181,12 @@ export default function AttendanceReportClient({
               </div>
             </div>
 
-            {/* העתקת התכנון לביצוע — בולט (רק במצב ביצוע) */}
+            {/* שכפול מהיר — מהתכנון / מאתמול (רק במצב ביצוע) */}
             {!isPlan && (
-              <button onClick={copyFromPlan} className="w-full mb-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-sm font-bold">
-                📋 העתק את התכנון לביצוע
-              </button>
+              <div className="flex gap-2 mb-2">
+                <button onClick={copyFromPlan} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-sm font-bold">📋 העתק מהתכנון</button>
+                <button onClick={copyFromYesterday} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2.5 text-sm font-bold">🔁 שכפל מאתמול</button>
+              </div>
             )}
 
             <div className="text-xs text-slate-500 mb-2">🟢 {present} נוכחים · סומנו {marked}/{soldiers.length}</div>
@@ -189,15 +201,23 @@ export default function AttendanceReportClient({
                   <div key={s.id} className="bg-white border border-slate-200 rounded-lg px-2 py-1.5 flex items-center gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="text-[13px] font-medium text-slate-800 truncate leading-tight">{s.name}</div>
-                      {y && <div className="text-[10px] text-slate-400 leading-tight">אתמול {y.icon} {y.name}</div>}
+                      <div className="flex items-center gap-1.5 text-[10px] leading-tight">
+                        {curSt ? <span className="font-medium" style={{ color: curSt.color }}>{curSt.icon} {curSt.name}</span> : <span className="text-slate-300">לא סומן</span>}
+                        {y && <span className="text-slate-400">· אתמול {y.icon}</span>}
+                      </div>
                     </div>
-                    {/* בורר סטטוס בגלילה — כדי שלא ישתנה בטעות בלחיצה */}
-                    <select value={cur ?? ""} onChange={(e) => setMark(s.id, e.target.value || null)}
-                      className="shrink-0 rounded-lg border px-2 py-2 text-sm font-medium min-w-[7.5rem]"
-                      style={curSt ? { background: curSt.color + "1a", color: curSt.color, borderColor: curSt.color } : { background: "#fff", color: "#94a3b8", borderColor: "#e2e8f0" }}>
-                      <option value="">— בחר —</option>
-                      {statuses.map((st) => <option key={st.id} value={st.id}>{st.icon ? `${st.icon} ` : ""}{st.name}</option>)}
-                    </select>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {statuses.map((st) => {
+                        const on = cur === st.id;
+                        return (
+                          <button key={st.id} onClick={() => setStatus(s.id, st.id)} title={st.name}
+                            className="w-8 h-8 rounded-lg border flex items-center justify-center text-base"
+                            style={on ? { background: st.color, borderColor: st.color, transform: "scale(1.05)" } : { background: "#fff", borderColor: "#e2e8f0" }}>
+                            <span style={on ? { filter: "grayscale(0)" } : { opacity: 0.55 }}>{st.icon ?? st.name.slice(0, 1)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
