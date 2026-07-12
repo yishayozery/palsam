@@ -301,7 +301,12 @@ export async function POST(
       if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
       await sendTelegramMessage(token, chatId,
-        `📁 <b>טפסי נהג — ${battalion.name}</b>\n\n${soldier.fullName}, למילוי וחתימה על טפסי תיק הנהג שלך:\n\n👉 <a href="${baseUrl}/driver-form/${soldier.id}${linkTokenQuery("driver-form", soldier.id)}">לחץ כאן למילוי הטפסים</a>`, keyboard);
+        `📁 <b>טפסי נהג — ${battalion.name}</b>\n\n${soldier.fullName}, למילוי וחתימה על טפסי תיק הנהג:\n👉 <a href="${baseUrl}/driver-form/${soldier.id}${linkTokenQuery("driver-form", soldier.id)}">לחץ כאן למילוי הטפסים</a>\n\n📸 <b>צילומי רישיון — הכי קל לשלוח כאן ישירות בבוט:</b>\nבחר/י סוג, ואז שלח/י את התמונה בצ'אט 👇`, {
+        inline_keyboard: [
+          [{ text: "🪪 אזרחי — קדימה", callback_data: "licphoto:civFront" }, { text: "🪪 אזרחי — אחורה", callback_data: "licphoto:civBack" }],
+          [{ text: "🎖️ צבאי — קדימה", callback_data: "licphoto:milFront" }],
+        ],
+      });
       return NextResponse.json({ ok: true });
     }
 
@@ -457,6 +462,23 @@ async function handleCallback(
     }
     await answerCallbackQuery(token, callback.id, "נחתם! ✅");
     await editMessageText(token, chatId, messageId, `✅ <b>חתמת על נוהל הנהיגה</b>\nתודה, ${soldier.fullName}.`);
+    return;
+  }
+
+  // בחירת סוג צילום רישיון — התמונה הבאה שתישלח תישמר לשדה הזה
+  if (data.startsWith("licphoto:")) {
+    const target = data.split(":")[1];
+    if (!["civFront", "civBack", "milFront"].includes(target)) { await answerCallbackQuery(token, callback.id, "שגיאה"); return; }
+    const soldier = await prisma.soldier.findFirst({ where: { battalionId, telegramChatId: chatId }, select: { id: true } });
+    if (!soldier) { await answerCallbackQuery(token, callback.id, "לא מחובר"); return; }
+    await prisma.telegramPhotoRequest.upsert({
+      where: { battalionId_chatId: { battalionId, chatId } },
+      update: { target, createdAt: new Date() },
+      create: { battalionId, chatId, target },
+    });
+    const label = target === "civFront" ? "רישיון אזרחי — קדימה" : target === "civBack" ? "רישיון אזרחי — אחורה" : "רישיון צבאי — קדימה";
+    await answerCallbackQuery(token, callback.id, "עכשיו שלח/י את התמונה 📸");
+    await sendTelegramMessage(token, chatId, `📸 <b>${label}</b>\nשלח/י עכשיו את התמונה כאן בצ'אט (מצלמה או גלריה של טלגרם — עובד תמיד).`);
     return;
   }
 
@@ -1105,6 +1127,27 @@ async function handlePhotoUpload(
   });
   if (!soldier) {
     await sendTelegramMessage(botToken, chatId, NOT_REGISTERED);
+    return;
+  }
+
+  // אם החייל בחר לשלוח צילום רישיון — התמונה נשמרת לשדה שנבחר (עוקף את מבחן הארמון)
+  const photoReq = await prisma.telegramPhotoRequest.findUnique({ where: { battalionId_chatId: { battalionId, chatId } } });
+  if (photoReq && ["civFront", "civBack", "milFront"].includes(photoReq.target)) {
+    const largest = photos[photos.length - 1];
+    try {
+      const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ file_id: largest.file_id }) });
+      const fileData = await fileRes.json();
+      if (!fileData.ok || !fileData.result?.file_path) { await sendTelegramMessage(botToken, chatId, "❌ שגיאה בטעינת התמונה. נסה שוב."); return; }
+      const imgRes = await fetch(`https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`);
+      const imgBuf = Buffer.from(await imgRes.arrayBuffer());
+      const ext = fileData.result.file_path.split(".").pop()?.toLowerCase() ?? "jpg";
+      const dataUrl = `data:${ext === "png" ? "image/png" : "image/jpeg"};base64,${imgBuf.toString("base64")}`;
+      const field = photoReq.target === "civFront" ? "civilianLicenseFrontData" : photoReq.target === "civBack" ? "civilianLicenseBackData" : "militaryLicenseFrontData";
+      await prisma.soldier.update({ where: { id: soldier.id }, data: { [field]: dataUrl } });
+      await prisma.telegramPhotoRequest.delete({ where: { battalionId_chatId: { battalionId, chatId } } }).catch(() => {});
+      const label = photoReq.target === "civFront" ? "רישיון אזרחי — קדימה" : photoReq.target === "civBack" ? "רישיון אזרחי — אחורה" : "רישיון צבאי — קדימה";
+      await sendTelegramMessage(botToken, chatId, `✅ <b>${label} נשמר!</b>\nתודה, ${soldier.fullName}. אפשר לשלוח עוד צילום דרך 🚗 רכבים ► 📁 תיק נהג.`);
+    } catch (e) { console.error("[Telegram license photo]", e); await sendTelegramMessage(botToken, chatId, "❌ שגיאה בשמירת התמונה. נסה שוב."); }
     return;
   }
 

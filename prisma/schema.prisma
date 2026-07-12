@@ -2336,6 +2336,16 @@ model TelegramBindChallenge {
   @@index([createdAt])
 }
 
+/** מצב "ממתין לתמונה" בבוט — החייל בחר סוג צילום (רישיון אזרחי/צבאי) והתמונה הבאה תישמר לשם. */
+model TelegramPhotoRequest {
+  battalionId String
+  chatId      String
+  target      String // civFront / civBack / milFront
+  createdAt   DateTime @default(now())
+
+  @@id([battalionId, chatId])
+}
+
 /** חריגת חלון-דיווח נוכחות לתאריך ספציפי (למשל לפני חג — לדווח כמה ימים קדימה). */
 model AttendanceReportOverride {
   id          String    @id @default(cuid())
