@@ -229,15 +229,16 @@ export async function POST(
       return NextResponse.json({ ok: true });
     }
 
-    // /attendance — דיווח נוכחות (רק למדווחי פלוגה)
+    // /attendance — דיווח נוכחות (רק למדווחי פלוגה) — לינק מאובטח ללא התחברות
     if (cmd === "/attendance") {
-      if (!canAttendance) {
-        await sendTelegramMessage(token, chatId, "🗓️ דיווח נוכחות זמין למדווחי הפלוגה בלבד (רס״פ).", keyboard);
+      if (!soldier || !canAttendance) {
+        await sendTelegramMessage(token, chatId, "🗓️ דיווח נוכחות זמין לנאמני כ\"א / רס״פ בלבד.", keyboard);
         return NextResponse.json({ ok: true });
       }
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+      const link = `${baseUrl}/attendance-report/${soldier.id}${linkTokenQuery("attendance-report", soldier.id)}`;
       await sendTelegramMessage(token, chatId,
-        `🗓️ <b>דיווח נוכחות — ${battalion.name}</b>\n\nדווח/י את נוכחות ${soldier?.company?.name || "הפלוגה"} להיום:\n\n👉 <a href="${baseUrl}/attendance">לחץ כאן לדיווח</a>`, keyboard);
+        `🗓️ <b>דיווח נוכחות (דוח 1) — ${battalion.name}</b>\n\n${soldier.fullName}, הרשימה תופיע ישר — רק לסמן ולשלוח (בלי התחברות):\n👉 <a href="${link}">פתח דיווח נוכחות</a>`, keyboard);
       return NextResponse.json({ ok: true });
     }
 
