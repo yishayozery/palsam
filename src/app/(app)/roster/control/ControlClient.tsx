@@ -180,6 +180,10 @@ export default function ControlClient({
               <option value="">כל הפלוגות</option>
               {companyNames.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
+            <a href={`/roster/control/export?from=${range.start}&to=${range.end}`}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg px-3 py-1 text-sm font-medium">
+              📥 הורד אקסל (חיילים ודיווחים)
+            </a>
             <span className="text-xs text-slate-400">{days.length} ימים · {filteredAgg.length} חיילים · אחוזים מתוך ימי שמ״פ</span>
           </div>
 
