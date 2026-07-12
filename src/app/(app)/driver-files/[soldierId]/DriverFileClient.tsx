@@ -210,8 +210,8 @@ function FormFiller({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-0 sm:p-4 overflow-y-auto" onClick={onClose}>
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl my-0 sm:my-4" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl my-0 sm:my-4">
         <div className="sticky top-0 bg-white border-b border-slate-100 p-4 flex items-center justify-between rounded-t-2xl z-10">
           <h3 className="font-bold text-slate-800">📝 {def.title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-xl">✕</button>

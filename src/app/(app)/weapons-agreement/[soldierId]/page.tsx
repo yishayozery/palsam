@@ -7,18 +7,50 @@ import { WEAPONS_AGREEMENT_TITLE, WEAPONS_AGREEMENT_CLAUSES, WEAPONS_AGREEMENT_F
 export const dynamic = "force-dynamic";
 
 export default async function WeaponsAgreementPage({
-  params,
+  params, searchParams,
 }: {
   params: Promise<{ soldierId: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   await requireCapability("weapons.view");
   const { soldierId } = await params;
+  const { tab } = await searchParams;
 
   const soldier = await prisma.soldier.findUnique({
     where: { id: soldierId },
     include: { battalion: { select: { name: true, logoData: true } }, company: { select: { name: true } } },
   });
-  if (!soldier || !soldier.weaponsAgreementSignedAt) notFound();
+  if (!soldier) notFound();
+
+  // 🖼️ תצוגת צילום מבחן הארמון (מהבוט/העלאה) — לינק "צפה" בעמודת "מבחן ארמון"
+  if (tab === "test") {
+    if (!soldier.armoryTestProofImage) notFound();
+    return (
+      <div>
+        <div className="flex justify-between items-center mb-4 print:hidden">
+          <a href="/armory-ineligibility" className="text-sm text-slate-500 hover:text-slate-800">→ חזרה לדוח זכאות</a>
+          <PrintButton />
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 max-w-2xl mx-auto print:shadow-none print:border-0" dir="rtl">
+          <h1 className="text-center text-lg font-bold mb-1">🎯 צילום מבחן ארמון</h1>
+          <div className="text-center text-sm text-slate-600 mb-4">
+            <span className="font-bold">{soldier.fullName}</span>
+            {soldier.personalNumber && <span className="font-mono"> · מ.א. {soldier.personalNumber}</span>}
+            {soldier.company?.name && <span> · {soldier.company.name}</span>}
+          </div>
+          {soldier.armoryTestProofAt && (
+            <div className="text-center text-xs text-slate-400 mb-3">הועלה: {soldier.armoryTestProofAt.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}</div>
+          )}
+          <div className="border border-slate-200 rounded-lg p-2 bg-slate-50 flex justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={soldier.armoryTestProofImage} alt="צילום מבחן ארמון" className="max-w-full max-h-[70vh] object-contain rounded" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!soldier.weaponsAgreementSignedAt) notFound();
 
   const unitName = soldier.battalion?.name || "גדוד";
   const approver = soldier.weaponsApprovedById

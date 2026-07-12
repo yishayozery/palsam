@@ -57,7 +57,7 @@ export default function IneligibilityTable({ rows, armoryTestUrl }: { rows: Row[
             <thead>
               <tr>
                 <Th>חייל</Th><Th>פלוגה</Th>
-                <Th>שלישות</Th><Th>מג&quot;ד/סמג&quot;ד</Th><Th>מבחן ארמון</Th><Th>נוהל שמירה</Th>
+                <Th>שלישות</Th><Th>אישור נשק-גדודי</Th><Th>מבחן ארמון</Th><Th>נוהל שמירה</Th>
                 <Th>סטטוס</Th>
                 <Th></Th>
               </tr>
