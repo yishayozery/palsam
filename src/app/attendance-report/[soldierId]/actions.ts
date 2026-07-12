@@ -2,7 +2,35 @@
 
 import { prisma } from "@/lib/prisma";
 import { verifyLink } from "@/lib/link-token";
+import { touchPresence, readPresence, type PresenceState } from "@/lib/attendancePresence";
 import { revalidatePath } from "next/cache";
+
+/** scope + פרטי הנאמן, אחרי אימות הרשאה. null אם אין הרשאה. */
+async function reporterScope(soldierId: string) {
+  const r = await prisma.soldier.findUnique({
+    where: { id: soldierId },
+    select: { fullName: true, battalionId: true, companyId: true, squadId: true, isAttendanceReporter: true, appUser: { select: { role: true } } },
+  });
+  if (!r) return null;
+  if (!(r.isAttendanceReporter || r.appUser?.role === "COMPANY_REP")) return null;
+  const scopeKey = r.squadId ?? r.companyId ?? "";
+  if (!scopeKey) return null;
+  return { name: r.fullName, battalionId: r.battalionId, scopeKey };
+}
+
+/** heartbeat — מסמן שהנאמן פעיל, ומחזיר מי עוד פעיל + מי דיווח לאחרונה (לתיאום בין 2 נאמנים). */
+export async function heartbeatPresence(
+  soldierId: string, token: string, date: string, submitted = false,
+): Promise<PresenceState> {
+  const empty: PresenceState = { others: [], lastSubmit: null };
+  if (!verifyLink("attendance-report", soldierId, token)) return empty;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return empty;
+  const sc = await reporterScope(soldierId);
+  if (!sc) return empty;
+  const dateObj = new Date(date + "T00:00:00.000Z");
+  await touchPresence({ ...sc, reporterId: soldierId, reporterName: sc.name, date: dateObj, submitted });
+  return readPresence(sc.scopeKey, dateObj, soldierId);
+}
 
 /** דיווח/תכנון נוכחות ע"י נאמן כ"א דרך לינק ציבורי מאובטח (ללא התחברות).
  *  תומך בריבוי ימים — אותו סימון נכתב לכל התאריכים שנבחרו (למשל בחמישי → שישי+שבת). */

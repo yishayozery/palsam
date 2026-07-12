@@ -1,24 +1,28 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { submitAttendanceReport } from "./actions";
+import { submitAttendanceReport, heartbeatPresence } from "./actions";
 
 type Status = { id: string; name: string; icon: string | null; color: string; isPresent: boolean };
 type Sol = { id: string; name: string; pn: string | null; squad: string | null };
 type Mark = { soldierId: string; statusId: string };
+type OtherReporter = { name: string; minutesAgo: number; submittedAt: string | null };
+type Presence = { others: OtherReporter[]; lastSubmit: { name: string; at: string; byMe: boolean } | null };
 
 const heDate = (ymd: string, opts: Intl.DateTimeFormatOptions) =>
   new Intl.DateTimeFormat("he-IL", { timeZone: "Asia/Jerusalem", ...opts }).format(new Date(ymd + "T00:00:00"));
+const hhmm = (iso: string) => new Intl.DateTimeFormat("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
 
 export default function AttendanceReportClient({
-  soldierId, token, date, today, mode, windowDates, scopeName, battalionName, reporterName, soldiers, statuses, records, plans, yesterday,
+  soldierId, token, date, today, mode, windowDates, scopeName, battalionName, reporterName, soldiers, statuses, records, plans, yesterday, presence,
 }: {
   soldierId: string; token: string; date: string; today: string; mode: "plan" | "record"; windowDates: string[];
   scopeName: string; battalionName: string; reporterName: string;
-  soldiers: Sol[]; statuses: Status[]; records: Mark[]; plans: Mark[]; yesterday: Mark[];
+  soldiers: Sol[]; statuses: Status[]; records: Mark[]; plans: Mark[]; yesterday: Mark[]; presence: Presence;
 }) {
   const router = useRouter();
+  const [pres, setPres] = useState<Presence>(presence);
   const source = mode === "plan" ? plans : records;
   const [marks, setMarks] = useState<Record<string, string | null>>(() => Object.fromEntries(source.map((r) => [r.soldierId, r.statusId])));
   const [extraDates, setExtraDates] = useState<string[]>([]); // ימים נוספים מלבד היום הראשי
@@ -26,6 +30,16 @@ export default function AttendanceReportClient({
   const [pending, start] = useTransition();
   const [done, setDone] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  // heartbeat — מסמן שהנאמן פעיל ומושך מי עוד פעיל (תיאום בין 2 נאמנים). כל 75 שנ' + במצב פתיחה.
+  const beat = useCallback(async (submitted = false) => {
+    try { setPres(await heartbeatPresence(soldierId, token, date, submitted)); } catch { /* לא קריטי */ }
+  }, [soldierId, token, date]);
+  useEffect(() => {
+    const t = setTimeout(() => beat(), 0);
+    const id = setInterval(() => beat(), 75_000);
+    return () => { clearTimeout(t); clearInterval(id); };
+  }, [beat]);
 
   const statusById = useMemo(() => Object.fromEntries(statuses.map((s) => [s.id, s])), [statuses]);
   const planMap = useMemo(() => Object.fromEntries(plans.map((p) => [p.soldierId, p.statusId])), [plans]);
@@ -60,12 +74,16 @@ export default function AttendanceReportClient({
   function fillRest(statusId: string) { // מילוי מהיר לכל מי שלא סומן (למשל "כולם נמצאים")
     setMarks((m) => { const next = { ...m }; for (const s of soldiers) if (!next[s.id]) next[s.id] = statusId; return next; });
   }
+  function reloadFresh() { // טעינת הדיווח העדכני (למשל אחרי שנאמן אחר עדכן) — מרענן את הסימונים
+    if (confirm("לטעון את הדיווח העדכני? שינויים שסימנת ולא נשמרו יאבדו.")) window.location.reload();
+  }
   function submit() {
     setErr(null);
     start(async () => {
       const entries = soldiers.map((s) => ({ soldierId: s.id, statusId: marks[s.id] ?? null }));
       const r = await submitAttendanceReport(soldierId, token, targetDates, mode, entries);
       if (r.error) { setErr(r.error); return; }
+      void beat(true); // סימון "דיווחתי עכשיו" לנאמנים האחרים
       const daysTxt = (r.days ?? 1) > 1 ? ` · ${r.days} ימים` : "";
       setDone(`✅ ${isPlan ? "התכנון נשמר" : "הדיווח נשלח"} — ${present} נוכחים מתוך ${soldiers.length}${daysTxt}`);
     });
@@ -87,6 +105,21 @@ export default function AttendanceReportClient({
           <button onClick={() => nav({ mode: "plan" })} className="flex-1 py-2" style={isPlan ? { background: "#2563eb", color: "#fff" } : { background: "#fff", color: "#64748b" }}>📝 תכנון</button>
           <button onClick={() => nav({ mode: "record" })} className="flex-1 py-2" style={!isPlan ? { background: "#059669", color: "#fff" } : { background: "#fff", color: "#64748b" }}>✅ ביצוע בפועל</button>
         </div>
+
+        {/* תיאום בין 2 נאמנים על אותה קבוצה */}
+        {!done && pres.others.length > 0 && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg px-2.5 py-2 text-[12px] text-amber-900 mb-2">
+            ⚠️ <b>נאמן נוסף פעיל כרגע</b> על {scopeName}: {pres.others.map((o) => `${o.name} (${o.minutesAgo === 0 ? "עכשיו" : `לפני ${o.minutesAgo} דק'`})`).join(" · ")}.
+            <div className="text-amber-700 mt-0.5">עבודה במקביל עלולה לדרוס אחד את השני — תאמו ביניכם, ורעננו לפני עדכון.</div>
+            <button onClick={reloadFresh} className="mt-1 text-[11px] bg-amber-600 text-white rounded px-2 py-0.5 font-medium">🔄 רענן לדיווח העדכני</button>
+          </div>
+        )}
+        {!done && pres.lastSubmit && (
+          <div className="text-[11px] text-slate-500 text-center mb-2">
+            עודכן לאחרונה: <b>{pres.lastSubmit.byMe ? "על ידך" : pres.lastSubmit.name}</b> · {hhmm(pres.lastSubmit.at)}
+            {!pres.lastSubmit.byMe && <button onClick={reloadFresh} className="mr-1 text-indigo-600 underline">רענן</button>}
+          </div>
+        )}
 
         {done ? (
           <div className="text-center py-10"><div className="text-5xl mb-3">✅</div><p className="font-bold text-emerald-700">{done}</p>

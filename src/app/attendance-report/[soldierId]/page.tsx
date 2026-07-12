@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { verifyLink } from "@/lib/link-token";
 import { maxReportableDate } from "@/lib/attendanceWindow";
+import { readPresence } from "@/lib/attendancePresence";
 import AttendanceReportClient from "./AttendanceReportClient";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +57,9 @@ export default async function AttendanceReportPage({ params, searchParams }: { p
   ]);
 
   const scopeName = reporter.squadId ? (reporter.squad?.name ?? "המחלקה") : (reporter.company?.name ?? "הפלוגה");
+  // מצב נוכחות ראשוני — מי עוד פעיל על אותה קבוצה + מי דיווח לאחרונה (תיאום בין 2 נאמנים)
+  const scopeKey = reporter.squadId ?? reporter.companyId ?? "";
+  const presence = scopeKey ? await readPresence(scopeKey, dateObj, reporter.id) : { others: [], lastSubmit: null };
   return (
     <AttendanceReportClient
       soldierId={reporter.id}
@@ -72,6 +76,7 @@ export default async function AttendanceReportPage({ params, searchParams }: { p
       records={records.map((r) => ({ soldierId: r.soldierId, statusId: r.statusId }))}
       plans={plans.map((r) => ({ soldierId: r.soldierId, statusId: r.statusId }))}
       yesterday={yesterday.map((r) => ({ soldierId: r.soldierId, statusId: r.statusId }))}
+      presence={presence}
     />
   );
 }

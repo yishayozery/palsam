@@ -2360,6 +2360,26 @@ model AttendanceReportOverride {
   @@index([battalionId])
 }
 
+/**
+ * נוכחות "מי מדווח עכשיו" — לתיאום בין 2 נאמני כ"א על אותה קבוצה (scope+יום).
+ * לא נעילה קשיחה: שורה פר-נאמן, heartbeat מרענן lastActiveAt. אם נאמן אחר פעיל
+ * לאחרונה — מוצגת אזהרה כדי שלא יעבדו במקביל וידרסו. lastSubmitAt = מתי דיווח לאחרונה.
+ */
+model AttendanceReporterPresence {
+  id           String   @id @default(cuid())
+  battalionId  String
+  scopeKey     String   // squadId אם משויך למחלקה, אחרת companyId
+  date         DateTime @db.Date
+  reporterId   String   // מזהה החייל-נאמן
+  reporterName String
+  lastActiveAt DateTime @updatedAt
+  lastSubmitAt DateTime?
+
+  @@unique([scopeKey, date, reporterId])
+  @@index([scopeKey, date])
+  @@index([battalionId, date])
+}
+
 /** כרטיס דלק שנמשך ע"י חייל — מעקב מי מחזיק, מספר כרטיס, מתי נמשך והוחזר. */
 model VehicleFuelCard {
   id          String    @id @default(cuid())
