@@ -20,14 +20,22 @@ export async function saveWarehouse(_prev: unknown, fd: FormData) {
   const notes = (fd.get("notes") as string)?.trim() || null;
   if (!name) return { error: "שם חובה" };
 
-  if (id) {
-    const existing = await prisma.companyWarehouse.findUnique({ where: { id }, select: { battalionId: true } });
-    if (!existing || existing.battalionId !== bId) return { error: "מחסן לא תקין" };
-    await prisma.companyWarehouse.update({ where: { id }, data: { name, notes } });
-  } else {
-    await prisma.companyWarehouse.create({
-      data: { battalionId: bId, holderId, name, notes },
-    });
+  try {
+    if (id) {
+      const existing = await prisma.companyWarehouse.findUnique({ where: { id }, select: { battalionId: true } });
+      if (!existing || existing.battalionId !== bId) return { error: "מחסן לא תקין" };
+      await prisma.companyWarehouse.update({ where: { id }, data: { name, notes } });
+    } else {
+      await prisma.companyWarehouse.create({
+        data: { battalionId: bId, holderId, name, notes },
+      });
+    }
+  } catch (e) {
+    // @@unique([holderId, name]) — שם כפול לאותה פלוגה/מחסן
+    if (e && typeof e === "object" && "code" in e && (e as { code?: string }).code === "P2002") {
+      return { error: "כבר קיים מחסן בשם הזה לפלוגה/מחסן הנבחרים" };
+    }
+    return { error: "שגיאה בשמירת המחסן" };
   }
   revalidatePath("/ymach");
   return { ok: true };

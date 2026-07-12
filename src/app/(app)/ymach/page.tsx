@@ -16,23 +16,12 @@ export default async function YmachPage({
   const bId = user.battalionId!;
 
   const sp = await searchParams;
-  // כל ה-holders עם תקן (baselines) — פלוגות ומחסנים כאחד
-  const holdersWithBaselines = await prisma.holder.findMany({
-    where: {
-      battalionId: bId, active: true,
-      companyItemBaselines: { some: { permanentQuantity: { gt: 0 } } },
-    },
-    orderBy: { name: "asc" },
+  // כל הפלוגות והמחסנים הפעילים — לבורר מידוף (לא רק אלו עם תקן, כדי לכלול גם מפקדה וכו')
+  const holders = await prisma.holder.findMany({
+    where: { battalionId: bId, active: true, kind: { in: ["COMPANY", "WAREHOUSE"] } },
+    orderBy: [{ kind: "asc" }, { name: "asc" }],
     select: { id: true, name: true, kind: true },
   });
-  // fallback: אם אין holders עם תקנים, מציגים את כל הפלוגות + מחסנים
-  const holders = holdersWithBaselines.length > 0
-    ? holdersWithBaselines
-    : await prisma.holder.findMany({
-        where: { battalionId: bId, active: true, kind: { in: ["COMPANY", "WAREHOUSE"] } },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true, kind: true },
-      });
   const isOwnHolder = user.holderId ? holders.some((h) => h.id === user.holderId) : false;
   const holderId = isOwnHolder
     ? user.holderId

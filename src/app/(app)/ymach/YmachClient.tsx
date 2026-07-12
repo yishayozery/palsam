@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card, Badge, EmptyState } from "@/components/ui";
 import {
   saveWarehouse, deleteWarehouse,
@@ -154,9 +155,11 @@ function SoldierSearch({
 
 // ===================== טאב מחסנים ומדפים =====================
 function WarehousesTab({ warehouses, holderId }: { warehouses: Warehouse[]; holderId: string }) {
+  const router = useRouter();
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [addShelfFor, setAddShelfFor] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   return (
@@ -173,24 +176,25 @@ function WarehousesTab({ warehouses, holderId }: { warehouses: Warehouse[]; hold
 
       {showAdd && (
         <Card className="p-4 bg-blue-50 border-blue-200">
-          <form action={(fd) => { startTransition(async () => { await saveWarehouse(null, fd); setShowAdd(false); }); }}>
+          <form action={(fd) => { setFormError(null); startTransition(async () => { const r = await saveWarehouse(null, fd); if (r?.error) { setFormError(r.error); return; } setShowAdd(false); router.refresh(); }); }}>
             <input type="hidden" name="holderId" value={holderId} />
             <div className="flex gap-2 items-end flex-wrap">
               <div>
                 <label className="text-xs text-slate-600 block mb-1">שם מחסן</label>
-                <input name="name" className="border rounded px-2 py-1.5 text-sm w-48" placeholder='מחסן ציוד ראשי' autoFocus />
+                <input name="name" required className="border rounded px-2 py-1.5 text-sm w-48" placeholder='מחסן ציוד ראשי' autoFocus />
               </div>
               <div>
                 <label className="text-xs text-slate-600 block mb-1">הערה</label>
                 <input name="notes" className="border rounded px-2 py-1.5 text-sm w-48" placeholder="אופציונלי" />
               </div>
-              <button type="submit" disabled={pending} className="bg-blue-700 text-white px-3 py-1.5 rounded text-sm">
+              <button type="submit" disabled={pending} className="bg-blue-700 text-white px-3 py-1.5 rounded text-sm disabled:opacity-50">
                 {pending ? "שומר..." : "שמור"}
               </button>
-              <button type="button" onClick={() => setShowAdd(false)} className="text-slate-500 text-sm px-2 py-1.5">
+              <button type="button" onClick={() => { setShowAdd(false); setFormError(null); }} className="text-slate-500 text-sm px-2 py-1.5">
                 ביטול
               </button>
             </div>
+            {formError && <p className="text-rose-600 text-xs mt-2">⚠️ {formError}</p>}
           </form>
         </Card>
       )}
@@ -221,7 +225,7 @@ function WarehousesTab({ warehouses, holderId }: { warehouses: Warehouse[]; hold
                 + מדף
               </button>
               <button
-                onClick={() => { if (confirm("למחוק מחסן?")) startTransition(async () => { await deleteWarehouse(wh.id); }); }}
+                onClick={() => { if (confirm("למחוק מחסן?")) startTransition(async () => { await deleteWarehouse(wh.id); router.refresh(); }); }}
                 className="text-xs text-red-500 hover:text-red-700"
               >
                 🗑️
@@ -234,7 +238,7 @@ function WarehousesTab({ warehouses, holderId }: { warehouses: Warehouse[]; hold
               className="mb-3 flex gap-2 items-end flex-wrap bg-emerald-50 rounded-lg p-3"
               action={(fd) => {
                 fd.set("warehouseId", wh.id);
-                startTransition(async () => { await saveShelf(null, fd); setAddShelfFor(null); });
+                startTransition(async () => { await saveShelf(null, fd); setAddShelfFor(null); router.refresh(); });
               }}
             >
               <div>
@@ -281,7 +285,7 @@ function WarehousesTab({ warehouses, holderId }: { warehouses: Warehouse[]; hold
                       </Badge>
                     )}
                     <button
-                      onClick={() => { if (confirm(`למחוק מדף ${sh.column}-${sh.row}?`)) startTransition(async () => { await deleteShelf(sh.id); }); }}
+                      onClick={() => { if (confirm(`למחוק מדף ${sh.column}-${sh.row}?`)) startTransition(async () => { await deleteShelf(sh.id); router.refresh(); }); }}
                       className="absolute top-1 right-1 text-red-400 opacity-0 group-hover:opacity-100 text-[10px]"
                     >
                       ✕
