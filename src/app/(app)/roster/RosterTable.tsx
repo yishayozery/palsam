@@ -25,6 +25,8 @@ type StatusLogEntry = {
 type AttachmentReq = {
   id: string; soldierName: string; personalNumber: string | null;
   sourceUnit: string | null; targetCompany: string | null;
+  role?: string | null; certifications?: string | null; interviewer?: string | null;
+  frameName?: string | null; rawStatus?: string | null; shmapNote?: string | null;
   fromDate: string; toDate: string; fullEmployment: boolean; status: string;
   requestedBy: string; requestedAt: string;
   notes: string | null; statusLog: StatusLogEntry[];
@@ -351,16 +353,18 @@ function AttachmentRequestsPanel({ requests, companies, open, onToggle }: { requ
                   <tr key={r.id} className={tab === "active" && days >= 7 ? "bg-rose-50/50" : tab === "active" && days >= 3 ? "bg-amber-50/30" : ""}>
                     <Td>
                       <span className="font-medium text-sm">{r.soldierName}</span>
-                      <div className="text-[10px] text-slate-400">ביקש: {r.requestedBy}</div>
+                      {r.role && <div className="text-[10px] text-slate-500">{r.role}{r.certifications ? ` · ${r.certifications}` : ""}</div>}
+                      <div className="text-[10px] text-slate-400">{r.interviewer ? `ראיין: ${r.interviewer}` : `ביקש: ${r.requestedBy}`}</div>
                     </Td>
                     <Td className="font-mono text-xs">{r.personalNumber ?? "—"}</Td>
                     <Td className="text-xs">{r.sourceUnit ?? "—"}</Td>
-                    <Td className="text-xs">{r.targetCompany ?? "—"}</Td>
+                    <Td className="text-xs">{r.targetCompany ?? r.frameName ?? "—"}</Td>
                     <Td className="text-xs whitespace-nowrap">
-                      {r.fullEmployment ? "מלאה" : `${new Date(r.fromDate).toLocaleDateString("he-IL")} — ${new Date(r.toDate).toLocaleDateString("he-IL")}`}
+                      {r.fullEmployment ? "מלאה" : (r.fromDate && r.toDate) ? `${new Date(r.fromDate).toLocaleDateString("he-IL")} — ${new Date(r.toDate).toLocaleDateString("he-IL")}` : "—"}
                     </Td>
                     <Td>
                       <Badge className={STATUS_COLORS[r.status] ?? "bg-slate-100"}>{STATUS_LABELS[r.status] ?? r.status}</Badge>
+                      {r.rawStatus && r.rawStatus !== (STATUS_LABELS[r.status] ?? r.status) && <div className="text-[10px] text-slate-400 mt-0.5 max-w-[160px]">{r.rawStatus}</div>}
                     </Td>
                     <Td>
                       <span className={`text-[10px] rounded-full px-2 py-0.5 font-bold ${days >= 7 ? "bg-rose-100 text-rose-700" : days >= 3 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>

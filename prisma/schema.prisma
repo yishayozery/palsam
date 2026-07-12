@@ -551,12 +551,20 @@ model AttachmentRequest {
   soldierName       String
   personalNumber    String?
   phone             String?
-  sourceUnit        String?             // יחידת מקור
+  sourceUnit        String?             // יחידת מקור / יחידה נוכחית
   targetCompanyId   String?
   targetCompany     Holder?             @relation("AttachmentTargetCompany", fields: [targetCompanyId], references: [id])
 
-  fromDate      DateTime                @db.Date
-  toDate        DateTime                @db.Date
+  // 🆕 שדות התאמה לקובץ המאסטר
+  role          String?                 // תפקיד
+  certifications String?                // הסמכות / היתרים
+  interviewer   String?                 // מי ביצע ראיון
+  frameName     String?                 // מסגרת בגדוד (טקסט חופשי)
+  rawStatus     String?                 // סטטוס סיפוח כפי שנרשם (טקסט חופשי עם תאריכים)
+  shmapNote     String?                 // האם בשמ"פ?
+
+  fromDate      DateTime?               @db.Date
+  toDate        DateTime?               @db.Date
   notes         String?
 
   status        AttachmentRequestStatus  @default(REQUESTED)
