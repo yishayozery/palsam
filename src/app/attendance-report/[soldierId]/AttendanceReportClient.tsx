@@ -62,7 +62,7 @@ export default function AttendanceReportClient({
     const p = new URLSearchParams({ t: token, date, mode, ...patch });
     router.push(`?${p.toString()}`);
   };
-  function setStatus(sid: string, statusId: string) { setMarks((m) => ({ ...m, [sid]: m[sid] === statusId ? null : statusId })); }
+  function setMark(sid: string, statusId: string | null) { setMarks((m) => ({ ...m, [sid]: statusId })); }
   function toggleExtra(d: string) { setExtraDates((cur) => cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d]); }
   function copyFromPlan() {
     const next: Record<string, string | null> = { ...marks };
@@ -162,7 +162,6 @@ export default function AttendanceReportClient({
                 ))}
               </div>
               <div className="flex flex-wrap gap-1">
-                {!isPlan && <button onClick={copyFromPlan} className="text-[11px] bg-blue-600 text-white rounded-lg px-2 py-1 font-medium">📋 העתק מהתכנון</button>}
                 {statuses.filter((s) => s.isPresent).slice(0, 1).map((s) => (
                   <button key={s.id} onClick={() => fillRest(s.id)} className="text-[11px] bg-slate-100 text-slate-700 rounded-lg px-2 py-1 border border-slate-200">
                     {s.icon} סמן את השאר כ{s.name}
@@ -170,6 +169,13 @@ export default function AttendanceReportClient({
                 ))}
               </div>
             </div>
+
+            {/* העתקת התכנון לביצוע — בולט (רק במצב ביצוע) */}
+            {!isPlan && (
+              <button onClick={copyFromPlan} className="w-full mb-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-sm font-bold">
+                📋 העתק את התכנון לביצוע
+              </button>
+            )}
 
             <div className="text-xs text-slate-500 mb-2">🟢 {present} נוכחים · סומנו {marked}/{soldiers.length}</div>
 
@@ -183,23 +189,15 @@ export default function AttendanceReportClient({
                   <div key={s.id} className="bg-white border border-slate-200 rounded-lg px-2 py-1.5 flex items-center gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="text-[13px] font-medium text-slate-800 truncate leading-tight">{s.name}</div>
-                      <div className="flex items-center gap-1.5 text-[10px] leading-tight">
-                        {curSt ? <span className="font-medium" style={{ color: curSt.color }}>{curSt.icon} {curSt.name}</span> : <span className="text-slate-300">לא סומן</span>}
-                        {y && <span className="text-slate-400">· אתמול {y.icon}</span>}
-                      </div>
+                      {y && <div className="text-[10px] text-slate-400 leading-tight">אתמול {y.icon} {y.name}</div>}
                     </div>
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      {statuses.map((st) => {
-                        const on = cur === st.id;
-                        return (
-                          <button key={st.id} onClick={() => setStatus(s.id, st.id)} title={st.name}
-                            className="w-8 h-8 rounded-lg border flex items-center justify-center text-base"
-                            style={on ? { background: st.color, borderColor: st.color, transform: "scale(1.05)" } : { background: "#fff", borderColor: "#e2e8f0" }}>
-                            <span style={on ? { filter: "grayscale(0)" } : { opacity: 0.55 }}>{st.icon ?? st.name.slice(0, 1)}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    {/* בורר סטטוס בגלילה — כדי שלא ישתנה בטעות בלחיצה */}
+                    <select value={cur ?? ""} onChange={(e) => setMark(s.id, e.target.value || null)}
+                      className="shrink-0 rounded-lg border px-2 py-2 text-sm font-medium min-w-[7.5rem]"
+                      style={curSt ? { background: curSt.color + "1a", color: curSt.color, borderColor: curSt.color } : { background: "#fff", color: "#94a3b8", borderColor: "#e2e8f0" }}>
+                      <option value="">— בחר —</option>
+                      {statuses.map((st) => <option key={st.id} value={st.id}>{st.icon ? `${st.icon} ` : ""}{st.name}</option>)}
+                    </select>
                   </div>
                 );
               })}

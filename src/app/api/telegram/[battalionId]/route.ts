@@ -342,6 +342,13 @@ export async function POST(
       return NextResponse.json({ ok: true });
     }
 
+    // 🪪 משתמש שכבר מחובר שמקיש מ.א — בדיקת הסמכות של חייל אחר (ללא אימות נייד).
+    //    אימות דו-שלבי נדרש רק לחיבור ראשוני של משתמש לא-מחובר.
+    if (soldier) {
+      await handleLicenseCheck(token, chatId, battalionId, personalNumber, "other", keyboard);
+      return NextResponse.json({ ok: true });
+    }
+
     // Registration by personal number
     const target = await prisma.soldier.findFirst({
       where: { battalionId, personalNumber },
