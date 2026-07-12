@@ -21,7 +21,7 @@ type CartItem = CartSerial | CartQty;
 type OpKitProp = { id: string; name: string; status: string; soldierId: string; soldierName: string; shelfLabel: string | null; items: { itemTypeId: string; itemName: string; sku: string | null; quantity: number }[] };
 
 export default function SignoutModal({
-  soldiers, companies = [], balances = [], units, kits, vehicles, equipmentLocations = [], lockCompanyId, isArmory = false, reopenForSoldierId, preselectSerialIds, operationalKits = [],
+  soldiers, companies = [], balances = [], units, kits, vehicles, equipmentLocations = [], lockCompanyId, isArmory = false, reopenForSoldierId, preselectSerialIds, operationalKits = [], warehouseId = null, warehouseName = null,
 }: {
   soldiers: Soldier[]; companies?: Company[]; balances?: Balance[];
   units: Unit[]; kits: Kit[]; vehicles: Vehicle[];
@@ -31,6 +31,8 @@ export default function SignoutModal({
   reopenForSoldierId?: string | null;
   preselectSerialIds?: string[];
   operationalKits?: OpKitProp[];
+  warehouseId?: string | null;   // המחסן הפעיל שממנו מחתימים
+  warehouseName?: string | null;
 }) {
   const [open, setOpen] = useState(!!reopenForSoldierId);
   const [soldierId, setSoldierId] = useState(reopenForSoldierId ?? "");
@@ -291,6 +293,7 @@ export default function SignoutModal({
 
     const fd = new FormData();
     fd.append("soldierId", soldierId);
+    if (warehouseId) fd.append("warehouseId", warehouseId);
     if (ironNumber) fd.append("ironNumber", ironNumber);
     fd.append("method", retroactive ? "LINK" : method);
     fd.append("retroactive", retroactive ? "true" : "false");
@@ -346,8 +349,8 @@ export default function SignoutModal({
         {/* כותרת */}
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 flex items-center justify-between shrink-0">
           <div>
-            <h3 className="font-bold text-lg">✍️ החתמת חייל על ציוד</h3>
-            <p className="text-xs text-slate-300 mt-0.5">בחר חייל → הוסף פריטים מהמלאי לעגלה → אופן חתימה → שלח</p>
+            <h3 className="font-bold text-lg">✍️ החתמת חייל על ציוד{warehouseName ? ` — ${warehouseName}` : ""}</h3>
+            <p className="text-xs text-slate-300 mt-0.5">{warehouseName ? `מחתים מהמחסן: ${warehouseName} · ` : ""}בחר חייל → הוסף פריטים מהמלאי לעגלה → אופן חתימה → שלח</p>
           </div>
           <button onClick={() => { reset(); setOpen(false); }} className="text-slate-300 hover:text-white text-2xl">✕</button>
         </div>

@@ -415,10 +415,10 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
           </div>
         )}
 
-        {/* בחירת מחסן יעד — למפ"מ שלא מוגדר על מחסן */}
-        {!defaultToHolderId && warehouses.length > 0 && soldierId && (
+        {/* בחירת מחסן יעד — למפ"מ ללא מחסן קבוע, או למי שיש הרשאה ל-2+ מחסנים */}
+        {(warehouses.length > 1 || (!defaultToHolderId && warehouses.length > 0)) && soldierId && (
           <div className="bg-blue-50 border-b border-blue-200 p-3">
-            <label className="block text-[11px] text-slate-600 mb-1">מחסן יעד להחזרה</label>
+            <label className="block text-[11px] text-slate-600 mb-1">מחסן יעד להחזרה (מזכה)</label>
             <select value={targetHolderId} onChange={(e) => setTargetHolderId(e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white">
               <option value="">— בחר מחסן —</option>

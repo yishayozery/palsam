@@ -9,6 +9,7 @@ import SignoutModal from "./SignoutModal";
 import CompanySignModal from "./CompanySignModal";
 import CheckinModal from "./CheckinModal";
 import SoldierTransferModal from "./SoldierTransferModal";
+import WarehouseSwitcher from "./WarehouseSwitcher";
 
 import CompanyCheckinModal from "./CompanyCheckinModal";
 import { ROLE_LABELS } from "@/lib/rbac";
@@ -16,14 +17,28 @@ import { isRedirectError } from "next/dist/client/components/redirect-error";
 
 export const dynamic = "force-dynamic";
 
-export default async function SignaturesPage({ searchParams }: { searchParams: Promise<{ reopenFor?: string; preselect?: string }> }) {
+export default async function SignaturesPage({ searchParams }: { searchParams: Promise<{ reopenFor?: string; preselect?: string; wh?: string }> }) {
   let _step = "init";
   try {
-  const { reopenFor, preselect } = await searchParams;
+  const { reopenFor, preselect, wh } = await searchParams;
   const user = await requireUser();
   _step = "user-ok";
   const bId = user.battalionId!;
   const canSign = can(user, "signatures.manage");
+
+  // 🏬 מחסן פעיל — למשתמש עם הרשאה ל-2+ מחסנים: בורר מאיזה מחסן מחתימים/מזכים.
+  // כל שאילתות המלאי-להחתמה + מקור/יעד ההעברה משתמשות ב-activeHolderId במקום בראשי הקבוע.
+  const myWarehouses = user.holderIds.length > 0
+    ? await prisma.holder.findMany({
+        where: { id: { in: user.holderIds }, kind: "WAREHOUSE", active: true },
+        select: { id: true, name: true, warehouseType: true },
+        orderBy: { name: "asc" },
+      })
+    : [];
+  const activeHolderId: string | null =
+    (wh && myWarehouses.some((w) => w.id === wh)) ? wh
+    : (user.holderId && myWarehouses.some((w) => w.id === user.holderId)) ? user.holderId
+    : (myWarehouses[0]?.id ?? user.holderId ?? null);
 
   // היקף: קצין מחסן/נציג רואים את המחזיקים שלהם; מפמ/צופה רואים הכל
   const scopedToOwn =
@@ -46,9 +61,9 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
 
   const isMafam = user.isAdmin;
 
-  const kits = user.holderId
+  const kits = activeHolderId
     ? await prisma.signableKit.findMany({
-        where: { holderId: user.holderId, active: true },
+        where: { holderId: activeHolderId, active: true },
         include: { lines: { include: { itemType: true } } },
         orderBy: { name: "asc" },
       })
@@ -81,10 +96,10 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
   });
   // מלאי כמותי וסריאלי להחתמה: קצין מחסן רואה רק את שלו; מפ"מ רואה את כל מלאי הגדוד
   // ⚠️ פילטר signable !== false — פריטים שהוגדרו "ללא החתמה" לא יופיעו (כמו כסאות נח)
-  const warehouseBalances = (user.holderId || isMafam)
+  const warehouseBalances = (activeHolderId || isMafam)
     ? await prisma.stockBalance.findMany({
         where: {
-          ...(isMafam ? { battalionId: bId } : { holderId: user.holderId! }),
+          ...(isMafam ? { battalionId: bId } : { holderId: activeHolderId! }),
           quantity: { gt: 0 },
           itemType: { signable: true },
         },
@@ -93,11 +108,11 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
     : [];
 
   // רכבים שמשויכים לפלוגה/מחסן הנוכחיים (לבחירה כמיקום פיזי)
-  const vehicles = user.holderId
+  const vehicles = activeHolderId
     ? await prisma.serialUnit.findMany({
         where: {
           battalionId: bId,
-          currentHolderId: user.holderId,
+          currentHolderId: activeHolderId,
           itemType: { category: { warehouseType: "VEHICLES" } },
         },
         include: { itemType: true },
@@ -229,7 +244,8 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
       where: {
         battalionId: bId, signedSoldierId: null,
         itemType: { signable: true },
-        ...(isMafam ? {} : holderFilter),
+        // מלאי סריאלי להחתמה — מהמחסן הפעיל (לא מכל המחסנים של המשתמש)
+        ...(isMafam ? {} : (scopedToOwn && activeHolderId ? { currentHolderId: activeHolderId } : {})),
         // ⚠️ לא מציגים פריטים שכבר בהעברה PENDING (כדי למנוע כפל-החתמה)
         transferLines: { none: { transfer: { status: "PENDING" } } },
       },
@@ -297,7 +313,8 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
     take: 100,
   });
 
-  const isArmory = !!(user.holderId && await prisma.holder.findFirst({ where: { id: user.holderId, warehouseType: "ARMORY" } }));
+  const isArmory = !!(activeHolderId && await prisma.holder.findFirst({ where: { id: activeHolderId, warehouseType: "ARMORY" } }));
+  const activeWarehouseName = myWarehouses.find((w) => w.id === activeHolderId)?.name ?? null;
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
 
   _step = "render-start";
@@ -309,7 +326,8 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
         subtitle={isMafam ? "כל ההחתמות של פלוגות וחיילים בגדוד — מעקב והיסטוריה" : "החתמה דיגיטלית (QR/וואטסאפ/שרבוט) וזיכוי מהיר"}
         action={
           canSign ? (
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap items-center">
+              <WarehouseSwitcher warehouses={myWarehouses.map((w) => ({ id: w.id, name: w.name }))} activeId={activeHolderId} />
               {/* החתמת פלוגה — רק למפ"מ ולקצין מחסן (לא לרס"פ פלוגה) */}
               {!isCompanyRep && <CompanySignModal
                 companies={companiesForSign.map((c) => ({
@@ -371,8 +389,8 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                   lotQuantity: u.lotQuantity,
                 }))}
                 qtyHoldings={soldierQtyHoldings}
-                defaultToHolderId={user.holderId ?? null}
-                warehouses={allWarehouses}
+                defaultToHolderId={activeHolderId}
+                warehouses={myWarehouses.length > 0 ? myWarehouses.map((w) => ({ id: w.id, name: w.name })) : allWarehouses}
                 statuses={statuses.map((s) => ({ id: s.id, name: s.name, isWear: s.isWear, isLoss: s.isLoss, isDefault: s.isDefault }))}
                 operationalKits={operationalKits.filter((k) => k.assignedSoldier).map((k) => ({
                   id: k.id, name: k.name, status: k.status,
@@ -396,6 +414,8 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                 companies={companiesForFilter}
                 lockCompanyId={isCompanyRep ? user.holderId : null}
                 isArmory={isArmory}
+                warehouseId={activeHolderId}
+                warehouseName={activeWarehouseName}
                 soldiers={soldiers.map((s) => {
                   const c = companiesForFilter.find((x) => x.id === s.companyId);
                   const armoryEligible = s.status === "ENLISTED" && !!s.weaponsApprovedAt && !!s.armoryTestProofAt && !!s.weaponsAgreementSignedAt;

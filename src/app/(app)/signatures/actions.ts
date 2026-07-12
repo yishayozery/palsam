@@ -323,16 +323,21 @@ export async function createSignout(formData: FormData): Promise<{ error: string
   const physicalLocation = String(formData.get("physicalLocation") || "").trim() || null;
   const equipmentLocationId = String(formData.get("equipmentLocationId") || "") || null;
 
+  // 🏬 מחסן מקור — למשתמש עם 2+ מחסנים: המחסן שנבחר בבורר (מאומת מול הרשאות המשתמש).
+  //    ברירת מחדל: המחסן הראשי (holderId). מחליף את user.holderId בכל שאילתות המקור.
+  const pickedWarehouse = String(formData.get("warehouseId") || "") || null;
+  const sourceHolderId = pickedWarehouse && user.holderIds.includes(pickedWarehouse) ? pickedWarehouse : user.holderId;
+
   // 🔢 מספר ברזל (מיספור פנימי פר-מחסן) — נשמר בזמן ההחתמה אם הוזן, ללא דריסת מספר תפוס
   const ironRaw = String(formData.get("ironNumber") || "").replace(/\D/g, "");
-  if (ironRaw && soldierId && user.holderId) {
+  if (ironRaw && soldierId && sourceHolderId) {
     const number = parseInt(ironRaw, 10);
-    const taken = await prisma.warehouseSoldierIndex.findFirst({ where: { holderId: user.holderId, number, soldierId: { not: soldierId } } });
+    const taken = await prisma.warehouseSoldierIndex.findFirst({ where: { holderId: sourceHolderId, number, soldierId: { not: soldierId } } });
     if (!taken) {
       await prisma.warehouseSoldierIndex.upsert({
-        where: { holderId_soldierId: { holderId: user.holderId, soldierId } },
+        where: { holderId_soldierId: { holderId: sourceHolderId, soldierId } },
         update: { number },
-        create: { battalionId: bId, holderId: user.holderId, soldierId, number },
+        create: { battalionId: bId, holderId: sourceHolderId, soldierId, number },
       }).catch((e) => console.error("[createSignout] iron save failed (non-fatal):", e));
     }
   }
@@ -345,11 +350,11 @@ export async function createSignout(formData: FormData): Promise<{ error: string
 
   // 🔒 הקפאת מצב — אם יש ספירה בהקפאה שטרם הסתיימה עבור המחסן/פלוגה של המחתים,
   //    חוסמים החתמה עד לסיום הספירה (כדי לא לשבש את מצב המלאי הקפוא).
-  if (user.holderId) {
+  if (sourceHolderId) {
     const frozen = await prisma.countSession.findFirst({
       where: {
         battalionId: bId, frozen: true, status: { not: "COMPLETED" },
-        OR: [{ task: { holderId: user.holderId } }, { lines: { some: { holderId: user.holderId } } }],
+        OR: [{ task: { holderId: sourceHolderId } }, { lines: { some: { holderId: sourceHolderId } } }],
       },
       select: { id: true },
     });
@@ -497,14 +502,14 @@ export async function createSignout(formData: FormData): Promise<{ error: string
   }
 
   // 🛡️ ולידציה: לא ניתן להחתים יותר ממה שיש במלאי (פריטים כמותיים שהמשתמש בחר ידנית)
-  if (user.holderId && qtyItems.length > 0) {
+  if (sourceHolderId && qtyItems.length > 0) {
     for (let i = 0; i < qtyItems.length; i++) {
       const itemTypeId = qtyItems[i];
       const quantity = qtyValues[i];
       const statusId = qtyStatuses[i];
       if (!itemTypeId || !statusId || quantity < 1) continue;
       const balance = await prisma.stockBalance.findFirst({
-        where: { itemTypeId, holderId: user.holderId, statusId, battalionId: bId },
+        where: { itemTypeId, holderId: sourceHolderId, statusId, battalionId: bId },
       });
       const available = balance?.quantity ?? 0;
       if (available < quantity) {
@@ -520,7 +525,7 @@ export async function createSignout(formData: FormData): Promise<{ error: string
   try {
   await prisma.$transaction(async (tx) => {
     const transfer = await tx.transfer.create({
-      data: { battalionId: bId, type: "SIGNOUT", status: "PENDING", toSoldierId: soldierId, fromHolderId: user.holderId, createdById: user.id, notes: kitId ? "החתמה על ערכה" : null },
+      data: { battalionId: bId, type: "SIGNOUT", status: "PENDING", toSoldierId: soldierId, fromHolderId: sourceHolderId, createdById: user.id, notes: kitId ? "החתמה על ערכה" : null },
     });
     transferId = transfer.id;
     // יחידות סריאליות שנבחרו ידנית
@@ -552,7 +557,7 @@ export async function createSignout(formData: FormData): Promise<{ error: string
         const available = await tx.serialUnit.findMany({
           where: {
             battalionId: bId, itemTypeId: l.itemTypeId, signedSoldierId: null,
-            ...(user.holderId ? { currentHolderId: user.holderId } : {}),
+            ...(sourceHolderId ? { currentHolderId: sourceHolderId } : {}),
           },
           take: l.quantity,
         });
