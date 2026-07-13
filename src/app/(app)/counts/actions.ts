@@ -510,49 +510,8 @@ export async function sendTelegramVerification(requestId: string) {
 
   const { sendTelegramMessage } = await import("@/lib/telegram");
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
-
-  const fmtItem = (i: { itemTypeName: string; serialNumber: string | null }) =>
-    i.serialNumber ? `• <b>${i.itemTypeName}</b>\n   🔢 <code>${i.serialNumber}</code>` : `• <b>${i.itemTypeName}</b>`;
-
-  const itemsList = req.items.map(fmtItem).join("\n");
-
-  // CONFIRM mode — inline buttons per item inside Telegram
-  if (req.mode === "CONFIRM") {
-    const lines: string[] = [
-      `🔍 <b>אימות ציוד — ${req.battalion.name}</b>`,
-      ``,
-      `שלום ${req.soldier.fullName},`,
-      `סמן/י עבור כל פריט האם נמצא ברשותך:`,
-      ``,
-    ];
-    for (const i of req.items) {
-      lines.push(fmtItem(i));
-    }
-
-    const buttons = req.items.map((i) => ([
-      { text: `✅ נמצא — ${i.itemTypeName}${i.serialNumber ? ` (${i.serialNumber})` : ""}`, callback_data: `verify:${i.id}:found` },
-      { text: `❌ חסר`, callback_data: `verify:${i.id}:denied` },
-    ]));
-
-    await sendTelegramMessage(req.battalion.telegramBotToken, req.soldier.telegramChatId, lines.join("\n"), { inline_keyboard: buttons });
-
-  // BATCH mode — single confirm/deny for all items
-  } else if (req.mode === "BATCH") {
-    const text = `🔍 <b>אימות ציוד — ${req.battalion.name}</b>\n\nשלום ${req.soldier.fullName},\nהאם כל הפריטים הבאים נמצאים ברשותך?\n\n${itemsList}`;
-    await sendTelegramMessage(req.battalion.telegramBotToken, req.soldier.telegramChatId, text, {
-      inline_keyboard: [
-        [
-          { text: "✅ הכל נמצא", callback_data: `vbatch:${req.id}:confirm` },
-          { text: "❌ חסרים פריטים", callback_data: `vbatch:${req.id}:deny` },
-        ],
-      ],
-    });
-
-  // Other modes — link to web form
-  } else {
-    const text = `🔍 <b>אימות ציוד — ${req.battalion.name}</b>\n\nשלום ${req.soldier.fullName},\nנדרש אימות שהציוד הבא נמצא ברשותך:\n\n${itemsList}\n\n👉 <a href="${baseUrl}/verify/${req.token}">לחץ כאן לאימות</a>`;
-    await sendTelegramMessage(req.battalion.telegramBotToken, req.soldier.telegramChatId, text);
-  }
+  const { text, replyMarkup } = buildVerificationMessage(req, baseUrl);
+  await sendTelegramMessage(req.battalion.telegramBotToken, req.soldier.telegramChatId, text, replyMarkup);
 
   await prisma.verificationRequest.update({
     where: { id: requestId },
@@ -560,6 +519,94 @@ export async function sendTelegramVerification(requestId: string) {
   });
 
   return { ok: true };
+}
+
+type VerReqForMsg = {
+  id: string;
+  mode: string;
+  token: string;
+  soldier: { fullName: string } | null;
+  battalion: { name: string };
+  items: { id: string; itemTypeName: string; serialNumber: string | null }[];
+};
+
+/** בונה את גוף הודעת האימות + הכפתורים לפי מצב הבקשה. משותף לשליחה בודדת ולברודקאסט. */
+function buildVerificationMessage(req: VerReqForMsg, baseUrl: string): { text: string; replyMarkup?: object } {
+  const fmtItem = (i: { itemTypeName: string; serialNumber: string | null }) =>
+    i.serialNumber ? `• <b>${i.itemTypeName}</b>\n   🔢 <code>${i.serialNumber}</code>` : `• <b>${i.itemTypeName}</b>`;
+  const itemsList = req.items.map(fmtItem).join("\n");
+  const name = req.soldier?.fullName ?? "";
+
+  // CONFIRM — כפתורי inline לכל פריט בתוך טלגרם
+  if (req.mode === "CONFIRM") {
+    const lines = [
+      `🔍 <b>אימות ציוד — ${req.battalion.name}</b>`, ``,
+      `שלום ${name},`, `סמן/י עבור כל פריט האם נמצא ברשותך:`, ``,
+      ...req.items.map(fmtItem),
+    ];
+    const buttons = req.items.map((i) => ([
+      { text: `✅ נמצא — ${i.itemTypeName}${i.serialNumber ? ` (${i.serialNumber})` : ""}`, callback_data: `verify:${i.id}:found` },
+      { text: `❌ חסר`, callback_data: `verify:${i.id}:denied` },
+    ]));
+    return { text: lines.join("\n"), replyMarkup: { inline_keyboard: buttons } };
+  }
+  // BATCH — אישור/שלילה יחיד לכל הפריטים
+  if (req.mode === "BATCH") {
+    return {
+      text: `🔍 <b>אימות ציוד — ${req.battalion.name}</b>\n\nשלום ${name},\nהאם כל הפריטים הבאים נמצאים ברשותך?\n\n${itemsList}`,
+      replyMarkup: { inline_keyboard: [[
+        { text: "✅ הכל נמצא", callback_data: `vbatch:${req.id}:confirm` },
+        { text: "❌ חסרים פריטים", callback_data: `vbatch:${req.id}:deny` },
+      ]] },
+    };
+  }
+  // ברירת מחדל — לינק לטופס web
+  return { text: `🔍 <b>אימות ציוד — ${req.battalion.name}</b>\n\nשלום ${name},\nנדרש אימות שהציוד הבא נמצא ברשותך:\n\n${itemsList}\n\n👉 <a href="${baseUrl}/verify/${req.token}">לחץ כאן לאימות</a>` };
+}
+
+/**
+ * שליחת אימות לכל החיילים בסשן שטרם נשלח אליהם — בפעולת-שרת אחת (במקום N סבבי-רשת
+ * מהלקוח). שולח דרך sendTelegramBulk עם throttling ~25/שנייה, ומסמן sentAt רק למי שנמסר.
+ */
+export async function sendAllVerifications(sessionId: string): Promise<{ sent: number; failed: number; skipped: number } | { error: string }> {
+  const user = await requireCapability("counts.manage");
+  const bId = user.battalionId!;
+
+  const session = await prisma.countSession.findUnique({ where: { id: sessionId }, select: { battalionId: true } });
+  if (!session || session.battalionId !== bId) return { error: "ספירה לא נמצאה" };
+
+  const requests = await prisma.verificationRequest.findMany({
+    where: { sessionId, sentAt: null, soldier: { telegramChatId: { not: null } } },
+    include: {
+      soldier: { select: { fullName: true, telegramChatId: true } },
+      battalion: { select: { telegramBotToken: true, name: true } },
+      items: { select: { id: true, itemTypeName: true, serialNumber: true } },
+    },
+  });
+
+  const token = requests[0]?.battalion.telegramBotToken;
+  const sendable = requests.filter((r) => r.soldier?.telegramChatId && r.battalion.telegramBotToken);
+  const skipped = requests.length - sendable.length;
+  if (!token || sendable.length === 0) return { sent: 0, failed: 0, skipped };
+
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+  const { sendTelegramBulk } = await import("@/lib/telegram");
+  const messages = sendable.map((r) => {
+    const { text, replyMarkup } = buildVerificationMessage(r, baseUrl);
+    return { chatId: r.soldier!.telegramChatId!, text, replyMarkup };
+  });
+
+  const { sent, failed, results } = await sendTelegramBulk(token, messages);
+
+  // סימון sentAt רק למי שנמסר בפועל — כדי שהאחרים יישלחו שוב בלחיצה הבאה
+  const deliveredIds = sendable.filter((_, i) => results[i]).map((r) => r.id);
+  if (deliveredIds.length > 0) {
+    await prisma.verificationRequest.updateMany({
+      where: { id: { in: deliveredIds } },
+      data: { sentAt: new Date(), sentVia: "TELEGRAM" },
+    });
+  }
+  return { sent, failed, skipped };
 }
 
 export async function deleteVerificationData(sessionId: string) {

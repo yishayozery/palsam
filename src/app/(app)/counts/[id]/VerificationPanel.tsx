@@ -7,6 +7,7 @@ import {
   getVerificationStatus,
   markVerificationSent,
   sendTelegramVerification,
+  sendAllVerifications,
   deleteVerificationData,
 } from "../actions";
 
@@ -130,11 +131,11 @@ export default function VerificationPanel({
   };
 
   const sendAllTelegram = () => {
-    const unsent = requests.filter((r) => !r.sentAt && r.hasTelegram);
+    // פעולת-שרת אחת ששולחת לכולם עם throttling — במקום סבב-רשת נפרד לכל חייל
     startTransition(async () => {
-      for (const req of unsent) {
-        await sendTelegramVerification(req.id);
-      }
+      const res = await sendAllVerifications(sessionId);
+      if ("error" in res) alert(res.error);
+      else if (res.failed > 0) alert(`נשלחו ${res.sent}, נכשלו ${res.failed}. נסה שוב את הנכשלים.`);
       loadStatus();
     });
   };

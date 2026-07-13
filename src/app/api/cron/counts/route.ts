@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { generatePendingTasks } from "@/lib/countScheduler";
 
+// יצירת משימות ספירה + התראות ל-4 גדודים — מרחיב את חלון הריצה (Vercel Pro)
+export const maxDuration = 60;
+
 export async function GET(req: Request) {
   const expected = process.env.CRON_SECRET || "";
   if (!expected) {

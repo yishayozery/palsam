@@ -7,6 +7,8 @@ import CountExecutor from "./CountExecutor";
 import VerificationPanel from "./VerificationPanel";
 
 export const dynamic = "force-dynamic";
+// "שלח לכולם" מריץ ברודקאסט מווסת (~25/שנייה) שיכול לקחת עד דקה לפלוגה גדולה
+export const maxDuration = 60;
 
 export default async function CountSessionPage({
   params,

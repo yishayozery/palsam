@@ -3,6 +3,9 @@ import { processAttendanceReminders } from "@/lib/attendanceReminder";
 import { processDriverLicenseReports } from "@/lib/driverLicenseReport";
 import { processMaintenanceReminders } from "@/lib/maintenanceReminder";
 
+// ברודקאסטים ל-4 גדודים עם throttling עשויים לקחת עד דקה — מרחיב את חלון הריצה (Vercel Pro)
+export const maxDuration = 60;
+
 // רץ כל 30 דק' (vercel.json). מפעיל תזכורת פתיחה ב-07:00 ותזכורת חוזרת חצי שעה לפני שעת הגג.
 export async function GET(req: Request) {
   const expected = process.env.CRON_SECRET || "";

@@ -1,10 +1,54 @@
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * קריאת Telegram API עמידה — מטפלת ב-429 (flood, לפי retry_after), 5xx ותקלות רשת
+ * עם backoff. שגיאות 4xx אחרות (chat_id שגוי, המשתמש חסם את הבוט) קבועות — לא חוזרים עליהן.
+ * זהו הבסיס לכל שליחה: הופך "הודעה נופלת בשקט" ל-מסירה אמינה גם תחת עומס של אלפי חיילים.
+ */
+async function telegramRequest(
+  botToken: string,
+  method: string,
+  init: RequestInit,
+  retries = 3,
+): Promise<unknown> {
+  let attempt = 0;
+  for (;;) {
+    let res: Response;
+    try {
+      res = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, init);
+    } catch (e) {
+      if (attempt++ >= retries) throw e; // תקלת רשת — retry עד המכסה
+      await sleep(Math.min(500 * 2 ** attempt, 8000));
+      continue;
+    }
+    if (res.ok) return res.json();
+
+    if (res.status === 429) {
+      // flood control — Telegram מחזיר retry_after (שניות). ממתינים בדיוק כמה שנדרש.
+      const body = (await res.json().catch(() => null)) as { parameters?: { retry_after?: number } } | null;
+      const retryAfter = body?.parameters?.retry_after ?? 1;
+      if (attempt++ >= retries) throw new Error(`Telegram 429 — retry exhausted after ${retryAfter}s`);
+      await sleep((retryAfter + 0.5) * 1000);
+      continue;
+    }
+    if (res.status >= 500) {
+      if (attempt++ >= retries) throw new Error(`Telegram ${res.status} — server error, retry exhausted`);
+      await sleep(Math.min(500 * 2 ** attempt, 8000));
+      continue;
+    }
+    // 4xx קבוע (chat_id שגוי / הבוט חסום) — אין טעם לחזור
+    const err = await res.text().catch(() => "");
+    throw new Error(`Telegram API error ${res.status}: ${err}`);
+  }
+}
+
 export async function sendTelegramMessage(
   botToken: string,
   chatId: string,
   text: string,
   replyMarkup?: object,
 ) {
-  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+  return telegramRequest(botToken, "sendMessage", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -14,11 +58,56 @@ export async function sendTelegramMessage(
       ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
     }),
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Telegram API error: ${err}`);
+}
+
+export type BulkMessage = { chatId: string; text: string; replyMarkup?: object };
+
+/**
+ * שליחה מרוכזת עם bounded concurrency ו-rate-limit (ברירת מחדל 25 הודעות/שנייה — מתחת
+ * לתקרת ה-flood של Telegram, ~30/שנייה לבוט). מיועד לברודקאסטים גדולים (אימות ספירה
+ * לכל הפלוגה, תזכורות) כדי שלא ייחתכו ב-maxDuration ולא יופלו ע"י flood control.
+ *
+ * מחזיר results[] מיושר לסדר הקלט (true=נשלח) — כדי שאפשר לסמן sentAt רק למי שנמסר בפועל.
+ */
+export async function sendTelegramBulk(
+  botToken: string,
+  messages: BulkMessage[],
+  opts: { ratePerSec?: number; concurrency?: number } = {},
+): Promise<{ sent: number; failed: number; results: boolean[] }> {
+  const minGapMs = Math.ceil(1000 / (opts.ratePerSec ?? 25));
+  const concurrency = Math.min(opts.concurrency ?? 8, messages.length || 1);
+  const results = new Array<boolean>(messages.length).fill(false);
+  let sent = 0;
+  let failed = 0;
+  let cursor = 0;
+  let nextSlot = Date.now();
+
+  // שער-קצב: כל שולח מזמין "חלון" ריק אטומית (JS חד-חוטי) ואז ממתין עד שיגיע.
+  async function gate() {
+    const now = Date.now();
+    const slot = Math.max(now, nextSlot);
+    nextSlot = slot + minGapMs;
+    const wait = slot - now;
+    if (wait > 0) await sleep(wait);
   }
-  return res.json();
+
+  async function worker() {
+    while (cursor < messages.length) {
+      const i = cursor++;
+      const m = messages[i];
+      await gate();
+      try {
+        await sendTelegramMessage(botToken, m.chatId, m.text, m.replyMarkup);
+        results[i] = true;
+        sent++;
+      } catch {
+        failed++; // עמיד — הודעה בודדת שנכשלה לא מפילה את הברודקאסט
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, worker));
+  return { sent, failed, results };
 }
 
 export async function sendTelegramDocument(
@@ -35,15 +124,7 @@ export async function sendTelegramDocument(
     formData.append("caption", caption);
     formData.append("parse_mode", "HTML");
   }
-  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
-    method: "POST",
-    body: formData,
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Telegram sendDocument error: ${err}`);
-  }
-  return res.json();
+  return telegramRequest(botToken, "sendDocument", { method: "POST", body: formData });
 }
 
 export async function answerCallbackQuery(botToken: string, callbackQueryId: string, text?: string) {
