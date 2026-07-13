@@ -617,8 +617,9 @@ async function handleCallback(
     const itemId = parts[1];
     const found = parts[2] === "found";
 
-    const item = await prisma.verificationItem.findUnique({
-      where: { id: itemId },
+    // 🔒 מוודא שהפריט שייך לגדוד של ה-webhook — callback_data הוא ציבורי ובר-זיוף
+    const item = await prisma.verificationItem.findFirst({
+      where: { id: itemId, request: { battalionId } },
       include: { request: { select: { id: true, token: true, respondedAt: true, items: true } } },
     });
 
@@ -691,8 +692,9 @@ async function handleCallback(
     const requestId = parts[1];
     const confirmed = parts[2] === "confirm";
 
-    const request = await prisma.verificationRequest.findUnique({
-      where: { id: requestId },
+    // 🔒 מוודא שהבקשה שייכת לגדוד של ה-webhook
+    const request = await prisma.verificationRequest.findFirst({
+      where: { id: requestId, battalionId },
       include: { items: true },
     });
 
@@ -729,8 +731,9 @@ async function handleCallback(
   // Format: delegate:<taskId>
   if (data.startsWith("delegate:")) {
     const taskId = data.split(":")[1];
-    const task = await prisma.countTask.findUnique({
-      where: { id: taskId },
+    // 🔒 מוודא שהמשימה שייכת לגדוד של ה-webhook
+    const task = await prisma.countTask.findFirst({
+      where: { id: taskId, battalionId },
       include: { holder: { select: { name: true, users: { where: { active: true }, select: { id: true, fullName: true, soldier: { select: { telegramChatId: true } } } } } } },
     });
     if (!task || task.sessionId) {
@@ -758,16 +761,18 @@ async function handleCallback(
     const parts = data.split(":");
     const taskId = parts[1];
     const newUserId = parts[2];
-    const task = await prisma.countTask.findUnique({
-      where: { id: taskId },
+    // 🔒 מוודא שהמשימה שייכת לגדוד של ה-webhook
+    const task = await prisma.countTask.findFirst({
+      where: { id: taskId, battalionId },
       include: { holder: { select: { name: true } }, plan: { select: { name: true } } },
     });
     if (!task || task.sessionId) {
       await answerCallbackQuery(token, callback.id, "המשימה כבר בביצוע");
       return;
     }
-    const newUser = await prisma.appUser.findUnique({
-      where: { id: newUserId },
+    // 🔒 היעד להאצלה חייב להיות משתמש באותו גדוד
+    const newUser = await prisma.appUser.findFirst({
+      where: { id: newUserId, battalionId },
       select: { id: true, fullName: true, soldier: { select: { telegramChatId: true } } },
     });
     if (!newUser) {

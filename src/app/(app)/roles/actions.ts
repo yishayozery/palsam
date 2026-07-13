@@ -170,6 +170,9 @@ export async function saveRole(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
   if (!name) return;
   if (id) {
+    // 🔒 בעלות גדוד — מניעת שינוי-שם של תפקיד בגדוד אחר
+    const role = await prisma.customRole.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!role || role.battalionId !== bId) return;
     await prisma.customRole.update({ where: { id }, data: { name } });
   } else {
     await prisma.customRole.create({ data: { battalionId: bId, name, template: "VIEWER" } });
@@ -180,6 +183,9 @@ export async function saveRole(formData: FormData) {
 export async function deleteRole(formData: FormData) {
   const user = await requireAdmin();
   const id = String(formData.get("id") || "");
+  // 🔒 בעלות גדוד — מניעת מחיקה/השבתה של תפקיד בגדוד אחר
+  const role = await prisma.customRole.findUnique({ where: { id }, select: { battalionId: true } });
+  if (!role || role.battalionId !== user.battalionId) return;
   const inUse = await prisma.appUser.count({ where: { customRoleId: id } });
   if (inUse > 0) {
     await prisma.customRole.update({ where: { id }, data: { active: false } });

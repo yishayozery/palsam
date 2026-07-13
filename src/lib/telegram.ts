@@ -10,16 +10,22 @@ async function telegramRequest(
   method: string,
   init: RequestInit,
   retries = 3,
+  timeoutMs = 8000,
 ): Promise<unknown> {
   let attempt = 0;
   for (;;) {
     let res: Response;
+    // timeout לכל ניסיון — קריאה תקועה של Telegram לא תחזיק את הבקשה/הקרון ללא הגבלה
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      res = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, init);
+      res = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, { ...init, signal: controller.signal });
     } catch (e) {
-      if (attempt++ >= retries) throw e; // תקלת רשת — retry עד המכסה
+      if (attempt++ >= retries) throw e; // תקלת רשת / timeout — retry עד המכסה
       await sleep(Math.min(500 * 2 ** attempt, 8000));
       continue;
+    } finally {
+      clearTimeout(timer);
     }
     if (res.ok) return res.json();
 

@@ -87,6 +87,10 @@ export async function saveUser(formData: FormData) {
 
   try {
     if (id) {
+      // 🔒 בעלות גדוד — אסור לערוך משתמש של גדוד אחר (super-admin רשאי חוצה-גדודים)
+      const existing = await prisma.appUser.findUnique({ where: { id }, select: { battalionId: true } });
+      if (!existing) return;
+      if (admin.role !== "SUPER_ADMIN" && existing.battalionId !== admin.battalionId) return;
       const username = await resolveUniqueUsername(enteredUsername, battalionId, id);
       await prisma.appUser.update({
         where: { id },
@@ -116,6 +120,10 @@ export async function saveUser(formData: FormData) {
 export async function regenerateInvite(formData: FormData) {
   const admin = await requireCapability("users.manage");
   const id = String(formData.get("id") || "");
+  // 🔒 בעלות גדוד — מניעת מינוף קישור-הזמנה להשתלטות על חשבון בגדוד אחר
+  const target = await prisma.appUser.findUnique({ where: { id }, select: { battalionId: true } });
+  if (!target) return;
+  if (admin.role !== "SUPER_ADMIN" && target.battalionId !== admin.battalionId) return;
   const inviteToken = nanoid(28);
   await prisma.appUser.update({ where: { id }, data: { inviteToken, passwordSet: false } });
   await audit(admin.id, "REGEN_INVITE", "AppUser", id);
@@ -164,8 +172,10 @@ export async function toggleUser(formData: FormData) {
   const admin = await requireCapability("users.manage");
   const id = String(formData.get("id") || "");
   if (id === admin.id) return;
-  const u = await prisma.appUser.findUnique({ where: { id } });
+  const u = await prisma.appUser.findUnique({ where: { id }, select: { active: true, battalionId: true } });
   if (!u) return;
+  // 🔒 בעלות גדוד — מניעת השבתה/הפעלה של משתמש בגדוד אחר
+  if (admin.role !== "SUPER_ADMIN" && u.battalionId !== admin.battalionId) return;
   await prisma.appUser.update({ where: { id }, data: { active: !u.active } });
   await audit(admin.id, "UPDATE", "AppUser", id, { active: !u.active });
   revalidatePath("/users/all");
