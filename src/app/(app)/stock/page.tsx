@@ -369,6 +369,12 @@ export default async function StockPage({
           const available = qtyStock + serialFree;
           const total = available + serialSigned + transit;
 
+          // 🆕 פילוח תקין / תקול (במחסן) — תקין=isDefault · תקול=בלאי/תקול/אבוד (isWear/isLoss)
+          const okQty = warehouseScopedBalances.filter((b) => b.status.isDefault).reduce((s, b) => s + b.quantity, 0)
+            + warehouseScopedSerials.filter((u) => !u.status.isWear && !u.status.isLoss).reduce((s, u) => s + (u.lotQuantity ?? 1), 0);
+          const defQty = warehouseScopedBalances.filter((b) => b.status.isWear || b.status.isLoss).reduce((s, b) => s + b.quantity, 0)
+            + warehouseScopedSerials.filter((u) => u.status.isWear || u.status.isLoss).reduce((s, u) => s + (u.lotQuantity ?? 1), 0);
+
           // 🆕 פילוח פר פלוגה: כמה יש לכל פלוגה, כמה חתום על חיילים, כמה תקול
           const companyMap = new Map<string, {
             companyId: string; companyName: string;
@@ -426,7 +432,7 @@ export default async function StockPage({
             category: i.category?.name ?? null,
             categoryId: i.categoryId ?? null,
             warehouseType: itemWhType,
-            categoryMismatch,
+            categoryMismatch, okQty, defQty,
             total, available, signedOnSoldiers: serialSigned, transit,
             companyBreakdown,
             units: warehouseScopedSerials.map((u) => ({

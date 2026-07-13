@@ -19,6 +19,7 @@ type Item = {
   available: number;
   signedOnSoldiers: number;
   transit: number;
+  okQty?: number; defQty?: number;
   units?: { id: string; serialNumber: string; lotQuantity: number | null; statusName: string; signedTo?: string | null; locationName?: string | null; isVehicleLocation?: boolean }[];
   companyBreakdown?: { companyId: string; companyName: string; totalQty: number; totalSerials: number; signedOnSoldiers: number; defective: number }[];
 };
@@ -348,6 +349,12 @@ export default function StockTable({
                       </div>
                       {i.transit > 0 && (
                         <div className="text-[10px] text-amber-600 font-normal mt-0.5">🚚 {i.transit} במעבר</div>
+                      )}
+                      {(i.okQty != null || i.defQty != null) && (i.okQty! + i.defQty!) > 0 && (
+                        <div className="text-[10px] font-normal mt-0.5 flex gap-1.5">
+                          <span className="text-emerald-600">✅ {i.okQty} תקין</span>
+                          {i.defQty! > 0 && <span className="text-amber-600">🔧 {i.defQty} תקול</span>}
+                        </div>
                       )}
                     </Td>
                     <Td>

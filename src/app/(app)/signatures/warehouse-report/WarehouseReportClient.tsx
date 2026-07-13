@@ -38,6 +38,9 @@ export default function WarehouseReportClient({
     return stock.qty.filter((s) => s.name.toLowerCase().includes(q));
   }, [stock.qty, search]);
   const stockTotal = stock.serials.length + stock.qty.reduce((n, q) => n + q.qty, 0);
+  // 🔧 סיכום תקינות מלאי המחסן: סריאלי ללא סטטוס/"תקין" = תקין, כל שאר הסטטוסים = תקול; פריטי כמות נספרים כתקין
+  const stockDef = stock.serials.filter((s) => s.status && s.status !== "תקין").length;
+  const stockOk = stockTotal - stockDef;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -135,7 +138,14 @@ export default function WarehouseReportClient({
         <Card className="mb-4 overflow-hidden border-2 border-teal-200">
           <button onClick={() => setShowStock((v) => !v)}
             className="w-full bg-teal-50 px-4 py-2 font-bold text-teal-800 border-b border-teal-100 flex items-center justify-between hover:bg-teal-100/70">
-            <span>🏬 ציוד במחסן (לא חתום)</span>
+            <span className="flex items-center gap-2">🏬 ציוד במחסן (לא חתום)
+              {stockTotal > 0 && (
+                <span className="flex gap-1.5 text-[11px] font-normal">
+                  <span className="text-emerald-600">✅ {stockOk} תקין</span>
+                  {stockDef > 0 && <span className="text-amber-600">🔧 {stockDef} תקול</span>}
+                </span>
+              )}
+            </span>
             <span className="text-sm font-normal text-teal-600">{stockSerialsFiltered.length + stockQtyFiltered.length} סוגים · {stockTotal} יח׳ · {showStock ? "▼" : "◀"}</span>
           </button>
           {showStock && (
