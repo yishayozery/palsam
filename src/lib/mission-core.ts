@@ -67,6 +67,14 @@ export async function createOrUpdateMission(
     }
   }
 
+  // 🚫 מניעת שיבוץ כפול — אותו חייל לא יכול להיות ביותר מרכב אחד באותה משימה
+  const allSids = input.vehicles.flatMap((v) => v.soldiers.filter((s): s is { soldierId: string } => "soldierId" in s && !!s.soldierId).map((s) => s.soldierId));
+  const dupId = allSids.find((id, i) => allSids.indexOf(id) !== i);
+  if (dupId) {
+    const dup = await prisma.soldier.findUnique({ where: { id: dupId }, select: { fullName: true } });
+    return { error: `🚫 שיבוץ כפול — ${dup?.fullName ?? "חייל"} משובץ ליותר מרכב אחד באותה משימה` };
+  }
+
   const missionDateObj = new Date(input.missionDate + "T00:00:00.000Z");
   if (isNaN(missionDateObj.getTime())) return { error: "תאריך שגוי" };
   const companyId = input.companyId?.trim() || null;
@@ -76,12 +84,12 @@ export async function createOrUpdateMission(
   const commanderName = input.commanderName?.trim() || null;
   const commanderData = { commanderSoldierId, commanderName };
 
-  const buildVehicleData = (missionId: string) => input.vehicles.map((v) => {
+  const buildVehicleData = (missionId: string) => input.vehicles.map((v, vi) => {
     const external = v.isExternal || !v.vehicleSerialUnitId;
     return {
       battalionId: bId, companyId, missionId,
       missionDate: missionDateObj, departureTime: input.departureTime,
-      createdById,
+      createdById, convoyOrder: vi, // סדר בשיירה = סדר השורות במסך
       vehicleSerialUnitId: external ? null : v.vehicleSerialUnitId!,
       isExternal: external,
       externalVehicleNumber: external ? (v.externalVehicleNumber?.trim() || null) : null,

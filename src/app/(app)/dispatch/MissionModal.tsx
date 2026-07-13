@@ -139,6 +139,9 @@ export default function MissionModal({
     });
   }
   function patchRow(key: string, patch: Partial<VehRow>) { setRows((r) => r.map((x) => x.key === key ? { ...x, ...patch } : x)); }
+  function moveRow(key: string, dir: -1 | 1) { // סדר בשיירה
+    setRows((r) => { const i = r.findIndex((x) => x.key === key); const j = i + dir; if (i < 0 || j < 0 || j >= r.length) return r; const next = [...r]; [next[i], next[j]] = [next[j], next[i]]; return next; });
+  }
 
   function addSoldier(rowKey: string, soldierId: string, roleId: string | null = null) {
     if (!soldierId) return;
@@ -317,9 +320,18 @@ export default function MissionModal({
                   const ri = rows.findIndex((r) => r.key === row.key);
                   return (
                     <div className="p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-bold text-sm text-slate-700">רכב {ri + 1} {row.source === "external" && <span className="text-amber-600">· חוץ</span>}</span>
-                        <button onClick={() => removeRow(row.key)} className="text-xs text-rose-500 hover:text-rose-700">הסר רכב</button>
+                      <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+                        <span className="font-bold text-sm text-slate-700 flex items-center gap-1">
+                          <span className="bg-slate-800 text-white rounded-full w-5 h-5 inline-flex items-center justify-center text-[10px]" title="מיקום בשיירה">{ri + 1}</span>
+                          רכב {ri + 1} {row.source === "external" && <span className="text-amber-600">· חוץ</span>}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button disabled={ri === 0} onClick={() => moveRow(row.key, -1)} title="הזז למעלה בשיירה" className="text-xs border border-slate-300 rounded px-1.5 disabled:opacity-30">↑</button>
+                          <button disabled={ri === rows.length - 1} onClick={() => moveRow(row.key, 1)} title="הזז למטה בשיירה" className="text-xs border border-slate-300 rounded px-1.5 disabled:opacity-30">↓</button>
+                          <button onClick={() => patchRow(row.key, { source: row.source === "system" ? "external" : "system", vehicleSerialUnitId: "", externalVehicleNumber: "", externalVehicleTypeName: "" })}
+                            className="text-[11px] text-indigo-600 hover:text-indigo-800">{row.source === "system" ? "↔ לרכב חוץ" : "↔ לרכב מהמערכת"}</button>
+                          <button onClick={() => removeRow(row.key)} className="text-xs text-rose-500 hover:text-rose-700">הסר</button>
+                        </div>
                       </div>
                       {row.source === "system" ? (
                         <select value={row.vehicleSerialUnitId} onChange={(e) => patchRow(row.key, { vehicleSerialUnitId: e.target.value })}

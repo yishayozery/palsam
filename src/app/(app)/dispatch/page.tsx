@@ -76,6 +76,7 @@ export default async function DispatchPage() {
         createdBy: { select: { fullName: true } },
         commanderSoldier: { select: { fullName: true } },
         vehicles: {
+          orderBy: [{ convoyOrder: "asc" }, { createdAt: "asc" }],
           include: {
             vehicleSerialUnit: { include: { itemType: { select: { id: true, name: true } } } },
             soldiers: { include: { soldier: { select: { id: true, fullName: true, personalNumber: true } } } },
@@ -128,6 +129,21 @@ export default async function DispatchPage() {
     return true;
   };
 
+  // 🆕 ציוד המורכב על כל רכב במשימות (serialUnits.vehicleId = הרכב) — "מה יש על הרכב"
+  const missionVehIds = [...new Set(missions.flatMap((m) => m.vehicles.map((v) => v.vehicleSerialUnitId).filter((x): x is string => !!x)))];
+  const mountedEquip = missionVehIds.length ? await prisma.serialUnit.findMany({
+    where: { vehicleId: { in: missionVehIds }, battalionId: bId },
+    select: { vehicleId: true, serialNumber: true, itemType: { select: { name: true } }, signedSoldier: { select: { fullName: true } } },
+    orderBy: { itemType: { name: "asc" } },
+  }) : [];
+  const equipByVehicle = new Map<string, { name: string; serial: string; holder: string | null }[]>();
+  for (const e of mountedEquip) {
+    if (!e.vehicleId) continue;
+    const arr = equipByVehicle.get(e.vehicleId) ?? [];
+    arr.push({ name: e.itemType.name, serial: e.serialNumber, holder: e.signedSoldier?.fullName ?? null });
+    equipByVehicle.set(e.vehicleId, arr);
+  }
+
   const missionsData = missions.map((m) => ({
     id: m.id, title: m.title, companyId: m.companyId, companyName: m.company?.name ?? null,
     commanderName: m.commanderSoldier?.fullName || m.commanderName || null,
@@ -144,6 +160,7 @@ export default async function DispatchPage() {
         ? `${v.externalVehicleTypeName || "רכב חוץ"} ${v.externalVehicleNumber || ""}`.trim()
         : `${v.vehicleSerialUnit?.itemType.name || "רכב"} · ${v.vehicleSerialUnit?.serialNumber || ""}`,
       typeName: v.isExternal ? (v.externalVehicleTypeName || "רכב חוץ") : (v.vehicleSerialUnit?.itemType.name || "רכב"),
+      equipment: v.vehicleSerialUnitId ? (equipByVehicle.get(v.vehicleSerialUnitId) ?? []) : [],
       soldiers: v.soldiers.map((s) => ({
         vasId: s.id, soldierId: s.soldierId, externalName: s.externalName, externalPersonalNumber: s.externalPersonalNumber, isDriver: s.isDriver,
         name: s.soldier?.fullName || s.externalName || "—", pn: s.soldier?.personalNumber ?? s.externalPersonalNumber ?? null,

@@ -11,6 +11,7 @@ type MSoldierFull = { vasId: string; soldierId: string | null; externalName: str
 type MVehicleFull = {
   isExternal: boolean; vehicleSerialUnitId: string | null; externalVehicleNumber: string | null; externalVehicleTypeName: string | null;
   label: string; typeName: string; soldiers: MSoldierFull[];
+  equipment?: { name: string; serial: string; holder: string | null }[];
 };
 export type MissionFull = {
   id: string; title: string | null; companyId: string | null; companyName: string | null;
@@ -145,9 +146,20 @@ export default function MissionsSection({
                   <div className="grid md:grid-cols-2 gap-2">
                     {m.vehicles.map((v, vi) => (
                       <div key={vi} className="border border-slate-200 rounded-lg p-2">
-                        <div className="font-medium text-sm text-slate-700 mb-1">
+                        <div className="font-medium text-sm text-slate-700 mb-1 flex items-center gap-1.5">
+                          <span className="bg-slate-800 text-white rounded-full w-5 h-5 inline-flex items-center justify-center text-[10px] shrink-0" title="מיקום בשיירה">{vi + 1}</span>
                           {v.isExternal ? "🔶 " : `${vehicleIcon(v.typeName)} `}{v.label}
                         </div>
+                        {v.equipment && v.equipment.length > 0 && (
+                          <details className="mb-1">
+                            <summary className="text-[11px] text-indigo-700 cursor-pointer">📻 ציוד על הרכב ({v.equipment.length})</summary>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {v.equipment.map((eq, ei) => (
+                                <span key={ei} className="text-[10px] bg-indigo-50 text-indigo-800 rounded px-1.5 py-0.5">{eq.name} <span className="font-mono text-indigo-400">{eq.serial}</span></span>
+                              ))}
+                            </div>
+                          </details>
+                        )}
                         <div className="flex flex-wrap gap-1">
                           {v.soldiers.map((s, si) => (
                             <span key={si} className={`text-[11px] rounded px-2 py-0.5 inline-flex items-center gap-1 ${s.isDriver ? "bg-sky-100 text-sky-800 font-medium" : "bg-slate-100 text-slate-600"}`}>
