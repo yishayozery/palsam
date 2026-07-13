@@ -143,6 +143,10 @@ export default async function WarehouseReportPage({ searchParams }: { searchPara
       <PageHeader
         title="📋 דוח מחסן — ציוד חתום + מחסן"
         subtitle={`${selectedName} · ${bySoldier.size} חיילים · ${totalItems} חתום · ${stockTotal} במחסן`}
+        action={selectedId ? (
+          <a href={`/signatures/warehouse-report/reports?warehouse=${selectedId}`}
+            className="text-sm bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 whitespace-nowrap">📊 דוחות מחסן</a>
+        ) : undefined}
       />
       <WarehouseReportClient
         warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
