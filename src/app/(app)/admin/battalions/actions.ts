@@ -7,6 +7,7 @@ import { requireSuperAdmin } from "@/lib/guard";
 import { hashPassword } from "@/lib/auth";
 import { resolveUniqueUsername } from "@/lib/usernames";
 import { audit } from "@/lib/audit";
+import { seedBattalionEssentials, createDemoCompany, deleteDemoCompany } from "@/lib/battalionSetup";
 import type { WarehouseType } from "@/generated/prisma";
 
 const WH_DEFS: { type: WarehouseType; name: string }[] = [
@@ -38,8 +39,10 @@ export async function createBattalion(formData: FormData) {
   const exists = await prisma.battalion.findUnique({ where: { code } });
   if (exists) return;
 
+  let newBattalionId = "";
   await prisma.$transaction(async (tx) => {
     const bat = await tx.battalion.create({ data: { name, code, brigade, commander, motto } });
+    newBattalionId = bat.id;
     // שם משתמש ייחודי בתוך הגדוד החדש (גדוד ריק — לכן השם הנקי תמיד פנוי)
     const mafamUsername = await resolveUniqueUsername(mafamUser, bat.id);
     // מפמ — באמצעות הזמנה (יגדיר סיסמה בכניסה ראשונה)
@@ -78,7 +81,44 @@ export async function createBattalion(formData: FormData) {
     }
   });
 
+  // בסיס שמיש: תפקידי RBAC + סטטוסי נוכחות מלאים + חוקי בוט + העתקת נהלים מהתבנית (גדסם4).
+  // idempotent — לא חוסם הקמה אם נכשל (ניתן להריץ שוב מהצ'ק-ליסט).
+  if (newBattalionId) await seedBattalionEssentials(newBattalionId).catch((e) => console.error("[createBattalion] essentials seed failed (non-fatal):", e));
+
   await audit(admin.id, "CREATE_BATTALION", "Battalion", code, { name });
+  revalidatePath("/admin/battalions");
+}
+
+/** אדמין-על: זריעת בסיס לגדוד קיים (backfill/צ'ק-ליסט) — תפקידים, נוכחות, בוט, נהלים. */
+export async function seedBattalionEssentialsAction(formData: FormData): Promise<void> {
+  const admin = await requireSuperAdmin();
+  const id = String(formData.get("id") || "");
+  const bat = await prisma.battalion.findUnique({ where: { id }, select: { id: true, code: true } });
+  if (!bat) return;
+  const res = await seedBattalionEssentials(bat.id);
+  await audit(admin.id, "SEED_ESSENTIALS", "Battalion", bat.code, res);
+  revalidatePath("/admin/battalions");
+}
+
+/** אדמין-על: יצירת פלוגת דמו (חיילים + ציוד חתום) לתרגול המערכת. */
+export async function createDemoCompanyAction(formData: FormData): Promise<void> {
+  const admin = await requireSuperAdmin();
+  const id = String(formData.get("id") || "");
+  const bat = await prisma.battalion.findUnique({ where: { id }, select: { id: true, code: true } });
+  if (!bat) return;
+  const res = await createDemoCompany(bat.id).catch((e) => ({ error: e instanceof Error ? e.message : "שגיאה" }));
+  await audit(admin.id, "CREATE_DEMO", "Battalion", bat.code, res);
+  revalidatePath("/admin/battalions");
+}
+
+/** אדמין-על: מחיקת פלוגת הדמו + כל הנתונים המסומנים שלה. */
+export async function deleteDemoCompanyAction(formData: FormData): Promise<void> {
+  const admin = await requireSuperAdmin();
+  const id = String(formData.get("id") || "");
+  const bat = await prisma.battalion.findUnique({ where: { id }, select: { id: true, code: true } });
+  if (!bat) return;
+  const res = await deleteDemoCompany(bat.id);
+  await audit(admin.id, "DELETE_DEMO", "Battalion", bat.code, res);
   revalidatePath("/admin/battalions");
 }
 

@@ -1,9 +1,11 @@
+import { Fragment } from "react";
 import { requireSuperAdmin } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card, Table, Th, Td, EmptyState } from "@/components/ui";
 import InviteLink from "@/components/InviteLink";
 import BattalionForm from "./BattalionForm";
-import { toggleBattalion, resetUserPassword, setBattalionSupportWhatsapp } from "./actions";
+import { toggleBattalion, resetUserPassword, setBattalionSupportWhatsapp, seedBattalionEssentialsAction, createDemoCompanyAction, deleteDemoCompanyAction } from "./actions";
+import { getSetupChecklist } from "@/lib/battalionSetup";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +20,10 @@ export default async function BattalionsPage() {
       users: { where: { role: "BATTALION_ADMIN" }, select: { id: true, username: true, fullName: true, phone: true, passwordSet: true, inviteToken: true } },
     },
   });
+  // צ'ק-ליסט הקמה פר-גדוד
+  const checklists = new Map(
+    await Promise.all(battalions.map(async (b) => [b.id, await getSetupChecklist(b.id)] as const)),
+  );
 
   return (
     <div>
@@ -36,7 +42,8 @@ export default async function BattalionsPage() {
             </thead>
             <tbody>
               {battalions.map((b) => (
-                <tr key={b.id}>
+                <Fragment key={b.id}>
+                <tr>
                   <Td className="font-medium">{b.name}</Td>
                   <Td className="font-mono text-xs">{b.code}</Td>
                   <Td className="text-xs">
@@ -75,6 +82,55 @@ export default async function BattalionsPage() {
                     </form>
                   </Td>
                 </tr>
+                <tr className="bg-slate-50/60">
+                  <td colSpan={9} className="px-4 py-2">
+                    {(() => {
+                      const c = checklists.get(b.id);
+                      if (!c) return null;
+                      const chip = (ok: boolean, label: string) => (
+                        <span className={`text-[11px] rounded-full px-2 py-0.5 border ${ok ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+                          {ok ? "✅" : "◻️"} {label}
+                        </span>
+                      );
+                      const ready = c.hasPresetRoles;
+                      return (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] font-semibold text-slate-500">צ׳ק-ליסט הקמה:</span>
+                          {chip(true, `${b._count.holders} מחסנים`)}
+                          {chip(c.hasPresetRoles, `תפקידים (${c.roles})`)}
+                          {chip(c.botRules > 0, "חוקי בוט")}
+                          {chip(c.hasProcedures, "נהלים")}
+                          {chip(c.hasDemo, "פלוגת דמו")}
+                          <div className="grow" />
+                          {!ready && (
+                            <form action={seedBattalionEssentialsAction}>
+                              <input type="hidden" name="id" value={b.id} />
+                              <button className="text-[11px] bg-blue-600 text-white rounded px-2 py-1 hover:bg-blue-700">⚙️ זרע בסיס (תפקידים+נהלים+בוט)</button>
+                            </form>
+                          )}
+                          {ready && (
+                            <form action={seedBattalionEssentialsAction}>
+                              <input type="hidden" name="id" value={b.id} />
+                              <button className="text-[11px] text-slate-500 hover:underline">↻ רענן בסיס</button>
+                            </form>
+                          )}
+                          {!c.hasDemo ? (
+                            <form action={createDemoCompanyAction}>
+                              <input type="hidden" name="id" value={b.id} />
+                              <button className="text-[11px] bg-violet-600 text-white rounded px-2 py-1 hover:bg-violet-700">🎭 צור פלוגת דמו</button>
+                            </form>
+                          ) : (
+                            <form action={deleteDemoCompanyAction}>
+                              <input type="hidden" name="id" value={b.id} />
+                              <button className="text-[11px] bg-rose-50 border border-rose-200 text-rose-700 rounded px-2 py-1 hover:bg-rose-100">🗑️ מחק דמו</button>
+                            </form>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </td>
+                </tr>
+                </Fragment>
               ))}
             </tbody>
           </Table>
