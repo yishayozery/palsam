@@ -416,10 +416,17 @@ export async function createSignout(formData: FormData): Promise<{ error: string
       const companyAllocations = await prisma.companyAllocation.findMany({
         where: { companyId: soldier.companyId, itemTypeId: { in: uniqueItemTypes } },
       });
+      // כמה כבר חתום פר-סוג בפלוגה — שאילתה מרוכזת אחת (במקום count פר-הקצאה = N+1)
+      const signedGroups = companyAllocations.length > 0
+        ? await prisma.serialUnit.groupBy({
+            by: ["itemTypeId"],
+            where: { battalionId: bId, itemTypeId: { in: companyAllocations.map((a) => a.itemTypeId) }, signedSoldier: { companyId: soldier.companyId } },
+            _count: { _all: true },
+          })
+        : [];
+      const signedByType = new Map(signedGroups.map((g) => [g.itemTypeId, g._count._all]));
       for (const alloc of companyAllocations) {
-        const currentSigned = await prisma.serialUnit.count({
-          where: { itemTypeId: alloc.itemTypeId, signedSoldier: { companyId: soldier.companyId } },
-        });
+        const currentSigned = signedByType.get(alloc.itemTypeId) ?? 0;
         const newCount = allItemTypeIds.filter((id) => id === alloc.itemTypeId).length;
         if (currentSigned + newCount > alloc.quantity && alloc.blockOnExceed) {
           const item = await prisma.itemType.findUnique({ where: { id: alloc.itemTypeId }, select: { name: true } });
