@@ -21,10 +21,16 @@ export default async function RequestsPage() {
   const defsUnitId = isBrigade ? bId : unit?.parentId ?? null;
   if (defsUnitId) await ensureRequestDefaults(defsUnitId).catch(() => {});
   const fieldDefs = defsUnitId
-    ? await prisma.requestFieldDef.findMany({ where: { brigadeUnitId: defsUnitId, side: "REQUESTER", active: true }, orderBy: { sortOrder: "asc" }, select: { type: true, fieldKey: true, label: true, fieldType: true, options: true, required: true } })
+    ? await prisma.requestFieldDef.findMany({ where: { brigadeUnitId: defsUnitId, active: true }, orderBy: { sortOrder: "asc" }, select: { type: true, side: true, fieldKey: true, label: true, fieldType: true, options: true, required: true } })
     : [];
-  const fieldsByType: Record<string, { fieldKey: string; label: string; fieldType: string; options: string[]; required: boolean }[]> = {};
-  for (const f of fieldDefs) { (fieldsByType[f.type] ??= []).push({ fieldKey: f.fieldKey, label: f.label, fieldType: f.fieldType, options: f.options, required: f.required }); }
+  type DF = { fieldKey: string; label: string; fieldType: string; options: string[]; required: boolean };
+  const fieldsByType: Record<string, DF[]> = {};
+  const handlerFieldsByType: Record<string, DF[]> = {};
+  for (const f of fieldDefs) {
+    const df: DF = { fieldKey: f.fieldKey, label: f.label, fieldType: f.fieldType, options: f.options, required: f.required };
+    (f.side === "HANDLER" ? handlerFieldsByType : fieldsByType)[f.type] ??= [];
+    (f.side === "HANDLER" ? handlerFieldsByType : fieldsByType)[f.type].push(df);
+  }
 
   // בעל תפקיד בחטיבה — רואה רק את הסוגים שהוקצו לו. מלכ"א/גדוד — הכל.
   let myTypes: RequestType[] | null = null;
@@ -81,6 +87,7 @@ export default async function RequestsPage() {
       companies={companies}
       requests={rows}
       fieldsByType={fieldsByType}
+      handlerFieldsByType={handlerFieldsByType}
       brigadeUsers={brigadeUsers.map((u) => ({ id: u.id, name: u.fullName ?? "—" }))}
       handlers={handlers}
       settingsDefs={settingsDefs}

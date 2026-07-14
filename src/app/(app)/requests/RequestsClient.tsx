@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { REQUEST_TYPE_LABEL, REQUEST_PRIORITY_LABEL, REQUEST_STATUS_LABEL, REQUEST_STATUS_STYLE, REQUEST_TYPES, REQUEST_PRIORITIES } from "@/lib/request-labels";
 import type { RequestType, RequestPriority, RequestStatus } from "@/generated/prisma";
-import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus, assignTypeHandler, removeTypeHandler, setTypeConfig, addFieldDef, removeFieldDef } from "./actions";
+import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus, assignTypeHandler, removeTypeHandler, setTypeConfig, addFieldDef, removeFieldDef, saveHandlerFields } from "./actions";
 
 type Upd = { id: string; authorName: string | null; text: string; statusFrom: RequestStatus | null; statusTo: RequestStatus | null; createdAt: string };
 type DynField = { fieldKey: string; label: string; fieldType: string; options: string[]; required: boolean };
@@ -13,27 +13,29 @@ type Req = {
   openerName: string; openedByName: string | null; assignedName: string | null; data: Record<string, string> | null; createdAt: string; escalatedAt: string | null; updates: Upd[];
 };
 
-function DynFieldInput({ f }: { f: DynField }) {
+function DynFieldInput({ f, defaultValue, namePrefix = "f_" }: { f: DynField; defaultValue?: string; namePrefix?: string }) {
   const cls = "w-full rounded border border-slate-300 px-2 py-1 text-sm";
-  const name = `f_${f.fieldKey}`;
-  if (f.fieldType === "TEXTAREA") return <textarea name={name} required={f.required} placeholder={f.label} rows={2} className={cls} />;
-  if (f.fieldType === "NUMBER") return <input type="number" name={name} required={f.required} placeholder={f.label} className={cls} />;
-  if (f.fieldType === "DATE") return <input type="date" name={name} required={f.required} className={cls} />;
-  if (f.fieldType === "TIME") return <input type="time" name={name} required={f.required} className={cls} />;
-  if (f.fieldType === "SELECT") return <select name={name} required={f.required} defaultValue="" className={cls}><option value="">— {f.label} —</option>{f.options.map((o) => <option key={o} value={o}>{o}</option>)}</select>;
-  return <input name={name} required={f.required} placeholder={f.fieldType === "CONTACT" ? `${f.label} (שם + טלפון)` : f.label} className={cls} />;
+  const name = `${namePrefix}${f.fieldKey}`;
+  const dv = defaultValue ?? "";
+  if (f.fieldType === "TEXTAREA") return <textarea name={name} required={f.required} placeholder={f.label} rows={2} defaultValue={dv} className={cls} />;
+  if (f.fieldType === "NUMBER") return <input type="number" name={name} required={f.required} placeholder={f.label} defaultValue={dv} className={cls} />;
+  if (f.fieldType === "DATE") return <input type="date" name={name} required={f.required} defaultValue={dv} className={cls} />;
+  if (f.fieldType === "TIME") return <input type="time" name={name} required={f.required} defaultValue={dv} className={cls} />;
+  if (f.fieldType === "SELECT") return <select name={name} required={f.required} defaultValue={dv} className={cls}><option value="">— {f.label} —</option>{f.options.map((o) => <option key={o} value={o}>{o}</option>)}</select>;
+  return <input name={name} required={f.required} placeholder={f.fieldType === "CONTACT" ? `${f.label} (שם + טלפון)` : f.label} defaultValue={dv} className={cls} />;
 }
 
 type SettingsDef = { id: string; type: RequestType; side: string; label: string; fieldType: string; options: string[]; required: boolean };
 type TypeConfig = { type: RequestType; requiresApproval: boolean; requestDays: string | null; requestHours: string | null; supplyTiming: string | null };
 
-export default function RequestsClient({ mode, unitName, parentName, isCommander, isMalka, myTypes, companies, requests, fieldsByType, brigadeUsers, handlers, settingsDefs, typeConfigs }: {
+export default function RequestsClient({ mode, unitName, parentName, isCommander, isMalka, myTypes, companies, requests, fieldsByType, handlerFieldsByType, brigadeUsers, handlers, settingsDefs, typeConfigs }: {
   mode: "brigade" | "battalion";
   unitName: string; parentName: string | null; isCommander: boolean; isMalka: boolean;
   myTypes: RequestType[] | null;
   companies: { id: string; name: string }[];
   requests: Req[];
   fieldsByType: Record<string, DynField[]>;
+  handlerFieldsByType: Record<string, DynField[]>;
   brigadeUsers: { id: string; name: string }[];
   handlers: { id: string; type: RequestType; userId: string }[];
   settingsDefs: SettingsDef[];
@@ -47,6 +49,7 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
   const [fType, setFType] = useState<RequestType | "all">("all");
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [handlerFor, setHandlerFor] = useState<string | null>(null);
 
   const OPEN_STATUSES: RequestStatus[] = ["PENDING_APPROVAL", "IN_PROGRESS", "NEEDS_INFO"];
   const filtered = useMemo(() => requests.filter((r) => {
@@ -246,11 +249,21 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
                   פתח: {r.openedByName ?? "—"} · {new Date(r.createdAt).toLocaleDateString("he-IL")}
                   {r.assignedName && ` · מטפל: ${r.assignedName}`}
                 </div>
-                {r.data && Object.keys(r.data).length > 0 && (
+                {r.data && Object.keys(r.data).filter((k) => !k.startsWith("h:")).length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-600">
-                    {Object.entries(r.data).map(([k, v]) => {
+                    {Object.entries(r.data).filter(([k]) => !k.startsWith("h:")).map(([k, v]) => {
                       const label = (fieldsByType[r.type] ?? []).find((f) => f.fieldKey === k)?.label ?? k;
                       return <span key={k}><b className="text-slate-500">{label}:</b> {v}</span>;
+                    })}
+                  </div>
+                )}
+                {r.data && Object.keys(r.data).some((k) => k.startsWith("h:")) && (
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-emerald-700 bg-emerald-50 rounded px-2 py-1">
+                    <span className="text-emerald-500 font-medium">טיפול:</span>
+                    {Object.entries(r.data).filter(([k]) => k.startsWith("h:")).map(([k, v]) => {
+                      const key = k.slice(2);
+                      const label = (handlerFieldsByType[r.type] ?? []).find((f) => f.fieldKey === key)?.label ?? key;
+                      return <span key={k}><b className="text-emerald-600">{label}:</b> {v}</span>;
                     })}
                   </div>
                 )}
@@ -288,6 +301,10 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
                   <button onClick={() => setStatus(r.id, "REJECTED")} className="text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded px-2 py-1 hover:bg-rose-100">נדחה</button>
                 </>
               )}
+              {/* חטיבה: מילוי שדות טיפול דינמיים */}
+              {mode === "brigade" && (handlerFieldsByType[r.type] ?? []).length > 0 && !["CANCELLED", "REJECTED"].includes(r.status) && (
+                <button onClick={() => setHandlerFor((v) => (v === r.id ? null : r.id))} className="text-xs bg-teal-50 border border-teal-200 text-teal-700 rounded px-2 py-1 hover:bg-teal-100">📝 שדות טיפול</button>
+              )}
               {/* עדכון/מענה — שני הצדדים */}
               {!["CANCELLED"].includes(r.status) && (
                 replyTo === r.id ? (
@@ -301,6 +318,25 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
                 )
               )}
             </div>
+
+            {/* טופס שדות טיפול — חטיבה */}
+            {mode === "brigade" && handlerFor === r.id && (handlerFieldsByType[r.type] ?? []).length > 0 && (
+              <form
+                action={(fd) => { fd.set("id", r.id); start(async () => { const res = await saveHandlerFields(fd); if (res.error) alert(res.error); else setHandlerFor(null); }); }}
+                className="mt-3 border-t border-teal-100 pt-3 grid sm:grid-cols-2 gap-2 bg-teal-50/40 rounded p-2"
+              >
+                {(handlerFieldsByType[r.type] ?? []).map((f) => (
+                  <div key={f.fieldKey}>
+                    <label className="text-xs text-slate-500 block mb-0.5">{f.label}{f.required ? " *" : ""}</label>
+                    <DynFieldInput f={f} namePrefix="fh_" defaultValue={r.data?.[`h:${f.fieldKey}`]} />
+                  </div>
+                ))}
+                <div className="sm:col-span-2 flex gap-2">
+                  <button disabled={pending} className="text-xs bg-teal-600 text-white rounded px-3 py-1.5 hover:bg-teal-700 disabled:opacity-50">שמור שדות טיפול</button>
+                  <button type="button" onClick={() => setHandlerFor(null)} className="text-xs text-slate-400">ביטול</button>
+                </div>
+              </form>
+            )}
           </Card>
         ))}
       </div>

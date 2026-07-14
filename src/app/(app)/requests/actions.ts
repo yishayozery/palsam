@@ -255,3 +255,21 @@ export async function removeFieldDef(formData: FormData): Promise<void> {
   await prisma.requestFieldDef.delete({ where: { id } });
   revalidatePath("/requests");
 }
+
+/** חטיבה — מילוי/עדכון שדות טיפול דינמיים (מוזגים ל-data של הדרישה). */
+export async function saveHandlerFields(formData: FormData): Promise<{ error?: string; ok?: boolean }> {
+  const user = await requireUser();
+  const id = String(formData.get("id") || "");
+  const req = await prisma.request.findUnique({ where: { id }, select: { targetUnitId: true, type: true, data: true } });
+  if (!req) return { error: "דרישה לא נמצאה" };
+  if (req.targetUnitId !== user.battalionId) return { error: "רק החטיבה יכולה למלא שדות טיפול" };
+  if (!(await canHandleType(user, req.type))) return { error: "אינך אחראי על סוג זה" };
+  const merged: Record<string, string> = { ...((req.data as Record<string, string> | null) ?? {}) };
+  for (const [k, v] of formData.entries()) {
+    // שדות טיפול נשמרים ב-namespace "h:" כדי לא להתנגש עם שדות המבקש (fieldKey זהה אפשרי)
+    if (k.startsWith("fh_") && typeof v === "string") { const key = `h:${k.slice(3)}`; if (v.trim()) merged[key] = v.trim(); else delete merged[key]; }
+  }
+  await prisma.request.update({ where: { id }, data: { data: merged } });
+  revalidatePath("/requests");
+  return { ok: true };
+}
