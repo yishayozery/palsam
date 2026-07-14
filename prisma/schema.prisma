@@ -203,6 +203,14 @@ model Battalion {
   vacationStatuses   VacationStatus[]
   armoryInspections    ArmoryInspection[]
   armoryChecklistItems ArmoryChecklistItem[]
+  // 🏛️ היררכיית יחידה — גדוד/חטיבה כאותה ישות. level=BRIGADE + parentId=null = חטיבה;
+  //    level=BATTALION + parentId=<חטיבה> = גדוד המשויך לחטיבה.
+  level              UnitLevel   @default(BATTALION)
+  parentId           String?
+  parent             Battalion?  @relation("UnitHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children           Battalion[] @relation("UnitHierarchy")
+  requestsOpened     Request[]   @relation("RequestOpener")
+  requestsReceived   Request[]   @relation("RequestTarget")
   dispatchRoles      DispatchRole[] @relation("BattalionDispatchRoles")
   dispatchTemplates  DispatchTemplate[] @relation("BattalionDispatchTemplates")
   drivingLicenseTypes DrivingLicenseType[] @relation("BattalionDrivingLicenseTypes")
@@ -2583,4 +2591,79 @@ model ArmoryInspectionItem {
   sortOrder    Int      @default(0)
 
   @@index([inspectionId])
+}
+
+// ===== היררכיית יחידה + דרישות לרמה הממונה (גדוד → חטיבה) =====
+enum UnitLevel {
+  BRIGADE   // חטיבה
+  BATTALION // גדוד
+}
+
+enum RequestType {
+  CONSTRUCTION // בינוי
+  TRANSPORT    // הובלה
+  SUPPLY       // הספקה
+  FUEL         // דלקים
+  FUEL_CARDS   // כרטיסי דלק
+  MEDICAL      // רפואה
+  TRAINING     // הדרכות/קורסים
+  OTHER        // אחר
+}
+
+enum RequestPriority {
+  ROUTINE     // רגיל
+  URGENT      // דחוף
+  OPERATIONAL // מבצעי
+}
+
+enum RequestStatus {
+  DRAFT             // טיוטה
+  PENDING_APPROVAL  // ממתין לאישור מפקד (בגדוד)
+  IN_PROGRESS       // בטיפול החטיבה (קבלה אוטומטית בהסלמה)
+  NEEDS_INFO        // דרוש מידע — הוחזר לגדוד
+  RESOLVED          // נפתר
+  REJECTED          // נדחה
+  CANCELLED         // בוטל
+}
+
+/** דרישה/פנייה מיחידה לרמה הממונה (גדוד→חטיבה). openerUnit=battalion, targetUnit=parent. */
+model Request {
+  id           String          @id @default(cuid())
+  battalionId  String          // היחידה הפותחת (גדוד)
+  battalion    Battalion       @relation("RequestOpener", fields: [battalionId], references: [id], onDelete: Cascade)
+  targetUnitId String          // היחידה הממונה שאליה מופנית הדרישה (חטיבה)
+  targetUnit   Battalion       @relation("RequestTarget", fields: [targetUnitId], references: [id])
+  companyId    String?         // אם פלוגה פתחה
+  type         RequestType
+  title        String
+  description  String?
+  priority     RequestPriority @default(ROUTINE)
+  status       RequestStatus   @default(PENDING_APPROVAL)
+  openedById   String?         // AppUser שפתח
+  openedByName String?
+  approvedById String?         // מפקד שאישר והסלים
+  assignedToId String?         // בעל תפקיד בחטיבה שמטפל
+  assignedName String?
+  createdAt    DateTime        @default(now())
+  escalatedAt  DateTime?       // מתי הוסלם לחטיבה
+  resolvedAt   DateTime?
+  updates      RequestUpdate[]
+
+  @@index([battalionId])
+  @@index([targetUnitId, status])
+}
+
+/** שרשור עדכונים/דיווחי-טיפול על דרישה (thread). */
+model RequestUpdate {
+  id         String        @id @default(cuid())
+  requestId  String
+  request    Request       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  authorId   String?
+  authorName String?
+  text       String
+  statusFrom RequestStatus?
+  statusTo   RequestStatus?
+  createdAt  DateTime      @default(now())
+
+  @@index([requestId])
 }

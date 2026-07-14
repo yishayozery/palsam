@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Badge, Card, Table, Th, Td, EmptyState } from "@/components/ui";
 import InviteLink from "@/components/InviteLink";
 import BattalionForm from "./BattalionForm";
-import { toggleBattalion, resetUserPassword, setBattalionSupportWhatsapp, seedBattalionEssentialsAction, createDemoCompanyAction, deleteDemoCompanyAction } from "./actions";
+import { toggleBattalion, resetUserPassword, setBattalionSupportWhatsapp, seedBattalionEssentialsAction, createDemoCompanyAction, deleteDemoCompanyAction, setUnitLevel, setUnitParent } from "./actions";
 import { getSetupChecklist } from "@/lib/battalionSetup";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +24,9 @@ export default async function BattalionsPage() {
   const checklists = new Map(
     await Promise.all(battalions.map(async (b) => [b.id, await getSetupChecklist(b.id)] as const)),
   );
+  // חטיבות (לשיוך גדודים) + מיפוי שם חטיבת-אב
+  const brigades = battalions.filter((b) => b.level === "BRIGADE");
+  const nameById = new Map(battalions.map((b) => [b.id, b.name]));
 
   return (
     <div>
@@ -95,6 +98,28 @@ export default async function BattalionsPage() {
                       const ready = c.hasPresetRoles;
                       return (
                         <div className="flex flex-wrap items-center gap-2">
+                          {/* 🏛️ רמת יחידה + שיוך לחטיבה */}
+                          <form action={setUnitLevel} className="flex items-center gap-1">
+                            <input type="hidden" name="id" value={b.id} />
+                            <select name="level" defaultValue={b.level} className="text-[11px] rounded border border-slate-300 px-1 py-0.5">
+                              <option value="BATTALION">גדוד</option>
+                              <option value="BRIGADE">חטיבה</option>
+                            </select>
+                            <button className="text-[11px] text-blue-600 hover:underline">שמור רמה</button>
+                          </form>
+                          {b.level === "BATTALION" && (
+                            <form action={setUnitParent} className="flex items-center gap-1">
+                              <input type="hidden" name="id" value={b.id} />
+                              <select name="parentId" defaultValue={b.parentId ?? ""} className="text-[11px] rounded border border-slate-300 px-1 py-0.5">
+                                <option value="">— ללא חטיבה —</option>
+                                {brigades.map((br) => <option key={br.id} value={br.id}>{br.name}</option>)}
+                              </select>
+                              <button className="text-[11px] text-blue-600 hover:underline">שייך</button>
+                            </form>
+                          )}
+                          {b.level === "BRIGADE" && <span className="text-[11px] rounded-full px-2 py-0.5 bg-indigo-100 text-indigo-700">🏛️ חטיבה</span>}
+                          {b.level === "BATTALION" && b.parentId && <span className="text-[11px] text-slate-500">▲ {nameById.get(b.parentId) ?? ""}</span>}
+                          <span className="w-px h-4 bg-slate-200" />
                           <span className="text-[11px] font-semibold text-slate-500">צ׳ק-ליסט הקמה:</span>
                           {chip(true, `${b._count.holders} מחסנים`)}
                           {chip(c.hasPresetRoles, `תפקידים (${c.roles})`)}

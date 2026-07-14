@@ -138,6 +138,32 @@ export async function resetUserPassword(formData: FormData) {
 // הערה: ניהול מנהלי מערכת נוספים עבר לניהול המשתמשים בתוך הגדוד (/users) —
 // אדמין-על מקים כאן רק את הגדוד ואת המנהל הראשון (bootstrap).
 
+/** אדמין-על: קביעת רמת יחידה (חטיבה/גדוד). */
+export async function setUnitLevel(formData: FormData): Promise<void> {
+  const admin = await requireSuperAdmin();
+  const id = String(formData.get("id") || "");
+  const level = String(formData.get("level") || "BATTALION") === "BRIGADE" ? "BRIGADE" : "BATTALION";
+  // חטיבה לא יכולה להיות משויכת להורה (היא ברמה העליונה)
+  await prisma.battalion.update({ where: { id }, data: { level, ...(level === "BRIGADE" ? { parentId: null } : {}) } });
+  await audit(admin.id, "SET_UNIT_LEVEL", "Battalion", id, { level });
+  revalidatePath("/admin/battalions");
+}
+
+/** אדמין-על: שיוך גדוד לחטיבה ממונה (parentId). */
+export async function setUnitParent(formData: FormData): Promise<void> {
+  const admin = await requireSuperAdmin();
+  const id = String(formData.get("id") || "");
+  const parentId = String(formData.get("parentId") || "").trim() || null;
+  if (parentId) {
+    const parent = await prisma.battalion.findUnique({ where: { id: parentId }, select: { level: true } });
+    if (!parent || parent.level !== "BRIGADE") return; // הורה חייב להיות חטיבה
+    if (parentId === id) return;
+  }
+  await prisma.battalion.update({ where: { id }, data: { parentId } });
+  await audit(admin.id, "SET_UNIT_PARENT", "Battalion", id, { parentId });
+  revalidatePath("/admin/battalions");
+}
+
 export async function toggleBattalion(formData: FormData) {
   const admin = await requireSuperAdmin();
   const id = String(formData.get("id") || "");
