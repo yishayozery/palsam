@@ -12,6 +12,38 @@ function canManage(user: Parameters<typeof can>[0] & { isAdmin?: boolean }): boo
   return !!user.isAdmin || can(user, "armory") || can(user, "signatures.manage");
 }
 
+/** ממיר תאריך+שעה שהוזנו בשעון ישראל ל-Date נכון ב-UTC (כולל שעון קיץ). */
+function israelWallToUtc(date: string, time: string): Date {
+  const [yy, mm, dd] = date.split("-").map(Number);
+  const [hh, mi] = time.split(":").map(Number);
+  const utcGuess = Date.UTC(yy, (mm || 1) - 1, dd || 1, hh || 0, mi || 0);
+  const ilMs = new Date(new Date(utcGuess).toLocaleString("en-US", { timeZone: "Asia/Jerusalem" })).getTime();
+  const utcMs = new Date(new Date(utcGuess).toLocaleString("en-US", { timeZone: "UTC" })).getTime();
+  return new Date(utcGuess - (ilMs - utcMs));
+}
+
+/** עריכת סבב מתוכנן (מועד/בודק/ארמון) — רק לפני השלמה. */
+export async function updateArmoryInspection(formData: FormData): Promise<{ error?: string; ok?: boolean }> {
+  const user = await requireUser();
+  if (!canManage(user)) return { error: "אין הרשאה" };
+  const id = String(formData.get("id") || "");
+  const insp = await prisma.armoryInspection.findFirst({ where: { id, battalionId: user.battalionId! }, select: { status: true } });
+  if (!insp) return { error: "סבב לא נמצא" };
+  if (insp.status === "COMPLETED") return { error: "לא ניתן לערוך סבב שהושלם" };
+  const date = String(formData.get("date") || "").trim();
+  const time = String(formData.get("time") || "09:00").trim();
+  const inspectorSoldierId = String(formData.get("inspectorSoldierId") || "").trim() || null;
+  const inspectorName = String(formData.get("inspectorName") || "").trim() || null;
+  const holderId = String(formData.get("holderId") || "").trim() || null;
+  if (!date) return { error: "בחר תאריך" };
+  if (!inspectorSoldierId && !inspectorName) return { error: "בחר מפקד בודק או הזן שם" };
+  if (inspectorSoldierId && !(await prisma.soldier.findFirst({ where: { id: inspectorSoldierId, battalionId: user.battalionId! }, select: { id: true } }))) return { error: "מפקד לא נמצא" };
+  await prisma.armoryInspection.update({ where: { id }, data: { scheduledAt: israelWallToUtc(date, time), inspectorSoldierId, inspectorName, holderId } });
+  await audit(user.id, "UPDATE_ARMORY_INSPECTION", "ArmoryInspection", id, {});
+  revalidatePath("/armory-inspections");
+  return { ok: true };
+}
+
 /** תזמון סבב בדיקה חדש — snapshot של הסעיפים הפעילים + התראת טלגרם למפקד הבודק. */
 export async function createArmoryInspection(formData: FormData): Promise<{ error?: string; ok?: boolean }> {
   const user = await requireUser();

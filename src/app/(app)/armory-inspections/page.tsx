@@ -33,7 +33,10 @@ export default async function ArmoryInspectionsPage() {
   const rows = inspections.map((i) => ({
     id: i.id,
     scheduledAt: i.scheduledAt.toISOString(),
+    inspectorSoldierId: i.inspectorSoldierId ?? "",
     inspectorName: i.inspectorName ?? (i.inspectorSoldierId ? solMap.get(i.inspectorSoldierId) ?? "—" : "—"),
+    inspectorNameRaw: i.inspectorName ?? "",
+    holderId: i.holderId ?? "",
     holderName: i.holderId ? holderMap.get(i.holderId) ?? "" : "",
     status: i.status,
     overallOk: i.overallOk,
@@ -44,9 +47,21 @@ export default async function ArmoryInspectionsPage() {
     link: `/armory-inspection/${i.id}?t=${signLink("armory-inspection", i.id)}`,
   }));
 
+  // מדדים עליונים
+  const completed = inspections.filter((i) => i.status === "COMPLETED" && i.completedAt);
+  const lastCompletedAt = completed.length ? completed.map((i) => i.completedAt!.getTime()).sort((a, b) => b - a)[0] : null;
+  const metrics = {
+    open: inspections.filter((i) => i.status !== "COMPLETED").length,
+    okCount: inspections.filter((i) => i.status === "COMPLETED" && i.overallOk).length,
+    faultCount: inspections.filter((i) => i.status === "COMPLETED" && i.overallOk === false).length,
+    faultsTotal: inspections.reduce((s, i) => s + i.items.filter((it) => it.ok === false).length, 0),
+    lastCompletedAt: lastCompletedAt ? new Date(lastCompletedAt).toISOString() : null,
+  };
+
   return (
     <InspectionsClient
       inspections={rows}
+      metrics={metrics}
       checklist={checklist.map((c) => ({ id: c.id, label: c.label, active: c.active }))}
       soldiers={soldiers}
       armories={armories}
