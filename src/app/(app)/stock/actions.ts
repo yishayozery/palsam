@@ -523,7 +523,7 @@ export async function withdrawSerials(formData: FormData) {
     });
     for (const sid of serialIds) {
       const su = await tx.serialUnit.findUnique({ where: { id: sid } });
-      if (!su) continue;
+      if (!su || su.battalionId !== bId) continue;
       await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: su.statusId } });
       await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: null, signedSoldierId: null, dischargedAt: new Date() } });
     }

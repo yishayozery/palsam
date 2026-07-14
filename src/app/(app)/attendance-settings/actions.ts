@@ -40,6 +40,8 @@ export async function upsertAttendanceStatus(
     if (!name) return { error: "שם סטטוס חובה" };
 
     if (id) {
+      const row = await prisma.attendanceStatus.findUnique({ where: { id }, select: { battalionId: true } });
+      if (!row || row.battalionId !== bId) return { error: "לא נמצא" };
       await prisma.attendanceStatus.update({
         where: { id },
         data: { name, color, icon, isPresent, sortOrder },
@@ -68,6 +70,8 @@ export async function deleteAttendanceStatus(
     const user = await requireUser();
     if (!can(user, "attendance.manage") && !can(user, "battalion.profile"))
       return { error: "אין הרשאה" };
+    const row = await prisma.attendanceStatus.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!row || row.battalionId !== user.battalionId) return { error: "לא נמצא" };
     const used = await prisma.attendancePlan.count({ where: { statusId: id } })
       + await prisma.attendanceRecord.count({ where: { statusId: id } });
     if (used > 0) return { error: "לא ניתן למחוק סטטוס שנמצא בשימוש. ניתן לכבות אותו." };
@@ -88,6 +92,8 @@ export async function toggleAttendanceStatus(
     const user = await requireUser();
     if (!can(user, "attendance.manage") && !can(user, "battalion.profile"))
       return { error: "אין הרשאה" };
+    const row = await prisma.attendanceStatus.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!row || row.battalionId !== user.battalionId) return { error: "לא נמצא" };
     await prisma.attendanceStatus.update({ where: { id }, data: { active } });
     revalidatePath("/attendance-settings");
     return { ok: true };
@@ -116,8 +122,8 @@ export async function upsertSquad(
     if (!isBattalionAdmin && !isCompanyRep) return { error: "אין הרשאה" };
 
     if (id) {
-      const existing = await prisma.squad.findUnique({ where: { id }, select: { companyId: true } });
-      if (!existing) return { error: "מחלקה לא נמצאה" };
+      const existing = await prisma.squad.findUnique({ where: { id }, select: { companyId: true, battalionId: true } });
+      if (!existing || existing.battalionId !== bId) return { error: "מחלקה לא נמצאה" };
       if (!isBattalionAdmin && !user.holderIds.includes(existing.companyId)) return { error: "אין הרשאה" };
       await prisma.squad.update({
         where: { id },
@@ -144,8 +150,8 @@ export async function deleteSquad(
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
     const user = await requireUser();
-    const squad = await prisma.squad.findUnique({ where: { id }, select: { companyId: true } });
-    if (!squad) return { error: "לא נמצא" };
+    const squad = await prisma.squad.findUnique({ where: { id }, select: { companyId: true, battalionId: true } });
+    if (!squad || squad.battalionId !== user.battalionId) return { error: "לא נמצא" };
 
     const isBattalionAdmin = can(user, "battalion.profile");
     const isCompanyRep = user.role === "COMPANY_REP" && user.holderIds.includes(squad.companyId);

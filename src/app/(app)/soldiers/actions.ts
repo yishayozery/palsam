@@ -35,6 +35,8 @@ export async function saveCompanyRole(formData: FormData) {
   if (!name || !companyId) return;
 
   if (id) {
+    const row = await prisma.companyRole.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!row || row.battalionId !== bId) return;
     await prisma.companyRole.update({ where: { id }, data: { name, isCommander, sortOrder } });
   } else {
     await prisma.companyRole.create({ data: { battalionId: bId, companyId, name, isCommander, sortOrder } });
@@ -47,7 +49,7 @@ export async function toggleCompanyRole(formData: FormData) {
   const user = await requireCapability("company.manage");
   const id = String(formData.get("id") || "");
   const r = await prisma.companyRole.findUnique({ where: { id } });
-  if (!r) return;
+  if (!r || r.battalionId !== user.battalionId) return;
   await prisma.companyRole.update({ where: { id }, data: { active: !r.active } });
   await audit(user.id, "UPDATE", "CompanyRole", id, { active: !r.active });
   revalidatePath("/soldiers");
@@ -63,6 +65,8 @@ export async function saveSquad(formData: FormData) {
   if (!name || !companyId) return;
 
   if (id) {
+    const row = await prisma.squad.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!row || row.battalionId !== bId) return;
     await prisma.squad.update({ where: { id }, data: { name, sortOrder } });
   } else {
     await prisma.squad.create({ data: { battalionId: bId, companyId, name, sortOrder } });
@@ -77,7 +81,7 @@ export async function toggleSquad(formData: FormData) {
   const user = await requireCapability("company.manage");
   const id = String(formData.get("id") || "");
   const sq = await prisma.squad.findUnique({ where: { id } });
-  if (!sq) return;
+  if (!sq || sq.battalionId !== user.battalionId) return;
   await prisma.squad.update({ where: { id }, data: { active: !sq.active } });
   await audit(user.id, "UPDATE", "Squad", id, { active: !sq.active });
   revalidatePath("/soldiers");
@@ -144,6 +148,8 @@ export async function saveSoldier(formData: FormData): Promise<string | undefine
   const data = { fullName, personalNumber, phone: cleanPhone, platoon, companyId, squadId, companyRoleId, dutyRound, isAttendanceReporter,
     ...(formData.has("dietType") ? { dietType } : {}) };
   if (id) {
+    const row = await prisma.soldier.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!row || row.battalionId !== bId) return "חייל לא נמצא";
     await prisma.soldier.update({ where: { id }, data });
   } else {
     await prisma.soldier.create({ data: { ...data, battalionId: bId } });
@@ -156,7 +162,7 @@ export async function toggleSoldier(formData: FormData) {
   const user = await requireCapability("company.manage");
   const id = String(formData.get("id") || "");
   const s = await prisma.soldier.findUnique({ where: { id } });
-  if (!s) return;
+  if (!s || s.battalionId !== user.battalionId) return;
   const newStatus = (s.status === "DISCHARGED" || s.status === "INACTIVE") ? "REGISTERED" : "INACTIVE";
   await prisma.soldier.update({ where: { id }, data: { status: newStatus } });
   await audit(user.id, "UPDATE", "Soldier", id, { status: newStatus });

@@ -15,6 +15,8 @@ export async function saveLocation(formData: FormData) {
   if (!column || !row) return;
 
   if (id) {
+    const existing = await prisma.storageLocation.findUnique({ where: { id }, select: { holderId: true } });
+    if (!existing || existing.holderId !== user.holderId) return;
     await prisma.storageLocation.update({ where: { id }, data: { column, row, label } });
   } else {
     // מניעת כפילות
@@ -71,6 +73,8 @@ export async function setItemLocation(formData: FormData): Promise<{ ok?: boolea
 export async function deleteLocation(formData: FormData) {
   const user = await requireCapability("locations.manage");
   const id = String(formData.get("id") || "");
+  const existing = await prisma.storageLocation.findUnique({ where: { id }, select: { holderId: true } });
+  if (!existing || existing.holderId !== user.holderId) return;
   const inUse =
     (await prisma.serialUnit.count({ where: { locationId: id } })) +
     (await prisma.stockBalance.count({ where: { locationId: id } }));
@@ -101,6 +105,8 @@ export async function saveEquipmentLocation(formData: FormData): Promise<{ ok?: 
     if (!holder || holder.battalionId !== user.battalionId) return { error: "מיקום לא בגדוד" };
 
     if (id) {
+      const existing = await prisma.equipmentLocation.findUnique({ where: { id }, select: { battalionId: true } });
+      if (!existing || existing.battalionId !== user.battalionId) return { error: "מיקום לא נמצא" };
       await prisma.equipmentLocation.update({ where: { id }, data: { name, vehicleSerialUnitId } });
     } else {
       // מניעת כפילות בתוך אותו holder

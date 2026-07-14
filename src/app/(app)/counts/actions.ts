@@ -17,6 +17,8 @@ export async function saveCountDefinition(formData: FormData) {
   const scopeHolderId = String(formData.get("scopeHolderId") || "") || null;
   if (!name) return;
   if (id) {
+    const row = await prisma.countDefinition.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!row || row.battalionId !== bId) return;
     await prisma.countDefinition.update({ where: { id }, data: { name, type, frequencyId, scopeHolderId } });
   } else {
     await prisma.countDefinition.create({ data: { battalionId: bId, name, type, frequencyId, scopeHolderId, categoryIds: [], daysOfWeek: [] } });
@@ -28,6 +30,8 @@ export async function saveCountDefinition(formData: FormData) {
 export async function deleteCountDefinition(formData: FormData) {
   const user = await requireCapability("counts.manage");
   const id = String(formData.get("id") || "");
+  const row = await prisma.countDefinition.findUnique({ where: { id }, select: { battalionId: true } });
+  if (!row || row.battalionId !== user.battalionId) return;
   await prisma.countDefinition.update({ where: { id }, data: { active: false } });
   await audit(user.id, "DELETE", "CountDefinition", id);
   revalidatePath("/counts");
@@ -234,8 +238,8 @@ export async function submitCount(formData: FormData) {
 
   await prisma.$transaction(async (tx) => {
     for (const [serialUnitId, loc] of locationUpdates) {
-      await tx.serialUnit.update({
-        where: { id: serialUnitId },
+      await tx.serialUnit.updateMany({
+        where: { id: serialUnitId, battalionId: bId },
         data: { physicalLocation: loc || null },
       });
     }
@@ -486,6 +490,8 @@ export async function getVerificationStatus(sessionId: string) {
 
 export async function markVerificationSent(requestId: string, via: "WHATSAPP" | "TELEGRAM") {
   const user = await requireUser();
+  const row = await prisma.verificationRequest.findUnique({ where: { id: requestId }, select: { battalionId: true } });
+  if (!row || row.battalionId !== user.battalionId) return { error: "לא נמצא" };
   await prisma.verificationRequest.update({
     where: { id: requestId },
     data: { sentAt: new Date(), sentVia: via },
@@ -504,7 +510,8 @@ export async function sendTelegramVerification(requestId: string) {
       items: { select: { id: true, itemTypeName: true, serialNumber: true, expectedQuantity: true } },
     },
   });
-  if (!req || !req.soldier?.telegramChatId || !req.battalion.telegramBotToken) {
+  if (!req || req.battalionId !== user.battalionId) return { error: "לא נמצא" };
+  if (!req.soldier?.telegramChatId || !req.battalion.telegramBotToken) {
     return { error: "חייל או בוט טלגרם לא מוגדרים" };
   }
 

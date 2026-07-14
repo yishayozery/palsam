@@ -20,6 +20,13 @@ export async function createSoldier(formData: FormData) {
   if (!firstName || !lastName) throw new Error("שם פרטי + שם משפחה חובה");
   if (!companyId) throw new Error("חובה לשייך לפלוגה");
 
+  const company = await prisma.holder.findUnique({ where: { id: companyId }, select: { battalionId: true } });
+  if (!company || company.battalionId !== bId) throw new Error("פלוגה לא נמצאה");
+  if (squadId) {
+    const squad = await prisma.squad.findUnique({ where: { id: squadId }, select: { battalionId: true } });
+    if (!squad || squad.battalionId !== bId) throw new Error("מחלקה לא נמצאה");
+  }
+
   if (personalNumber) {
     const existing = await prisma.soldier.findFirst({
       where: { battalionId: bId, personalNumber },
@@ -78,6 +85,15 @@ export async function updateSoldier(formData: FormData) {
 
   const s = await prisma.soldier.findUnique({ where: { id } });
   if (!s || s.battalionId !== user.battalionId) return;
+
+  if (companyId) {
+    const company = await prisma.holder.findUnique({ where: { id: companyId }, select: { battalionId: true } });
+    if (!company || company.battalionId !== user.battalionId) return;
+  }
+  if (squadId) {
+    const squad = await prisma.squad.findUnique({ where: { id: squadId }, select: { battalionId: true } });
+    if (!squad || squad.battalionId !== user.battalionId) return;
+  }
 
   await prisma.soldier.update({
     where: { id },

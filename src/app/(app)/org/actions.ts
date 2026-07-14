@@ -195,6 +195,8 @@ export async function renameHolder(formData: FormData) {
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
   if (!name) return;
+  const h = await prisma.holder.findUnique({ where: { id } });
+  if (!h || h.battalionId !== user.battalionId) return;
   await prisma.holder.update({ where: { id }, data: { name } });
   await audit(user.id, "UPDATE", "Holder", id, { name });
   revalidatePath("/org");

@@ -21,6 +21,8 @@ export async function saveCategory(formData: FormData) {
   const maxPerSoldier = maxRaw > 0 ? maxRaw : null;
   if (!name) return;
   if (id) {
+    const row = await prisma.category.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!row || row.battalionId !== bId) return;
     await prisma.category.update({ where: { id }, data: { name, warehouseType, maxPerSoldier } });
   } else {
     await prisma.category.create({ data: { battalionId: bId, name, warehouseType, maxPerSoldier } });
@@ -32,6 +34,8 @@ export async function saveCategory(formData: FormData) {
 export async function deleteCategory(formData: FormData) {
   const user = await guard();
   const id = String(formData.get("id") || "");
+  const row = await prisma.category.findUnique({ where: { id }, select: { battalionId: true } });
+  if (!row || row.battalionId !== user.battalionId) return;
   const count = await prisma.itemType.count({ where: { categoryId: id } });
   if (count > 0) return;
   await prisma.category.delete({ where: { id } });
@@ -60,6 +64,8 @@ export async function saveStatus(formData: FormData) {
   });
   if (dup) throw new Error(`כבר קיים סטטוס בשם "${name}"`);
   if (id) {
+    const row = await prisma.itemStatus.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!row || row.battalionId !== bId) return;
     await prisma.itemStatus.update({ where: { id }, data });
   } else {
     await prisma.itemStatus.create({ data: { ...data, battalionId: bId } });
@@ -71,6 +77,8 @@ export async function saveStatus(formData: FormData) {
 export async function deleteStatus(formData: FormData) {
   const user = await guard();
   const id = String(formData.get("id") || "");
+  const row = await prisma.itemStatus.findUnique({ where: { id }, select: { battalionId: true } });
+  if (!row || row.battalionId !== user.battalionId) return;
   const inUse =
     (await prisma.serialUnit.count({ where: { statusId: id } })) +
     (await prisma.stockBalance.count({ where: { statusId: id } }));
@@ -90,6 +98,8 @@ export async function saveFrequency(formData: FormData) {
   if (!name) return;
   const data = { name, intervalDays: isNaN(intervalDays) ? 7 : intervalDays };
   if (id) {
+    const row = await prisma.countFrequency.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!row || row.battalionId !== bId) return;
     await prisma.countFrequency.update({ where: { id }, data });
   } else {
     await prisma.countFrequency.create({ data: { ...data, battalionId: bId } });
@@ -101,6 +111,8 @@ export async function saveFrequency(formData: FormData) {
 export async function deleteFrequency(formData: FormData) {
   const user = await guard();
   const id = String(formData.get("id") || "");
+  const row = await prisma.countFrequency.findUnique({ where: { id }, select: { battalionId: true } });
+  if (!row || row.battalionId !== user.battalionId) return;
   await prisma.countFrequency.delete({ where: { id } });
   await audit(user.id, "DELETE", "CountFrequency", id);
   revalidatePath("/dictionaries");

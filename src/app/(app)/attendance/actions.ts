@@ -70,6 +70,16 @@ export async function saveAttendance(
     entries = entries.filter((e) => !(e.type === "record" && e.date > maxDate));
     if (entries.length === 0) return { error: `לא ניתן לדווח ביצוע מעבר לחלון המותר (עד ${maxDate})` };
 
+    // 🔒 IDOR: ודא שכל חייל וכל סטטוס שייכים לגדוד של המשתמש
+    const entrySoldierIds = [...new Set(entries.map((e) => e.soldierId))];
+    const validSoldiers = await prisma.soldier.findMany({ where: { id: { in: entrySoldierIds }, battalionId: user.battalionId! }, select: { id: true } });
+    const validSoldierSet = new Set(validSoldiers.map((s) => s.id));
+    const entryStatusIds = [...new Set(entries.map((e) => e.statusId).filter((s): s is string => !!s))];
+    const validStatuses = entryStatusIds.length ? await prisma.attendanceStatus.findMany({ where: { id: { in: entryStatusIds }, battalionId: user.battalionId! }, select: { id: true } }) : [];
+    const validStatusSet = new Set(validStatuses.map((s) => s.id));
+    entries = entries.filter((e) => validSoldierSet.has(e.soldierId) && (!e.statusId || validStatusSet.has(e.statusId)));
+    if (entries.length === 0) return { error: "לא נמצא" };
+
     const departureAlerts: { soldierId: string; statusName: string }[] = [];
 
     for (const entry of entries) {
@@ -134,6 +144,8 @@ export async function openCallup(
   try {
     const user = await requireUser();
     if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
+    const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true } });
+    if (!soldier || soldier.battalionId !== user.battalionId) return { error: "חייל לא נמצא" };
     const existing = await prisma.callupPeriod.findFirst({
       where: { soldierId, endDate: null },
     });
@@ -159,7 +171,7 @@ export async function closeCallup(
   try {
     const user = await requireUser();
     if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
-    const period = await prisma.callupPeriod.findUnique({ where: { id: callupId } });
+    const period = await prisma.callupPeriod.findFirst({ where: { id: callupId, soldier: { battalionId: user.battalionId! } } });
     if (!period) return { error: "תקופת שמ\"פ לא נמצאה" };
     if (period.endDate) return { error: "שמ\"פ כבר סגור" };
 
@@ -186,7 +198,7 @@ export async function deleteCallup(
     const user = await requireUser();
     if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
 
-    const period = await prisma.callupPeriod.findUnique({ where: { id: callupId }, select: { soldierId: true } });
+    const period = await prisma.callupPeriod.findFirst({ where: { id: callupId, soldier: { battalionId: user.battalionId! } }, select: { soldierId: true } });
     if (!period) return { error: "תקופת שמ\"פ לא נמצאה" };
     const signedCount = await prisma.serialUnit.count({ where: { signedSoldierId: period.soldierId } });
     if (signedCount > 0) {
@@ -246,6 +258,8 @@ export async function updateCallupDates(callupId: string, startDate: string, end
     if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
     if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return { error: "תאריך התחלה לא תקין" };
     if (endDate && (!/^\d{4}-\d{2}-\d{2}$/.test(endDate) || endDate < startDate)) return { error: "תאריך סיום לא תקין" };
+    const period = await prisma.callupPeriod.findFirst({ where: { id: callupId, soldier: { battalionId: user.battalionId! } }, select: { id: true } });
+    if (!period) return { error: "תקופת שמ\"פ לא נמצאה" };
     await prisma.callupPeriod.update({
       where: { id: callupId },
       data: { startDate: new Date(startDate + "T00:00:00Z"), endDate: endDate ? new Date(endDate + "T00:00:00Z") : null },
@@ -263,6 +277,12 @@ export async function assignSquad(
     const user = await requireUser();
     if (!can(user, "attendance.manage") && !can(user, "battalion.profile"))
       return { error: "אין הרשאה" };
+    const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true } });
+    if (!soldier || soldier.battalionId !== user.battalionId) return { error: "חייל לא נמצא" };
+    if (squadId) {
+      const squad = await prisma.squad.findUnique({ where: { id: squadId }, select: { battalionId: true } });
+      if (!squad || squad.battalionId !== user.battalionId) return { error: "מחלקה לא נמצאה" };
+    }
     await prisma.soldier.update({
       where: { id: soldierId },
       data: { squadId },
@@ -292,7 +312,7 @@ export async function toggleCompanyLock(
         create: { battalionId: bId, companyId, date: dateObj, lockedById: user.id },
       });
     } else {
-      await prisma.attendanceLock.deleteMany({ where: { companyId, date: dateObj } });
+      await prisma.attendanceLock.deleteMany({ where: { battalionId: bId, companyId, date: dateObj } });
     }
     revalidatePath("/roster/control");
     revalidatePath("/attendance");

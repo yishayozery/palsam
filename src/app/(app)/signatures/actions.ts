@@ -109,8 +109,13 @@ export async function setSoldierIronNumber(formData: FormData): Promise<{ ok?: b
   const soldierId = String(formData.get("soldierId") || "");
   const raw = String(formData.get("number") || "").replace(/\D/g, ""); // ספרות בלבד
   if (!holderId || !soldierId) return { error: "חסרים נתונים" };
+  const [holderRow, soldierRow] = await Promise.all([
+    prisma.holder.findUnique({ where: { id: holderId }, select: { battalionId: true } }),
+    prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true } }),
+  ]);
+  if (!holderRow || holderRow.battalionId !== bId || !soldierRow || soldierRow.battalionId !== bId) return { error: "לא נמצא" };
   if (!raw) {
-    await prisma.warehouseSoldierIndex.deleteMany({ where: { holderId, soldierId } });
+    await prisma.warehouseSoldierIndex.deleteMany({ where: { holderId, soldierId, battalionId: bId } });
     revalidatePath("/signatures/warehouse-report");
     return { ok: true };
   }
@@ -1008,8 +1013,11 @@ export async function cancelSignature(formData: FormData): Promise<{ ok?: boolea
 export async function updatePhysicalLocation(formData: FormData) {
   const user = await requireUser();
   if (!can(user, "signatures.manage")) redirect("/signatures");
+  const bId = user.battalionId!;
   const serialUnitId = String(formData.get("serialUnitId") || "");
   const physicalLocation = String(formData.get("physicalLocation") || "").trim() || null;
+  const unit = await prisma.serialUnit.findUnique({ where: { id: serialUnitId }, select: { battalionId: true } });
+  if (!unit || unit.battalionId !== bId) return;
   await prisma.serialUnit.update({ where: { id: serialUnitId }, data: { physicalLocation } });
   await audit(user.id, "UPDATE_LOCATION", "SerialUnit", serialUnitId, { physicalLocation });
   revalidatePath("/signatures");

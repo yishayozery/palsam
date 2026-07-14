@@ -24,7 +24,7 @@ export async function upsertAllocation(
     if (!company || company.battalionId !== bId || company.kind !== "COMPANY") return { error: "פלוגה לא נמצאה" };
 
     if (quantity === 0) {
-      await prisma.companyAllocation.deleteMany({ where: { companyId, itemTypeId } });
+      await prisma.companyAllocation.deleteMany({ where: { companyId, itemTypeId, battalionId: bId } });
     } else {
       await prisma.companyAllocation.upsert({
         where: { companyId_itemTypeId: { companyId, itemTypeId } },

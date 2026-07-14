@@ -60,6 +60,9 @@ export async function setDonationQty(formData: FormData) {
   const itemTypeId = String(formData.get("itemTypeId") || "");
   const target = Math.max(0, parseInt(String(formData.get("quantity") || "0"), 10) || 0);
 
+  const it = await prisma.itemType.findUnique({ where: { id: itemTypeId } });
+  if (!it || it.ownerHolderId !== user.holderId) return;
+
   await prisma.$transaction(async (tx) => {
     const statusId = await defaultStatusId(tx, bId);
     const existing = await tx.stockBalance.findFirst({ where: { itemTypeId, holderId: user.holderId! } });

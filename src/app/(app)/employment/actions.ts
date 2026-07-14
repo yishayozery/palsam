@@ -94,6 +94,12 @@ export async function saveAllocations(
     const allocations: { companyId: string; date: string; allocated: number }[] =
       JSON.parse(allocationsJson);
 
+    const companyIds = [...new Set(allocations.map((a) => a.companyId))];
+    if (companyIds.length > 0) {
+      const validCount = await prisma.holder.count({ where: { id: { in: companyIds }, battalionId: bId } });
+      if (validCount !== companyIds.length) return { error: "פלוגה לא נמצאה" };
+    }
+
     await prisma.$transaction(async (tx) => {
       await tx.employmentAllocation.deleteMany({ where: { employmentId } });
       if (allocations.length > 0) {

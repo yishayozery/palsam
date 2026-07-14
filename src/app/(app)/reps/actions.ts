@@ -133,6 +133,8 @@ export async function saveRep(formData: FormData) {
 export async function removeRep(formData: FormData) {
   const user = await requireCapability("reps.manage");
   const id = String(formData.get("id") || "");
+  const link = await prisma.warehouseCompany.findUnique({ where: { id }, select: { warehouse: { select: { battalionId: true } } } });
+  if (!link || link.warehouse.battalionId !== user.battalionId) return;
   await prisma.warehouseCompany.delete({ where: { id } });
   await audit(user.id, "DELETE", "WarehouseCompany", id);
   revalidatePath("/reps");
@@ -144,6 +146,9 @@ export async function copyFromWarehouse(formData: FormData) {
   if (!user.holderId) return;
   const sourceWarehouseId = String(formData.get("sourceWarehouseId") || "");
   if (!sourceWarehouseId || sourceWarehouseId === user.holderId) return;
+
+  const sourceWh = await prisma.holder.findUnique({ where: { id: sourceWarehouseId }, select: { battalionId: true } });
+  if (!sourceWh || sourceWh.battalionId !== user.battalionId) return;
 
   const source = await prisma.warehouseCompany.findMany({ where: { warehouseId: sourceWarehouseId } });
   for (const link of source) {

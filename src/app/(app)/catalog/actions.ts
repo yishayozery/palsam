@@ -37,6 +37,8 @@ export async function saveItemType(formData: FormData) {
   const base = { sku, name, categoryId, trackingMethod, unit, association, signMode, isDonated, homeLocationId, trackExpiry, expiryAlertDays, maxPerSoldier, allowLocationUpdate };
   const data = imageData !== undefined ? { ...base, imageData } : base;
   if (id) {
+    const row = await prisma.itemType.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!row || row.battalionId !== bId) return;
     await prisma.itemType.update({ where: { id }, data });
   } else {
     await prisma.itemType.create({ data: { ...data, battalionId: bId } });
@@ -75,6 +77,9 @@ export async function addKitComponent(formData: FormData) {
   const componentTypeId = String(formData.get("componentTypeId") || "");
   const quantity = Math.max(1, parseInt(String(formData.get("quantity") || "1"), 10) || 1);
   if (!kitItemTypeId || !componentTypeId) return;
+  const bId = user.battalionId!;
+  const owned = await prisma.itemType.count({ where: { id: { in: [kitItemTypeId, componentTypeId] }, battalionId: bId } });
+  if (owned !== 2) return;
   await prisma.kitComponent.upsert({
     where: { kitItemTypeId_componentTypeId: { kitItemTypeId, componentTypeId } },
     create: { kitItemTypeId, componentTypeId, quantity },
@@ -85,8 +90,13 @@ export async function addKitComponent(formData: FormData) {
 }
 
 export async function removeKitComponent(formData: FormData) {
-  await requireCapability("catalog.manage");
+  const user = await requireCapability("catalog.manage");
   const id = String(formData.get("id") || "");
+  const owned = await prisma.kitComponent.findFirst({
+    where: { id, kitItemType: { battalionId: user.battalionId! } },
+    select: { id: true },
+  });
+  if (!owned) return;
   await prisma.kitComponent.delete({ where: { id } });
   revalidatePath("/catalog");
 }

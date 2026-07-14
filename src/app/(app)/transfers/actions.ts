@@ -77,7 +77,8 @@ export async function createReturn(formData: FormData) {
   const user = await requireUser();
   if (!can(user, "company.manage")) redirect("/");
   const bId = user.battalionId!;
-  const fromHolderId = user.holderId || String(formData.get("fromHolderId") || "");
+  const reqFrom = String(formData.get("fromHolderId") || "");
+  const fromHolderId = user.holderId || (reqFrom && user.holderIds.includes(reqFrom) ? reqFrom : "");
   const toHolderId = String(formData.get("toHolderId") || "");
   const returnStatusId = String(formData.get("returnStatusId") || "");
   const notes = String(formData.get("notes") || "").trim() || null;

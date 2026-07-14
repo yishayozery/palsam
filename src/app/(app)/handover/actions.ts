@@ -25,6 +25,9 @@ export async function createHandover(formData: FormData) {
   // רס"פ מוגבל לפלוגה שלו
   if (user.role === "COMPANY_REP" && user.holderId && companyId !== user.holderId) return;
 
+  const company = await prisma.holder.findUnique({ where: { id: companyId }, select: { battalionId: true } });
+  if (!company || company.battalionId !== bId) return;
+
   const handover = await prisma.shiftHandover.create({
     data: { battalionId: bId, companyId, fromRound, toRound, title, createdById: user.id },
   });

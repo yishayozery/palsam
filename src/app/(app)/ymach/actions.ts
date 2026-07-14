@@ -73,6 +73,11 @@ export async function saveShelf(_prev: unknown, fd: FormData) {
   if (!wh || wh.battalionId !== bId || (user.holderId && wh.holderId !== user.holderId)) return { error: "מחסן לא תקין" };
 
   if (id) {
+    const existingShelf = await prisma.companyShelf.findUnique({
+      where: { id },
+      select: { warehouse: { select: { battalionId: true, holderId: true } } },
+    });
+    if (!existingShelf || existingShelf.warehouse.battalionId !== bId || (user.holderId && existingShelf.warehouse.holderId !== user.holderId)) return { error: "מדף לא תקין" };
     await prisma.companyShelf.update({ where: { id }, data: { column, row, label } });
   } else {
     await prisma.companyShelf.create({
@@ -165,6 +170,7 @@ export async function saveOperationalKit(_prev: unknown, fd: FormData) {
   try {
     if (id) {
       const existing = await prisma.operationalKit.findUnique({ where: { id } });
+      if (!existing || existing.battalionId !== bId || (user.holderId && existing.holderId !== user.holderId)) return { error: "ארגז לא תקין" };
       // אם שינו חייל במארז ISSUED — מחזירים למדף
       const shouldResetStatus = existing?.status === "ISSUED" && assignedSoldierId !== existing.assignedSoldierId;
       await prisma.operationalKit.update({
@@ -328,6 +334,12 @@ export async function processStorage(
   let gaps = 0;
 
   for (const check of checks) {
+    // אבטחה: היחידה שייכת לגדוד ולמחסן/פלוגה של המשתמש
+    const owned = await prisma.serialUnit.findUnique({
+      where: { id: check.serialUnitId },
+      select: { battalionId: true, currentHolderId: true, itemTypeId: true },
+    });
+    if (!owned || owned.battalionId !== bId || owned.currentHolderId !== holderId) continue;
     if (check.returned) {
       // פריט חזר → STORED + מדף
       await prisma.serialUnit.update({
@@ -342,10 +354,7 @@ export async function processStorage(
       stored++;
     } else {
       // פריט חסר → יוצר פער ימ"ח
-      const unit = await prisma.serialUnit.findUnique({
-        where: { id: check.serialUnitId },
-        select: { itemTypeId: true },
-      });
+      const unit = { itemTypeId: owned.itemTypeId };
       if (unit) {
         await prisma.ymachGap.create({
           data: {
