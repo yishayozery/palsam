@@ -75,10 +75,22 @@ export async function createRequest(formData: FormData): Promise<{ error?: strin
   const companyId = String(formData.get("companyId") || "").trim() || null;
   if (!title) return { error: "הזן כותרת לדרישה" };
 
+  // שדות דינמיים פר-סוג — נשמרים ב-data (key = `f_<fieldKey>`)
+  const data: Record<string, string> = {};
+  for (const [k, v] of formData.entries()) {
+    if (k.startsWith("f_") && typeof v === "string" && v.trim()) data[k.slice(2)] = v.trim();
+  }
+  // דגל אישור-מפמ פר-סוג — אם לא נדרש אישור, הדרישה עולה ישר לטיפול החטיבה
+  const cfg = await prisma.requestTypeConfig.findUnique({ where: { brigadeUnitId_type: { brigadeUnitId: unit.parentId, type } }, select: { requiresApproval: true } });
+  const requiresApproval = cfg?.requiresApproval ?? true;
+
   const req = await prisma.request.create({
     data: {
       battalionId: unit.id, targetUnitId: unit.parentId, companyId, type, title, description, priority,
-      status: "PENDING_APPROVAL", openedById: user.id, openedByName: user.fullName ?? null,
+      data: Object.keys(data).length ? data : undefined,
+      status: requiresApproval ? "PENDING_APPROVAL" : "IN_PROGRESS",
+      escalatedAt: requiresApproval ? null : new Date(),
+      openedById: user.id, openedByName: user.fullName ?? null,
     },
   });
   await audit(user.id, "CREATE_REQUEST", "Request", req.id, { type, targetUnitId: unit.parentId });

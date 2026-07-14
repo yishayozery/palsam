@@ -7,22 +7,36 @@ import type { RequestType, RequestPriority, RequestStatus } from "@/generated/pr
 import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus, assignTypeHandler, removeTypeHandler } from "./actions";
 
 type Upd = { id: string; authorName: string | null; text: string; statusFrom: RequestStatus | null; statusTo: RequestStatus | null; createdAt: string };
+type DynField = { fieldKey: string; label: string; fieldType: string; options: string[]; required: boolean };
 type Req = {
   id: string; type: RequestType; title: string; description: string | null; priority: RequestPriority; status: RequestStatus;
-  openerName: string; openedByName: string | null; assignedName: string | null; createdAt: string; escalatedAt: string | null; updates: Upd[];
+  openerName: string; openedByName: string | null; assignedName: string | null; data: Record<string, string> | null; createdAt: string; escalatedAt: string | null; updates: Upd[];
 };
 
-export default function RequestsClient({ mode, unitName, parentName, isCommander, isMalka, myTypes, companies, requests, brigadeUsers, handlers }: {
+function DynFieldInput({ f }: { f: DynField }) {
+  const cls = "w-full rounded border border-slate-300 px-2 py-1 text-sm";
+  const name = `f_${f.fieldKey}`;
+  if (f.fieldType === "TEXTAREA") return <textarea name={name} required={f.required} placeholder={f.label} rows={2} className={cls} />;
+  if (f.fieldType === "NUMBER") return <input type="number" name={name} required={f.required} placeholder={f.label} className={cls} />;
+  if (f.fieldType === "DATE") return <input type="date" name={name} required={f.required} className={cls} />;
+  if (f.fieldType === "TIME") return <input type="time" name={name} required={f.required} className={cls} />;
+  if (f.fieldType === "SELECT") return <select name={name} required={f.required} defaultValue="" className={cls}><option value="">— {f.label} —</option>{f.options.map((o) => <option key={o} value={o}>{o}</option>)}</select>;
+  return <input name={name} required={f.required} placeholder={f.fieldType === "CONTACT" ? `${f.label} (שם + טלפון)` : f.label} className={cls} />;
+}
+
+export default function RequestsClient({ mode, unitName, parentName, isCommander, isMalka, myTypes, companies, requests, fieldsByType, brigadeUsers, handlers }: {
   mode: "brigade" | "battalion";
   unitName: string; parentName: string | null; isCommander: boolean; isMalka: boolean;
   myTypes: RequestType[] | null;
   companies: { id: string; name: string }[];
   requests: Req[];
+  fieldsByType: Record<string, DynField[]>;
   brigadeUsers: { id: string; name: string }[];
   handlers: { id: string; type: RequestType; userId: string }[];
 }) {
   const [pending, start] = useTransition();
   const [showNew, setShowNew] = useState(false);
+  const [newType, setNewType] = useState<RequestType>("SUPPLY");
   const [tab, setTab] = useState<"list" | "settings">("list");
   const [fStatus, setFStatus] = useState<RequestStatus | "all" | "open">("open");
   const [fType, setFType] = useState<RequestType | "all">("all");
@@ -135,7 +149,7 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
           <form action={submitNew} className="space-y-3">
             <div className="flex flex-wrap gap-3">
               <div><label className="text-xs text-slate-500 block mb-1">סוג</label>
-                <select name="type" className="rounded border border-slate-300 px-2 py-1 text-sm">
+                <select name="type" value={newType} onChange={(e) => setNewType(e.target.value as RequestType)} className="rounded border border-slate-300 px-2 py-1 text-sm">
                   {REQUEST_TYPES.map((t) => <option key={t} value={t}>{REQUEST_TYPE_LABEL[t]}</option>)}
                 </select></div>
               <div><label className="text-xs text-slate-500 block mb-1">עדיפות</label>
@@ -148,8 +162,16 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
               )}
             </div>
             <input name="title" placeholder="כותרת הדרישה" required className="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
-            <textarea name="description" placeholder="פירוט (לא חובה)" rows={3} className="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
-            <button disabled={pending} className="bg-blue-600 text-white rounded px-4 py-1.5 text-sm hover:bg-blue-700 disabled:opacity-50">שלח דרישה (ממתין לאישור מפקד)</button>
+            {/* שדות דינמיים פר-סוג */}
+            {(fieldsByType[newType] ?? []).length > 0 && (
+              <div className="grid sm:grid-cols-2 gap-2 border-t border-slate-100 pt-2">
+                {(fieldsByType[newType] ?? []).map((f) => (
+                  <div key={f.fieldKey}><label className="text-xs text-slate-500 block mb-0.5">{f.label}{f.required ? " *" : ""}</label><DynFieldInput f={f} /></div>
+                ))}
+              </div>
+            )}
+            <textarea name="description" placeholder="פירוט/הערות (לא חובה)" rows={2} className="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
+            <button disabled={pending} className="bg-blue-600 text-white rounded px-4 py-1.5 text-sm hover:bg-blue-700 disabled:opacity-50">שלח דרישה</button>
           </form>
         </Card>
       )}
@@ -182,6 +204,14 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
                   פתח: {r.openedByName ?? "—"} · {new Date(r.createdAt).toLocaleDateString("he-IL")}
                   {r.assignedName && ` · מטפל: ${r.assignedName}`}
                 </div>
+                {r.data && Object.keys(r.data).length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-600">
+                    {Object.entries(r.data).map(([k, v]) => {
+                      const label = (fieldsByType[r.type] ?? []).find((f) => f.fieldKey === k)?.label ?? k;
+                      return <span key={k}><b className="text-slate-500">{label}:</b> {v}</span>;
+                    })}
+                  </div>
+                )}
                 {r.description && <div className="text-sm text-slate-700 mt-1 whitespace-pre-wrap">{r.description}</div>}
               </div>
             </div>

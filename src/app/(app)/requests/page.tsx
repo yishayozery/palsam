@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import type { RequestType } from "@/generated/prisma";
+import { ensureRequestDefaults } from "@/lib/requestDefaults";
 import RequestsClient from "./RequestsClient";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,15 @@ export default async function RequestsPage() {
   });
   const isBrigade = unit?.level === "BRIGADE";
   const isMalka = user.isAdmin || can(user, "battalion.profile");
+
+  // מנוע השדות הדינמי — ההגדרות שמורות ברמת החטיבה (יחידת האב לגדוד).
+  const defsUnitId = isBrigade ? bId : unit?.parentId ?? null;
+  if (defsUnitId) await ensureRequestDefaults(defsUnitId).catch(() => {});
+  const fieldDefs = defsUnitId
+    ? await prisma.requestFieldDef.findMany({ where: { brigadeUnitId: defsUnitId, side: "REQUESTER", active: true }, orderBy: { sortOrder: "asc" }, select: { type: true, fieldKey: true, label: true, fieldType: true, options: true, required: true } })
+    : [];
+  const fieldsByType: Record<string, { fieldKey: string; label: string; fieldType: string; options: string[]; required: boolean }[]> = {};
+  for (const f of fieldDefs) { (fieldsByType[f.type] ??= []).push({ fieldKey: f.fieldKey, label: f.label, fieldType: f.fieldType, options: f.options, required: f.required }); }
 
   // בעל תפקיד בחטיבה — רואה רק את הסוגים שהוקצו לו. מלכ"א/גדוד — הכל.
   let myTypes: RequestType[] | null = null;
@@ -36,6 +46,7 @@ export default async function RequestsPage() {
   const rows = requests.map((r) => ({
     id: r.id, type: r.type, title: r.title, description: r.description, priority: r.priority, status: r.status,
     openerName: r.battalion.name, openedByName: r.openedByName, assignedName: r.assignedName,
+    data: (r.data as Record<string, string> | null) ?? null,
     createdAt: r.createdAt.toISOString(), escalatedAt: r.escalatedAt?.toISOString() ?? null,
     updates: r.updates.map((u) => ({ id: u.id, authorName: u.authorName, text: u.text, statusFrom: u.statusFrom, statusTo: u.statusTo, createdAt: u.createdAt.toISOString() })),
   }));
@@ -62,6 +73,7 @@ export default async function RequestsPage() {
       myTypes={myTypes}
       companies={companies}
       requests={rows}
+      fieldsByType={fieldsByType}
       brigadeUsers={brigadeUsers.map((u) => ({ id: u.id, name: u.fullName ?? "—" }))}
       handlers={handlers}
     />

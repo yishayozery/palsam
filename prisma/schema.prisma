@@ -2638,6 +2638,7 @@ model Request {
   type         RequestType
   title        String
   description  String?
+  data         Json?           // ערכי שדות דינמיים פר-סוג (key→value) — מבקש + מטפל
   priority     RequestPriority @default(ROUTINE)
   status       RequestStatus   @default(PENDING_APPROVAL)
   openedById   String?         // AppUser שפתח
@@ -2754,4 +2755,50 @@ model DutyAssignment {
 
   @@unique([slotId, soldierId])
   @@index([soldierId])
+}
+
+// ===== שדות דינמיים + הגדרות פר-סוג-דרישה (מנוע טפסים) =====
+enum RequestFieldSide {
+  REQUESTER
+  HANDLER
+}
+
+enum RequestFieldType {
+  TEXT
+  TEXTAREA
+  NUMBER
+  SELECT
+  DATE
+  TIME
+  CONTACT
+}
+
+/** הגדרת סוג-דרישה פר-חטיבה — דגל אישור-מפמ + חלון בקשה. */
+model RequestTypeConfig {
+  id            String      @id @default(cuid())
+  brigadeUnitId String
+  type          RequestType
+  requiresApproval Boolean  @default(false)
+  requestDays   String?     // ימי בקשה מותרים (מלל, למשל "א,ג,ה")
+  requestHours  String?     // שעות בקשה "08:00-12:00"
+  supplyTiming  String?     // מתי אספקה (לא חובה)
+
+  @@unique([brigadeUnitId, type])
+}
+
+/** הגדרת שדה דינמי בטופס פר-סוג (צד מבקש/מטפל). SELECT → options ניתנות לעריכה. */
+model RequestFieldDef {
+  id            String           @id @default(cuid())
+  brigadeUnitId String
+  type          RequestType
+  side          RequestFieldSide
+  fieldKey      String           // מזהה ייחודי (slug)
+  label         String
+  fieldType     RequestFieldType @default(TEXT)
+  options       String[]         @default([]) // ל-SELECT
+  required      Boolean          @default(false)
+  sortOrder     Int              @default(0)
+  active        Boolean          @default(true)
+
+  @@index([brigadeUnitId, type, side])
 }
