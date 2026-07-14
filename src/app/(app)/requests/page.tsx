@@ -84,6 +84,36 @@ export default async function RequestsPage() {
     ? await prisma.appUser.findMany({ where: { battalionId: bId, active: true }, select: { id: true, fullName: true }, orderBy: { fullName: "asc" } })
     : [];
 
+  // 🍽️ מדד מזון מיוחד — כמות חיילים לפי סוג-דיאטה, פר-גדוד (חטיבה) / פר-פלוגה (גדוד)
+  const NON_DIET = new Set(["", "ללא", "רגיל"]);
+  type FoodRow = { unit: string; total: number; diets: { type: string; count: number }[] };
+  let foodMetric: FoodRow[] = [];
+  if (isBrigade) {
+    const children = await prisma.battalion.findMany({ where: { parentId: bId }, select: { id: true, name: true } });
+    const childIds = children.map((c) => c.id);
+    if (childIds.length) {
+      const grp = await prisma.soldier.groupBy({ by: ["battalionId", "dietType"], where: { battalionId: { in: childIds }, dischargedAt: null, dietType: { not: null } }, _count: { _all: true } });
+      foodMetric = children.map((c) => {
+        const rows = grp.filter((g) => g.battalionId === c.id && g.dietType && !NON_DIET.has(g.dietType.trim()));
+        return { unit: c.name, total: rows.reduce((s, r) => s + r._count._all, 0), diets: rows.map((r) => ({ type: r.dietType!, count: r._count._all })).sort((a, b) => b.count - a.count) };
+      }).filter((r) => r.total > 0);
+    }
+  } else {
+    const grp = await prisma.soldier.groupBy({ by: ["companyId", "dietType"], where: { battalionId: bId, dischargedAt: null, dietType: { not: null } }, _count: { _all: true } });
+    const compIds = [...new Set(grp.map((g) => g.companyId).filter(Boolean) as string[])];
+    const comps = compIds.length ? await prisma.holder.findMany({ where: { id: { in: compIds } }, select: { id: true, name: true } }) : [];
+    const nameOf = (id: string | null) => comps.find((c) => c.id === id)?.name ?? "ללא שיוך";
+    const byComp = new Map<string, FoodRow>();
+    for (const g of grp) {
+      if (!g.dietType || NON_DIET.has(g.dietType.trim())) continue;
+      const key = g.companyId ?? "—";
+      const row = byComp.get(key) ?? { unit: nameOf(g.companyId), total: 0, diets: [] };
+      row.total += g._count._all; row.diets.push({ type: g.dietType, count: g._count._all });
+      byComp.set(key, row);
+    }
+    foodMetric = [...byComp.values()].map((r) => ({ ...r, diets: r.diets.sort((a, b) => b.count - a.count) })).sort((a, b) => b.total - a.total);
+  }
+
   return (
     <RequestsClient
       mode={isBrigade ? "brigade" : "battalion"}
@@ -103,6 +133,7 @@ export default async function RequestsPage() {
       responsibles={responsibles.map((r) => ({ id: r.id, type: r.type, name: r.name, phone: r.phone, hasAccount: !!r.userId, bound: !!r.chatId, token: r.token }))}
       battalionUsers={battalionUsers.map((u) => ({ id: u.id, name: u.fullName ?? "—" }))}
       botUsername={unit?.telegramBotUsername ?? null}
+      foodMetric={foodMetric}
     />
   );
 }
