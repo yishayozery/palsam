@@ -180,6 +180,10 @@ export async function lookupSoldierEquipment(formData: FormData): Promise<Soldie
     if (personalNumber.length < 5) return { ok: false, error: "מספר אישי קצר מדי (5+ ספרות)" };
     if (!nameRaw) return { ok: false, error: "הזן שם מלא לאימות" };
 
+    // 🛡️ cap נוסף פר-מ"א (בלתי-תלוי IP) — חוסם brute-force ממוקד של השם למ"א נתון
+    //    גם אם התוקף מסובב כתובות IP. 15 ניסיונות לשעה לכל מספר אישי.
+    await checkRateLimit("my-equipment-pn", personalNumber, { max: 15, windowSec: 3600 });
+
     const soldier = await prisma.soldier.findFirst({
       where: { personalNumber, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
       include: { battalion: { select: { name: true, logoData: true } }, company: { select: { name: true } } },

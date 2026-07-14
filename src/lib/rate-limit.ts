@@ -55,10 +55,13 @@ export async function getClientIp(): Promise<string> {
     // Next.js 15 - ניתן לקרוא headers ב-server actions
     const { headers } = await import("next/headers");
     const h = await headers();
+    // ⚠️ x-forwarded-for[0] (השמאלי) הוא ה-IP שהלקוח *טוען* לו — ניתן לזיוף.
+    //    מעדיפים headers שהפלטפורמה מזריקה (x-real-ip ב-Vercel / cf-connecting-ip),
+    //    ורק כ-fallback לוקחים את ה-hop הימני ביותר של XFF (הפרוקסי הקרוב לשרת).
     return (
-      h.get("x-forwarded-for")?.split(",")[0]?.trim()
-      || h.get("x-real-ip")
+      h.get("x-real-ip")
       || h.get("cf-connecting-ip")
+      || h.get("x-forwarded-for")?.split(",").pop()?.trim()
       || "unknown"
     );
   } catch {
