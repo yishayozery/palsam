@@ -12,7 +12,7 @@ export default async function RequestsPage() {
   const bId = user.battalionId!;
   const unit = await prisma.battalion.findUnique({
     where: { id: bId },
-    select: { id: true, name: true, level: true, parentId: true, parent: { select: { name: true } } },
+    select: { id: true, name: true, level: true, parentId: true, telegramBotUsername: true, parent: { select: { name: true } } },
   });
   const isBrigade = unit?.level === "BRIGADE";
   const isMalka = user.isAdmin || can(user, "battalion.profile");
@@ -76,6 +76,14 @@ export default async function RequestsPage() {
     ? await prisma.requestTypeConfig.findMany({ where: { brigadeUnitId: bId }, select: { type: true, requiresApproval: true, requestDays: true, requestHours: true, supplyTiming: true } })
     : [];
 
+  // אחראי-תחום ברמת הגדוד (צד המבקש) — נטענים בגדוד (עריכה למפקד בלבד)
+  const responsibles = !isBrigade
+    ? await prisma.requestResponsible.findMany({ where: { battalionId: bId }, select: { id: true, type: true, name: true, phone: true, userId: true, token: true, chatId: true }, orderBy: { createdAt: "asc" } })
+    : [];
+  const battalionUsers = !isBrigade && isMalka
+    ? await prisma.appUser.findMany({ where: { battalionId: bId, active: true }, select: { id: true, fullName: true }, orderBy: { fullName: "asc" } })
+    : [];
+
   return (
     <RequestsClient
       mode={isBrigade ? "brigade" : "battalion"}
@@ -92,6 +100,9 @@ export default async function RequestsPage() {
       handlers={handlers}
       settingsDefs={settingsDefs}
       typeConfigs={typeConfigs}
+      responsibles={responsibles.map((r) => ({ id: r.id, type: r.type, name: r.name, phone: r.phone, hasAccount: !!r.userId, bound: !!r.chatId, token: r.token }))}
+      battalionUsers={battalionUsers.map((u) => ({ id: u.id, name: u.fullName ?? "—" }))}
+      botUsername={unit?.telegramBotUsername ?? null}
     />
   );
 }

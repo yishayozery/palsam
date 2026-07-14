@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { REQUEST_TYPE_LABEL, REQUEST_PRIORITY_LABEL, REQUEST_STATUS_LABEL, REQUEST_STATUS_STYLE, REQUEST_TYPES, REQUEST_PRIORITIES } from "@/lib/request-labels";
 import type { RequestType, RequestPriority, RequestStatus } from "@/generated/prisma";
-import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus, assignTypeHandler, removeTypeHandler, setTypeConfig, addFieldDef, removeFieldDef, saveHandlerFields } from "./actions";
+import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus, assignTypeHandler, removeTypeHandler, setTypeConfig, addFieldDef, removeFieldDef, saveHandlerFields, addResponsible, removeResponsible } from "./actions";
 
 type Upd = { id: string; authorName: string | null; text: string; statusFrom: RequestStatus | null; statusTo: RequestStatus | null; createdAt: string };
 type DynField = { fieldKey: string; label: string; fieldType: string; options: string[]; required: boolean };
@@ -28,7 +28,9 @@ function DynFieldInput({ f, defaultValue, namePrefix = "f_" }: { f: DynField; de
 type SettingsDef = { id: string; type: RequestType; side: string; label: string; fieldType: string; options: string[]; required: boolean };
 type TypeConfig = { type: RequestType; requiresApproval: boolean; requestDays: string | null; requestHours: string | null; supplyTiming: string | null };
 
-export default function RequestsClient({ mode, unitName, parentName, isCommander, isMalka, myTypes, companies, requests, fieldsByType, handlerFieldsByType, brigadeUsers, handlers, settingsDefs, typeConfigs }: {
+type Responsible = { id: string; type: RequestType; name: string; phone: string | null; hasAccount: boolean; bound: boolean; token: string };
+
+export default function RequestsClient({ mode, unitName, parentName, isCommander, isMalka, myTypes, companies, requests, fieldsByType, handlerFieldsByType, brigadeUsers, handlers, settingsDefs, typeConfigs, responsibles, battalionUsers, botUsername }: {
   mode: "brigade" | "battalion";
   unitName: string; parentName: string | null; isCommander: boolean; isMalka: boolean;
   myTypes: RequestType[] | null;
@@ -40,6 +42,9 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
   handlers: { id: string; type: RequestType; userId: string }[];
   settingsDefs: SettingsDef[];
   typeConfigs: TypeConfig[];
+  responsibles: Responsible[];
+  battalionUsers: { id: string; name: string }[];
+  botUsername: string | null;
 }) {
   const [pending, start] = useTransition();
   const [showNew, setShowNew] = useState(false);
@@ -86,11 +91,11 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
         <Card className="mb-4 p-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm">היחידה אינה משויכת לחטיבה. פנה לאדמין-על לשיוך (הגדרות גדודים) כדי לפתוח דרישות.</Card>
       )}
 
-      {/* מלכ"א — טאבים: דרישות / הגדרות בעלי תפקיד */}
-      {isMalka && (
+      {/* טאבים: דרישות / הגדרות — מלכ"א (חטיבה) או מפקד גדוד */}
+      {(isMalka || (mode === "battalion" && isCommander)) && (
         <div className="flex rounded-lg border border-slate-200 overflow-hidden w-fit mb-3 text-sm">
           <button onClick={() => setTab("list")} className={`px-3 py-1 ${tab === "list" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>דרישות</button>
-          <button onClick={() => setTab("settings")} className={`px-3 py-1 ${tab === "settings" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>⚙️ בעלי תפקיד</button>
+          <button onClick={() => setTab("settings")} className={`px-3 py-1 ${tab === "settings" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>{isMalka ? "⚙️ בעלי תפקיד" : "⚙️ אחראי-תחום"}</button>
         </div>
       )}
       {myTypes && (
@@ -174,7 +179,48 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
         </div>
       )}
 
-      {tab === "settings" && isMalka ? null : (<>
+      {/* הגדרות אחראי-תחום — מפקד גדוד */}
+      {mode === "battalion" && isCommander && tab === "settings" && (
+        <div className="space-y-2">
+          <p className="text-sm text-slate-500">הגדר מי אחראי על כל סוג דרישה בגדוד. אפשר לבחור משתמש קיים במערכת, או להוסיף חייל ללא חשבון שיקבל התראות דרך הבוט (עם קישור אישי). האחראי מקבל התראה על כל עדכון סטטוס/טיפול בדרישות מהסוג שלו.</p>
+          {REQUEST_TYPES.map((t) => {
+            const rs = responsibles.filter((r) => r.type === t);
+            return (
+              <Card key={t} className="p-3">
+                <div className="font-medium text-sm mb-2">{REQUEST_TYPE_LABEL[t]}</div>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {rs.length === 0 && <span className="text-xs text-slate-300">— אין אחראי —</span>}
+                  {rs.map((r) => {
+                    const link = !r.hasAccount && botUsername ? `https://t.me/${botUsername}?start=resp_${r.token}` : null;
+                    return (
+                      <span key={r.id} className="text-xs bg-slate-100 rounded-full px-2 py-0.5 flex items-center gap-1">
+                        {r.hasAccount ? "👤" : r.bound ? "🤖✅" : "🤖"} {r.name}{r.phone ? ` · ${r.phone}` : ""}
+                        {link && !r.bound && <a href={link} target="_blank" rel="noreferrer" className="text-sky-600 underline">קישור בוט</a>}
+                        <form action={(fd) => start(async () => { await removeResponsible(fd); })} className="inline"><input type="hidden" name="id" value={r.id} /><button className="text-rose-500 hover:text-rose-700">×</button></form>
+                      </span>
+                    );
+                  })}
+                </div>
+                <form action={(fd) => start(async () => { const res = await addResponsible(fd); if (res.error) alert(res.error); })} className="flex flex-wrap items-end gap-1.5 text-xs border-t border-slate-100 pt-2">
+                  <input type="hidden" name="type" value={t} />
+                  <div><label className="block text-[11px] text-slate-400">משתמש במערכת</label>
+                    <select name="userId" defaultValue="" className="rounded border border-slate-300 px-1.5 py-0.5">
+                      <option value="">— חייל ללא חשבון —</option>
+                      {battalionUsers.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select></div>
+                  <div><label className="block text-[11px] text-slate-400">או שם (ללא חשבון)</label>
+                    <input name="name" placeholder="שם מלא" className="rounded border border-slate-300 px-1.5 py-0.5 w-28" /></div>
+                  <div><label className="block text-[11px] text-slate-400">טלפון</label>
+                    <input name="phone" placeholder="טלפון" className="rounded border border-slate-300 px-1.5 py-0.5 w-24" /></div>
+                  <button className="bg-indigo-600 text-white rounded px-2 py-1 hover:bg-indigo-700">➕ הוסף</button>
+                </form>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {tab === "settings" ? null : (<>
 
       {/* דשבורד חריגות — חטיבה */}
       {mode === "brigade" && (

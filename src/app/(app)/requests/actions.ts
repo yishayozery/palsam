@@ -6,7 +6,23 @@ import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { nanoid } from "nanoid";
+import { sendTelegramMessage } from "@/lib/telegram";
+import { escapeTelegram } from "@/lib/escape-html";
+import { REQUEST_TYPE_LABEL, REQUEST_STATUS_LABEL } from "@/lib/request-labels";
 import type { RequestType, RequestPriority, RequestStatus, RequestFieldSide, RequestFieldType } from "@/generated/prisma";
+
+/** התראה לאחראי-התחום של הגדוד המבקש (חיילים עם/בלי חשבון שקושרו לבוט) על שינוי בדרישה. */
+async function notifyBattalionResponsibles(battalionId: string, type: RequestType, message: string): Promise<void> {
+  try {
+    const [battalion, resps] = await Promise.all([
+      prisma.battalion.findUnique({ where: { id: battalionId }, select: { telegramBotToken: true } }),
+      prisma.requestResponsible.findMany({ where: { battalionId, type, chatId: { not: null } }, select: { chatId: true } }),
+    ]);
+    const botToken = battalion?.telegramBotToken;
+    if (!botToken || resps.length === 0) return;
+    await Promise.all(resps.map((r) => sendTelegramMessage(botToken, r.chatId!, message).catch(() => {})));
+  } catch { /* התראה בbest-effort — לא מפילה את הפעולה */ }
+}
 
 type Sessionish = Awaited<ReturnType<typeof requireUser>>;
 
@@ -153,7 +169,7 @@ export async function setRequestStatus(formData: FormData): Promise<{ error?: st
   const id = String(formData.get("id") || "");
   const status = String(formData.get("status") || "") as RequestStatus;
   const note = String(formData.get("note") || "").trim();
-  const req = await prisma.request.findUnique({ where: { id }, select: { targetUnitId: true, status: true, type: true } });
+  const req = await prisma.request.findUnique({ where: { id }, select: { targetUnitId: true, status: true, type: true, title: true, battalionId: true } });
   if (!req) return { error: "דרישה לא נמצאה" };
   // רק היחידה הממונה (חטיבה) מטפלת
   if (req.targetUnitId !== user.battalionId) return { error: "רק החטיבה יכולה לעדכן סטטוס טיפול" };
@@ -167,6 +183,8 @@ export async function setRequestStatus(formData: FormData): Promise<{ error?: st
     prisma.requestUpdate.create({ data: { requestId: id, authorId: user.id, authorName: user.fullName ?? null, text: note || "עודכן סטטוס טיפול", statusFrom: req.status, statusTo: status } }),
   ]);
   await audit(user.id, "SET_REQUEST_STATUS", "Request", id, { status });
+  await notifyBattalionResponsibles(req.battalionId, req.type,
+    `🔔 עדכון דרישה — <b>${escapeTelegram(REQUEST_TYPE_LABEL[req.type])}</b>\n${escapeTelegram(req.title)}\nסטטוס: <b>${escapeTelegram(REQUEST_STATUS_LABEL[status])}</b>${note ? `\n${escapeTelegram(note)}` : ""}`);
   revalidatePath("/requests");
   return { ok: true };
 }
@@ -260,7 +278,7 @@ export async function removeFieldDef(formData: FormData): Promise<void> {
 export async function saveHandlerFields(formData: FormData): Promise<{ error?: string; ok?: boolean }> {
   const user = await requireUser();
   const id = String(formData.get("id") || "");
-  const req = await prisma.request.findUnique({ where: { id }, select: { targetUnitId: true, type: true, data: true } });
+  const req = await prisma.request.findUnique({ where: { id }, select: { targetUnitId: true, type: true, data: true, title: true, battalionId: true } });
   if (!req) return { error: "דרישה לא נמצאה" };
   if (req.targetUnitId !== user.battalionId) return { error: "רק החטיבה יכולה למלא שדות טיפול" };
   if (!(await canHandleType(user, req.type))) return { error: "אינך אחראי על סוג זה" };
@@ -270,6 +288,48 @@ export async function saveHandlerFields(formData: FormData): Promise<{ error?: s
     if (k.startsWith("fh_") && typeof v === "string") { const key = `h:${k.slice(3)}`; if (v.trim()) merged[key] = v.trim(); else delete merged[key]; }
   }
   await prisma.request.update({ where: { id }, data: { data: merged } });
+  await notifyBattalionResponsibles(req.battalionId, req.type,
+    `🔔 עודכנו פרטי טיפול — <b>${escapeTelegram(REQUEST_TYPE_LABEL[req.type])}</b>\n${escapeTelegram(req.title)}`);
   revalidatePath("/requests");
   return { ok: true };
+}
+
+// ===== אחראי-תחום ברמת הגדוד (צד המבקש) — פר-סוג =====
+
+/** מפקד הגדוד מוסיף אחראי-תחום לסוג דרישה: חייל במערכת (userId) או חייל ללא חשבון (שם+טלפון → טוקן בוט). */
+export async function addResponsible(formData: FormData): Promise<{ error?: string; ok?: boolean }> {
+  const user = await requireUser();
+  if (!isCommander(user)) return { error: "רק מפקד הגדוד יכול להגדיר אחראים" };
+  const unit = await myUnit(user);
+  if (unit?.level === "BRIGADE") return { error: "הגדרה זו מיועדת לגדוד" };
+  const bId = user.battalionId!;
+  const type = String(formData.get("type") || "") as RequestType;
+  if (!type) return { error: "חסר סוג" };
+  const userId = String(formData.get("userId") || "").trim();
+  let name = String(formData.get("name") || "").trim();
+  const phone = String(formData.get("phone") || "").trim() || null;
+  if (userId) {
+    // חייל במערכת — חייב להיות של הגדוד
+    const target = await prisma.appUser.findFirst({ where: { id: userId, battalionId: bId }, select: { id: true, fullName: true } });
+    if (!target) return { error: "משתמש לא נמצא בגדוד" };
+    name = target.fullName ?? (name || "—");
+    await prisma.requestResponsible.create({ data: { battalionId: bId, type, userId, name, phone } });
+  } else {
+    // חייל ללא חשבון — שם חובה, מקבל טוקן לקישור בוט
+    if (!name) return { error: "הזן שם" };
+    await prisma.requestResponsible.create({ data: { battalionId: bId, type, name, phone } });
+  }
+  revalidatePath("/requests");
+  return { ok: true };
+}
+
+/** מפקד הגדוד מסיר אחראי-תחום. */
+export async function removeResponsible(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  if (!isCommander(user)) return;
+  const id = String(formData.get("id") || "");
+  const r = await prisma.requestResponsible.findUnique({ where: { id }, select: { battalionId: true } });
+  if (!r || r.battalionId !== user.battalionId!) return;
+  await prisma.requestResponsible.delete({ where: { id } });
+  revalidatePath("/requests");
 }

@@ -2683,6 +2683,23 @@ model RequestTypeHandler {
   @@index([userId])
 }
 
+/** אחראי-תחום ברמת הגדוד (צד המבקש) — פר-סוג. חייל במערכת (userId) או חייל
+ *  ללא חשבון שעובד דרך הבוט עם טוקן. מקבל התראות על שינויים בדרישות מהסוג שלו. */
+model RequestResponsible {
+  id          String      @id @default(cuid())
+  battalionId String      // הגדוד המבקש
+  type        RequestType
+  userId      String?     // AppUser — אם חייל במערכת
+  name        String      // שם לתצוגה (חובה גם ללא חשבון)
+  phone       String?
+  token       String      @unique @default(nanoid(24)) // קישור בוט לחייל ללא חשבון
+  chatId      String?     // מזהה צ'אט טלגרם לאחר binding
+  createdAt   DateTime    @default(now())
+
+  @@index([battalionId, type])
+  @@index([token])
+}
+
 // ===== ניהול משמרות / משימות (שמירה, ניקיונות, תורני מטבח...) =====
 enum DutyVisibility {
   ALL       // כל המשתמשים בגדוד רואים את הלוח

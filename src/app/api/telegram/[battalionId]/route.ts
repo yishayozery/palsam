@@ -125,7 +125,18 @@ export async function POST(
 
     // /start — registration (תומך ב-deep-link "/start <מספר אישי>" מהזמנת וואטסאפ — חיבור בקליק)
     if (cmd === "/start" || text.startsWith("/start ")) {
-      const startParam = text.includes(" ") ? text.slice(text.indexOf(" ") + 1).trim().replace(/\D/g, "") : "";
+      const rawParam = text.includes(" ") ? text.slice(text.indexOf(" ") + 1).trim() : "";
+      // 🔗 קישור אחראי-תחום (חייל ללא חשבון) — "/start resp_<token>" או שליחת הטוקן ישירות
+      const respToken = rawParam.startsWith("resp_") ? rawParam.slice(5) : "";
+      if (respToken) {
+        const resp = await prisma.requestResponsible.findFirst({ where: { token: respToken, battalionId }, select: { id: true, name: true, type: true } });
+        if (resp) {
+          await prisma.requestResponsible.update({ where: { id: resp.id }, data: { chatId } });
+          await sendTelegramMessage(token, chatId, `שלום ${escapeTelegram(resp.name)}! ✅\nחוברת בהצלחה כאחראי-תחום ב<b>${escapeTelegram(battalion.name)}</b>.\nתקבל/י כאן התראות על דרישות בתחום שלך.`);
+          return NextResponse.json({ ok: true });
+        }
+      }
+      const startParam = rawParam.replace(/\D/g, "");
       if (startParam.length >= 5) {
         const target = await prisma.soldier.findFirst({
           where: { battalionId, personalNumber: startParam },
