@@ -211,6 +211,7 @@ model Battalion {
   children           Battalion[] @relation("UnitHierarchy")
   requestsOpened     Request[]   @relation("RequestOpener")
   requestsReceived   Request[]   @relation("RequestTarget")
+  dutyBoards         DutyBoard[]
   dispatchRoles      DispatchRole[] @relation("BattalionDispatchRoles")
   dispatchTemplates  DispatchTemplate[] @relation("BattalionDispatchTemplates")
   drivingLicenseTypes DrivingLicenseType[] @relation("BattalionDrivingLicenseTypes")
@@ -2679,4 +2680,78 @@ model RequestTypeHandler {
   @@unique([brigadeUnitId, type, userId])
   @@index([brigadeUnitId])
   @@index([userId])
+}
+
+// ===== ניהול משמרות / משימות (שמירה, ניקיונות, תורני מטבח...) =====
+enum DutyVisibility {
+  ALL       // כל המשתמשים בגדוד רואים את הלוח
+  SELECTED  // רק משתמשים שנבחרו
+}
+
+/** לוח משימות — יוזם מקים, מגדיר טווח/שעות/נראוּת, ואחרים משבצים. */
+model DutyBoard {
+  id           String         @id @default(cuid())
+  battalionId  String
+  battalion    Battalion      @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  name         String         // "שמירה" / "ניקיונות" / "תורני מטבח"
+  visibility   DutyVisibility @default(ALL)
+  fromDate     DateTime?      @db.Date
+  toDate       DateTime?      @db.Date
+  defaultStart String?        // שעת התחלה ברירת מחדל "20:00"
+  defaultEnd   String?        // שעת סיום "22:00"
+  notes        String?
+  active       Boolean        @default(true)
+  createdById  String?
+  createdByName String?
+  createdAt    DateTime       @default(now())
+  slots        DutySlot[]
+  viewers      DutyBoardViewer[]
+
+  @@index([battalionId])
+}
+
+/** מי רשאי לראות לוח (כאשר visibility=SELECTED). */
+model DutyBoardViewer {
+  id      String    @id @default(cuid())
+  boardId String
+  board   DutyBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  userId  String    // AppUser
+
+  @@unique([boardId, userId])
+  @@index([userId])
+}
+
+/** משבצת בלוח — תאריך + שעות (או יומי), פלוגה/מחלקה וחייל אחראי למילוי. */
+model DutySlot {
+  id                   String    @id @default(cuid())
+  boardId              String
+  board                DutyBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  date                 DateTime  @db.Date
+  startTime            String?   // "20:00" — null = יומי
+  endTime              String?
+  label                String?   // "עמדה 1" / תיאור
+  companyId            String?   // פלוגה/מסגרת אחראית (Holder)
+  squadId              String?   // מחלקה אחראית
+  responsibleSoldierId String?   // חייל אחראי למילוי
+  capacity             Int       @default(1) // כמה חיילים נדרשים במשבצת
+  createdById          String?
+  createdAt            DateTime  @default(now())
+  assignments          DutyAssignment[]
+
+  @@index([boardId, date])
+}
+
+/** חייל ששובץ למשבצת — מקבל התראה. */
+model DutyAssignment {
+  id             String   @id @default(cuid())
+  slotId         String
+  slot           DutySlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  soldierId      String
+  assignedById   String?
+  assignedByName String?
+  notifiedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  @@unique([slotId, soldierId])
+  @@index([soldierId])
 }

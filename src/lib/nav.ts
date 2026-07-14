@@ -21,6 +21,7 @@ export const NAV: NavItem[] = [
   // ===== מבצעי =====
   { href: "/dashboard", label: "דשבורד", icon: "📊", group: "מבצעי", screen: "dashboard" },
   { href: "/requests", label: "דרישות / חטיבה", icon: "📨", group: "מבצעי" },
+  { href: "/duty", label: "משמרות / משימות", icon: "🗓️", group: "מבצעי" },
   { href: "/roster", label: "שלישות (חיילים)", icon: "🪖", group: "מבצעי", screen: "roster" },
   { href: "/roster/control", label: "מסך שליטה שלישות", icon: "🎛️", group: "מבצעי", screen: "roster" },
   { href: "/roster?tab=attachments", label: "בקשות סיפוח", icon: "📌", group: "מבצעי", screen: "roster" },
