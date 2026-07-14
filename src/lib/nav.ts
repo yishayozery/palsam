@@ -40,6 +40,7 @@ export const NAV: NavItem[] = [
   { href: "/armory-inspections", label: "סבב בדיקות נשקייה", icon: "🛡️", group: "נשק", screen: "armory" },
 
   // ===== לוגיסטי =====
+  { href: "/equipment-by-location", label: "ציוד לפי מיקום", icon: "📍", group: "לוגיסטי", screen: "signatures" },
   { href: "/permanent-items", label: "ציוד קבוע לפלוגה", icon: "📌", group: "לוגיסטי", screen: "allocations" },
   { href: "/warehouses", label: "ניהול מחסנים", icon: "🏪", group: "לוגיסטי", screen: "warehouses" },
   { href: "/items", label: "הגדרות פריטים", icon: "🏷️", group: "לוגיסטי", screen: "catalog" },
