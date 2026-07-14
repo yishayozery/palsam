@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { createBoard, deleteBoard, addSlot, deleteSlot, assignSoldier, unassignSoldier } from "./actions";
+import MonthCalendar from "./MonthCalendar";
 
 type Slot = {
   id: string; date: string; startTime: string | null; endTime: string | null; label: string | null; capacity: number;
@@ -23,6 +24,8 @@ export default function DutyClient({ isManager, boards, detail, companies, squad
   const [showNew, setShowNew] = useState(false);
   const [showSlot, setShowSlot] = useState(false);
   const [assignFor, setAssignFor] = useState<string | null>(null);
+  const [calView, setCalView] = useState<"list" | "cal">("list");
+  const [slotDate, setSlotDate] = useState("");
   const open = (id: string) => router.push(`/duty?board=${id}`);
   const act = (fn: (fd: FormData) => Promise<{ error?: string; ok?: boolean }>, fd: FormData, done?: () => void) =>
     start(async () => { const r = await fn(fd); if (r.error) alert(r.error); else done?.(); });
@@ -31,6 +34,7 @@ export default function DutyClient({ isManager, boards, detail, companies, squad
   if (detail) {
     const byDate = new Map<string, Slot[]>();
     for (const s of detail.slots) { const a = byDate.get(s.date) ?? []; a.push(s); byDate.set(s.date, a); }
+    const countByDate = Object.fromEntries([...byDate].map(([d, arr]) => [d, arr.length]));
     return (
       <div>
         <PageHeader title={`🗓️ ${detail.name}`} subtitle={`${detail.slots.length} משבצות`}
@@ -42,7 +46,7 @@ export default function DutyClient({ isManager, boards, detail, companies, squad
             {showSlot && (
               <form action={(fd) => act(addSlot, fd, () => setShowSlot(false))} className="flex flex-wrap items-end gap-2 mt-3">
                 <input type="hidden" name="boardId" value={detail.id} />
-                <div><label className="text-xs text-slate-500 block">תאריך</label><input type="date" name="date" required className="rounded border border-slate-300 px-2 py-1 text-sm" /></div>
+                <div><label className="text-xs text-slate-500 block">תאריך</label><input type="date" name="date" required value={slotDate} onChange={(e) => setSlotDate(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" /></div>
                 <div><label className="text-xs text-slate-500 block">משעה</label><input type="time" name="startTime" defaultValue={detail.defaultStart ?? ""} className="rounded border border-slate-300 px-2 py-1 text-sm" /></div>
                 <div><label className="text-xs text-slate-500 block">עד</label><input type="time" name="endTime" defaultValue={detail.defaultEnd ?? ""} className="rounded border border-slate-300 px-2 py-1 text-sm" /></div>
                 <div><label className="text-xs text-slate-500 block">תיאור</label><input name="label" placeholder="עמדה 1" className="rounded border border-slate-300 px-2 py-1 text-sm w-24" /></div>
@@ -56,6 +60,17 @@ export default function DutyClient({ isManager, boards, detail, companies, squad
           </Card>
         )}
 
+        <div className="flex gap-1 mb-3 rounded-lg border border-slate-200 w-fit overflow-hidden text-sm">
+          <button onClick={() => setCalView("list")} className={`px-3 py-1 ${calView === "list" ? "bg-blue-600 text-white" : "bg-white text-slate-600"}`}>📋 רשימה</button>
+          <button onClick={() => setCalView("cal")} className={`px-3 py-1 ${calView === "cal" ? "bg-blue-600 text-white" : "bg-white text-slate-600"}`}>📅 לוח שנה</button>
+        </div>
+
+        {calView === "cal" ? (
+          <Card className="p-4">
+            <MonthCalendar countByDate={countByDate} onDayClick={(d) => { setSlotDate(d); setCalView("list"); if (detail.canManage) setShowSlot(true); }} />
+            {detail.canManage && <p className="text-xs text-slate-400 mt-3 text-center">לחץ על יום כדי להוסיף לו משבצת</p>}
+          </Card>
+        ) : (<>
         {[...byDate.entries()].map(([date, slots]) => (
           <Card key={date} className="mb-3 overflow-hidden">
             <div className="bg-slate-50 px-4 py-1.5 font-bold text-slate-700 border-b text-sm">📅 {new Date(date).toLocaleDateString("he-IL", { weekday: "short", day: "2-digit", month: "2-digit" })}</div>
@@ -93,6 +108,7 @@ export default function DutyClient({ isManager, boards, detail, companies, squad
           </Card>
         ))}
         {detail.slots.length === 0 && <Card className="p-6 text-center text-slate-400">אין משבצות. {detail.canManage ? "הוסף משבצת חדשה." : ""}</Card>}
+        </>)}
       </div>
     );
   }
