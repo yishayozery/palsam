@@ -618,6 +618,7 @@ model Soldier {
   companyId      String?
   company        Holder?   @relation(fields: [companyId], references: [id])
   dutyRound      Int?      // סבב תעסוקה — לשיבוץ החלפות סבב ברמת פלוגה
+  dietType       String?   // מזון/כשרות: ציליאק | טבעוני | צמחוני | כשרות בד"ץ | ללא (עדכון עצמי בבוט)
   isAttendanceReporter Boolean @default(false) // נאמן כ"א — מדווח נוכחות (פלוגה, או המחלקה שלו אם משויך)
   fuelCards      VehicleFuelCard[]
   // שיוך משני — מחסן שהחייל גם משתייך אליו (למשל חייל ארמון שגם בפלוגה א')

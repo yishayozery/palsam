@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireCapability, requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { DIET_OPTIONS } from "@/lib/diet";
 
 /** ניתוק קישור הטלגרם של חייל — מפקדים ישירים (company.manage) על הפלוגה שלהם, או שלישות/אדמין. */
 export async function unlinkTelegram(soldierId: string) {
@@ -84,6 +85,18 @@ export async function toggleSquad(formData: FormData) {
   revalidatePath("/attendance-settings");
 }
 
+/** עדכון מהיר של סוג מזון/כשרות לחייל (עמודה במסך הפלוגה). */
+export async function setSoldierDiet(soldierId: string, diet: string): Promise<{ ok?: boolean; error?: string }> {
+  const user = await requireCapability("company.manage");
+  const bId = user.battalionId!;
+  const s = await prisma.soldier.findFirst({ where: { id: soldierId, battalionId: bId }, select: { id: true } });
+  if (!s) return { error: "חייל לא נמצא" };
+  const value = diet && diet !== "ללא" && (DIET_OPTIONS as readonly string[]).includes(diet) ? diet : null;
+  await prisma.soldier.update({ where: { id: soldierId }, data: { dietType: value } });
+  revalidatePath("/soldiers");
+  return { ok: true };
+}
+
 export async function saveSoldier(formData: FormData): Promise<string | undefined> {
   const user = await requireCapability("company.manage");
   const bId = user.battalionId!;
@@ -97,6 +110,8 @@ export async function saveSoldier(formData: FormData): Promise<string | undefine
   const dutyRoundRaw = String(formData.get("dutyRound") || "").trim();
   const dutyRound = dutyRoundRaw ? (Math.min(3, Math.max(1, parseInt(dutyRoundRaw, 10) || 0)) || null) : null;
   const isAttendanceReporter = formData.get("isAttendanceReporter") === "on" || formData.get("isAttendanceReporter") === "true";
+  const dietRaw = String(formData.get("dietType") || "").trim();
+  const dietType = dietRaw && dietRaw !== "ללא" ? dietRaw : null; // "ללא" = ריק
   let companyId = String(formData.get("companyId") || "") || null;
   // 🛡️ פלוגת חייל חייבת להיות holder מסוג COMPANY — לעולם לא מחסן.
   // (מנע באג: מנהל מחסן שערך חייל בלי לבחור פלוגה — הפלוגה נדרסה לשם המחסן שלו.)
@@ -126,7 +141,8 @@ export async function saveSoldier(formData: FormData): Promise<string | undefine
 
   const cleanPhone = phone ? phone.replace(/-/g, "") : null;
 
-  const data = { fullName, personalNumber, phone: cleanPhone, platoon, companyId, squadId, companyRoleId, dutyRound, isAttendanceReporter };
+  const data = { fullName, personalNumber, phone: cleanPhone, platoon, companyId, squadId, companyRoleId, dutyRound, isAttendanceReporter,
+    ...(formData.has("dietType") ? { dietType } : {}) };
   if (id) {
     await prisma.soldier.update({ where: { id }, data });
   } else {

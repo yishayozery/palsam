@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
 import SoldierEquipmentButton from "./SoldierEquipmentButton";
 import { saveSoldierCertifications } from "../certifications/actions";
-import { saveSoldier, toggleSoldier, requestOpenCallup, unlinkTelegram } from "./actions";
+import { saveSoldier, toggleSoldier, requestOpenCallup, unlinkTelegram, setSoldierDiet } from "./actions";
+import { DIET_OPTIONS, DIET_ICON } from "@/lib/diet";
 
 type SignedSerial = {
   id: string; itemName: string; sku: string | null; serialNumber: string; lotQuantity: number | null;
@@ -31,6 +32,7 @@ export type SoldierRow = {
   roleName: string | null;
   isCommander: boolean;
   dutyRound: number | null;
+  dietType: string | null;
   isAttendanceReporter: boolean;
   certIds: string[];
   drivingNames: string[];
@@ -260,6 +262,7 @@ export default function SoldiersTable({
               <th className="px-2 py-2 text-right font-medium border-b">מחלקה</th>
               <th className="px-2 py-2 text-right font-medium border-b">תפקיד</th>
               <th className="px-2 py-2 text-center font-medium border-b">סבב</th>
+              <th className="px-2 py-2 text-center font-medium border-b">מזון</th>
               <th className="px-2 py-2 text-center font-medium border-b">הסמכות</th>
               <th className="px-2 py-2 text-center font-medium border-b">ציוד חתום</th>
               <th className="px-2 py-2 text-center font-medium border-b">נהיגה</th>
@@ -304,6 +307,15 @@ export default function SoldiersTable({
                   {s.dutyRound != null ? <Badge className="bg-purple-100 text-purple-700">🔄 {s.dutyRound}</Badge> : <span className="text-slate-300">—</span>}
                 </td>
                 <td className="px-2 py-2 text-center whitespace-nowrap">
+                  <select
+                    defaultValue={s.dietType ?? "ללא"}
+                    onChange={(e) => { const v = e.target.value; startTransition(async () => { await setSoldierDiet(s.id, v); router.refresh(); }); }}
+                    className={`text-xs rounded border px-1.5 py-0.5 ${s.dietType ? "border-amber-300 bg-amber-50 text-amber-800" : "border-slate-200 text-slate-400"}`}
+                  >
+                    {DIET_OPTIONS.map((d) => <option key={d} value={d}>{DIET_ICON[d] ? `${DIET_ICON[d]} ` : ""}{d}</option>)}
+                  </select>
+                </td>
+                <td className="px-2 py-2 text-center whitespace-nowrap">
                   <button onClick={() => openCerts(s)}
                     className={`text-[11px] rounded px-2 py-0.5 border ${s.certIds.length > 0 ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100" : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100"}`}>
                     🏅 {s.certIds.length > 0 ? `${s.certIds.length} הסמכות` : (canEditCerts ? "הוסף" : "—")}
@@ -346,7 +358,7 @@ export default function SoldiersTable({
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={showCompany ? 9 : 8} className="px-3 py-6 text-center text-sm text-slate-400">לא נמצאו חיילים</td></tr>
+              <tr><td colSpan={showCompany ? 10 : 9} className="px-3 py-6 text-center text-sm text-slate-400">לא נמצאו חיילים</td></tr>
             )}
           </tbody>
         </table>
@@ -508,6 +520,11 @@ function SoldierEditModal({
               <option value="1">סבב 1</option>
               <option value="2">סבב 2</option>
               <option value="3">סבב 3</option>
+            </select>
+          </Field>
+          <Field label="🍽️ מזון / כשרות">
+            <select name="dietType" defaultValue={row?.dietType ?? "ללא"} className="inp">
+              {DIET_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           </Field>
           <label className="flex items-center gap-2 text-sm text-slate-700 bg-slate-50 rounded-lg px-3 py-2 cursor-pointer">

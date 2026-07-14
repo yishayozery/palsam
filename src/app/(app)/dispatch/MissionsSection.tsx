@@ -46,7 +46,7 @@ export default function MissionsSection({
     if (m.commanderName) lines.push(`מפקד משימה: ${m.commanderName}`);
     for (const v of m.vehicles) {
       lines.push(`\n${v.isExternal ? "🔶" : "🚗"} ${v.label}`);
-      for (const s of v.soldiers) lines.push(`  ${s.isDriver ? "🚗 נהג: " : "• "}${s.name}${s.pn ? ` (${s.pn})` : ""}`);
+      for (const s of v.soldiers) lines.push(`  ${s.isDriver ? "🚗 נהג: " : "• "}${s.name}${s.pn ? ` ${s.pn}` : ""}`);
     }
     return lines.join("\n");
   }

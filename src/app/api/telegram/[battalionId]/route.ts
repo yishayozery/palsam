@@ -424,7 +424,7 @@ async function handleContactShare(
   }
   const soldier = await prisma.soldier.findFirst({
     where: { battalionId, personalNumber: challenge.personalNumber },
-    select: { id: true, fullName: true, phone: true, telegramChatId: true },
+    select: { id: true, fullName: true, phone: true, telegramChatId: true, dietType: true },
   });
   await prisma.telegramBindChallenge.delete({ where: { battalionId_chatId: { battalionId, chatId } } }).catch(() => {});
   if (!soldier) {
@@ -448,6 +448,13 @@ async function handleContactShare(
     await sendTelegramMessage(token, prevChat, "ℹ️ החשבון שלך חובר למכשיר חדש (מאומת בטלפון). אם זה לא אתה — דווח/י לשלישות.").catch(() => {});
   }
   await sendTelegramMessage(token, chatId, `מעולה, ${soldier.fullName}! ✅\nהתחברת בהצלחה (מאומת בטלפון) למערכת PALMY.\n\n${HELP_TEXT}`, MAIN_KEYBOARD);
+
+  // 🍽️ בקשת עדכון מזון/כשרות — רק אם טרם עודכן
+  if (soldier.dietType == null) {
+    const { DIET_OPTIONS } = await import("@/lib/diet");
+    const buttons = DIET_OPTIONS.map((d, i) => [{ text: d, callback_data: `diet:${i}` }]);
+    await sendTelegramMessage(token, chatId, "🍽️ <b>עדכון מזון/כשרות</b>\nבחר/י את סוג המזון שלך (לצורכי הזמנות אוכל ביחידה):", { inline_keyboard: buttons }).catch(() => {});
+  }
 }
 
 // --- Callback handler for inline verification buttons ---
@@ -459,6 +466,20 @@ async function handleCallback(
   const chatId = String(callback.message.chat.id);
   const messageId = callback.message.message_id;
   const data = callback.data;
+
+  // 🍽️ עדכון מזון/כשרות: diet:<index> — החייל המחובר בלבד (לפי chatId)
+  if (data.startsWith("diet:")) {
+    const { DIET_OPTIONS } = await import("@/lib/diet");
+    const idx = parseInt(data.split(":")[1], 10);
+    const choice = DIET_OPTIONS[idx];
+    if (choice == null) { await answerCallbackQuery(token, callback.id, "בחירה לא תקינה"); return; }
+    const soldier = await prisma.soldier.findFirst({ where: { battalionId, telegramChatId: chatId }, select: { id: true } });
+    if (!soldier) { await answerCallbackQuery(token, callback.id, "לא נמצא"); return; }
+    await prisma.soldier.update({ where: { id: soldier.id }, data: { dietType: choice === "ללא" ? null : choice } });
+    await editMessageText(token, chatId, messageId, `🍽️ עודכן: <b>${choice}</b>\nתודה! ניתן לעדכן שוב בכל עת מול המפקד.`);
+    await answerCallbackQuery(token, callback.id, "עודכן ✅");
+    return;
+  }
 
   // חתימה על נוהל נהיגה: signproc:<soldierId> — רק החייל עצמו (התאמת chatId)
   if (data.startsWith("signproc:")) {
