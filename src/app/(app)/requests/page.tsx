@@ -114,6 +114,21 @@ export default async function RequestsPage() {
     foodMetric = [...byComp.values()].map((r) => ({ ...r, diets: r.diets.sort((a, b) => b.count - a.count) })).sort((a, b) => b.total - a.total);
   }
 
+  // ⛽ כרטיסי דלק — חטיבה: כל המאגר; גדוד: שהוקצו לו. קצין רכב/מפקד רשאי לחתום.
+  const canSignFuel = user.isAdmin || can(user, "battalion.profile") || can(user, "driving_licenses") || can(user, "dispatch");
+  const showFuel = isBrigade ? isMalka : canSignFuel;
+  const fuelCardsRaw = showFuel
+    ? await prisma.brigadeFuelCard.findMany({
+        where: isBrigade ? { brigadeUnitId: bId } : { allocatedBattalionId: bId },
+        select: { id: true, cardNumber: true, label: true, status: true, allocatedBattalionId: true, allocatedName: true, signedByName: true, signedByPersonal: true, signedAt: true },
+        orderBy: { createdAt: "asc" }, take: 2000,
+      })
+    : [];
+  const fuelCards = fuelCardsRaw.map((c) => ({ ...c, signedAt: c.signedAt?.toISOString() ?? null }));
+  const childBattalions = isBrigade && isMalka
+    ? (await prisma.battalion.findMany({ where: { parentId: bId }, select: { id: true, name: true }, orderBy: { name: "asc" } }))
+    : [];
+
   return (
     <RequestsClient
       mode={isBrigade ? "brigade" : "battalion"}
@@ -134,6 +149,9 @@ export default async function RequestsPage() {
       battalionUsers={battalionUsers.map((u) => ({ id: u.id, name: u.fullName ?? "—" }))}
       botUsername={unit?.telegramBotUsername ?? null}
       foodMetric={foodMetric}
+      showFuel={showFuel}
+      fuelCards={fuelCards}
+      childBattalions={childBattalions}
     />
   );
 }

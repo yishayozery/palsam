@@ -2723,6 +2723,35 @@ enum TransportRole {
   UNLOADER // פורק
 }
 
+/** מאגר כרטיסי דלק ברמת החטיבה — נטען ע"י המלכ"א, מוקצה לגדוד ונחתם ע"י קצין רכב/מפקד. */
+model BrigadeFuelCard {
+  id             String                @id @default(cuid())
+  brigadeUnitId  String                // יחידת החטיבה (בעלים)
+  cardNumber     String                // מספר הכרטיס
+  label          String?               // הערה / סוג דלק
+  status         BrigadeFuelCardStatus @default(AVAILABLE)
+  allocatedBattalionId String?         // הגדוד שהוקצה לו
+  allocatedName        String?         // שם הגדוד (cache לתצוגה)
+  allocatedAt          DateTime?
+  signedByName     String?             // שם החותם (קצין רכב / מפקד)
+  signedByPersonal String?             // מ"א החותם
+  signatureData    String?             // חתימה דיגיטלית (data URL)
+  signedAt         DateTime?
+  token          String                @unique @default(nanoid(24)) // קישור חתימה מרחוק / בוט
+  createdAt      DateTime              @default(now())
+
+  @@unique([brigadeUnitId, cardNumber])
+  @@index([brigadeUnitId, status])
+  @@index([allocatedBattalionId, status])
+  @@index([token])
+}
+
+enum BrigadeFuelCardStatus {
+  AVAILABLE // במאגר החטיבה, לא הוקצה
+  ALLOCATED // הוקצה לגדוד, ממתין לחתימה
+  SIGNED    // נחתם ע"י הגדוד
+}
+
 // ===== ניהול משמרות / משימות (שמירה, ניקיונות, תורני מטבח...) =====
 enum DutyVisibility {
   ALL       // כל המשתמשים בגדוד רואים את הלוח

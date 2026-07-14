@@ -6,6 +6,8 @@ import { REQUEST_TYPE_LABEL, REQUEST_PRIORITY_LABEL, REQUEST_STATUS_LABEL, REQUE
 import type { RequestType, RequestPriority, RequestStatus } from "@/generated/prisma";
 import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus, assignTypeHandler, removeTypeHandler, setTypeConfig, addFieldDef, removeFieldDef, saveHandlerFields, addResponsible, removeResponsible, ensureTransportParties } from "./actions";
 
+import FuelCardsClient, { type FuelCard } from "./FuelCardsClient";
+
 type TransportLink = { role: "LOADER" | "UNLOADER"; label: string; name: string | null; link: string | null; reportText: string | null; reportedAt: string | null };
 
 type Upd = { id: string; authorName: string | null; text: string; statusFrom: RequestStatus | null; statusTo: RequestStatus | null; createdAt: string };
@@ -32,7 +34,7 @@ type TypeConfig = { type: RequestType; requiresApproval: boolean; requestDays: s
 
 type Responsible = { id: string; type: RequestType; name: string; phone: string | null; hasAccount: boolean; bound: boolean; token: string };
 
-export default function RequestsClient({ mode, unitName, parentName, isCommander, isMalka, myTypes, companies, requests, fieldsByType, handlerFieldsByType, brigadeUsers, handlers, settingsDefs, typeConfigs, responsibles, battalionUsers, botUsername, foodMetric }: {
+export default function RequestsClient({ mode, unitName, parentName, isCommander, isMalka, myTypes, companies, requests, fieldsByType, handlerFieldsByType, brigadeUsers, handlers, settingsDefs, typeConfigs, responsibles, battalionUsers, botUsername, foodMetric, showFuel, fuelCards, childBattalions }: {
   mode: "brigade" | "battalion";
   unitName: string; parentName: string | null; isCommander: boolean; isMalka: boolean;
   myTypes: RequestType[] | null;
@@ -48,11 +50,14 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
   battalionUsers: { id: string; name: string }[];
   botUsername: string | null;
   foodMetric: { unit: string; total: number; diets: { type: string; count: number }[] }[];
+  showFuel: boolean;
+  fuelCards: FuelCard[];
+  childBattalions: { id: string; name: string }[];
 }) {
   const [pending, start] = useTransition();
   const [showNew, setShowNew] = useState(false);
   const [newType, setNewType] = useState<RequestType>("SUPPLY");
-  const [tab, setTab] = useState<"list" | "settings" | "food">("list");
+  const [tab, setTab] = useState<"list" | "settings" | "food" | "fuel">("list");
   const [fStatus, setFStatus] = useState<RequestStatus | "all" | "open">("open");
   const [fType, setFType] = useState<RequestType | "all">("all");
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -96,12 +101,19 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
         <Card className="mb-4 p-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm">היחידה אינה משויכת לחטיבה. פנה לאדמין-על לשיוך (הגדרות גדודים) כדי לפתוח דרישות.</Card>
       )}
 
-      {/* טאבים: דרישות / הגדרות / מזון */}
-      {(isMalka || (mode === "battalion" && isCommander)) && (
-        <div className="flex rounded-lg border border-slate-200 overflow-hidden w-fit mb-3 text-sm">
+      {/* טאבים: דרישות / הגדרות / מזון / דלק */}
+      {(isMalka || (mode === "battalion" && isCommander) || showFuel) && (
+        <div className="flex flex-wrap rounded-lg border border-slate-200 overflow-hidden w-fit mb-3 text-sm">
           <button onClick={() => setTab("list")} className={`px-3 py-1 ${tab === "list" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>דרישות</button>
-          <button onClick={() => setTab("settings")} className={`px-3 py-1 ${tab === "settings" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>{isMalka ? "⚙️ בעלי תפקיד" : "⚙️ אחראי-תחום"}</button>
-          <button onClick={() => setTab("food")} className={`px-3 py-1 ${tab === "food" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>🍽️ מזון</button>
+          {(isMalka || (mode === "battalion" && isCommander)) && (
+            <button onClick={() => setTab("settings")} className={`px-3 py-1 ${tab === "settings" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>{isMalka ? "⚙️ בעלי תפקיד" : "⚙️ אחראי-תחום"}</button>
+          )}
+          {(isMalka || (mode === "battalion" && isCommander)) && (
+            <button onClick={() => setTab("food")} className={`px-3 py-1 ${tab === "food" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>🍽️ מזון</button>
+          )}
+          {showFuel && (
+            <button onClick={() => setTab("fuel")} className={`px-3 py-1 ${tab === "fuel" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>⛽ כרטיסי דלק</button>
+          )}
         </div>
       )}
       {myTypes && (
@@ -247,6 +259,11 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
             ))}
           </div>
         </div>
+      )}
+
+      {/* ⛽ כרטיסי דלק */}
+      {tab === "fuel" && showFuel && (
+        <FuelCardsClient mode={mode} cards={fuelCards} childBattalions={childBattalions} />
       )}
 
       {tab !== "list" ? null : (<>
