@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
-import type { RequestType, RequestPriority, RequestStatus } from "@/generated/prisma";
+import { nanoid } from "nanoid";
+import type { RequestType, RequestPriority, RequestStatus, RequestFieldSide, RequestFieldType } from "@/generated/prisma";
 
 type Sessionish = Awaited<ReturnType<typeof requireUser>>;
 
@@ -168,4 +169,89 @@ export async function setRequestStatus(formData: FormData): Promise<{ error?: st
   await audit(user.id, "SET_REQUEST_STATUS", "Request", id, { status });
   revalidatePath("/requests");
   return { ok: true };
+}
+
+/** בדיקת מלכ"א ביחידת חטיבה — משותף להגדרות. מחזיר את מזהה החטיבה. */
+async function requireMalkaBrigade(user: Sessionish): Promise<string | null> {
+  if (!isMalka(user)) return null;
+  const unit = await myUnit(user);
+  return unit?.level === "BRIGADE" ? unit.id : null;
+}
+
+/** מלכ"א — הגדרת סוג: דגל אישור-מפמ + חלון בקשה. */
+export async function setTypeConfig(formData: FormData): Promise<{ error?: string; ok?: boolean }> {
+  const user = await requireUser();
+  const bId = await requireMalkaBrigade(user);
+  if (!bId) return { error: "רק מלכ\"א" };
+  const type = String(formData.get("type") || "") as RequestType;
+  if (!type) return { error: "חסר סוג" };
+  await prisma.requestTypeConfig.upsert({
+    where: { brigadeUnitId_type: { brigadeUnitId: bId, type } },
+    update: {
+      requiresApproval: formData.get("requiresApproval") === "on",
+      requestDays: String(formData.get("requestDays") || "").trim() || null,
+      requestHours: String(formData.get("requestHours") || "").trim() || null,
+      supplyTiming: String(formData.get("supplyTiming") || "").trim() || null,
+    },
+    create: {
+      brigadeUnitId: bId, type,
+      requiresApproval: formData.get("requiresApproval") === "on",
+      requestDays: String(formData.get("requestDays") || "").trim() || null,
+      requestHours: String(formData.get("requestHours") || "").trim() || null,
+      supplyTiming: String(formData.get("supplyTiming") || "").trim() || null,
+    },
+  });
+  revalidatePath("/requests");
+  return { ok: true };
+}
+
+/** מלכ"א — הוספת שדה דינמי לסוג. */
+export async function addFieldDef(formData: FormData): Promise<{ error?: string; ok?: boolean }> {
+  const user = await requireUser();
+  const bId = await requireMalkaBrigade(user);
+  if (!bId) return { error: "רק מלכ\"א" };
+  const type = String(formData.get("type") || "") as RequestType;
+  const side = (String(formData.get("side") || "REQUESTER") === "HANDLER" ? "HANDLER" : "REQUESTER") as RequestFieldSide;
+  const label = String(formData.get("label") || "").trim();
+  const fieldType = String(formData.get("fieldType") || "TEXT") as RequestFieldType;
+  if (!type || !label) return { error: "בחר סוג והזן שם שדה" };
+  const options = String(formData.get("options") || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const max = await prisma.requestFieldDef.aggregate({ where: { brigadeUnitId: bId, type, side }, _max: { sortOrder: true } });
+  await prisma.requestFieldDef.create({
+    data: { brigadeUnitId: bId, type, side, fieldKey: `f${nanoid(8)}`, label, fieldType, options, required: formData.get("required") === "on", sortOrder: (max._max.sortOrder ?? -1) + 1 },
+  });
+  revalidatePath("/requests");
+  return { ok: true };
+}
+
+/** מלכ"א — עדכון שדה (שם / אופציות / חובה). */
+export async function updateFieldDef(formData: FormData): Promise<{ error?: string; ok?: boolean }> {
+  const user = await requireUser();
+  const bId = await requireMalkaBrigade(user);
+  if (!bId) return { error: "רק מלכ\"א" };
+  const id = String(formData.get("id") || "");
+  const def = await prisma.requestFieldDef.findFirst({ where: { id, brigadeUnitId: bId }, select: { id: true } });
+  if (!def) return { error: "שדה לא נמצא" };
+  await prisma.requestFieldDef.update({
+    where: { id },
+    data: {
+      label: String(formData.get("label") || "").trim() || undefined,
+      options: String(formData.get("options") || "").split(",").map((s) => s.trim()).filter(Boolean),
+      required: formData.get("required") === "on",
+    },
+  });
+  revalidatePath("/requests");
+  return { ok: true };
+}
+
+/** מלכ"א — מחיקת שדה. */
+export async function removeFieldDef(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const bId = await requireMalkaBrigade(user);
+  if (!bId) return;
+  const id = String(formData.get("id") || "");
+  const def = await prisma.requestFieldDef.findFirst({ where: { id, brigadeUnitId: bId }, select: { id: true } });
+  if (!def) return;
+  await prisma.requestFieldDef.delete({ where: { id } });
+  revalidatePath("/requests");
 }

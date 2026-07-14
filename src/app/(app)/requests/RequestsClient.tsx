@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { REQUEST_TYPE_LABEL, REQUEST_PRIORITY_LABEL, REQUEST_STATUS_LABEL, REQUEST_STATUS_STYLE, REQUEST_TYPES, REQUEST_PRIORITIES } from "@/lib/request-labels";
 import type { RequestType, RequestPriority, RequestStatus } from "@/generated/prisma";
-import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus, assignTypeHandler, removeTypeHandler } from "./actions";
+import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus, assignTypeHandler, removeTypeHandler, setTypeConfig, addFieldDef, removeFieldDef } from "./actions";
 
 type Upd = { id: string; authorName: string | null; text: string; statusFrom: RequestStatus | null; statusTo: RequestStatus | null; createdAt: string };
 type DynField = { fieldKey: string; label: string; fieldType: string; options: string[]; required: boolean };
@@ -24,7 +24,10 @@ function DynFieldInput({ f }: { f: DynField }) {
   return <input name={name} required={f.required} placeholder={f.fieldType === "CONTACT" ? `${f.label} (שם + טלפון)` : f.label} className={cls} />;
 }
 
-export default function RequestsClient({ mode, unitName, parentName, isCommander, isMalka, myTypes, companies, requests, fieldsByType, brigadeUsers, handlers }: {
+type SettingsDef = { id: string; type: RequestType; side: string; label: string; fieldType: string; options: string[]; required: boolean };
+type TypeConfig = { type: RequestType; requiresApproval: boolean; requestDays: string | null; requestHours: string | null; supplyTiming: string | null };
+
+export default function RequestsClient({ mode, unitName, parentName, isCommander, isMalka, myTypes, companies, requests, fieldsByType, brigadeUsers, handlers, settingsDefs, typeConfigs }: {
   mode: "brigade" | "battalion";
   unitName: string; parentName: string | null; isCommander: boolean; isMalka: boolean;
   myTypes: RequestType[] | null;
@@ -33,6 +36,8 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
   fieldsByType: Record<string, DynField[]>;
   brigadeUsers: { id: string; name: string }[];
   handlers: { id: string; type: RequestType; userId: string }[];
+  settingsDefs: SettingsDef[];
+  typeConfigs: TypeConfig[];
 }) {
   const [pending, start] = useTransition();
   const [showNew, setShowNew] = useState(false);
@@ -123,6 +128,43 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
                     );
                   })}
                 </div>
+
+                {/* הגדרת סוג — אישור מפמ + חלון בקשה */}
+                <form action={(fd) => start(async () => { const r = await setTypeConfig(fd); if (r.error) alert(r.error); })} className="flex flex-wrap items-center gap-2 text-xs mt-3 border-t border-slate-100 pt-2">
+                  <input type="hidden" name="type" value={t} />
+                  <label className="flex items-center gap-1"><input type="checkbox" name="requiresApproval" defaultChecked={typeConfigs.find((c) => c.type === t)?.requiresApproval ?? false} /> אישור מפמ</label>
+                  <input name="requestDays" defaultValue={typeConfigs.find((c) => c.type === t)?.requestDays ?? ""} placeholder="ימי בקשה" className="rounded border border-slate-300 px-1.5 py-0.5 w-20" />
+                  <input name="requestHours" defaultValue={typeConfigs.find((c) => c.type === t)?.requestHours ?? ""} placeholder="שעות" className="rounded border border-slate-300 px-1.5 py-0.5 w-24" />
+                  <input name="supplyTiming" defaultValue={typeConfigs.find((c) => c.type === t)?.supplyTiming ?? ""} placeholder="מתי אספקה" className="rounded border border-slate-300 px-1.5 py-0.5 w-28" />
+                  <button className="bg-slate-700 text-white rounded px-2 py-0.5">שמור</button>
+                </form>
+
+                {/* עריכת שדות דינמיים — מבקש/מטפל */}
+                {(["REQUESTER", "HANDLER"] as const).map((side) => {
+                  const fs = settingsDefs.filter((d) => d.type === t && d.side === side);
+                  return (
+                    <div key={side} className="mt-2">
+                      <div className="text-[11px] font-semibold text-slate-500">{side === "REQUESTER" ? "שדות מבקש" : "שדות מטפל"}</div>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {fs.length === 0 && <span className="text-xs text-slate-300">— אין —</span>}
+                        {fs.map((f) => (
+                          <span key={f.id} className="text-xs bg-blue-50 border border-blue-100 rounded px-2 py-0.5 flex items-center gap-1">
+                            {f.label}<span className="text-slate-400">{f.options.length ? `(${f.options.join("/")})` : ""}</span>
+                            <form action={(fd) => start(async () => { await removeFieldDef(fd); })} className="inline"><input type="hidden" name="id" value={f.id} /><button className="text-rose-500">×</button></form>
+                          </span>
+                        ))}
+                      </div>
+                      <form action={(fd) => start(async () => { const r = await addFieldDef(fd); if (r.error) alert(r.error); })} className="flex flex-wrap items-center gap-1 mt-1 text-xs">
+                        <input type="hidden" name="type" value={t} /><input type="hidden" name="side" value={side} />
+                        <input name="label" placeholder="שם שדה" className="rounded border border-slate-300 px-1.5 py-0.5 w-24" />
+                        <select name="fieldType" className="rounded border border-slate-300 px-1 py-0.5" defaultValue="TEXT"><option value="TEXT">טקסט</option><option value="TEXTAREA">ארוך</option><option value="NUMBER">מספר</option><option value="SELECT">בחירה</option><option value="DATE">תאריך</option><option value="TIME">שעה</option><option value="CONTACT">איש קשר</option></select>
+                        <input name="options" placeholder="אופציות (פסיק)" className="rounded border border-slate-300 px-1.5 py-0.5 w-28" />
+                        <label className="flex items-center gap-0.5"><input type="checkbox" name="required" /> חובה</label>
+                        <button className="bg-indigo-600 text-white rounded px-2 py-0.5">+</button>
+                      </form>
+                    </div>
+                  );
+                })}
               </Card>
             );
           })}

@@ -62,6 +62,13 @@ export default async function RequestsPage() {
   const handlers = isBrigade && isMalka
     ? await prisma.requestTypeHandler.findMany({ where: { brigadeUnitId: bId }, select: { id: true, type: true, userId: true } })
     : [];
+  // מנוע השדות — עריכה ע"י מלכ"א (שני הצדדים) + הגדרות סוג
+  const settingsDefs = isBrigade && isMalka
+    ? await prisma.requestFieldDef.findMany({ where: { brigadeUnitId: bId }, orderBy: [{ sortOrder: "asc" }], select: { id: true, type: true, side: true, label: true, fieldType: true, options: true, required: true } })
+    : [];
+  const typeConfigs = isBrigade && isMalka
+    ? await prisma.requestTypeConfig.findMany({ where: { brigadeUnitId: bId }, select: { type: true, requiresApproval: true, requestDays: true, requestHours: true, supplyTiming: true } })
+    : [];
 
   return (
     <RequestsClient
@@ -76,6 +83,8 @@ export default async function RequestsPage() {
       fieldsByType={fieldsByType}
       brigadeUsers={brigadeUsers.map((u) => ({ id: u.id, name: u.fullName ?? "—" }))}
       handlers={handlers}
+      settingsDefs={settingsDefs}
+      typeConfigs={typeConfigs}
     />
   );
 }
