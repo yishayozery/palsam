@@ -28,6 +28,18 @@ export async function sendSerialToTana(formData: FormData): Promise<{ ok?: boole
     if (!su || su.battalionId !== bId) return { error: "פריט לא נמצא" };
     if (su.currentHolderId === tana.id) return { error: "פריט כבר אצל הטנא" };
 
+    // 🛡️ הרכב = מיקום. אין לשלוח לטנא כל עוד יש ציוד "על הרכב" (SerialUnit.vehicleId=הרכב).
+    //    עוצרים עד שמעבירים חתימות / משנים מיקום לציוד — כדי לא לאבד עקבות ציוד.
+    const onVehicle = await prisma.serialUnit.findMany({
+      where: { vehicleId: serialUnitId, dischargedAt: null },
+      select: { serialNumber: true, itemType: { select: { name: true } }, signedSoldier: { select: { fullName: true } } },
+      take: 30,
+    });
+    if (onVehicle.length > 0) {
+      const list = onVehicle.map((u) => `• ${u.itemType.name} ${u.serialNumber}${u.signedSoldier ? ` (חתום: ${u.signedSoldier.fullName})` : ""}`).join("\n");
+      return { error: `🚫 לא ניתן לשלוח את הרכב לטנא — יש עליו ${onVehicle.length} פריטי ציוד:\n${list}\n\nיש להעביר את חתימות הציוד / לשנות את מיקומו (להסירו מהרכב) לפני השליחה.` };
+    }
+
     const defectiveStatusId = await findDefectiveStatusId(bId);
     if (!defectiveStatusId) return { error: "לא נמצא סטטוס 'תקול' בגדוד" };
 
