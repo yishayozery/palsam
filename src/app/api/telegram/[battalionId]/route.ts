@@ -8,6 +8,7 @@ import type { RequestType, RequestStatus } from "@/generated/prisma";
 import { linkTokenQuery } from "@/lib/link-token";
 import { escapeTelegram } from "@/lib/escape-html";
 import { normalizePhone } from "@/lib/phone";
+import { notifyBattalionResponsibles } from "@/lib/request-notify";
 
 export async function POST(
   req: NextRequest,
@@ -136,6 +137,18 @@ export async function POST(
           return NextResponse.json({ ok: true });
         }
       }
+      // 🚚 קישור מעמיס/פורק בהובלה — "/start tload_<token>" / "/start tunload_<token>"
+      const tMatch = rawParam.match(/^t(load|unload)_(.+)$/);
+      if (tMatch) {
+        const role = tMatch[1] === "load" ? "LOADER" : "UNLOADER";
+        const party = await prisma.transportParty.findFirst({ where: { token: tMatch[2], role, request: { battalionId } }, select: { id: true, role: true, request: { select: { title: true } } } });
+        if (party) {
+          await prisma.transportParty.update({ where: { id: party.id }, data: { chatId } });
+          const verb = role === "LOADER" ? "מה הועמס (רשימת רכבים / מכולות + פרטים)" : "אישור שהמשלוח הגיע ומה התקבל";
+          await sendTelegramMessage(token, chatId, `שלום! ✅ חוברת כ<b>${role === "LOADER" ? "מעמיס" : "פורק"}</b> בהובלה: <b>${escapeTelegram(party.request.title)}</b>.\n\nשלח/י כאן בהודעה אחת: ${escapeTelegram(verb)}.`);
+          return NextResponse.json({ ok: true });
+        }
+      }
       const startParam = rawParam.replace(/\D/g, "");
       if (startParam.length >= 5) {
         const target = await prisma.soldier.findFirst({
@@ -159,6 +172,22 @@ export async function POST(
         `שלום! 👋\nאני הבוט של <b>${escapeTelegram(battalion.name)}</b> במערכת PALMY.\n\nשלח/י את <b>המספר האישי</b> שלך כדי להתחבר.`,
       );
       return NextResponse.json({ ok: true });
+    }
+
+    // 🚚 דיווח מעמיס/פורק — צד-הובלה מקושר ששולח הודעה חופשית (וטרם דיווח) → שמירה + התראה
+    if (!text.startsWith("/")) {
+      const party = await prisma.transportParty.findFirst({
+        where: { chatId, reportedAt: null, request: { battalionId } },
+        select: { id: true, role: true, request: { select: { id: true, title: true, type: true, battalionId: true } } },
+      });
+      if (party) {
+        await prisma.transportParty.update({ where: { id: party.id }, data: { reportText: text.slice(0, 2000), reportedAt: new Date() } });
+        const roleLabel = party.role === "LOADER" ? "מעמיס" : "פורק";
+        await prisma.requestUpdate.create({ data: { requestId: party.request.id, authorName: roleLabel, text: `דיווח ${roleLabel}: ${text.slice(0, 2000)}` } });
+        await notifyBattalionResponsibles(party.request.battalionId, party.request.type, `🚚 דיווח <b>${roleLabel}</b> — ${escapeTelegram(party.request.title)}\n${escapeTelegram(text.slice(0, 500))}`);
+        await sendTelegramMessage(token, chatId, "התקבל, תודה! ✅ הדיווח הועבר.");
+        return NextResponse.json({ ok: true });
+      }
     }
 
     // טעינת החייל המקושר + תפקידו (לתפריט דינמי)

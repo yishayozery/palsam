@@ -2650,6 +2650,7 @@ model Request {
   escalatedAt  DateTime?       // מתי הוסלם לחטיבה
   resolvedAt   DateTime?
   updates      RequestUpdate[]
+  transportParties TransportParty[]
 
   @@index([battalionId])
   @@index([targetUnitId, status])
@@ -2698,6 +2699,28 @@ model RequestResponsible {
 
   @@index([battalionId, type])
   @@index([token])
+}
+
+/** צד בהובלה (מעמיס/פורק) — מקבל קישור בוט אישי לעדכון מה הועמס / שהכל הגיע. */
+model TransportParty {
+  id         String        @id @default(cuid())
+  requestId  String
+  request    Request       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  role       TransportRole
+  name       String?       // שם איש הקשר (מהדרישה)
+  token      String        @unique @default(nanoid(24))
+  chatId     String?       // מזהה צ'אט טלגרם לאחר binding
+  reportText String?       // הדיווח החופשי (מה הועמס / אישור הגעה)
+  reportedAt DateTime?
+  createdAt  DateTime      @default(now())
+
+  @@unique([requestId, role])
+  @@index([token])
+}
+
+enum TransportRole {
+  LOADER   // מעמיס
+  UNLOADER // פורק
 }
 
 // ===== ניהול משמרות / משימות (שמירה, ניקיונות, תורני מטבח...) =====

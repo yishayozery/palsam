@@ -6,23 +6,10 @@ import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { nanoid } from "nanoid";
-import { sendTelegramMessage } from "@/lib/telegram";
 import { escapeTelegram } from "@/lib/escape-html";
 import { REQUEST_TYPE_LABEL, REQUEST_STATUS_LABEL } from "@/lib/request-labels";
+import { notifyBattalionResponsibles } from "@/lib/request-notify";
 import type { RequestType, RequestPriority, RequestStatus, RequestFieldSide, RequestFieldType } from "@/generated/prisma";
-
-/** התראה לאחראי-התחום של הגדוד המבקש (חיילים עם/בלי חשבון שקושרו לבוט) על שינוי בדרישה. */
-async function notifyBattalionResponsibles(battalionId: string, type: RequestType, message: string): Promise<void> {
-  try {
-    const [battalion, resps] = await Promise.all([
-      prisma.battalion.findUnique({ where: { id: battalionId }, select: { telegramBotToken: true } }),
-      prisma.requestResponsible.findMany({ where: { battalionId, type, chatId: { not: null } }, select: { chatId: true } }),
-    ]);
-    const botToken = battalion?.telegramBotToken;
-    if (!botToken || resps.length === 0) return;
-    await Promise.all(resps.map((r) => sendTelegramMessage(botToken, r.chatId!, message).catch(() => {})));
-  } catch { /* התראה בbest-effort — לא מפילה את הפעולה */ }
-}
 
 type Sessionish = Awaited<ReturnType<typeof requireUser>>;
 
@@ -332,4 +319,40 @@ export async function removeResponsible(formData: FormData): Promise<void> {
   if (!r || r.battalionId !== user.battalionId!) return;
   await prisma.requestResponsible.delete({ where: { id } });
   revalidatePath("/requests");
+}
+
+// ===== הובלה — מעמיס/פורק (עדכון דרך הבוט) =====
+type TransportLink = { role: "LOADER" | "UNLOADER"; label: string; name: string | null; link: string | null; reportText: string | null; reportedAt: string | null };
+
+/** יצירת/שליפת צדדי-הובלה (מעמיס/פורק) לדרישת הובלה + קישורי בוט אישיים לשיתוף. */
+export async function ensureTransportParties(requestId: string): Promise<{ error?: string; links?: TransportLink[] }> {
+  const user = await requireUser();
+  const req = await prisma.request.findUnique({ where: { id: requestId }, select: { battalionId: true, targetUnitId: true, type: true, data: true } });
+  if (!req) return { error: "דרישה לא נמצאה" };
+  // רק הגדוד הפותח או החטיבה הממונה
+  if (req.battalionId !== user.battalionId && req.targetUnitId !== user.battalionId) return { error: "אין הרשאה" };
+  if (req.type !== "TRANSPORT") return { error: "רלוונטי להובלה בלבד" };
+  const data = (req.data as Record<string, string> | null) ?? {};
+  const contacts: { role: "LOADER" | "UNLOADER"; name: string | null }[] = [
+    { role: "LOADER", name: data["loaderContact"] || null },
+    { role: "UNLOADER", name: data["unloaderContact"] || null },
+  ];
+  for (const c of contacts) {
+    await prisma.transportParty.upsert({
+      where: { requestId_role: { requestId, role: c.role } },
+      update: { name: c.name ?? undefined },
+      create: { requestId, role: c.role, name: c.name },
+    });
+  }
+  const battalion = await prisma.battalion.findUnique({ where: { id: req.battalionId }, select: { telegramBotUsername: true } });
+  const botUsername = battalion?.telegramBotUsername ?? null;
+  const parties = await prisma.transportParty.findMany({ where: { requestId }, select: { role: true, name: true, token: true, reportText: true, reportedAt: true } });
+  const prefix = { LOADER: "tload", UNLOADER: "tunload" } as const;
+  const links: TransportLink[] = parties.map((p) => ({
+    role: p.role, label: p.role === "LOADER" ? "מעמיס" : "פורק", name: p.name,
+    link: botUsername ? `https://t.me/${botUsername}?start=${prefix[p.role]}_${p.token}` : null,
+    reportText: p.reportText, reportedAt: p.reportedAt?.toISOString() ?? null,
+  }));
+  revalidatePath("/requests");
+  return { links };
 }

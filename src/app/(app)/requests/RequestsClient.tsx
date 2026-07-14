@@ -4,7 +4,9 @@ import { useState, useTransition, useMemo } from "react";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { REQUEST_TYPE_LABEL, REQUEST_PRIORITY_LABEL, REQUEST_STATUS_LABEL, REQUEST_STATUS_STYLE, REQUEST_TYPES, REQUEST_PRIORITIES } from "@/lib/request-labels";
 import type { RequestType, RequestPriority, RequestStatus } from "@/generated/prisma";
-import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus, assignTypeHandler, removeTypeHandler, setTypeConfig, addFieldDef, removeFieldDef, saveHandlerFields, addResponsible, removeResponsible } from "./actions";
+import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus, assignTypeHandler, removeTypeHandler, setTypeConfig, addFieldDef, removeFieldDef, saveHandlerFields, addResponsible, removeResponsible, ensureTransportParties } from "./actions";
+
+type TransportLink = { role: "LOADER" | "UNLOADER"; label: string; name: string | null; link: string | null; reportText: string | null; reportedAt: string | null };
 
 type Upd = { id: string; authorName: string | null; text: string; statusFrom: RequestStatus | null; statusTo: RequestStatus | null; createdAt: string };
 type DynField = { fieldKey: string; label: string; fieldType: string; options: string[]; required: boolean };
@@ -56,6 +58,7 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [handlerFor, setHandlerFor] = useState<string | null>(null);
+  const [transportLinks, setTransportLinks] = useState<Record<string, TransportLink[]>>({});
 
   const OPEN_STATUSES: RequestStatus[] = ["PENDING_APPROVAL", "IN_PROGRESS", "NEEDS_INFO"];
   const filtered = useMemo(() => requests.filter((r) => {
@@ -79,6 +82,7 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
   const submitNew = (fd: FormData) => start(async () => { const r = await createRequest(fd); if (r.error) alert(r.error); else setShowNew(false); });
   const sendReply = (id: string) => { const fd = new FormData(); fd.set("id", id); fd.set("text", replyText); start(async () => { const r = await addRequestUpdate(fd); if (r.error) alert(r.error); else { setReplyTo(null); setReplyText(""); } }); };
   const setStatus = (id: string, status: RequestStatus) => { const note = prompt(`דיווח טיפול (${REQUEST_STATUS_LABEL[status]}):`, ""); if (note === null) return; const fd = new FormData(); fd.set("id", id); fd.set("status", status); fd.set("note", note); act(setRequestStatus, fd); };
+  const loadTransport = (id: string) => start(async () => { const res = await ensureTransportParties(id); if (res.error) alert(res.error); else setTransportLinks((m) => ({ ...m, [id]: res.links ?? [] })); });
 
   return (
     <div>
@@ -376,6 +380,10 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
               {mode === "brigade" && (handlerFieldsByType[r.type] ?? []).length > 0 && !["CANCELLED", "REJECTED"].includes(r.status) && (
                 <button onClick={() => setHandlerFor((v) => (v === r.id ? null : r.id))} className="text-xs bg-teal-50 border border-teal-200 text-teal-700 rounded px-2 py-1 hover:bg-teal-100">📝 שדות טיפול</button>
               )}
+              {/* הובלה: קישורי מעמיס/פורק לעדכון דרך הבוט */}
+              {r.type === "TRANSPORT" && !["CANCELLED", "REJECTED"].includes(r.status) && (
+                <button disabled={pending} onClick={() => loadTransport(r.id)} className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded px-2 py-1 hover:bg-amber-100 disabled:opacity-50">🚚 מעמיס/פורק</button>
+              )}
               {/* עדכון/מענה — שני הצדדים */}
               {!["CANCELLED"].includes(r.status) && (
                 replyTo === r.id ? (
@@ -407,6 +415,29 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
                   <button type="button" onClick={() => setHandlerFor(null)} className="text-xs text-slate-400">ביטול</button>
                 </div>
               </form>
+            )}
+
+            {/* הובלה: קישורי מעמיס/פורק + דיווחים */}
+            {transportLinks[r.id] && (
+              <div className="mt-3 border-t border-amber-100 pt-3 space-y-2 bg-amber-50/40 rounded p-2">
+                <div className="text-xs font-semibold text-amber-800">🚚 עדכון מעמיס/פורק דרך הבוט</div>
+                {transportLinks[r.id].map((p) => (
+                  <div key={p.role} className="text-xs flex flex-wrap items-center gap-2">
+                    <b className="text-slate-600">{p.label}{p.name ? ` · ${p.name}` : ""}:</b>
+                    {p.reportedAt ? (
+                      <span className="text-emerald-700">✅ דיווח ({new Date(p.reportedAt).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}): {p.reportText}</span>
+                    ) : p.link ? (
+                      <>
+                        <a href={p.link} target="_blank" rel="noreferrer" className="text-sky-600 underline">קישור בוט</a>
+                        <a href={`https://wa.me/?text=${encodeURIComponent(`עדכון ${p.label} להובלה — לחצו לחיבור ודיווח: ${p.link}`)}`} target="_blank" rel="noreferrer" className="text-emerald-600 underline">שלח ב-WhatsApp</a>
+                        <span className="text-slate-400">טרם דיווח</span>
+                      </>
+                    ) : (
+                      <span className="text-slate-400">⚠️ אין בוט מוגדר לגדוד</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </Card>
         ))}
