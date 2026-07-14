@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
-import { sendTelegramMessage, answerCallbackQuery, editMessageText, MAIN_KEYBOARD, buildMainKeyboard, buildVehicleKeyboard, buildTasksKeyboard } from "@/lib/telegram";
+import { sendTelegramMessage, answerCallbackQuery, editMessageText, MAIN_KEYBOARD, buildMainKeyboard, buildVehicleKeyboard, buildTasksKeyboard, buildBrigadeKeyboard } from "@/lib/telegram";
+import { REQUEST_TYPE_LABEL, REQUEST_STATUS_LABEL } from "@/lib/request-labels";
+import type { RequestType, RequestStatus } from "@/generated/prisma";
 import { linkTokenQuery } from "@/lib/link-token";
 import { escapeTelegram } from "@/lib/escape-html";
 import { normalizePhone } from "@/lib/phone";
@@ -38,6 +40,7 @@ export async function POST(
         telegramBotInfo: true,
         armoryTestUrl: true,
         drivingRefreshDays: true,
+        level: true,
       },
     });
     // fallback: אם אין armoryTestUrl על הגדוד — נבדוק על מחסן ארמון
@@ -103,6 +106,7 @@ export async function POST(
       "📝 תעודות לחתימה": "/pendingsigns",
       "⛽ כרטיסי הדלק שלי": "/myfuel",
       "🕐 ארוחות ותפילות": "/info",
+      "📥 דרישות נכנסות": "/brigade-requests",
       "🪪 בדיקת הסמכות": "/license",
       "🪪 בדיקת רישיון": "/license",
       "📁 תיק נהג": "/driverforms",
@@ -186,7 +190,15 @@ export async function POST(
     }
     const showTasks = canAttendance || hasOpenCounts || hasPendingSigs;
     const tasksPending = hasOpenCounts || hasPendingSigs; // פעולה שממתינה למשתמש (🔴)
-    const keyboard = buildMainKeyboard(showTasks, tasksPending, isDriver);
+    const isBrigadeUnit = battalion.level === "BRIGADE";
+    const keyboard = isBrigadeUnit ? buildBrigadeKeyboard() : buildMainKeyboard(showTasks, tasksPending, isDriver);
+
+    // 📥 בוט חטיבה — דרישות נכנסות (רק ליחידת חטיבה)
+    if (cmd === "/brigade-requests" && isBrigadeUnit) {
+      if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
+      await handleBrigadeRequests(token, chatId, battalionId, soldier.appUser?.id ?? null, soldier.appUser?.role ?? null, keyboard);
+      return NextResponse.json({ ok: true });
+    }
 
     // /help
     if (cmd === "/help") {
@@ -483,6 +495,30 @@ async function handleCallback(
     if (!soldier) { await answerCallbackQuery(token, callback.id, "לא נמצא"); return; }
     await prisma.soldier.update({ where: { id: soldier.id }, data: { dietType: choice === "ללא" ? null : choice } });
     await editMessageText(token, chatId, messageId, `🍽️ עודכן: <b>${choice}</b>\nתודה! ניתן לעדכן שוב בכל עת מול המפקד.`);
+    await answerCallbackQuery(token, callback.id, "עודכן ✅");
+    return;
+  }
+
+  // 📥 בוט חטיבה — עדכון סטטוס דרישה: breq:<id>:<RESOLVED|NEEDS_INFO>
+  if (data.startsWith("breq:")) {
+    const [, id, statusRaw] = data.split(":");
+    const req = await prisma.request.findFirst({ where: { id, targetUnitId: battalionId }, select: { id: true, status: true, type: true } });
+    if (!req) { await answerCallbackQuery(token, callback.id, "לא נמצא"); return; }
+    const soldier = await prisma.soldier.findFirst({ where: { battalionId, telegramChatId: chatId }, select: { appUser: { select: { id: true, role: true, fullName: true } } } });
+    const au = soldier?.appUser;
+    const isMalka = au?.role === "BATTALION_ADMIN" || au?.role === "SUPER_ADMIN";
+    let allowed = isMalka;
+    if (!allowed && au?.id) {
+      const h = await prisma.requestTypeHandler.findFirst({ where: { brigadeUnitId: battalionId, userId: au.id, type: req.type }, select: { id: true } });
+      allowed = !!h;
+    }
+    if (!allowed) { await answerCallbackQuery(token, callback.id, "אינך אחראי על סוג זה"); return; }
+    const newStatus: RequestStatus = statusRaw === "RESOLVED" ? "RESOLVED" : "NEEDS_INFO";
+    await prisma.$transaction([
+      prisma.request.update({ where: { id }, data: { status: newStatus, ...(newStatus === "RESOLVED" ? { resolvedAt: new Date() } : {}), assignedName: au?.fullName ?? "בוט חטיבה", assignedToId: au?.id ?? null } }),
+      prisma.requestUpdate.create({ data: { requestId: id, authorName: au?.fullName ?? "בוט חטיבה", text: newStatus === "RESOLVED" ? "נסגר מהבוט" : "סומן 'דרוש מידע' מהבוט", statusFrom: req.status, statusTo: newStatus } }),
+    ]);
+    await editMessageText(token, chatId, messageId, `✅ עודכן: <b>${REQUEST_STATUS_LABEL[newStatus]}</b>`);
     await answerCallbackQuery(token, callback.id, "עודכן ✅");
     return;
   }
@@ -874,6 +910,40 @@ type BattalionCtx = {
   armoryTestUrl: string | null;
   drivingRefreshDays: number;
 };
+
+/** 📥 בוט חטיבה — רשימת דרישות פתוחות (מלכ"א=הכל, בעל-תפקיד=הסוגים שלו) + כפתורי טיפול. */
+async function handleBrigadeRequests(token: string, chatId: string, battalionId: string, appUserId: string | null, appUserRole: string | null, keyboard: object) {
+  const isMalka = appUserRole === "BATTALION_ADMIN" || appUserRole === "SUPER_ADMIN";
+  let typeFilter: RequestType[] | null = null;
+  if (!isMalka) {
+    if (!appUserId) { await sendTelegramMessage(token, chatId, "אין לך הרשאה לצפות בדרישות החטיבה.", keyboard); return; }
+    const handlers = await prisma.requestTypeHandler.findMany({ where: { brigadeUnitId: battalionId, userId: appUserId }, select: { type: true } });
+    const types = [...new Set(handlers.map((h) => h.type))];
+    if (types.length === 0) { await sendTelegramMessage(token, chatId, "לא הוקצו לך סוגי דרישות. פנה למלכ\"א.", keyboard); return; }
+    typeFilter = types;
+  }
+  const OPEN: RequestStatus[] = ["PENDING_APPROVAL", "IN_PROGRESS", "NEEDS_INFO"];
+  const reqs = await prisma.request.findMany({
+    where: { targetUnitId: battalionId, status: { in: OPEN }, ...(typeFilter ? { type: { in: typeFilter } } : {}) },
+    include: { battalion: { select: { name: true } } },
+    orderBy: [{ priority: "desc" }, { createdAt: "desc" }], take: 15,
+  });
+  if (reqs.length === 0) { await sendTelegramMessage(token, chatId, "✅ אין דרישות פתוחות כרגע.", keyboard); return; }
+  await sendTelegramMessage(token, chatId, `📥 <b>${reqs.length} דרישות פתוחות</b>${isMalka ? "" : " (הסוגים שלך)"}:`, keyboard);
+  for (const r of reqs) {
+    const lines = [
+      `${REQUEST_TYPE_LABEL[r.type]} — <b>${escapeTelegram(r.title)}</b>`,
+      `מ: ${escapeTelegram(r.battalion.name)} · ${REQUEST_STATUS_LABEL[r.status]}`,
+      r.description ? escapeTelegram(r.description) : "",
+    ].filter(Boolean);
+    await sendTelegramMessage(token, chatId, lines.join("\n"), {
+      inline_keyboard: [[
+        { text: "✅ נפתר", callback_data: `breq:${r.id}:RESOLVED` },
+        { text: "ℹ️ דרוש מידע", callback_data: `breq:${r.id}:NEEDS_INFO` },
+      ]],
+    });
+  }
+}
 
 async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, battalion: BattalionCtx) {
   const lines: string[] = [];

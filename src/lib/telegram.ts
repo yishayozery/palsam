@@ -187,6 +187,11 @@ export function buildTasksKeyboard(canAttendance = false) {
   return { keyboard: rows, resize_keyboard: true, is_persistent: true };
 }
 
+/** תפריט בוט חטיבה — רק לאנשי יחידת חטיבה (מלכ"א / בעלי-תפקיד). */
+export function buildBrigadeKeyboard() {
+  return { keyboard: [[{ text: "📥 דרישות נכנסות" }], [{ text: "❓ עזרה" }]], resize_keyboard: true, is_persistent: true };
+}
+
 /** תת-תפריט רכבים — כל האפשרויות תחת "🚗 רכבים" (זמינות לכולם). */
 export function buildVehicleKeyboard(_canManageTeam = false, _isDriver = false) {
   void _canManageTeam; void _isDriver;
