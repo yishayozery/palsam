@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { PageHeader, Card } from "@/components/ui";
 import { TRANSFER_TYPE } from "@/lib/labels";
+import { escapeHtml } from "@/lib/escape-html";
 
 type StateReport = {
   statuses: { id: string; name: string }[];
@@ -63,17 +64,17 @@ export default function ReportsClient({
     if (!w) return;
     let body = "";
     if (tab === "state" && state) {
-      body = `<table><thead><tr><th>פריט</th>${state.statuses.map((s) => `<th>${s.name}</th>`).join("")}<th>סה״כ</th></tr></thead><tbody>${
-        state.rows.map((r) => `<tr><td>${r.name}</td>${r.byStatus.map((n) => `<td>${n || "—"}</td>`).join("")}<td><b>${r.total}</b></td></tr>`).join("")
+      body = `<table><thead><tr><th>פריט</th>${state.statuses.map((s) => `<th>${escapeHtml(s.name)}</th>`).join("")}<th>סה״כ</th></tr></thead><tbody>${
+        state.rows.map((r) => `<tr><td>${escapeHtml(r.name)}</td>${r.byStatus.map((n) => `<td>${n || "—"}</td>`).join("")}<td><b>${r.total}</b></td></tr>`).join("")
       }<tr class="tot"><td>סה״כ</td>${state.statusTotals.map((n) => `<td>${n}</td>`).join("")}<td>${state.grandTotal}</td></tr></tbody></table>`;
     } else if (tab === "movements" && movements) {
       body = `<h3>סיכום פר-פריט</h3><table><thead><tr><th>פריט</th><th>נכנס</th><th>יצא</th></tr></thead><tbody>${
-        movements.summaryRows.map((r) => `<tr><td>${r.name}</td><td>${r.in}</td><td>${r.out}</td></tr>`).join("")
+        movements.summaryRows.map((r) => `<tr><td>${escapeHtml(r.name)}</td><td>${r.in}</td><td>${r.out}</td></tr>`).join("")
       }</tbody></table><h3>פירוט תנועות</h3><table><thead><tr><th>שעה</th><th>סוג</th><th>פריט</th><th>סריאלי</th><th>כמות</th><th>מול</th><th>בוצע ע״י</th></tr></thead><tbody>${
-        movements.detail.map((d) => `<tr><td>${new Date(d.time).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}</td><td>${TRANSFER_TYPE[d.type as keyof typeof TRANSFER_TYPE] ?? d.type}</td><td>${d.item}</td><td>${d.serial ?? "—"}</td><td>${d.qty}</td><td>${d.counterparty}</td><td>${d.by}</td></tr>`).join("")
+        movements.detail.map((d) => `<tr><td>${new Date(d.time).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}</td><td>${escapeHtml(TRANSFER_TYPE[d.type as keyof typeof TRANSFER_TYPE] ?? d.type)}</td><td>${escapeHtml(d.item)}</td><td>${d.serial ? escapeHtml(d.serial) : "—"}</td><td>${d.qty}</td><td>${escapeHtml(d.counterparty)}</td><td>${escapeHtml(d.by)}</td></tr>`).join("")
       }</tbody></table>`;
     }
-    w.document.write(`<html dir="rtl"><head><meta charset="utf-8"><title>${title}</title><style>body{font-family:Arial;padding:20px}h2{margin:0}table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13px}th,td{border:1px solid #cbd5e1;padding:4px 8px;text-align:right}th{background:#1f2937;color:#fff}.tot td{background:#f1f5f9;font-weight:bold}</style></head><body><h2>${title} — ${selectedName}</h2><div>📅 ${dateLabel}</div>${body}<script>window.onload=()=>window.print()</script></body></html>`);
+    w.document.write(`<html dir="rtl"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:Arial;padding:20px}h2{margin:0}table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13px}th,td{border:1px solid #cbd5e1;padding:4px 8px;text-align:right}th{background:#1f2937;color:#fff}.tot td{background:#f1f5f9;font-weight:bold}</style></head><body><h2>${escapeHtml(title)} — ${escapeHtml(selectedName)}</h2><div>📅 ${escapeHtml(dateLabel)}</div>${body}<script>window.onload=()=>window.print()</script></body></html>`);
     w.document.close();
   };
 

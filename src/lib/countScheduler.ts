@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { sendTelegramMessage } from "./telegram";
 import { runCountFromPlan } from "./count-runner";
+import { escapeTelegram } from "./escape-html";
 
 // ===== אזור זמן ישראל — שעות הספירה מתפרשות לפי שעון ישראל, לא UTC של השרת =====
 const TZ = "Asia/Jerusalem";
@@ -205,7 +206,7 @@ async function notifyTaskAssignee(
   const text = [
     `📋 <b>משימת ספירת מלאי חדשה</b>`,
     ``,
-    `מחזיק: <b>${task.holder.name}</b>`,
+    `מחזיק: <b>${escapeTelegram(task.holder.name)}</b>`,
     `עד: ${due}`,
     ``,
     `👉 <a href="${baseUrl}/counts/share/${task.shareToken}">לחץ כאן לביצוע הספירה</a>`,
@@ -241,8 +242,8 @@ async function notifyOverdue(
     await sendTelegramMessage(token, assigneeChatId, [
       `⏰ <b>משימת ספירה באיחור!</b>`,
       ``,
-      `מחזיק: <b>${task.holder.name}</b>`,
-      `תכנית: ${task.plan?.name ?? "ספירה"}`,
+      `מחזיק: <b>${escapeTelegram(task.holder.name)}</b>`,
+      `תכנית: ${escapeTelegram(task.plan?.name ?? "ספירה")}`,
       `מועד אחרון: ${due}`,
       ``,
       `👉 <a href="${baseUrl}/counts/share/${task.shareToken}">לחץ כאן לביצוע עכשיו</a>`,
@@ -255,8 +256,8 @@ async function notifyOverdue(
     await sendTelegramMessage(token, responsibleChatId, [
       `⚠️ <b>משימת ספירה באיחור</b>`,
       ``,
-      `מחזיק: <b>${task.holder.name}</b>`,
-      `אחראי: ${task.assignedUser?.fullName ?? "לא שויך"}`,
+      `מחזיק: <b>${escapeTelegram(task.holder.name)}</b>`,
+      `אחראי: ${escapeTelegram(task.assignedUser?.fullName ?? "לא שויך")}`,
       `מועד אחרון: ${due}`,
       ``,
       `המשימה טרם בוצעה.`,

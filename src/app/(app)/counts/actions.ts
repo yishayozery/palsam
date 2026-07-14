@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
+import { escapeTelegram } from "@/lib/escape-html";
 import type { CountType } from "@/generated/prisma";
 
 export async function saveCountDefinition(formData: FormData) {
@@ -451,7 +452,7 @@ export async function createVerificationRequests(
 }
 
 export async function getVerificationStatus(sessionId: string) {
-  const user = await requireUser();
+  const user = await requireCapability("counts.execute");
   const bId = user.battalionId!;
 
   const requests = await prisma.verificationRequest.findMany({
@@ -489,7 +490,7 @@ export async function getVerificationStatus(sessionId: string) {
 }
 
 export async function markVerificationSent(requestId: string, via: "WHATSAPP" | "TELEGRAM") {
-  const user = await requireUser();
+  const user = await requireCapability("counts.execute");
   const row = await prisma.verificationRequest.findUnique({ where: { id: requestId }, select: { battalionId: true } });
   if (!row || row.battalionId !== user.battalionId) return { error: "לא נמצא" };
   await prisma.verificationRequest.update({
@@ -500,7 +501,7 @@ export async function markVerificationSent(requestId: string, via: "WHATSAPP" | 
 }
 
 export async function sendTelegramVerification(requestId: string) {
-  const user = await requireUser();
+  const user = await requireCapability("counts.execute");
 
   const req = await prisma.verificationRequest.findUnique({
     where: { id: requestId },
@@ -540,9 +541,9 @@ type VerReqForMsg = {
 /** בונה את גוף הודעת האימות + הכפתורים לפי מצב הבקשה. משותף לשליחה בודדת ולברודקאסט. */
 function buildVerificationMessage(req: VerReqForMsg, baseUrl: string): { text: string; replyMarkup?: object } {
   const fmtItem = (i: { itemTypeName: string; serialNumber: string | null }) =>
-    i.serialNumber ? `• <b>${i.itemTypeName}</b>\n   🔢 <code>${i.serialNumber}</code>` : `• <b>${i.itemTypeName}</b>`;
+    i.serialNumber ? `• <b>${escapeTelegram(i.itemTypeName)}</b>\n   🔢 <code>${escapeTelegram(i.serialNumber)}</code>` : `• <b>${escapeTelegram(i.itemTypeName)}</b>`;
   const itemsList = req.items.map(fmtItem).join("\n");
-  const name = req.soldier?.fullName ?? "";
+  const name = escapeTelegram(req.soldier?.fullName ?? "");
 
   // CONFIRM — כפתורי inline לכל פריט בתוך טלגרם
   if (req.mode === "CONFIRM") {
@@ -639,7 +640,7 @@ export async function deleteVerificationData(sessionId: string) {
 }
 
 export async function getVerificationStorageStats() {
-  const user = await requireUser();
+  const user = await requireCapability("counts.execute");
   const bId = user.battalionId!;
 
   const items = await prisma.verificationItem.findMany({
@@ -699,7 +700,7 @@ export async function registerTelegramWebhook() {
   const res = await fetch(`${apiBase}/setWebhook`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url: webhookUrl }),
+    body: JSON.stringify({ url: webhookUrl, ...(process.env.TELEGRAM_WEBHOOK_SECRET ? { secret_token: process.env.TELEGRAM_WEBHOOK_SECRET } : {}) }),
   });
   const data = await res.json();
   if (!data.ok) return { error: `Telegram error: ${data.description}` };

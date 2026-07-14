@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { sendTelegramMessage } from "@/lib/telegram";
 import { DEFAULT_RULES } from "@/lib/botNotifications";
+import { escapeTelegram } from "@/lib/escape-html";
 
 /** תזכורת טיפולי רכב — נשלחת יום (או N ימים) לפני מועד הטיפול. מופעלת מהקרון היומי. */
 export async function processMaintenanceReminders(): Promise<{ battalions: number; sent: number }> {
@@ -39,7 +40,7 @@ export async function processMaintenanceReminders(): Promise<{ battalions: numbe
       });
       const lines = due.map((m, i) => {
         const v = m.vehicleSerialUnit;
-        return `${i + 1}. ${v.itemType.name} · ${v.serialNumber}${m.serviceType ? ` — ${m.serviceType}` : ""}${m.location ? ` @ ${m.location}` : ""}${m.hours ? ` (${m.hours})` : ""}${m.contactName ? ` · ${m.contactName}${m.contactPhone ? " " + m.contactPhone : ""}` : ""}`;
+        return `${i + 1}. ${escapeTelegram(v.itemType.name)} · ${escapeTelegram(v.serialNumber)}${m.serviceType ? ` — ${escapeTelegram(m.serviceType)}` : ""}${m.location ? ` @ ${escapeTelegram(m.location)}` : ""}${m.hours ? ` (${escapeTelegram(String(m.hours))})` : ""}${m.contactName ? ` · ${escapeTelegram(m.contactName)}${m.contactPhone ? " " + escapeTelegram(m.contactPhone) : ""}` : ""}`;
       });
       const text = `🔧 <b>תזכורת טיפולים — ${dateLabel}</b>\n${due.length} רכבים לטיפול:\n\n${lines.join("\n")}`;
       const seen = new Set<string>();
@@ -55,11 +56,11 @@ export async function processMaintenanceReminders(): Promise<{ battalions: numbe
         const v = m.vehicleSerialUnit;
         const chat = v.signedSoldier?.telegramChatId;
         if (!chat) continue;
-        const parts = [`🔧 <b>תזכורת טיפול רכב — ${dateLabel}</b>`, `לרכב שחתום עליך יש טיפול מתקרב:`, `🚙 ${v.itemType.name} · ${v.serialNumber}`];
-        if (m.serviceType) parts.push(`סוג: ${m.serviceType}`);
-        if (m.location) parts.push(`📍 ${m.location}`);
+        const parts = [`🔧 <b>תזכורת טיפול רכב — ${dateLabel}</b>`, `לרכב שחתום עליך יש טיפול מתקרב:`, `🚙 ${escapeTelegram(v.itemType.name)} · ${escapeTelegram(v.serialNumber)}`];
+        if (m.serviceType) parts.push(`סוג: ${escapeTelegram(m.serviceType)}`);
+        if (m.location) parts.push(`📍 ${escapeTelegram(m.location)}`);
         if (m.hours) parts.push(`🕐 ${m.hours}`);
-        if (m.contactName) parts.push(`☎️ ${m.contactName}${m.contactPhone ? " " + m.contactPhone : ""}`);
+        if (m.contactName) parts.push(`☎️ ${escapeTelegram(m.contactName)}${m.contactPhone ? " " + escapeTelegram(m.contactPhone) : ""}`);
         await sendTelegramMessage(token, chat, parts.join("\n")).catch(() => {});
         sent++;
       }

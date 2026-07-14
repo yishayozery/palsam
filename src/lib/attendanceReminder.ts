@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { sendTelegramMessage } from "./telegram";
 import { signLink } from "./link-token";
+import { escapeTelegram } from "./escape-html";
 
 /** לינק דיווח נוכחות מאובטח (ללא התחברות) לנאמן לפי מזהה החייל שלו. */
 function reportLink(baseUrl: string, soldierId: string): string {
@@ -67,8 +68,8 @@ export async function sendAttendanceInitial(todayYmd: string): Promise<number> {
       const scope = rep.kind === "squad" ? rep.label : (rep.label !== "הפלוגה" ? rep.label : "הפלוגה");
       const link = reportLink(baseUrl, rep.soldierId);
       const text = b.attendanceReminderText?.trim()
-        ? `🗓️ <b>${b.attendanceReminderText.trim()}</b>\n\n👉 <a href="${link}">פתח דיווח נוכחות</a> (בלי התחברות — הרשימה תופיע ישר)`
-        : `🗓️ <b>בוקר טוב!</b>\nנא לדווח את נוכחות ${scope} להיום.\n\n👉 <a href="${link}">פתח דיווח נוכחות</a> (בלי התחברות — הרשימה תופיע ישר)`;
+        ? `🗓️ <b>${escapeTelegram(b.attendanceReminderText.trim())}</b>\n\n👉 <a href="${link}">פתח דיווח נוכחות</a> (בלי התחברות — הרשימה תופיע ישר)`
+        : `🗓️ <b>בוקר טוב!</b>\nנא לדווח את נוכחות ${escapeTelegram(scope)} להיום.\n\n👉 <a href="${link}">פתח דיווח נוכחות</a> (בלי התחברות — הרשימה תופיע ישר)`;
       try { await sendTelegramMessage(b.telegramBotToken!, rep.chatId, text); sent++; } catch { /* non-fatal */ }
     }
   }
@@ -120,7 +121,7 @@ export async function sendAttendanceFollowup(nowMin: number, today: Date, todayY
       const missing = scope.filter((s) => !reportedSet.has(s.id)).length;
       if (missing === 0) continue;
       const link = reportLink(baseUrl, rep.soldierId);
-      const text = `⏰ <b>תזכורת דיווח נוכחות</b>\nטרם דווחה נוכחות ${rep.label} — נותרו <b>${missing}</b> חיילים.\nשעת גג לדיווח: <b>${deadlineLabel}</b>.\n\n👉 <a href="${link}">פתח דיווח נוכחות</a>`;
+      const text = `⏰ <b>תזכורת דיווח נוכחות</b>\nטרם דווחה נוכחות ${escapeTelegram(rep.label)} — נותרו <b>${missing}</b> חיילים.\nשעת גג לדיווח: <b>${escapeTelegram(deadlineLabel)}</b>.\n\n👉 <a href="${link}">פתח דיווח נוכחות</a>`;
       try { await sendTelegramMessage(b.telegramBotToken!, rep.chatId, text); sent++; } catch { /* non-fatal */ }
     }
   }

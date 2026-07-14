@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useTransition } from "react";
 import { Card, Badge } from "@/components/ui";
+import { escapeHtml } from "@/lib/escape-html";
 import { resendIncomplete, alertCommanders } from "./actions";
 
 type ReportLine = {
@@ -130,7 +131,7 @@ export default function SessionReportView({
       @media print { body { padding: 0; } }
     </style></head><body>`);
     win.document.write(`<h1>דוח ספירה</h1>`);
-    win.document.write(`<p>תאריך: ${completedAt ? new Date(completedAt).toLocaleDateString("he-IL") : "—"} · ביצע: ${startedBy ?? "—"}</p>`);
+    win.document.write(`<p>תאריך: ${completedAt ? new Date(completedAt).toLocaleDateString("he-IL") : "—"} · ביצע: ${startedBy ? escapeHtml(startedBy) : "—"}</p>`);
     win.document.write(`<div class="summary">
       <div class="summary-item"><div class="num">${summary.total}</div>סה״כ</div>
       <div class="summary-item"><div class="num" style="color:#059669">${summary.reported}</div>דווחו</div>
@@ -140,7 +141,7 @@ export default function SessionReportView({
 
     for (const [holder, items] of grouped) {
       const signer = items[0]?.signerName;
-      win.document.write(`<h2>📍 ${holder}${signer ? ` — חתם: ${signer}` : ""}</h2>`);
+      win.document.write(`<h2>📍 ${escapeHtml(holder)}${signer ? ` — חתם: ${escapeHtml(signer)}` : ""}</h2>`);
       win.document.write(`<table><thead><tr>
         <th>פריט</th><th>סריאלי</th><th>חייל</th><th>מיקום</th><th>תוקף</th>
         <th>צפוי</th><th>נספר</th><th>סטטוס</th><th>הערה</th>
@@ -149,15 +150,15 @@ export default function SessionReportView({
         const rowClass = l.status === "discrepancy" ? "gap" : l.status === "not_reported" ? "not-reported" : "";
         const badgeClass = l.status === "reported" ? "badge-green" : l.status === "discrepancy" ? "badge-rose" : "badge-amber";
         win.document.write(`<tr class="${rowClass}">
-          <td>${l.itemName}${l.sku ? ` (${l.sku})` : ""}</td>
-          <td>${l.serialNumber ?? "—"}</td>
-          <td>${l.soldierName ? `${l.soldierName}${l.soldierPN ? ` (${l.soldierPN})` : ""}` : "—"}</td>
-          <td>${[l.location, l.shelf].filter(Boolean).join(" / ") || "—"}</td>
+          <td>${escapeHtml(l.itemName)}${l.sku ? ` (${escapeHtml(l.sku)})` : ""}</td>
+          <td>${l.serialNumber ? escapeHtml(l.serialNumber) : "—"}</td>
+          <td>${l.soldierName ? `${escapeHtml(l.soldierName)}${l.soldierPN ? ` (${escapeHtml(l.soldierPN)})` : ""}` : "—"}</td>
+          <td>${[l.location, l.shelf].filter(Boolean).map((v) => escapeHtml(v)).join(" / ") || "—"}</td>
           <td>${l.expiryDate ? new Date(l.expiryDate).toLocaleDateString("he-IL") : "—"}</td>
           <td>${l.expectedQty}</td>
           <td>${l.countedQty ?? "—"}</td>
           <td><span class="badge ${badgeClass}">${STATUS_LABEL[l.status]}</span></td>
-          <td>${l.note ?? ""}</td>
+          <td>${l.note ? escapeHtml(l.note) : ""}</td>
         </tr>`);
       }
       win.document.write(`</tbody></table>`);

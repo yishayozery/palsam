@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui";
+import { escapeHtml } from "@/lib/escape-html";
 import {
   createVerificationRequests,
   getVerificationStatus,
@@ -189,18 +190,18 @@ export default function VerificationPanel({
       const cConfirmed = companyItems.filter((i) => i.status === "CONFIRMED").length;
       const cDenied = companyItems.filter((i) => i.status === "DENIED").length;
       const cPending = companyItems.filter((i) => i.status === "PENDING").length;
-      rows.push(`<tr style="background:#f1f5f9"><td colspan="5" style="padding:8px;font-weight:bold">📍 ${companyName} — ✅${cConfirmed} ❌${cDenied} ⏳${cPending}</td></tr>`);
+      rows.push(`<tr style="background:#f1f5f9"><td colspan="5" style="padding:8px;font-weight:bold">📍 ${escapeHtml(companyName)} — ✅${cConfirmed} ❌${cDenied} ⏳${cPending}</td></tr>`);
       for (const req of reqs) {
         const name = req.soldierName || req.holderName || "—";
         const statusLabel = req.respondedAt ? "דווח" : req.sentAt ? "נשלח" : "ממתין";
         for (const item of req.items) {
           const extra = [
-            item.reportedSerial && `סריאלי: ${item.reportedSerial}`,
-            item.reportedLocation && `מיקום: ${item.reportedLocation}`,
+            item.reportedSerial && `סריאלי: ${escapeHtml(item.reportedSerial)}`,
+            item.reportedLocation && `מיקום: ${escapeHtml(item.reportedLocation)}`,
             item.reportedQuantity != null && `כמות: ${item.reportedQuantity}`,
-            item.note,
+            item.note && escapeHtml(item.note),
           ].filter(Boolean).join(", ");
-          rows.push(`<tr><td style="padding:4px 8px">${name}</td><td style="padding:4px 8px">${item.itemTypeName}${item.serialNumber ? ` (${item.serialNumber})` : ""}</td><td style="padding:4px 8px">${item.status === "CONFIRMED" ? "✅" : item.status === "DENIED" ? "❌" : "⏳"}</td><td style="padding:4px 8px">${statusLabel}</td><td style="padding:4px 8px;font-size:11px;color:#666">${extra}</td></tr>`);
+          rows.push(`<tr><td style="padding:4px 8px">${escapeHtml(name)}</td><td style="padding:4px 8px">${escapeHtml(item.itemTypeName)}${item.serialNumber ? ` (${escapeHtml(item.serialNumber)})` : ""}</td><td style="padding:4px 8px">${item.status === "CONFIRMED" ? "✅" : item.status === "DENIED" ? "❌" : "⏳"}</td><td style="padding:4px 8px">${escapeHtml(statusLabel)}</td><td style="padding:4px 8px;font-size:11px;color:#666">${extra}</td></tr>`);
         }
       }
     }
@@ -210,7 +211,7 @@ export default function VerificationPanel({
       denied: filteredRequests.flatMap((r) => r.items).filter((i) => i.status === "DENIED").length,
       pending: filteredRequests.flatMap((r) => r.items).filter((i) => i.status === "PENDING").length,
     };
-    const html = `<html dir="rtl"><head><title>דוח אימות ציוד</title><style>body{font-family:system-ui;padding:20px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ddd;text-align:right}th{background:#334155;color:white;padding:8px}@media print{body{padding:0}}</style></head><body><h2>דוח אימות ציוד</h2><p>תאריך: ${now} | סינון: ${filterLabel}${reportCompany !== "all" ? ` | פלוגה: ${reportCompany}` : ""} | סה"כ: ${fStats.total} בקשות | ✅ ${fStats.confirmed} | ❌ ${fStats.denied} | ⏳ ${fStats.pending}</p><table><tr><th>שם</th><th>פריט</th><th>סטטוס</th><th>שליחה</th><th>פרטים</th></tr>${rows.join("")}</table></body></html>`;
+    const html = `<html dir="rtl"><head><title>דוח אימות ציוד</title><style>body{font-family:system-ui;padding:20px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ddd;text-align:right}th{background:#334155;color:white;padding:8px}@media print{body{padding:0}}</style></head><body><h2>דוח אימות ציוד</h2><p>תאריך: ${escapeHtml(now)} | סינון: ${escapeHtml(filterLabel)}${reportCompany !== "all" ? ` | פלוגה: ${escapeHtml(reportCompany)}` : ""} | סה"כ: ${fStats.total} בקשות | ✅ ${fStats.confirmed} | ❌ ${fStats.denied} | ⏳ ${fStats.pending}</p><table><tr><th>שם</th><th>פריט</th><th>סטטוס</th><th>שליחה</th><th>פרטים</th></tr>${rows.join("")}</table></body></html>`;
     const w = window.open("", "_blank");
     if (w) { w.document.write(html); w.document.close(); w.print(); }
   };

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/guard";
+import { requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 import { findTanaHolder, findDefectiveStatusId, findOkStatusId } from "@/lib/tana";
 import { adjustQuantity } from "@/lib/inventory";
@@ -14,7 +14,7 @@ import { FAULT_STAGE_KEYS, CLOSED_STAGE } from "@/lib/vehicleFault";
  */
 export async function sendSerialToTana(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireUser();
+    const user = await requireCapability("maintenance.manage");
     const bId = user.battalionId!;
     const serialUnitId = String(formData.get("serialUnitId") || "");
     const reason = String(formData.get("reason") || "").trim();
@@ -64,7 +64,7 @@ export async function sendSerialToTana(formData: FormData): Promise<{ ok?: boole
  */
 export async function sendQtyToTana(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireUser();
+    const user = await requireCapability("maintenance.manage");
     const bId = user.battalionId!;
     const itemTypeId = String(formData.get("itemTypeId") || "");
     const fromHolderId = String(formData.get("fromHolderId") || "");
@@ -109,7 +109,7 @@ export async function sendQtyToTana(formData: FormData): Promise<{ ok?: boolean;
  */
 export async function returnFromTana(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireUser();
+    const user = await requireCapability("maintenance.manage");
     const bId = user.battalionId!;
     const toHolderId = String(formData.get("toHolderId") || "");
     const asOk = String(formData.get("asOk") || "true") === "true";
@@ -178,7 +178,7 @@ export async function returnFromTana(formData: FormData): Promise<{ ok?: boolean
 /** שמירת/עדכון תוכנית הטיפול לרכב (תאריך הבא + פרטי מוסך). ריק = ניקוי. */
 export async function saveVehicleMaintenance(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireUser();
+    const user = await requireCapability("maintenance.manage");
     const bId = user.battalionId!;
     const vehicleSerialUnitId = String(formData.get("vehicleSerialUnitId") || "");
     if (!vehicleSerialUnitId) return { error: "חסר רכב" };
@@ -236,7 +236,9 @@ async function notifyFaultSoldier(faultId: string, bId: string) {
 }
 
 /** יצירת קטגוריות תקלה ברירת-מחדל אם אין. */
-export async function ensureFaultCategories(battalionId: string) {
+export async function ensureFaultCategories() {
+  const user = await requireCapability("maintenance.manage");
+  const battalionId = user.battalionId!;
   const cnt = await prisma.vehicleFaultCategory.count({ where: { battalionId } });
   if (cnt > 0) return;
   const { DEFAULT_FAULT_CATEGORIES } = await import("@/lib/vehicleFault");
@@ -266,7 +268,7 @@ async function resolveCategory(bId: string, categoryIdRaw: string, newName: stri
 /** דיווח תקלה חדשה על רכב — פותח תיק תקלה עם מספר רץ. */
 export async function reportVehicleFault(formData: FormData): Promise<{ ok?: boolean; error?: string; faultNumber?: number }> {
   try {
-    const user = await requireUser();
+    const user = await requireCapability("maintenance.manage");
     const bId = user.battalionId!;
     const vehicleSerialUnitId = String(formData.get("vehicleSerialUnitId") || "");
     const description = String(formData.get("description") || "").trim();
@@ -298,7 +300,7 @@ export async function reportVehicleFault(formData: FormData): Promise<{ ok?: boo
 /** קידום שלב בתיק תקלה + הערה. שלב "delivered" סוגר את התיק ומחזיר את הרכב לתקין. */
 export async function advanceVehicleFault(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireUser();
+    const user = await requireCapability("maintenance.manage");
     const bId = user.battalionId!;
     const faultId = String(formData.get("faultId") || "");
     const stage = String(formData.get("stage") || "");
@@ -352,7 +354,7 @@ export async function advanceVehicleFault(formData: FormData): Promise<{ ok?: bo
 /** הוספת הערה לתיק תקלה (בלי שינוי שלב). */
 export async function addVehicleFaultNote(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireUser();
+    const user = await requireCapability("maintenance.manage");
     const bId = user.battalionId!;
     const faultId = String(formData.get("faultId") || "");
     const note = String(formData.get("note") || "").trim();
@@ -370,7 +372,7 @@ export async function addVehicleFaultNote(formData: FormData): Promise<{ ok?: bo
 /** שליחת פרטי התקלה לחייל החתום בטלגרם. */
 export async function sendFaultToSoldier(formData: FormData): Promise<{ ok?: boolean; error?: string; sent?: boolean }> {
   try {
-    const user = await requireUser();
+    const user = await requireCapability("maintenance.manage");
     const bId = user.battalionId!;
     const faultId = String(formData.get("faultId") || "");
     const fault = await prisma.vehicleFault.findUnique({ where: { id: faultId }, select: { battalionId: true } });

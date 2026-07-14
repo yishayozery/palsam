@@ -8,11 +8,21 @@ import { ROLE_LABELS, permissionsFromLegacyRole, type UserPermissions, type Perm
 
 export { hashPassword, verifyPassword };
 
-const RAW_SECRET = process.env.AUTH_SECRET || "dev-secret-change-me-please-32-characters";
-if (process.env.NODE_ENV === "production" && !process.env.AUTH_SECRET) {
-  console.error("⚠️ AUTH_SECRET is not set — using insecure default. Set AUTH_SECRET in production!");
+/**
+ * מחזיר את סוד ה-JWT של ה-session. בפרודקשן — חובה AUTH_SECRET, אחרת נזרקת
+ * שגיאה. ההערכה עצלה (בזמן-בקשה, לא ב-import) כדי לא לשבור `next build`.
+ */
+function getSecret(): Uint8Array {
+  const raw = process.env.AUTH_SECRET;
+  if (!raw) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("AUTH_SECRET must be set in production for session JWT signing");
+    }
+    return new TextEncoder().encode("dev-secret-change-me-please-32-characters");
+  }
+  return new TextEncoder().encode(raw);
 }
-const SECRET = new TextEncoder().encode(RAW_SECRET);
+const JWT_ALG = "HS256";
 const COOKIE = "gadsam_session";
 const MAX_AGE = 60 * 60 * 12; // 12 שעות
 
@@ -36,10 +46,10 @@ export type SessionUser = {
 
 export async function createSession(user: SessionUser): Promise<void> {
   const token = await new SignJWT({ ...user })
-    .setProtectedHeader({ alg: "HS256" })
+    .setProtectedHeader({ alg: JWT_ALG })
     .setIssuedAt()
     .setExpirationTime(`${MAX_AGE}s`)
-    .sign(SECRET);
+    .sign(getSecret());
 
   const store = await cookies();
   store.set(COOKIE, token, {
@@ -61,7 +71,7 @@ export async function getSession(): Promise<SessionUser | null> {
   const token = store.get(COOKIE)?.value;
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, SECRET);
+    const { payload } = await jwtVerify(token, getSecret(), { algorithms: [JWT_ALG] });
     if (!payload.id || !payload.username || !payload.role) return null;
     const role = payload.role as Role;
     const permissions = (payload.permissions as UserPermissions) ?? permissionsFromLegacyRole(role);
@@ -236,10 +246,10 @@ export async function setPasswordByInvite(
 /** בונה את פרטי עוגיית ה-session — לשימוש ב-Route Handler (שם לא ניתן לקרוא ל-createSession). */
 export async function buildSessionCookie(user: SessionUser) {
   const token = await new SignJWT({ ...user })
-    .setProtectedHeader({ alg: "HS256" })
+    .setProtectedHeader({ alg: JWT_ALG })
     .setIssuedAt()
     .setExpirationTime(`${MAX_AGE}s`)
-    .sign(SECRET);
+    .sign(getSecret());
   return {
     name: COOKIE,
     value: token,

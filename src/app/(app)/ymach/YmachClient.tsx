@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Badge, EmptyState } from "@/components/ui";
+import { escapeHtml } from "@/lib/escape-html";
 import {
   saveWarehouse, deleteWarehouse,
   saveShelf, deleteShelf,
@@ -478,18 +479,18 @@ function KitsTab({
     const w = window.open("", "_blank", "width=400,height=600");
     if (!w) return;
     const rows = kit.items.map((i) =>
-      `<tr><td style="padding:4px 8px;border:1px solid #ccc">${i.itemName}${i.sku ? ` <small style="color:#888">(${i.sku})</small>` : ""}</td><td style="padding:4px 8px;border:1px solid #ccc;text-align:center">${i.quantity}</td></tr>`
+      `<tr><td style="padding:4px 8px;border:1px solid #ccc">${escapeHtml(i.itemName)}${i.sku ? ` <small style="color:#888">(${escapeHtml(i.sku)})</small>` : ""}</td><td style="padding:4px 8px;border:1px solid #ccc;text-align:center">${i.quantity}</td></tr>`
     ).join("");
-    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>מארז ${kit.kitNumber ?? ""} — ${kit.name}</title>
+    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>מארז ${escapeHtml(kit.kitNumber ?? "")} — ${escapeHtml(kit.name)}</title>
 <style>body{font-family:Arial,sans-serif;padding:20px}table{border-collapse:collapse;width:100%}th{background:#f1f5f9;padding:6px 8px;border:1px solid #ccc;text-align:right}h1{font-size:18px}h2{font-size:14px;color:#475569}.meta{font-size:13px;color:#64748b;margin:4px 0}@media print{button{display:none}}</style></head>
 <body>
-<h1>🎒 מארז: ${kit.name}</h1>
-${kit.kitNumber ? `<p class="meta"><b>מספר מארז:</b> ${kit.kitNumber}</p>` : ""}
-${kit.assignedSoldierName ? `<p class="meta"><b>חייל:</b> ${kit.assignedSoldierName}</p>` : `<p class="meta"><b>חייל:</b> לא משובץ</p>`}
-${kit.shelfLabel ? `<p class="meta"><b>מדף:</b> ${kit.shelfLabel}</p>` : ""}
-${kit.equipmentLocationName ? `<p class="meta"><b>מיקום תעסוקתי:</b> ${kit.equipmentLocationName}</p>` : ""}
+<h1>🎒 מארז: ${escapeHtml(kit.name)}</h1>
+${kit.kitNumber ? `<p class="meta"><b>מספר מארז:</b> ${escapeHtml(kit.kitNumber)}</p>` : ""}
+${kit.assignedSoldierName ? `<p class="meta"><b>חייל:</b> ${escapeHtml(kit.assignedSoldierName)}</p>` : `<p class="meta"><b>חייל:</b> לא משובץ</p>`}
+${kit.shelfLabel ? `<p class="meta"><b>מדף:</b> ${escapeHtml(kit.shelfLabel)}</p>` : ""}
+${kit.equipmentLocationName ? `<p class="meta"><b>מיקום תעסוקתי:</b> ${escapeHtml(kit.equipmentLocationName)}</p>` : ""}
 <p class="meta"><b>סטטוס:</b> ${kit.status === "ISSUED" ? "אצל חייל" : "על המדף"}</p>
-${kit.notes ? `<p class="meta"><b>הערה:</b> ${kit.notes}</p>` : ""}
+${kit.notes ? `<p class="meta"><b>הערה:</b> ${escapeHtml(kit.notes)}</p>` : ""}
 <hr style="margin:12px 0">
 <h2>תכולת המארז (${kit.items.length} פריטים)</h2>
 <table><thead><tr><th>פריט</th><th style="width:60px">כמות</th></tr></thead><tbody>${rows}</tbody></table>

@@ -220,7 +220,7 @@ export default async function MaintenancePage({
 
   // קטגוריות תקלה (זריעת ברירות-מחדל) + תיקי תקלה פתוחים
   const { ensureFaultCategories } = await import("./actions");
-  await ensureFaultCategories(bId);
+  await ensureFaultCategories();
   const faultCategories = await prisma.vehicleFaultCategory.findMany({
     where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true },
   });

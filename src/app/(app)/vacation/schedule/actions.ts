@@ -2,12 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/guard";
+import { requireUser, requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 import type { ScheduleEventType } from "@/generated/prisma";
 
 export async function createEvent(formData: FormData) {
-  const user = await requireUser();
+  const user = await requireCapability("battalion.profile");
   const bId = user.battalionId!;
   const name = String(formData.get("name") || "").trim();
   const type = String(formData.get("type") || "MUKDAM_MEASEF") as ScheduleEventType;
@@ -41,7 +41,7 @@ export async function createEvent(formData: FormData) {
 }
 
 export async function updateEvent(formData: FormData) {
-  const user = await requireUser();
+  const user = await requireCapability("battalion.profile");
   const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
@@ -72,7 +72,7 @@ export async function updateEvent(formData: FormData) {
 }
 
 export async function deleteEvent(formData: FormData) {
-  const user = await requireUser();
+  const user = await requireCapability("battalion.profile");
   const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
   const existing = await prisma.scheduleEvent.findUnique({ where: { id }, select: { battalionId: true } });
@@ -86,7 +86,7 @@ export async function deleteEvent(formData: FormData) {
 }
 
 export async function addForce(formData: FormData) {
-  const user = await requireUser();
+  const user = await requireCapability("battalion.profile");
   const bId = user.battalionId!;
   const eventId = String(formData.get("eventId") || "");
   const userId = String(formData.get("userId") || "");
@@ -106,7 +106,7 @@ export async function addForce(formData: FormData) {
 }
 
 export async function removeForce(formData: FormData) {
-  const user = await requireUser();
+  const user = await requireCapability("battalion.profile");
   const bId = user.battalionId!;
   const forceId = String(formData.get("forceId") || "");
 

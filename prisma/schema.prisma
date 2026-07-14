@@ -1275,7 +1275,7 @@ model CountTask {
   status      CountTaskStatus @default(PENDING)
 
   // לפתיחה ללא login (שיתוף ב-WhatsApp)
-  shareToken String @unique @default(cuid())
+  shareToken String @unique @default(nanoid(24))
   // קישור לסשן הספירה האמיתי
   sessionId  String?  @unique
   session    CountSession? @relation(fields: [sessionId], references: [id])
@@ -2239,7 +2239,7 @@ model VerificationRequest {
   holderId      String?
   holder        Holder?   @relation("HolderVerifications", fields: [holderId], references: [id], onDelete: Cascade)
   mode          VerificationMode @default(CONFIRM)
-  token         String   @unique @default(cuid())
+  token         String   @unique @default(nanoid(24))
   sentAt        DateTime?
   sentVia       String?  // "WHATSAPP" | "TELEGRAM"
   respondedAt   DateTime?

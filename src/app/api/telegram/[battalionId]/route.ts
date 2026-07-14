@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { sendTelegramMessage, answerCallbackQuery, editMessageText, MAIN_KEYBOARD, buildMainKeyboard, buildVehicleKeyboard, buildTasksKeyboard } from "@/lib/telegram";
 import { linkTokenQuery } from "@/lib/link-token";
+import { escapeTelegram } from "@/lib/escape-html";
 import { normalizePhone } from "@/lib/phone";
 
 export async function POST(
@@ -17,8 +19,12 @@ export async function POST(
     //    כל POST מזויף (בלי ה-header התואם) נדחה.
     const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
     if (expectedSecret) {
-      const provided = req.headers.get("x-telegram-bot-api-secret-token");
-      if (provided !== expectedSecret) {
+      const provided = req.headers.get("x-telegram-bot-api-secret-token") ?? "";
+      // השוואה בזמן-קבוע (מונע timing attacks). timingSafeEqual דורש אורך זהה —
+      // מוודאים אורך קודם כדי לא לזרוק, ומשווים על אורך שווה בלבד.
+      const a = Buffer.from(provided);
+      const b = Buffer.from(expectedSecret);
+      if (a.length !== b.length || !timingSafeEqual(a, b)) {
         return NextResponse.json({ ok: false }, { status: 401 });
       }
     }
@@ -123,7 +129,7 @@ export async function POST(
         });
         if (target) {
           if (target.telegramChatId === chatId) {
-            await sendTelegramMessage(token, chatId, `כבר מחובר/ת, ${target.fullName}! ✅`, MAIN_KEYBOARD);
+            await sendTelegramMessage(token, chatId, `כבר מחובר/ת, ${escapeTelegram(target.fullName)}! ✅`, MAIN_KEYBOARD);
             return NextResponse.json({ ok: true });
           }
           // 🔐 חיבור דו-שלבי: שומרים את המ.א וממתינים לשיתוף מספר טלפון לאימות
@@ -135,7 +141,7 @@ export async function POST(
       await sendTelegramMessage(
         token,
         chatId,
-        `שלום! 👋\nאני הבוט של <b>${battalion.name}</b> במערכת PALMY.\n\nשלח/י את <b>המספר האישי</b> שלך כדי להתחבר.`,
+        `שלום! 👋\nאני הבוט של <b>${escapeTelegram(battalion.name)}</b> במערכת PALMY.\n\nשלח/י את <b>המספר האישי</b> שלך כדי להתחבר.`,
       );
       return NextResponse.json({ ok: true });
     }
@@ -238,7 +244,7 @@ export async function POST(
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
       const link = `${baseUrl}/attendance-report/${soldier.id}${linkTokenQuery("attendance-report", soldier.id)}`;
       await sendTelegramMessage(token, chatId,
-        `🗓️ <b>דיווח נוכחות (דוח 1) — ${battalion.name}</b>\n\n${soldier.fullName}, הרשימה תופיע ישר — רק לסמן ולשלוח (בלי התחברות):\n👉 <a href="${link}">פתח דיווח נוכחות</a>`, keyboard);
+        `🗓️ <b>דיווח נוכחות (דוח 1) — ${escapeTelegram(battalion.name)}</b>\n\n${escapeTelegram(soldier.fullName)}, הרשימה תופיע ישר — רק לסמן ולשלוח (בלי התחברות):\n👉 <a href="${link}">פתח דיווח נוכחות</a>`, keyboard);
       return NextResponse.json({ ok: true });
     }
 
@@ -300,7 +306,7 @@ export async function POST(
       if (!info) {
         await sendTelegramMessage(token, chatId, "ℹ️ לא הוגדר מידע כללי עדיין.\nפנה למפקד שיעדכן בהגדרות המערכת.");
       } else {
-        await sendTelegramMessage(token, chatId, `ℹ️ <b>מידע כללי — ${battalion.name}</b>\n\n${info}`);
+        await sendTelegramMessage(token, chatId, `ℹ️ <b>מידע כללי — ${escapeTelegram(battalion.name)}</b>\n\n${escapeTelegram(info)}`);
       }
       return NextResponse.json({ ok: true });
     }
@@ -310,7 +316,7 @@ export async function POST(
       if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
       await sendTelegramMessage(token, chatId,
-        `📁 <b>טפסי נהג — ${battalion.name}</b>\n\n${soldier.fullName}, למילוי וחתימה על טפסי תיק הנהג:\n👉 <a href="${baseUrl}/driver-form/${soldier.id}${linkTokenQuery("driver-form", soldier.id)}">לחץ כאן למילוי הטפסים</a>\n\n📸 <b>צילומי רישיון — הכי קל לשלוח כאן ישירות בבוט:</b>\nבחר/י סוג, ואז שלח/י את התמונה בצ'אט 👇`, LICENSE_PHOTO_KEYBOARD);
+        `📁 <b>טפסי נהג — ${escapeTelegram(battalion.name)}</b>\n\n${escapeTelegram(soldier.fullName)}, למילוי וחתימה על טפסי תיק הנהג:\n👉 <a href="${baseUrl}/driver-form/${soldier.id}${linkTokenQuery("driver-form", soldier.id)}">לחץ כאן למילוי הטפסים</a>\n\n📸 <b>צילומי רישיון — הכי קל לשלוח כאן ישירות בבוט:</b>\nבחר/י סוג, ואז שלח/י את התמונה בצ'אט 👇`, LICENSE_PHOTO_KEYBOARD);
       return NextResponse.json({ ok: true });
     }
 
@@ -368,7 +374,7 @@ export async function POST(
       await sendTelegramMessage(
         token,
         chatId,
-        `כבר מחובר/ת, ${target.fullName}! ✅`,
+        `כבר מחובר/ת, ${escapeTelegram(target.fullName)}! ✅`,
         MAIN_KEYBOARD,
       );
       return NextResponse.json({ ok: true });
@@ -399,7 +405,7 @@ async function startBindChallenge(token: string, chatId: string, battalionId: st
   });
   await sendTelegramMessage(
     token, chatId,
-    `כמעט שם, ${fullName}! 🔐\nלאימות זהות — שתף/י את מספר הטלפון שלך בלחיצה על הכפתור למטה.\n(רק המספר שלך; חייב להתאים למספר הרשום במערכת)`,
+    `כמעט שם, ${escapeTelegram(fullName)}! 🔐\nלאימות זהות — שתף/י את מספר הטלפון שלך בלחיצה על הכפתור למטה.\n(רק המספר שלך; חייב להתאים למספר הרשום במערכת)`,
     SHARE_CONTACT_KEYBOARD,
   );
 }
@@ -447,7 +453,7 @@ async function handleContactShare(
   if (prevChat && prevChat !== chatId) {
     await sendTelegramMessage(token, prevChat, "ℹ️ החשבון שלך חובר למכשיר חדש (מאומת בטלפון). אם זה לא אתה — דווח/י לשלישות.").catch(() => {});
   }
-  await sendTelegramMessage(token, chatId, `מעולה, ${soldier.fullName}! ✅\nהתחברת בהצלחה (מאומת בטלפון) למערכת PALMY.\n\n${HELP_TEXT}`, MAIN_KEYBOARD);
+  await sendTelegramMessage(token, chatId, `מעולה, ${escapeTelegram(soldier.fullName)}! ✅\nהתחברת בהצלחה (מאומת בטלפון) למערכת PALMY.\n\n${HELP_TEXT}`, MAIN_KEYBOARD);
 
   // 🍽️ בקשת עדכון מזון/כשרות — רק אם טרם עודכן
   if (soldier.dietType == null) {
@@ -493,7 +499,7 @@ async function handleCallback(
       await prisma.soldier.update({ where: { id: soldier.id }, data: { drivingProcedureSignedAt: new Date() } });
     }
     await answerCallbackQuery(token, callback.id, "נחתם! ✅");
-    await editMessageText(token, chatId, messageId, `✅ <b>חתמת על נוהל הנהיגה</b>\nתודה, ${soldier.fullName}.`);
+    await editMessageText(token, chatId, messageId, `✅ <b>חתמת על נוהל הנהיגה</b>\nתודה, ${escapeTelegram(soldier.fullName)}.`);
     return;
   }
 
@@ -558,12 +564,12 @@ async function handleCallback(
     if (!mission) { await answerCallbackQuery(token, callback.id, "לא נמצאה משימה / אינך המפקד"); return; }
     if (mission.completedAt) {
       await answerCallbackQuery(token, callback.id, "המשימה כבר הסתיימה");
-      await editMessageText(token, chatId, messageId, `✅ <b>${mission.title || "המשימה"}</b> — כבר סומנה כהסתיימה.`);
+      await editMessageText(token, chatId, messageId, `✅ <b>${escapeTelegram(mission.title || "המשימה")}</b> — כבר סומנה כהסתיימה.`);
       return;
     }
     await prisma.mission.update({ where: { id: mission.id }, data: { completedAt: new Date(), completedById: null } });
     await answerCallbackQuery(token, callback.id, "המשימה הסתיימה ✅");
-    await editMessageText(token, chatId, messageId, `✅ <b>המשימה הסתיימה</b>\n${mission.title || "נסיעה"} — סומנה כהושלמה. תודה!`);
+    await editMessageText(token, chatId, messageId, `✅ <b>המשימה הסתיימה</b>\n${escapeTelegram(mission.title || "נסיעה")} — סומנה כהושלמה. תודה!`);
     return;
   }
 
@@ -586,14 +592,14 @@ async function handleCallback(
         },
         select: { fullName: true },
       });
-      if (officer) via = `${officer.fullName} (קצין רכב)`;
+      if (officer) via = `${escapeTelegram(officer.fullName)} (קצין רכב)`;
     }
     if (!via) { await answerCallbackQuery(token, callback.id, "אין הרשאה לאשר"); return; }
     if (!vas.tripConfirmedAt) {
       await prisma.vehicleAssignmentSoldier.update({ where: { id: vas.id }, data: { tripConfirmedAt: new Date(), tripConfirmedVia: via } });
     }
     await answerCallbackQuery(token, callback.id, "דווח ✅");
-    await editMessageText(token, chatId, messageId, `✅ <b>הרשאת נסיעה הוקמה</b> — ${vas.soldier?.fullName || "נהג"}.\nדווח ע"י: ${via}. תודה!`);
+    await editMessageText(token, chatId, messageId, `✅ <b>הרשאת נסיעה הוקמה</b> — ${escapeTelegram(vas.soldier?.fullName || "נהג")}.\nדווח ע"י: ${via}. תודה!`);
     return;
   }
 
@@ -615,7 +621,7 @@ async function handleCallback(
     const existing = await prisma.callupPeriod.findFirst({ where: { soldierId, endDate: null }, select: { id: true } });
     if (existing) {
       await answerCallbackQuery(token, callback.id, "כבר יש שמ\"פ פתוח");
-      await editMessageText(token, chatId, messageId, `ℹ️ ל<b>${soldier.fullName}</b> כבר יש שמ"פ פתוח.`);
+      await editMessageText(token, chatId, messageId, `ℹ️ ל<b>${escapeTelegram(soldier.fullName)}</b> כבר יש שמ"פ פתוח.`);
       return;
     }
     // תאריך התחלה = היום (שעון ישראל) פחות offset ימים, כחצות UTC
@@ -624,7 +630,7 @@ async function handleCallback(
     start.setUTCDate(start.getUTCDate() - offset);
     await prisma.callupPeriod.create({ data: { soldierId, startDate: start, createdById: approver.id } });
     await answerCallbackQuery(token, callback.id, "שמ\"פ נפתח ✅");
-    await editMessageText(token, chatId, messageId, `✅ <b>שמ"פ נפתח</b>\n${soldier.fullName} — מתאריך ${start.toISOString().slice(0, 10)}.\nאושר ע"י: ${approver.fullName}.`);
+    await editMessageText(token, chatId, messageId, `✅ <b>שמ"פ נפתח</b>\n${escapeTelegram(soldier.fullName)} — מתאריך ${start.toISOString().slice(0, 10)}.\nאושר ע"י: ${escapeTelegram(approver.fullName)}.`);
     return;
   }
 
@@ -674,8 +680,8 @@ async function handleCallback(
 
       const summary = allItems.map((i) => {
         const icon = i.status === "CONFIRMED" ? "✅ נמצא" : "❌ חסר";
-        const sn = i.serialNumber ? `\n   🔢 <code>${i.serialNumber}</code>` : "";
-        return `${icon} — <b>${i.itemTypeName}</b>${sn}`;
+        const sn = i.serialNumber ? `\n   🔢 <code>${escapeTelegram(i.serialNumber)}</code>` : "";
+        return `${icon} — <b>${escapeTelegram(i.itemTypeName)}</b>${sn}`;
       }).join("\n");
 
       await editMessageText(token, chatId, messageId, `📋 <b>אימות הושלם!</b>\n\n${summary}\n\nתודה על הדיווח! 🙏`);
@@ -689,8 +695,8 @@ async function handleCallback(
 
       const answered = allItems.filter((i) => i.status !== "PENDING").map((i) => {
         const icon = i.status === "CONFIRMED" ? "✅ נמצא" : "❌ חסר";
-        const sn = i.serialNumber ? `\n   🔢 <code>${i.serialNumber}</code>` : "";
-        return `${icon} — <b>${i.itemTypeName}</b>${sn}`;
+        const sn = i.serialNumber ? `\n   🔢 <code>${escapeTelegram(i.serialNumber)}</code>` : "";
+        return `${icon} — <b>${escapeTelegram(i.itemTypeName)}</b>${sn}`;
       }).join("\n");
 
       const remaining = allItems.filter((i) => i.status === "PENDING").length;
@@ -740,8 +746,8 @@ async function handleCallback(
     const icon = confirmed ? "✅ נמצא" : "❌ חסר";
     const label = confirmed ? "הכל נמצא" : "חסרים פריטים";
     const itemList = request.items.map((i) => {
-      const sn = i.serialNumber ? `\n   🔢 <code>${i.serialNumber}</code>` : "";
-      return `${icon} — <b>${i.itemTypeName}</b>${sn}`;
+      const sn = i.serialNumber ? `\n   🔢 <code>${escapeTelegram(i.serialNumber)}</code>` : "";
+      return `${icon} — <b>${escapeTelegram(i.itemTypeName)}</b>${sn}`;
     }).join("\n");
 
     await editMessageText(token, chatId, messageId, `📋 <b>אימות הושלם — ${label}</b>\n\n${itemList}\n\nתודה! 🙏`);
@@ -770,7 +776,7 @@ async function handleCallback(
       { text: u.fullName, callback_data: `delegateto:${taskId}:${u.id}` },
     ]));
     await editMessageText(token, chatId, messageId,
-      `🔄 <b>האצלת משימה — ${task.holder.name}</b>\n\nלמי להאציל?`,
+      `🔄 <b>האצלת משימה — ${escapeTelegram(task.holder.name)}</b>\n\nלמי להאציל?`,
       { inline_keyboard: buttons },
     );
     await answerCallbackQuery(token, callback.id);
@@ -802,7 +808,7 @@ async function handleCallback(
     }
     await prisma.countTask.update({ where: { id: taskId }, data: { assignedUserId: newUserId } });
     await editMessageText(token, chatId, messageId,
-      `✅ <b>המשימה הואצלה ל-${newUser.fullName}</b>\n\n📍 ${task.holder.name} · ${task.plan?.name ?? "ספירה"}`,
+      `✅ <b>המשימה הואצלה ל-${escapeTelegram(newUser.fullName)}</b>\n\n📍 ${escapeTelegram(task.holder.name)} · ${escapeTelegram(task.plan?.name ?? "ספירה")}`,
     );
     await answerCallbackQuery(token, callback.id, `הואצל ל-${newUser.fullName}`);
     // Notify new assignee
@@ -813,8 +819,8 @@ async function handleCallback(
       await sendTelegramMessage(token, newChatId, [
         `🔄 <b>הואצלה אליך משימת ספירה</b>`,
         ``,
-        `מחזיק: <b>${task.holder.name}</b>`,
-        `תכנית: ${task.plan?.name ?? "ספירה"}`,
+        `מחזיק: <b>${escapeTelegram(task.holder.name)}</b>`,
+        `תכנית: ${escapeTelegram(task.plan?.name ?? "ספירה")}`,
         `עד: ${due}`,
         ``,
         `👉 <a href="${baseUrl}/counts/share/${task.shareToken}">לחץ כאן לביצוע</a>`,
@@ -871,8 +877,8 @@ type BattalionCtx = {
 
 async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, battalion: BattalionCtx) {
   const lines: string[] = [];
-  lines.push(`🔫 <b>נשקייה — ${soldier.fullName}</b>`);
-  if (soldier.company) lines.push(`📍 ${soldier.company.name}`);
+  lines.push(`🔫 <b>נשקייה — ${escapeTelegram(soldier.fullName)}</b>`);
+  if (soldier.company) lines.push(`📍 ${escapeTelegram(soldier.company.name)}`);
   lines.push("");
 
   // Weapon signing status
@@ -920,7 +926,7 @@ async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, 
     for (const s of pendingSigs) {
       const items = s.transfer?.lines.map((l) => l.itemType.name).filter(Boolean).join(", ");
       const label = s.transfer?.reason || items || "תעודת ציוד";
-      lines.push(`• <a href="${baseUrl}/sign/${s.token}">✍️ ${label}</a>`);
+      lines.push(`• <a href="${baseUrl}/sign/${s.token}">✍️ ${escapeTelegram(label)}</a>`);
     }
   }
 
@@ -929,7 +935,7 @@ async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, 
     lines.push(`<b>🔫 צל"ם סריאלי חתום (${serialItems.length}):</b>`);
     for (const item of serialItems) {
       const lot = item.lotQuantity && item.lotQuantity > 1 ? ` (אצווה ×${item.lotQuantity})` : "";
-      lines.push(`• ${item.itemType.name} — <code>${item.serialNumber}</code>${lot}`);
+      lines.push(`• ${escapeTelegram(item.itemType.name)} — <code>${escapeTelegram(item.serialNumber)}</code>${lot}`);
     }
   } else {
     lines.push("🔫 אין צל\"ם סריאלי חתום כרגע.");
@@ -1000,21 +1006,21 @@ async function handleEquipment(token: string, chatId: string, soldier: SoldierCt
   const qtyItems = Array.from(qtyMap.values()).filter((q) => q.qty > 0).sort((a, b) => a.name.localeCompare(b.name));
 
   if (serialItems.length === 0 && qtyItems.length === 0) {
-    await sendTelegramMessage(token, chatId, `📦 <b>${soldier.fullName}</b> — אין ציוד חתום כרגע.`);
+    await sendTelegramMessage(token, chatId, `📦 <b>${escapeTelegram(soldier.fullName)}</b> — אין ציוד חתום כרגע.`);
     return;
   }
 
   const lines: string[] = [];
-  lines.push(`📦 <b>ציוד חתום — ${soldier.fullName}</b>`);
+  lines.push(`📦 <b>ציוד חתום — ${escapeTelegram(soldier.fullName)}</b>`);
 
   if (serialItems.length > 0) {
     lines.push("");
     lines.push(`<b>🔫 סריאלי / אצוות (${serialItems.length})</b>`);
     for (const item of serialItems) {
       const lot = item.lotQuantity && item.lotQuantity > 1 ? ` (אצווה ×${item.lotQuantity})` : "";
-      const loc = item.equipmentLocation ? ` · 📍 ${item.equipmentLocation.name}` : "";
+      const loc = item.equipmentLocation ? ` · 📍 ${escapeTelegram(item.equipmentLocation.name)}` : "";
       const editable = item.itemType.allowLocationUpdate ? " ✏️" : "";
-      lines.push(`• ${item.itemType.name} — <code>${item.serialNumber}</code>${lot}${loc}${editable}`);
+      lines.push(`• ${escapeTelegram(item.itemType.name)} — <code>${escapeTelegram(item.serialNumber)}</code>${lot}${loc}${editable}`);
     }
   }
 
@@ -1022,7 +1028,7 @@ async function handleEquipment(token: string, chatId: string, soldier: SoldierCt
     lines.push("");
     lines.push(`<b>📦 כמותי (${qtyItems.length})</b>`);
     for (const q of qtyItems) {
-      lines.push(`• ${q.name} — ×${q.qty} ${q.unit}`);
+      lines.push(`• ${escapeTelegram(q.name)} — ×${q.qty} ${escapeTelegram(q.unit)}`);
     }
   }
 
@@ -1047,14 +1053,14 @@ async function handleMyFuel(token: string, chatId: string, soldier: SoldierCtx, 
     select: { cardNumber: true, checkoutAt: true, signedAt: true },
   });
   if (cards.length === 0) {
-    await sendTelegramMessage(token, chatId, `⛽ <b>${soldier.fullName}</b> — אין לך כרטיסי דלק פתוחים.`, keyboard as never);
+    await sendTelegramMessage(token, chatId, `⛽ <b>${escapeTelegram(soldier.fullName)}</b> — אין לך כרטיסי דלק פתוחים.`, keyboard as never);
     return;
   }
-  const lines = [`⛽ <b>כרטיסי דלק — ${soldier.fullName}</b>`, ""];
+  const lines = [`⛽ <b>כרטיסי דלק — ${escapeTelegram(soldier.fullName)}</b>`, ""];
   for (const c of cards) {
     const days = Math.floor((Date.now() - new Date(c.checkoutAt).getTime()) / 86400000);
     const sig = c.signedAt ? "✍️" : "◌";
-    lines.push(`${sig} כרטיס <code>${c.cardNumber}</code> — נמשך ${fmtDate(c.checkoutAt)} (${days} י׳)`);
+    lines.push(`${sig} כרטיס <code>${escapeTelegram(c.cardNumber)}</code> — נמשך ${fmtDate(c.checkoutAt)} (${days} י׳)`);
   }
   lines.push("");
   lines.push("<i>✍️ = נחתם · ◌ = ממתין לחתימה</i>");
@@ -1073,7 +1079,7 @@ async function handleLicenseCheck(token: string, chatId: string, battalionId: st
       driverFileApprovedAt: true,
     },
   });
-  if (!target) { await sendTelegramMessage(token, chatId, `🪪 לא נמצא חייל עם מ.א ${pn}.`, keyboard as never); return; }
+  if (!target) { await sendTelegramMessage(token, chatId, `🪪 לא נמצא חייל עם מ.א ${escapeTelegram(pn)}.`, keyboard as never); return; }
 
   const [bat, vtl] = await Promise.all([
     prisma.battalion.findUnique({ where: { id: battalionId }, select: { drivingRefreshDays: true } }),
