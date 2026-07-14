@@ -36,6 +36,7 @@ export const NAV: NavItem[] = [
 
   // ===== נשק =====
   { href: "/armory-approvals", label: "אישור חיילים לנשק", icon: "🔫", group: "נשק", screen: "armory" },
+  { href: "/armory-inspections", label: "סבב בדיקות נשקייה", icon: "🛡️", group: "נשק", screen: "armory" },
 
   // ===== לוגיסטי =====
   { href: "/permanent-items", label: "ציוד קבוע לפלוגה", icon: "📌", group: "לוגיסטי", screen: "allocations" },

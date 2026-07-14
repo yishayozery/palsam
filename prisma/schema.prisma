@@ -201,6 +201,8 @@ model Battalion {
   attendanceLocks    AttendanceLock[] @relation("BattalionAttendanceLocks")
   vacationBoards     VacationBoard[]
   vacationStatuses   VacationStatus[]
+  armoryInspections    ArmoryInspection[]
+  armoryChecklistItems ArmoryChecklistItem[]
   dispatchRoles      DispatchRole[] @relation("BattalionDispatchRoles")
   dispatchTemplates  DispatchTemplate[] @relation("BattalionDispatchTemplates")
   drivingLicenseTypes DrivingLicenseType[] @relation("BattalionDrivingLicenseTypes")
@@ -2533,4 +2535,51 @@ model VehicleFaultEvent {
   createdAt   DateTime     @default(now())
 
   @@index([faultId])
+}
+
+// ===== סבב בדיקות נשקייה =====
+model ArmoryChecklistItem {
+  id          String    @id @default(cuid())
+  battalionId String
+  battalion   Battalion  @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  label       String
+  sortOrder   Int        @default(0)
+  active      Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+
+  @@index([battalionId])
+}
+
+model ArmoryInspection {
+  id                 String    @id @default(cuid())
+  battalionId        String
+  battalion          Battalion  @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  holderId           String?    // מחסן הארמון (holder)
+  scheduledAt        DateTime   // מועד הבדיקה
+  inspectorSoldierId String?    // המפקד הבודק (חייל במערכת) — או שם חופשי
+  inspectorName      String?
+  status             String     @default("SCHEDULED") // SCHEDULED | COMPLETED
+  overallOk          Boolean?   // האם כל הסעיפים תקינים
+  signatureData      String?    // חתימת המפקד (dataURL)
+  signerName         String?
+  notes              String?
+  completedAt        DateTime?
+  createdById        String?
+  createdAt          DateTime   @default(now())
+  items              ArmoryInspectionItem[]
+
+  @@index([battalionId])
+  @@index([status])
+}
+
+model ArmoryInspectionItem {
+  id           String   @id @default(cuid())
+  inspectionId String
+  inspection   ArmoryInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  label        String
+  ok           Boolean?
+  note         String?
+  sortOrder    Int      @default(0)
+
+  @@index([inspectionId])
 }

@@ -10,7 +10,7 @@ import { createHmac, timingSafeEqual } from "crypto";
  */
 const SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "insecure-fallback-secret";
 
-export type LinkKind = "weapons-sign" | "driver-form" | "transfer-doc" | "fuel-sign" | "attendance-report";
+export type LinkKind = "weapons-sign" | "driver-form" | "transfer-doc" | "fuel-sign" | "attendance-report" | "armory-inspection";
 
 /** מייצר את הטוקן החתום עבור (kind,id). */
 export function signLink(kind: LinkKind, id: string): string {
