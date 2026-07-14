@@ -19,6 +19,47 @@ async function myUnit(user: Sessionish) {
 function isCommander(user: Sessionish): boolean {
   return !!user.isAdmin || can(user, "battalion.profile");
 }
+/** מלכ"א = מפקד/מנהל יחידת החטיבה (רואה ומטפל בכל הסוגים). */
+function isMalka(user: Sessionish): boolean {
+  return !!user.isAdmin || can(user, "battalion.profile");
+}
+/** האם המשתמש רשאי לטפל בסוג נתון: מלכ"א → הכל; בעל תפקיד → רק סוגים שהוקצו לו. */
+async function canHandleType(user: Sessionish, type: RequestType): Promise<boolean> {
+  if (isMalka(user)) return true;
+  const h = await prisma.requestTypeHandler.findFirst({ where: { brigadeUnitId: user.battalionId!, userId: user.id, type }, select: { id: true } });
+  return !!h;
+}
+
+/** מלכ"א מקצה בעל-תפקיד לסוג דרישה. */
+export async function assignTypeHandler(formData: FormData): Promise<{ error?: string; ok?: boolean }> {
+  const user = await requireUser();
+  const unit = await myUnit(user);
+  if (unit?.level !== "BRIGADE" || !isMalka(user)) return { error: "רק מלכ\"א יכול להקצות בעלי תפקיד" };
+  const type = String(formData.get("type") || "") as RequestType;
+  const userId = String(formData.get("userId") || "").trim();
+  if (!type || !userId) return { error: "בחר סוג ומשתמש" };
+  // המשתמש חייב להיות של יחידת החטיבה
+  const target = await prisma.appUser.findFirst({ where: { id: userId, battalionId: user.battalionId! }, select: { id: true } });
+  if (!target) return { error: "משתמש לא נמצא ביחידה" };
+  await prisma.requestTypeHandler.upsert({
+    where: { brigadeUnitId_type_userId: { brigadeUnitId: user.battalionId!, type, userId } },
+    update: {}, create: { brigadeUnitId: user.battalionId!, type, userId },
+  });
+  revalidatePath("/requests");
+  return { ok: true };
+}
+
+/** מלכ"א מסיר הקצאת בעל-תפקיד. */
+export async function removeTypeHandler(formData: FormData): Promise<{ error?: string; ok?: boolean }> {
+  const user = await requireUser();
+  if (!isMalka(user)) return { error: "אין הרשאה" };
+  const id = String(formData.get("id") || "");
+  const h = await prisma.requestTypeHandler.findUnique({ where: { id }, select: { brigadeUnitId: true } });
+  if (!h || h.brigadeUnitId !== user.battalionId!) return { error: "לא נמצא" };
+  await prisma.requestTypeHandler.delete({ where: { id } });
+  revalidatePath("/requests");
+  return { ok: true };
+}
 
 /** גדוד פותח דרישה לחטיבה הממונה. */
 export async function createRequest(formData: FormData): Promise<{ error?: string; ok?: boolean }> {
@@ -99,10 +140,12 @@ export async function setRequestStatus(formData: FormData): Promise<{ error?: st
   const id = String(formData.get("id") || "");
   const status = String(formData.get("status") || "") as RequestStatus;
   const note = String(formData.get("note") || "").trim();
-  const req = await prisma.request.findUnique({ where: { id }, select: { targetUnitId: true, status: true } });
+  const req = await prisma.request.findUnique({ where: { id }, select: { targetUnitId: true, status: true, type: true } });
   if (!req) return { error: "דרישה לא נמצאה" };
   // רק היחידה הממונה (חטיבה) מטפלת
   if (req.targetUnitId !== user.battalionId) return { error: "רק החטיבה יכולה לעדכן סטטוס טיפול" };
+  // בעל תפקיד — רק הסוג/ים שהוקצו לו (מלכ"א = הכל)
+  if (!(await canHandleType(user, req.type))) return { error: "אינך אחראי על סוג דרישה זה" };
   const allowed: RequestStatus[] = ["IN_PROGRESS", "NEEDS_INFO", "RESOLVED", "REJECTED"];
   if (!allowed.includes(status)) return { error: "סטטוס לא תקין" };
 

@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { REQUEST_TYPE_LABEL, REQUEST_PRIORITY_LABEL, REQUEST_STATUS_LABEL, REQUEST_STATUS_STYLE, REQUEST_TYPES, REQUEST_PRIORITIES } from "@/lib/request-labels";
 import type { RequestType, RequestPriority, RequestStatus } from "@/generated/prisma";
-import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus } from "./actions";
+import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus, assignTypeHandler, removeTypeHandler } from "./actions";
 
 type Upd = { id: string; authorName: string | null; text: string; statusFrom: RequestStatus | null; statusTo: RequestStatus | null; createdAt: string };
 type Req = {
@@ -12,14 +12,18 @@ type Req = {
   openerName: string; openedByName: string | null; assignedName: string | null; createdAt: string; escalatedAt: string | null; updates: Upd[];
 };
 
-export default function RequestsClient({ mode, unitName, parentName, isCommander, companies, requests }: {
+export default function RequestsClient({ mode, unitName, parentName, isCommander, isMalka, myTypes, companies, requests, brigadeUsers, handlers }: {
   mode: "brigade" | "battalion";
-  unitName: string; parentName: string | null; isCommander: boolean;
+  unitName: string; parentName: string | null; isCommander: boolean; isMalka: boolean;
+  myTypes: RequestType[] | null;
   companies: { id: string; name: string }[];
   requests: Req[];
+  brigadeUsers: { id: string; name: string }[];
+  handlers: { id: string; type: RequestType; userId: string }[];
 }) {
   const [pending, start] = useTransition();
   const [showNew, setShowNew] = useState(false);
+  const [tab, setTab] = useState<"list" | "settings">("list");
   const [fStatus, setFStatus] = useState<RequestStatus | "all" | "open">("open");
   const [fType, setFType] = useState<RequestType | "all">("all");
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -59,6 +63,59 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
       {mode === "battalion" && !parentName && (
         <Card className="mb-4 p-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm">היחידה אינה משויכת לחטיבה. פנה לאדמין-על לשיוך (הגדרות גדודים) כדי לפתוח דרישות.</Card>
       )}
+
+      {/* מלכ"א — טאבים: דרישות / הגדרות בעלי תפקיד */}
+      {isMalka && (
+        <div className="flex rounded-lg border border-slate-200 overflow-hidden w-fit mb-3 text-sm">
+          <button onClick={() => setTab("list")} className={`px-3 py-1 ${tab === "list" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>דרישות</button>
+          <button onClick={() => setTab("settings")} className={`px-3 py-1 ${tab === "settings" ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>⚙️ בעלי תפקיד</button>
+        </div>
+      )}
+      {myTypes && (
+        <div className="text-xs text-slate-500 mb-2">בעל תפקיד — סוגים באחריותך: <b>{myTypes.length ? myTypes.map((t) => REQUEST_TYPE_LABEL[t]).join(", ") : "טרם הוקצו סוגים"}</b></div>
+      )}
+
+      {/* הגדרות בעלי-תפקיד — מלכ"א */}
+      {isMalka && tab === "settings" && (
+        <div className="space-y-2">
+          <p className="text-sm text-slate-500">הקצה משתמש/ים לכל סוג דרישה. בעל תפקיד יראה ויטפל רק בסוגים שהוקצו לו.</p>
+          {REQUEST_TYPES.map((t) => {
+            const assigned = handlers.filter((h) => h.type === t);
+            return (
+              <Card key={t} className="p-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="font-medium text-sm">{REQUEST_TYPE_LABEL[t]}</span>
+                  <form action={(fd) => start(async () => { const r = await assignTypeHandler(fd); if (r.error) alert(r.error); })} className="flex items-center gap-1">
+                    <input type="hidden" name="type" value={t} />
+                    <select name="userId" className="text-xs rounded border border-slate-300 px-1.5 py-0.5" defaultValue="">
+                      <option value="" disabled>+ הוסף אחראי</option>
+                      {brigadeUsers.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                    <button className="text-xs bg-indigo-600 text-white rounded px-2 py-0.5 hover:bg-indigo-700">הוסף</button>
+                  </form>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {assigned.length === 0 && <span className="text-xs text-slate-300">— אין אחראי —</span>}
+                  {assigned.map((h) => {
+                    const u = brigadeUsers.find((x) => x.id === h.userId);
+                    return (
+                      <span key={h.id} className="text-xs bg-slate-100 rounded-full px-2 py-0.5 flex items-center gap-1">
+                        {u?.name ?? "—"}
+                        <form action={(fd) => start(async () => { await removeTypeHandler(fd); })} className="inline">
+                          <input type="hidden" name="id" value={h.id} />
+                          <button className="text-rose-500 hover:text-rose-700">×</button>
+                        </form>
+                      </span>
+                    );
+                  })}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {tab === "settings" && isMalka ? null : (<>
 
       {/* דשבורד חריגות — חטיבה */}
       {mode === "brigade" && (
@@ -104,7 +161,7 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
           {(Object.keys(REQUEST_STATUS_LABEL) as RequestStatus[]).map((s) => <option key={s} value={s}>{REQUEST_STATUS_LABEL[s]}</option>)}
         </select>
         <select value={fType} onChange={(e) => setFType(e.target.value as typeof fType)} className="rounded border border-slate-300 px-2 py-1">
-          <option value="all">כל הסוגים</option>{REQUEST_TYPES.map((t) => <option key={t} value={t}>{REQUEST_TYPE_LABEL[t]}</option>)}
+          <option value="all">{myTypes ? "כל הסוגים שלי" : "כל הסוגים"}</option>{(myTypes ?? REQUEST_TYPES).map((t) => <option key={t} value={t}>{REQUEST_TYPE_LABEL[t]}</option>)}
         </select>
       </div>
 
@@ -175,6 +232,7 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
           </Card>
         ))}
       </div>
+      </>)}
     </div>
   );
 }

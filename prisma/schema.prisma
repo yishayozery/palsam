@@ -2667,3 +2667,16 @@ model RequestUpdate {
 
   @@index([requestId])
 }
+
+/** הקצאת בעל-תפקיד בחטיבה לסוג דרישה (מלכ"א מנהל). משתמש יכול לקבל כמה סוגים. */
+model RequestTypeHandler {
+  id            String      @id @default(cuid())
+  brigadeUnitId String      // יחידת החטיבה
+  type          RequestType
+  userId        String      // AppUser — בעל התפקיד
+  createdAt     DateTime    @default(now())
+
+  @@unique([brigadeUnitId, type, userId])
+  @@index([brigadeUnitId])
+  @@index([userId])
+}
