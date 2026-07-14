@@ -22,7 +22,7 @@ export default function FillClient(props: {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; overallOk?: boolean } | null>(done ? { ok: true, overallOk: props.overallOk ?? undefined } : null);
 
-  const when = new Date(props.scheduledAt).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const when = new Date(props.scheduledAt).toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
   const allMarked = props.items.every((i) => items[i.id]?.ok != null);
 
   const submit = async () => {

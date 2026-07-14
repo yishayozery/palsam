@@ -39,7 +39,13 @@ export async function createArmoryInspection(formData: FormData): Promise<{ erro
   await ensureArmoryChecklist(bId);
   const checklist = await prisma.armoryChecklistItem.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" } });
 
-  const scheduledAt = new Date(`${date}T${time}:00`);
+  // המועד שהוזן הוא שעון ישראל — ממירים ל-UTC נכון (כולל שעון קיץ), אחרת השרת (UTC) מפרש שגוי.
+  const [yy, mm, dd] = date.split("-").map(Number);
+  const [hh, mi] = time.split(":").map(Number);
+  const utcGuess = Date.UTC(yy, (mm || 1) - 1, dd || 1, hh || 0, mi || 0);
+  const ilMs = new Date(new Date(utcGuess).toLocaleString("en-US", { timeZone: "Asia/Jerusalem" })).getTime();
+  const utcMs = new Date(new Date(utcGuess).toLocaleString("en-US", { timeZone: "UTC" })).getTime();
+  const scheduledAt = new Date(utcGuess - (ilMs - utcMs));
   const inspection = await prisma.armoryInspection.create({
     data: {
       battalionId: bId, holderId, scheduledAt, inspectorSoldierId, inspectorName, createdById: user.id,

@@ -76,7 +76,7 @@ export default function InspectionsClient({ inspections, checklist, soldiers, ar
             <tbody>
               {inspections.map((i) => (
                 <tr key={i.id} className="border-t border-slate-100">
-                  <td className="px-3 py-1.5 whitespace-nowrap">{new Date(i.scheduledAt).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
+                  <td className="px-3 py-1.5 whitespace-nowrap">{new Date(i.scheduledAt).toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                   <td className="px-3 py-1.5">{i.inspectorName}</td>
                   <td className="px-3 py-1.5 text-slate-500">{i.holderName || "—"}</td>
                   <td className="px-3 py-1.5 text-center">{statusBadge(i)}</td>
