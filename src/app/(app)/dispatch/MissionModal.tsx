@@ -287,15 +287,19 @@ export default function MissionModal({
               <div className="flex flex-wrap items-stretch gap-2">
                 {rows.map((row, ri) => {
                   const active = row.key === activeVehKey;
-                  const type = row.source === "external" ? (row.externalVehicleTypeName || "רכב חוץ") : (vehicles.find((v) => v.id === row.vehicleSerialUnitId)?.typeName || "רכב");
+                  const veh = row.source === "system" ? vehicles.find((v) => v.id === row.vehicleSerialUnitId) : undefined;
+                  const type = row.source === "external" ? (row.externalVehicleTypeName || "רכב חוץ") : (veh?.typeName || "רכב");
+                  const ident = row.source === "external" ? (row.externalVehicleNumber || "—") : (veh?.serial || "—"); // מספר זיהוי
                   const bad = vehStatusBad(row);
                   return (
                     <button key={row.key} draggable onDragStart={() => setDragKey(row.key)} onDragEnd={() => setDragKey(null)}
                       onDragOver={(e) => e.preventDefault()} onDrop={() => { if (dragKey) reorderRow(dragKey, row.key); setDragKey(null); }}
-                      onClick={() => setActiveVehKey(row.key)} title={`רכב ${ri + 1}${bad ? " · לא תקין" : ""} — גרור/לחץ`}
-                      className={`relative flex flex-col items-center rounded-lg border px-2.5 py-1 cursor-grab active:cursor-grabbing ${active ? "bg-slate-800 text-white border-slate-800 ring-2 ring-slate-400" : "bg-white border-slate-300 hover:bg-slate-100"} ${bad ? "!border-rose-400" : ""} ${dragKey === row.key ? "opacity-40" : ""}`}>
+                      onClick={() => setActiveVehKey(row.key)} title={`רכב ${ri + 1} · ${type} · ${ident}${bad ? " · לא תקין" : ""} — גרור/לחץ`}
+                      className={`relative flex flex-col items-center rounded-lg border px-2 py-1 min-w-[76px] cursor-grab active:cursor-grabbing ${active ? "bg-slate-800 text-white border-slate-800 ring-2 ring-slate-400" : "bg-white border-slate-300 hover:bg-slate-100"} ${bad ? "!border-rose-400" : ""} ${dragKey === row.key ? "opacity-40" : ""}`}>
+                      <span className="text-[10px] opacity-70">רכב {ri + 1}</span>
                       <span className="text-2xl leading-none">{vehicleIcon(type)}</span>
-                      <span className="text-[10px] font-medium mt-0.5">רכב {ri + 1}</span>
+                      <span className="text-[10px] font-semibold mt-0.5 max-w-[72px] truncate" title={type}>{type}</span>
+                      <span className="text-[9px] opacity-70 max-w-[72px] truncate" title={ident}>{row.source === "external" ? "🔶 " : ""}{ident}</span>
                       {bad && <span className="absolute -top-1 -left-1 text-[10px]" title="רכב לא תקין">🔴</span>}
                     </button>
                   );
