@@ -418,6 +418,7 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
   const [squad, setSquad] = useState("");
   const [status, setStatus] = useState(initialStatus);
   const [round, setRound] = useState("");
+  const [showAttached, setShowAttached] = useState(false); // מסופחים — מכווצים כברירת מחדל
   const [addOpen, setAddOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [attachOpen, setAttachOpen] = useState(initialTab === "attachments");
@@ -602,7 +603,7 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
             </tr>
           </thead>
           <tbody>
-            {filtered.map((s) => (
+            {filtered.filter((s) => !s.attached || showAttached || status === "attached").map((s) => (
               <tr key={s.id} className={s.status === "DISCHARGED" || s.status === "INACTIVE" ? "opacity-50" : ""}>
                 <Td>
                   <div className="font-medium">{s.fullName}</div>
@@ -676,6 +677,17 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
                 </Td>
               </tr>
             ))}
+            {status !== "attached" && (() => {
+              const attCount = filtered.filter((s) => s.attached).length;
+              if (attCount === 0) return null;
+              return (
+                <tr key="attached-toggle" onClick={() => setShowAttached((v) => !v)} className="cursor-pointer bg-blue-50 hover:bg-blue-100 border-t-2 border-blue-200">
+                  <td colSpan={8} className="px-3 py-2 text-sm text-blue-700 font-medium">
+                    📌 מסופחים ({attCount}) {showAttached ? "▾ הסתר" : "▸ הצג פירוט"}
+                  </td>
+                </tr>
+              );
+            })()}
           </tbody>
         </Table>
       </Card>
