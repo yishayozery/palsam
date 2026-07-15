@@ -1,5 +1,8 @@
-import "server-only";
 import type { Prisma } from "@/generated/prisma";
+
+// שרת בלבד (ניגש ל-DB). guard במקום חבילת "server-only" כדי שגם סקריפטי אימות
+// (tsx/node) יוכלו לייבא את ה-helper לבדיקות שלמות תחת מקביליות.
+if (typeof window !== "undefined") throw new Error("inventory.ts is server-only");
 
 /**
  * עדכון יתרת מלאי כמותי עבור (פריט × מחזיק × סטטוס).
@@ -18,6 +21,12 @@ export async function adjustQuantity(
   delta: number,
 ): Promise<void> {
   if (delta === 0) return;
+
+  // 🔒 נעילת-סריאליזציה פר-מפתח-מלאי (פריט × מחזיק × סטטוס). מונע lost-update כאשר
+  //    כמה מנפיקים מעדכנים במקביל את אותו מלאי (read-modify-write בענף הגריעה + create-race).
+  //    advisory xact-lock משתחרר אוטומטית ב-commit/rollback; מפתחות שונים אינם חוסמים זה את זה.
+  //    ⚠️ מחייב הרצה בתוך אינטראקטיב-transaction (tx) — כל הקוראים עושים זאת.
+  await tx.$queryRaw`SELECT 1 AS ok FROM (SELECT pg_advisory_xact_lock(hashtextextended(${`${itemTypeId}:${holderId}:${statusId}`}, 0))) _lock`;
 
   if (delta > 0) {
     // הוספה: מעלים את שורת ה-NULL location (יוצרים אם צריך).
