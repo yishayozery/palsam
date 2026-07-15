@@ -11,6 +11,7 @@ import VehicleTypeLicenseEditor from "./VehicleTypeLicenseEditor";
 import RefreshDaysSettings from "./RefreshDaysSettings";
 import DriverFileSettings from "./DriverFileSettings";
 import FuelCardsManager from "./FuelCardsManager";
+import FuelCardsClient from "../requests/FuelCardsClient";
 import VehicleLinksManager from "./VehicleLinksManager";
 import { FORM_ORDER, FORM_TITLES, DEFAULT_VALIDITY_DAYS } from "@/lib/driverForms";
 
@@ -86,6 +87,15 @@ export default async function DrivingLicensesPage({
         select: { id: true, cardNumber: true, checkoutAt: true, returnedAt: true, note: true, signatureData: true, signedAt: true, signLinkSentAt: true, soldier: { select: { id: true, fullName: true, telegramChatId: true } } },
       })).map((c) => ({ id: c.id, cardNumber: c.cardNumber, soldierId: c.soldier.id, soldierName: c.soldier.fullName, soldierConnected: !!c.soldier.telegramChatId, checkoutAt: c.checkoutAt.toISOString(), returnedAt: c.returnedAt ? c.returnedAt.toISOString() : null, note: c.note, signed: !!c.signatureData, signLinkSentAt: c.signLinkSentAt ? c.signLinkSentAt.toISOString() : null }))
     : [];
+  // ⛽ כרטיסי דלק שהחטיבה הקצתה לגדוד — לחתימת קצין הרכב (אותו רכיב כמו במסך הדרישות של המפמ)
+  const brigadeFuelCardsRaw = tab === "fuelcards"
+    ? await prisma.brigadeFuelCard.findMany({
+        where: { allocatedBattalionId: bId },
+        select: { id: true, cardNumber: true, label: true, status: true, allocatedBattalionId: true, allocatedName: true, signedByName: true, signedByPersonal: true, signedAt: true },
+        orderBy: { createdAt: "asc" }, take: 1000,
+      })
+    : [];
+  const brigadeFuelCards = brigadeFuelCardsRaw.map((c) => ({ ...c, signedAt: c.signedAt?.toISOString() ?? null }));
   const vehicleLinks = tab === "links"
     ? await prisma.vehicleLink.findMany({ where: { battalionId: bId }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, url: true, visibleToSoldier: true } })
     : [];
@@ -150,7 +160,20 @@ export default async function DrivingLicensesPage({
         />
       )}
 
-      {tab === "fuelcards" && <FuelCardsManager cards={fuelCards} soldiers={soldierOpts} />}
+      {tab === "fuelcards" && (
+        <div className="space-y-6">
+          {/* כרטיסי דלק שהחטיבה הקצתה לגדוד — קצין הרכב חותם על קבלה (שם+מ"א+חתימה) */}
+          <div>
+            <h3 className="text-sm font-semibold text-slate-700 mb-2">⛽ כרטיסי דלק מהחטיבה — לחתימת קבלה</h3>
+            <FuelCardsClient mode="battalion" cards={brigadeFuelCards} childBattalions={[]} />
+          </div>
+          {/* משיכת כרטיסי דלק לחיילים (פנימי לגדוד) */}
+          <div>
+            <h3 className="text-sm font-semibold text-slate-700 mb-2">🚗 משיכת כרטיסים לחיילים</h3>
+            <FuelCardsManager cards={fuelCards} soldiers={soldierOpts} />
+          </div>
+        </div>
+      )}
 
       {tab === "links" && <VehicleLinksManager links={vehicleLinks} />}
 
