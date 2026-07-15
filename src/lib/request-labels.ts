@@ -38,5 +38,6 @@ export const REQUEST_STATUS_STYLE: Record<RequestStatus, string> = {
   CANCELLED: "bg-slate-100 text-slate-400",
 };
 
-export const REQUEST_TYPES: RequestType[] = ["CONSTRUCTION", "TRANSPORT", "SUPPLY", "FUEL", "FUEL_CARDS", "MEDICAL", "TRAINING", "OTHER"];
+// TRAINING + OTHER בוטלו מהמפרט — לא מוצעים ב-UI (התוויות נשמרות ב-REQUEST_TYPE_LABEL לדרישות ישנות אם יש).
+export const REQUEST_TYPES: RequestType[] = ["CONSTRUCTION", "TRANSPORT", "SUPPLY", "FUEL", "FUEL_CARDS", "MEDICAL"];
 export const REQUEST_PRIORITIES: RequestPriority[] = ["ROUTINE", "URGENT", "OPERATIONAL"];
