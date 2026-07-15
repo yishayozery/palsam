@@ -282,6 +282,25 @@ export async function buildSessionCookie(user: SessionUser) {
   };
 }
 
+/** יוצר לינק כניסה חד-פעמי קצר-מועד (15 דק') למשתמש — לשליחה מהבוט למי שאין לו סיסמה.
+ *  next = יעד הפניה אחרי הכניסה (נתיב פנימי בלבד). מחזיר URL מלא. */
+export async function createMagicLink(userId: string, baseUrl: string, next?: string): Promise<string | null> {
+  const { nanoid } = await import("nanoid");
+  const tok = nanoid(32);
+  try {
+    await prisma.appUser.update({ where: { id: userId }, data: { magicToken: tok, magicTokenExp: new Date(Date.now() + 15 * 60 * 1000) } });
+  } catch { return null; }
+  const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : undefined;
+  return `${baseUrl}/magic/${tok}${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""}`;
+}
+
+/** לינק לביצוע ספירה מהבוט: אם יש למשתמש חשבון — לינק magic חד-פעמי (כניסה אוטומטית,
+ *  ללא סיסמה, ללא קיר-לוגין); אחרת — לינק השיתוף הרגיל (fallback). */
+export async function magicCountLink(userId: string | null | undefined, shareToken: string, baseUrl: string): Promise<string> {
+  if (userId) { const link = await createMagicLink(userId, baseUrl, `/counts/share/${shareToken}`); if (link) return link; }
+  return `${baseUrl}/counts/share/${shareToken}`;
+}
+
 /** מממש לינק כניסה חד-פעמי (מהבוט) — מאמת תוקף, מבטל (חד-פעמי), ומחזיר SessionUser. */
 export async function consumeMagicToken(token: string): Promise<SessionUser | null> {
   if (!token) return null;

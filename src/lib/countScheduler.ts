@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import { sendTelegramMessage } from "./telegram";
 import { runCountFromPlan } from "./count-runner";
 import { escapeTelegram } from "./escape-html";
+import { magicCountLink } from "./auth";
 
 // ===== אזור זמן ישראל — שעות הספירה מתפרשות לפי שעון ישראל, לא UTC של השרת =====
 const TZ = "Asia/Jerusalem";
@@ -135,7 +136,7 @@ export async function generatePendingTasks(now: Date = new Date()): Promise<numb
     include: {
       holder: { select: { name: true } },
       plan: { select: { name: true, responsibleUserId: true, responsibleUser: { select: { soldier: { select: { telegramChatId: true } } } } } },
-      assignedUser: { select: { fullName: true, soldier: { select: { telegramChatId: true } } } },
+      assignedUser: { select: { id: true, fullName: true, soldier: { select: { telegramChatId: true } } } },
     },
   });
   if (overdueTasks.length > 0) {
@@ -187,7 +188,7 @@ async function notifyTaskAssignee(
     id: string;
     shareToken: string;
     holder: { name: string };
-    assignedUser: { fullName: string; soldier: { telegramChatId: string | null } | null } | null;
+    assignedUser: { id: string; fullName: string; soldier: { telegramChatId: string | null } | null } | null;
     scheduledAt: Date;
     dueAt: Date;
   },
@@ -203,13 +204,14 @@ async function notifyTaskAssignee(
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
   const due = task.dueAt.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const link = await magicCountLink(task.assignedUser?.id, task.shareToken, baseUrl); // 🔐 כניסה אוטומטית חד-פעמית — ללא קיר-לוגין
   const text = [
     `📋 <b>משימת ספירת מלאי חדשה</b>`,
     ``,
     `מחזיק: <b>${escapeTelegram(task.holder.name)}</b>`,
     `עד: ${due}`,
     ``,
-    `👉 <a href="${baseUrl}/counts/share/${task.shareToken}">לחץ כאן לביצוע הספירה</a>`,
+    `👉 <a href="${link}">לחץ כאן לביצוע הספירה</a>`,
   ].join("\n");
 
   await sendTelegramMessage(battalion.telegramBotToken, chatId, text);
@@ -223,7 +225,7 @@ async function notifyOverdue(
     shareToken: string;
     holder: { name: string };
     plan: { name: string; responsibleUserId: string | null; responsibleUser: { soldier: { telegramChatId: string | null } | null } | null } | null;
-    assignedUser: { fullName: string; soldier: { telegramChatId: string | null } | null } | null;
+    assignedUser: { id: string; fullName: string; soldier: { telegramChatId: string | null } | null } | null;
     dueAt: Date;
   },
 ) {
@@ -239,6 +241,7 @@ async function notifyOverdue(
   // notify assignee
   const assigneeChatId = task.assignedUser?.soldier?.telegramChatId;
   if (assigneeChatId) {
+    const link = await magicCountLink(task.assignedUser?.id, task.shareToken, baseUrl); // 🔐 כניסה חד-פעמית
     await sendTelegramMessage(token, assigneeChatId, [
       `⏰ <b>משימת ספירה באיחור!</b>`,
       ``,
@@ -246,7 +249,7 @@ async function notifyOverdue(
       `תכנית: ${escapeTelegram(task.plan?.name ?? "ספירה")}`,
       `מועד אחרון: ${due}`,
       ``,
-      `👉 <a href="${baseUrl}/counts/share/${task.shareToken}">לחץ כאן לביצוע עכשיו</a>`,
+      `👉 <a href="${link}">לחץ כאן לביצוע עכשיו</a>`,
     ].join("\n")).catch(() => {});
   }
 

@@ -10,6 +10,7 @@ import { escapeTelegram } from "@/lib/escape-html";
 import { normalizePhone } from "@/lib/phone";
 import { notifyBattalionResponsibles } from "@/lib/request-notify";
 import { decryptSecret } from "@/lib/crypto";
+import { magicCountLink } from "@/lib/auth";
 
 export async function POST(
   req: NextRequest,
@@ -899,6 +900,7 @@ async function handleCallback(
     if (newChatId) {
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
       const due = task.dueAt.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      const link = await magicCountLink(newUser.id, task.shareToken, baseUrl); // 🔐 כניסה חד-פעמית — ללא קיר-לוגין
       await sendTelegramMessage(token, newChatId, [
         `🔄 <b>הואצלה אליך משימת ספירה</b>`,
         ``,
@@ -906,7 +908,7 @@ async function handleCallback(
         `תכנית: ${escapeTelegram(task.plan?.name ?? "ספירה")}`,
         `עד: ${due}`,
         ``,
-        `👉 <a href="${baseUrl}/counts/share/${task.shareToken}">לחץ כאן לביצוע</a>`,
+        `👉 <a href="${link}">לחץ כאן לביצוע</a>`,
       ].join("\n")).catch(() => {});
     }
     return;
