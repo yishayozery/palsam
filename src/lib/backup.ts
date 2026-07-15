@@ -1,5 +1,7 @@
-import "server-only";
 import { prisma } from "./prisma";
+
+// שרת בלבד. guard במקום "server-only" כדי שסקריפטי DR (גיבוי/שחזור) יוכלו לייבא.
+if (typeof window !== "undefined") throw new Error("backup.ts is server-only");
 
 /**
  * גיבוי לוגי של הנתונים הקריטיים (נשק, חתימות, שינועים, חיילים, מלאי).
