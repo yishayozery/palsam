@@ -21,7 +21,11 @@ export class RateLimitError extends Error {
   }
 }
 
-/** בדיקה + הגדלה אטומית. זורק RateLimitError אם חרגו. */
+/**
+ * בדיקת קצב fail-closed: קודם רושמים את הניסיון ואז סופרים — כך שבמקביליות גבוהה
+ * (serverless) ריצה מתחרה תמיד רואה את רשומות האחרות ומגמת השגיאה היא לחסום (ולא
+ * לאפשר חריגה). זורק RateLimitError אם חרגו מהמכסה בחלון.
+ */
 export async function checkRateLimit(
   scope: string,
   key: string,
@@ -32,10 +36,12 @@ export async function checkRateLimit(
   if (Math.random() < 0.05) {
     await prisma.rateLimitHit.deleteMany({ where: { createdAt: { lt: since } } }).catch(() => {});
   }
+  // רושמים את הניסיון תחילה — הספירה שלאחר מכן כוללת אותו וגם ניסיונות מקבילים.
+  await prisma.rateLimitHit.create({ data: { scope, key } });
   const count = await prisma.rateLimitHit.count({
     where: { scope, key, createdAt: { gte: since } },
   });
-  if (count >= opts.max) {
+  if (count > opts.max) {
     // מוצא את הוותיק ביותר בחלון - מחשב כמה זמן עד שיפנה מקום
     const oldest = await prisma.rateLimitHit.findFirst({
       where: { scope, key, createdAt: { gte: since } },
@@ -46,7 +52,6 @@ export async function checkRateLimit(
       : opts.windowSec;
     throw new RateLimitError(retryAfter);
   }
-  await prisma.rateLimitHit.create({ data: { scope, key } });
 }
 
 /** ניסיון לחלץ IP מבקשת Next.js Server Action (heuristic, כי אין request ישיר) */

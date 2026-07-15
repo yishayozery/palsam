@@ -9,6 +9,11 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
+  // 🛑 מנעול בטיחות: ה-seed מבצע מחיקה מלאה (deleteMany) — אסור בפרודקשן/סביבת דפלוי.
+  //    להרצה מכוונת בלבד: ALLOW_SEED=1 npx prisma db seed
+  if ((process.env.NODE_ENV === "production" || process.env.VERCEL || process.env.CI) && process.env.ALLOW_SEED !== "1") {
+    throw new Error("🛑 seed חסום בפרודקשן (מבצע מחיקה מלאה). להרצה מכוונת: ALLOW_SEED=1");
+  }
   console.log("🌱 seed v2 — PALSAM...");
 
   // ניקוי מלא

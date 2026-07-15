@@ -32,12 +32,15 @@ export function battalionFilter(user: SessionUser): { battalionId?: string } {
   return { battalionId: user.battalionId ?? "__none__" };
 }
 
-/** האם המשתמש מוגבל למחזיק מסוים (מנהל מחסן / נציג פלוגה) */
+/**
+ * האם המשתמש מוגבל למחזיק מסוים (מנהל מחסן / נציג פלוגה).
+ * least-privilege: כל משתמש שאינו אדמין ומשויך ל-holder — מוגבל אליו. כך גם משתמשי
+ * ה-SystemRole החדש (שאצלם ה-role ה-legacy עשוי להיות VIEWER) מקבלים בידוד holder נכון,
+ * ולא רק ה-enum הישן WAREHOUSE_MANAGER/COMPANY_REP. אדמין/אדמין-על → ללא הגבלה (רואים הכל).
+ */
 export function scopedHolderId(user: SessionUser): string | null {
-  if (user.role === "WAREHOUSE_MANAGER" || user.role === "COMPANY_REP") {
-    return user.holderId;
-  }
-  return null;
+  if (user.isSuperAdmin || user.isAdmin) return null;
+  return user.holderId ?? null;
 }
 
 /** מסנן מחזיקים שהמשתמש רשאי לראות (לפי גדוד; מנהל מחסן/נציג — רק שלו) */
