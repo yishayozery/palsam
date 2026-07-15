@@ -411,6 +411,7 @@ export async function POST(
     // 🪪 משתמש שכבר מחובר שמקיש מ.א — בדיקת הסמכות של חייל אחר (ללא אימות נייד).
     //    אימות דו-שלבי נדרש רק לחיבור ראשוני של משתמש לא-מחובר.
     if (soldier) {
+      await sendTelegramMessage(token, chatId, `🪪 הקשת מספר אישי <b>${escapeTelegram(personalNumber)}</b> — המערכת בודקת את הרישיונות וההסמכות של בעל המ.א.\nלהלן התוצאות:`);
       await handleLicenseCheck(token, chatId, battalionId, personalNumber, "other", keyboard);
       return NextResponse.json({ ok: true });
     }
