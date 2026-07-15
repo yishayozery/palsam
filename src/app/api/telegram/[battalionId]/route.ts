@@ -515,14 +515,19 @@ async function handleContactShare(
   if (prevChat && prevChat !== chatId) {
     await sendTelegramMessage(token, prevChat, "ℹ️ החשבון שלך חובר למכשיר חדש (מאומת בטלפון). אם זה לא אתה — דווח/י לשלישות.").catch(() => {});
   }
-  await sendTelegramMessage(token, chatId, `מעולה, ${escapeTelegram(soldier.fullName)}! ✅\nהתחברת בהצלחה (מאומת בטלפון) למערכת PALMY.\n\n${HELP_TEXT}`, MAIN_KEYBOARD);
+  // סדר ה-onboarding: (1) אישור חיבור + מקלדת ראשית → (2) עדכון מזון → (3) הסבר על התפריט
+  // 1️⃣ אישור חיבור
+  await sendTelegramMessage(token, chatId, `מעולה, ${escapeTelegram(soldier.fullName)}! ✅\nהתחברת בהצלחה (מאומת בטלפון) למערכת PALMY.`, MAIN_KEYBOARD);
 
-  // 🍽️ בקשת עדכון מזון/כשרות — רק אם טרם עודכן
+  // 2️⃣ עדכון מזון/כשרות — רק אם טרם עודכן
   if (soldier.dietType == null) {
     const { DIET_OPTIONS } = await import("@/lib/diet");
     const buttons = DIET_OPTIONS.map((d, i) => [{ text: d, callback_data: `diet:${i}` }]);
     await sendTelegramMessage(token, chatId, "🍽️ <b>עדכון מזון/כשרות</b>\nבחר/י את סוג המזון שלך (לצורכי הזמנות אוכל ביחידה):", { inline_keyboard: buttons }).catch(() => {});
   }
+
+  // 3️⃣ הסבר על התפריט (אחרון — כדי שיישאר גלוי מעל המקלדת)
+  await sendTelegramMessage(token, chatId, HELP_TEXT, MAIN_KEYBOARD).catch(() => {});
 }
 
 // --- Callback handler for inline verification buttons ---
