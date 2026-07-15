@@ -57,7 +57,8 @@ export async function audit(
     if (battalionId && shouldNotifyEmail(action, entity)) {
       void notifyTransactionEmail({ battalionId, userId, action, entity, entityId, details, holderId });
     }
-  } catch {
-    // לוג כשל ביומן לא יפיל פעולה עסקית
+  } catch (e) {
+    // כשל ביומן לא יפיל פעולה עסקית — אך נרשם ללוג השרת לצורך חקירה
+    console.error("[audit] failed to write audit log:", e);
   }
 }

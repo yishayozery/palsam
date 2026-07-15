@@ -110,8 +110,9 @@ export async function saveUser(formData: FormData) {
       await syncSquads(created.id);
       await audit(admin.id, "CREATE", "AppUser", username, { invited: true, soldierId });
     }
-  } catch {
-    // לא מקריסים את המערכת על שגיאת יצירה
+  } catch (e) {
+    // לא מקריסים את המערכת על שגיאת יצירה — אך נרשם ללוג לצורך חקירה
+    console.error("[users] create/update user failed:", e);
   }
   revalidatePath("/users/all");
 }
