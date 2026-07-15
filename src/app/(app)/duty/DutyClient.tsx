@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader, Card, Badge } from "@/components/ui";
-import { createBoard, deleteBoard, addSlot, deleteSlot, assignSoldier, unassignSoldier } from "./actions";
+import { createBoard, deleteBoard, addSlot, deleteSlot, assignSoldier, unassignSoldier, updateBoard } from "./actions";
 import MonthCalendar from "./MonthCalendar";
 
 type Slot = {
@@ -11,7 +11,15 @@ type Slot = {
   companyName: string | null; squadName: string | null; responsibleName: string | null; canFill: boolean;
   assignments: { id: string; name: string }[];
 };
-type Detail = { id: string; name: string; defaultStart: string | null; defaultEnd: string | null; notes: string | null; canManage: boolean; slots: Slot[] };
+type Detail = { id: string; name: string; defaultStart: string | null; defaultEnd: string | null; notes: string | null; visibility: string; fromDate: string | null; toDate: string | null; canManage: boolean; slots: Slot[] };
+
+// צבע רקע יציב פר-פלוגה (לקריאוּת מהירה של החלוקה)
+const COMPANY_COLORS = ["bg-sky-50 border-sky-200", "bg-amber-50 border-amber-200", "bg-violet-50 border-violet-200", "bg-teal-50 border-teal-200", "bg-rose-50 border-rose-200", "bg-lime-50 border-lime-200"];
+function companyColor(name: string | null): string {
+  if (!name) return "bg-white border-slate-200";
+  let h = 0; for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return COMPANY_COLORS[h % COMPANY_COLORS.length];
+}
 type Board = { id: string; name: string; visibility: string; fromDate: string | null; toDate: string | null; createdByName: string | null; slotCount: number; canManage: boolean };
 
 export default function DutyClient({ isManager, boards, detail, companies, squads, soldiers }: {
@@ -23,6 +31,7 @@ export default function DutyClient({ isManager, boards, detail, companies, squad
   const [pending, start] = useTransition();
   const [showNew, setShowNew] = useState(false);
   const [showSlot, setShowSlot] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [assignFor, setAssignFor] = useState<string | null>(null);
   const [calView, setCalView] = useState<"list" | "cal">("list");
   const [slotDate, setSlotDate] = useState("");
@@ -37,16 +46,35 @@ export default function DutyClient({ isManager, boards, detail, companies, squad
     const countByDate = Object.fromEntries([...byDate].map(([d, arr]) => [d, arr.length]));
     return (
       <div>
-        <PageHeader title={`🗓️ ${detail.name}`} subtitle={`${detail.slots.length} משבצות`}
+        <PageHeader title={`🗓️ ${detail.name}`} subtitle={`${detail.slots.length} משבצות${detail.fromDate ? ` · ${detail.fromDate}${detail.toDate ? `→${detail.toDate}` : ""}` : ""}`}
           action={<button onClick={() => router.push("/duty")} className="text-sm text-blue-600 hover:underline">← כל הלוחות</button>} />
+
+        {/* עריכת לוח — יוזם/מפמ */}
+        {detail.canManage && showEdit && (
+          <Card className="mb-4 p-4 border-indigo-200">
+            <div className="text-sm font-semibold text-indigo-700 mb-2">✏️ עריכת לוח</div>
+            <form action={(fd) => { fd.set("id", detail.id); act(updateBoard, fd, () => setShowEdit(false)); }} className="flex flex-wrap items-end gap-3">
+              <div><label className="text-xs text-slate-500 block mb-1">שם</label><input name="name" required defaultValue={detail.name} className="rounded border border-slate-300 px-2 py-1 text-sm" /></div>
+              <div><label className="text-xs text-slate-500 block mb-1">מתאריך</label><input type="date" name="fromDate" defaultValue={detail.fromDate ?? ""} className="rounded border border-slate-300 px-2 py-1 text-sm" /></div>
+              <div><label className="text-xs text-slate-500 block mb-1">עד תאריך</label><input type="date" name="toDate" defaultValue={detail.toDate ?? ""} className="rounded border border-slate-300 px-2 py-1 text-sm" /></div>
+              <div><label className="text-xs text-slate-500 block mb-1">שעות ברירת-מחדל</label><span className="flex items-center gap-1"><input type="time" name="defaultStart" defaultValue={detail.defaultStart ?? ""} className="rounded border border-slate-300 px-2 py-1 text-sm" /><span>-</span><input type="time" name="defaultEnd" defaultValue={detail.defaultEnd ?? ""} className="rounded border border-slate-300 px-2 py-1 text-sm" /></span></div>
+              <div><label className="text-xs text-slate-500 block mb-1">נראוּת</label><select name="visibility" defaultValue={detail.visibility} className="rounded border border-slate-300 px-2 py-1 text-sm"><option value="ALL">כל המשתמשים</option><option value="SELECTED">נבחרים בלבד</option></select></div>
+              <button disabled={pending} className="bg-indigo-600 text-white rounded px-4 py-1.5 text-sm disabled:opacity-50">שמור</button>
+              <button type="button" onClick={() => setShowEdit(false)} className="text-sm text-slate-400">ביטול</button>
+            </form>
+          </Card>
+        )}
 
         {detail.canManage && (
           <Card className="mb-4 p-3">
-            <button onClick={() => setShowSlot((v) => !v)} className="text-sm bg-blue-600 text-white rounded px-3 py-1.5 hover:bg-blue-700">➕ משבצת חדשה</button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowSlot((v) => !v)} className="text-sm bg-blue-600 text-white rounded px-3 py-1.5 hover:bg-blue-700">➕ משבצת חדשה</button>
+              <button onClick={() => { setShowEdit((v) => !v); setShowSlot(false); }} className="text-sm bg-indigo-50 border border-indigo-200 text-indigo-700 rounded px-3 py-1.5 hover:bg-indigo-100">✏️ ערוך לוח</button>
+            </div>
             {showSlot && (
               <form action={(fd) => act(addSlot, fd, () => setShowSlot(false))} className="flex flex-wrap items-end gap-2 mt-3">
                 <input type="hidden" name="boardId" value={detail.id} />
-                <div><label className="text-xs text-slate-500 block">תאריך</label><input type="date" name="date" required value={slotDate} onChange={(e) => setSlotDate(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" /></div>
+                <div><label className="text-xs text-slate-500 block">תאריך</label><input type="date" name="date" required value={slotDate} onChange={(e) => setSlotDate(e.target.value)} min={detail.fromDate ?? undefined} max={detail.toDate ?? undefined} className="rounded border border-slate-300 px-2 py-1 text-sm" /></div>
                 <div><label className="text-xs text-slate-500 block">משעה</label><input type="time" name="startTime" defaultValue={detail.defaultStart ?? ""} className="rounded border border-slate-300 px-2 py-1 text-sm" /></div>
                 <div><label className="text-xs text-slate-500 block">עד</label><input type="time" name="endTime" defaultValue={detail.defaultEnd ?? ""} className="rounded border border-slate-300 px-2 py-1 text-sm" /></div>
                 <div><label className="text-xs text-slate-500 block">תיאור</label><input name="label" placeholder="עמדה 1" className="rounded border border-slate-300 px-2 py-1 text-sm w-24" /></div>
@@ -75,15 +103,17 @@ export default function DutyClient({ isManager, boards, detail, companies, squad
           <Card key={date} className="mb-3 overflow-hidden">
             <div className="bg-slate-50 px-4 py-1.5 font-bold text-slate-700 border-b text-sm">📅 {new Date(date).toLocaleDateString("he-IL", { weekday: "short", day: "2-digit", month: "2-digit" })}</div>
             <div className="divide-y divide-slate-100">
-              {slots.map((s) => (
-                <div key={s.id} className="px-4 py-2">
+              {slots.map((s) => {
+                const full = s.assignments.length >= s.capacity;
+                return (
+                <div key={s.id} className={`px-4 py-2 border-r-4 ${companyColor(s.companyName)}`}>
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="text-sm">
-                      <b>{s.startTime ? `${s.startTime}${s.endTime ? `–${s.endTime}` : ""}` : "יומי"}</b>
-                      {s.label && ` · ${s.label}`}
-                      {(s.companyName || s.squadName) && <span className="text-slate-500"> · {s.squadName || s.companyName}</span>}
+                      <b className="text-base">{s.startTime ? `${s.startTime}${s.endTime ? `–${s.endTime}` : ""}` : "יומי"}</b>
+                      {s.label && <span className="font-medium"> · {s.label}</span>}
+                      {(s.companyName || s.squadName) && <span className="text-slate-600"> · {s.squadName || s.companyName}</span>}
                       {s.responsibleName && <span className="text-xs text-indigo-600"> · אחראי: {s.responsibleName}</span>}
-                      <Badge className="bg-slate-100 text-slate-600 mr-1">{s.assignments.length}/{s.capacity}</Badge>
+                      <Badge className={`mr-1 ${full ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{s.assignments.length}/{s.capacity}{full ? " ✓" : ""}</Badge>
                     </div>
                     {detail.canManage && <form action={(fd) => start(async () => { await deleteSlot(fd); })} onSubmit={(e) => { if (!confirm("למחוק משבצת?")) e.preventDefault(); }}><input type="hidden" name="id" value={s.id} /><button className="text-xs text-rose-400 hover:underline">מחק</button></form>}
                   </div>
@@ -100,10 +130,11 @@ export default function DutyClient({ isManager, boards, detail, companies, squad
                         <button disabled={pending} className="text-xs bg-emerald-600 text-white rounded px-2 py-0.5">שבץ</button>
                         <button type="button" onClick={() => setAssignFor(null)} className="text-xs text-slate-400">ביטול</button>
                       </form>
-                    ) : <button onClick={() => setAssignFor(s.id)} className="text-xs text-blue-600 hover:underline">+ שבץ חייל</button>)}
+                    ) : (!full && <button onClick={() => setAssignFor(s.id)} className="text-xs text-blue-600 hover:underline">+ שבץ חייל</button>))}
+                    {full && s.canFill && assignFor !== s.id && <span className="text-xs text-emerald-600">מלא ✓</span>}
                   </div>
-                </div>
-              ))}
+                </div>);
+              })}
             </div>
           </Card>
         ))}

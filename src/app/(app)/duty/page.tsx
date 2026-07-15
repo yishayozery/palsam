@@ -38,6 +38,7 @@ export default async function DutyPage({ searchParams }: { searchParams: Promise
       where: { id: selectedId },
       select: {
         id: true, name: true, defaultStart: true, defaultEnd: true, notes: true, createdById: true,
+        visibility: true, fromDate: true, toDate: true,
         slots: {
           orderBy: [{ date: "asc" }, { startTime: "asc" }],
           select: { id: true, date: true, startTime: true, endTime: true, label: true, capacity: true, companyId: true, squadId: true, responsibleSoldierId: true, assignments: { select: { id: true, soldierId: true } } },
@@ -47,6 +48,7 @@ export default async function DutyPage({ searchParams }: { searchParams: Promise
     if (b) {
       detail = {
         id: b.id, name: b.name, defaultStart: b.defaultStart, defaultEnd: b.defaultEnd, notes: b.notes,
+        visibility: b.visibility, fromDate: b.fromDate?.toISOString().slice(0, 10) ?? null, toDate: b.toDate?.toISOString().slice(0, 10) ?? null,
         canManage: b.createdById === user.id || isManager,
         slots: b.slots.map((s) => ({
           id: s.id, date: s.date.toISOString().slice(0, 10), startTime: s.startTime, endTime: s.endTime, label: s.label, capacity: s.capacity,
