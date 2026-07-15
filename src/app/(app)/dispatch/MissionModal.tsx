@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import ConvoyView from "./ConvoyView";
+import { vehicleIcon } from "./ConvoyView";
 import { saveMission } from "./actions";
 
-export type MVehicle = { id: string; name: string; serial: string; typeName: string; requiredLicenseIds?: string[] };
+export type MVehicle = { id: string; name: string; serial: string; typeName: string; requiredLicenseIds?: string[]; statusName?: string; statusOk?: boolean; equipment?: string[] };
 export type MSoldier = { id: string; fullName: string; personalNumber: string; licenseIds?: string[]; procValid?: boolean; refreshValid?: boolean };
 export type MTemplate = { id: string; name: string; vehicleSerialUnitId: string; vehicleTypeName: string; soldierIds: string[]; soldiers?: { soldierId: string; dispatchRoleId: string; isDriver: boolean }[] };
 export type MRole = { id: string; name: string; icon: string; isDriver: boolean };
@@ -39,7 +39,7 @@ export type EditMission = {
 };
 
 let keySeq = 0;
-const nextKey = () => `k${++keySeq}_${Date.now()}`;
+const nextKey = () => `k${++keySeq}`; // מונה מודול — ייחודי לכל קריאה, ללא Date.now (טהור ל-react-compiler)
 
 export default function MissionModal({
   companies, vehicles, soldiers, templates, dispatchRoles = [], soldierRoleMap = {}, presentSoldierIds = [], myCompanyId, edit, reuse, onClose,
@@ -64,6 +64,8 @@ export default function MissionModal({
   const [driverWarning, setDriverWarning] = useState<{ reasons: string[]; name: string; onConfirm: () => void } | null>(null);
   const [activeVehKey, setActiveVehKey] = useState<string | null>(null);
   const [addRoleId, setAddRoleId] = useState(""); // תפקיד נבחר לתהליך "בחר תפקיד ואז חייל"
+  const [dragKey, setDragKey] = useState<string | null>(null); // גרירה לסידור שיירה
+  const [summary, setSummary] = useState<null | "equip" | "roles">(null); // פאנל סיכום
 
   // בדיקת הסמכת נהג (רק לרכב מערכת) — רישיון לסוג הרכב + נוהל נהיגה + ריענון
   function driverReasons(soldierId: string | null, row: VehRow): string[] {
@@ -142,6 +144,11 @@ export default function MissionModal({
   function moveRow(key: string, dir: -1 | 1) { // סדר בשיירה
     setRows((r) => { const i = r.findIndex((x) => x.key === key); const j = i + dir; if (i < 0 || j < 0 || j >= r.length) return r; const next = [...r]; [next[i], next[j]] = [next[j], next[i]]; return next; });
   }
+  function reorderRow(fromKey: string, toKey: string) { // גרירה: מזיז fromKey למיקום של toKey
+    if (fromKey === toKey) return;
+    setRows((r) => { const from = r.findIndex((x) => x.key === fromKey); const to = r.findIndex((x) => x.key === toKey); if (from < 0 || to < 0) return r; const next = [...r]; const [m] = next.splice(from, 1); next.splice(to, 0, m); return next; });
+  }
+  const vehStatusBad = (row: VehRow) => row.source === "system" && !!row.vehicleSerialUnitId && vehicles.find((v) => v.id === row.vehicleSerialUnitId)?.statusOk === false;
 
   function addSoldier(rowKey: string, soldierId: string, roleId: string | null = null) {
     if (!soldierId) return;
@@ -190,12 +197,6 @@ export default function MissionModal({
   function patchSoldier(rowKey: string, sKey: string, patch: Partial<VehSoldier>) {
     setRows((r) => r.map((x) => x.key === rowKey ? { ...x, soldiers: x.soldiers.map((s) => s.key === sKey ? { ...s, ...patch } : s) } : x));
   }
-
-  const convoyPreview = rows.map((row) => ({
-    typeName: row.source === "external"
-      ? (row.externalVehicleTypeName || "רכב חוץ")
-      : (vehicles.find((v) => v.id === row.vehicleSerialUnitId)?.typeName || "רכב"),
-  }));
 
   function submit() {
     setError(null);
@@ -279,11 +280,44 @@ export default function MissionModal({
             )}
           </div>
 
-          {/* תצוגת שיירה */}
-          {convoyPreview.length > 0 && (
+          {/* תצוגת שיירה — רכבים בודדים בסדר, גרירה לסידור + לחיצה לזיהוי */}
+          {rows.length > 0 && (
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-              <div className="text-xs text-slate-500 mb-1">השיירה:</div>
-              <ConvoyView vehicles={convoyPreview} />
+              <div className="text-xs text-slate-500 mb-2">השיירה — גרור לסידור · לחץ על רכב לזיהוי:</div>
+              <div className="flex flex-wrap items-stretch gap-2">
+                {rows.map((row, ri) => {
+                  const active = row.key === activeVehKey;
+                  const type = row.source === "external" ? (row.externalVehicleTypeName || "רכב חוץ") : (vehicles.find((v) => v.id === row.vehicleSerialUnitId)?.typeName || "רכב");
+                  const bad = vehStatusBad(row);
+                  return (
+                    <button key={row.key} draggable onDragStart={() => setDragKey(row.key)} onDragEnd={() => setDragKey(null)}
+                      onDragOver={(e) => e.preventDefault()} onDrop={() => { if (dragKey) reorderRow(dragKey, row.key); setDragKey(null); }}
+                      onClick={() => setActiveVehKey(row.key)} title={`רכב ${ri + 1}${bad ? " · לא תקין" : ""} — גרור/לחץ`}
+                      className={`relative flex flex-col items-center rounded-lg border px-2.5 py-1 cursor-grab active:cursor-grabbing ${active ? "bg-slate-800 text-white border-slate-800 ring-2 ring-slate-400" : "bg-white border-slate-300 hover:bg-slate-100"} ${bad ? "!border-rose-400" : ""} ${dragKey === row.key ? "opacity-40" : ""}`}>
+                      <span className="text-2xl leading-none">{vehicleIcon(type)}</span>
+                      <span className="text-[10px] font-medium mt-0.5">רכב {ri + 1}</span>
+                      {bad && <span className="absolute -top-1 -left-1 text-[10px]" title="רכב לא תקין">🔴</span>}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* #3 — סיכומי ציוד + תפקידים */}
+              <div className="flex gap-2 mt-3">
+                <button onClick={() => setSummary((s) => (s === "equip" ? null : "equip"))} className={`text-xs rounded-lg px-2.5 py-1 border ${summary === "equip" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white border-slate-300 hover:bg-slate-50"}`}>📦 סיכום ציוד</button>
+                <button onClick={() => setSummary((s) => (s === "roles" ? null : "roles"))} className={`text-xs rounded-lg px-2.5 py-1 border ${summary === "roles" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white border-slate-300 hover:bg-slate-50"}`}>👥 סיכום חיילים לפי תפקיד</button>
+              </div>
+              {summary === "equip" && (() => {
+                const counts = new Map<string, number>();
+                for (const row of rows) if (row.source === "system") for (const name of (vehicles.find((v) => v.id === row.vehicleSerialUnitId)?.equipment ?? [])) counts.set(name, (counts.get(name) ?? 0) + 1);
+                const arr = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+                return <div className="mt-2 flex flex-wrap gap-1.5 text-xs">{arr.length === 0 ? <span className="text-slate-400">אין ציוד מורכב על רכבי השיירה</span> : arr.map(([n, c]) => <span key={n} className="bg-white border border-slate-200 rounded-full px-2 py-0.5">{n}: <b>{c}</b></span>)}</div>;
+              })()}
+              {summary === "roles" && (() => {
+                const counts = new Map<string, number>(); let none = 0;
+                for (const row of rows) for (const s of row.soldiers) { if (s.dispatchRoleId) counts.set(s.dispatchRoleId, (counts.get(s.dispatchRoleId) ?? 0) + 1); else none++; }
+                const arr = [...counts.entries()].map(([id, c]) => ({ role: dispatchRoles.find((r) => r.id === id), c })).sort((a, b) => b.c - a.c);
+                return <div className="mt-2 flex flex-wrap gap-1.5 text-xs">{arr.map(({ role, c }) => <span key={role?.id ?? "?"} className="bg-white border border-slate-200 rounded-full px-2 py-0.5">{role?.icon} {role?.name ?? "—"}: <b>{c}</b></span>)}{none > 0 && <span className="bg-white border border-slate-200 rounded-full px-2 py-0.5 text-slate-500">ללא תפקיד: <b>{none}</b></span>}</div>;
+              })()}
             </div>
           )}
 
@@ -308,6 +342,7 @@ export default function MissionModal({
                           <span className={`rounded-full px-1.5 text-[10px] ${isActive ? "bg-white/25" : "bg-slate-100"}`}>{row.soldiers.length}</span>
                           {row.source === "external" && !row.externalVehicleNumber.trim() && <span title="חסר מספר רכב">⚠️</span>}
                           {unq && <span title="נהג לא מוסמך">🔴</span>}
+                          {vehStatusBad(row) && <span title="רכב לא תקין">🔧</span>}
                         </button>
                       );
                     })}
@@ -333,13 +368,25 @@ export default function MissionModal({
                           <button onClick={() => removeRow(row.key)} className="text-xs text-rose-500 hover:text-rose-700">הסר</button>
                         </div>
                       </div>
-                      {row.source === "system" ? (
-                        <select value={row.vehicleSerialUnitId} onChange={(e) => patchRow(row.key, { vehicleSerialUnitId: e.target.value })}
-                          className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white mb-2">
-                          <option value="">— בחר רכב —</option>
-                          {vehicles.map((v) => <option key={v.id} value={v.id}>{v.name} · {v.serial}</option>)}
-                        </select>
-                      ) : (
+                      {row.source === "system" ? (() => {
+                        const selVeh = vehicles.find((v) => v.id === row.vehicleSerialUnitId);
+                        const bad = selVeh?.statusOk === false;
+                        return (
+                        <div className="mb-2">
+                          <select value={row.vehicleSerialUnitId} onChange={(e) => patchRow(row.key, { vehicleSerialUnitId: e.target.value })}
+                            className={`w-full border rounded-lg px-2 py-1.5 text-sm bg-white ${bad ? "border-rose-400 bg-rose-50" : "border-slate-300"}`}>
+                            <option value="">— בחר רכב —</option>
+                            {vehicles.map((v) => <option key={v.id} value={v.id}>{v.statusOk === false ? "🔴 " : ""}{v.name} · {v.serial}{v.statusOk === false ? ` — לא תקין (${v.statusName})` : ""}</option>)}
+                          </select>
+                          {/* #4 — סטטוס רכב לא תקין */}
+                          {bad && <p className="text-[11px] text-rose-600 mt-1 font-medium">🔴 הרכב אינו תקין ({selVeh?.statusName}) — יישלח דיווח לקצין רכב עם רשימת הנהגים</p>}
+                          {/* #5 — ציוד מורכב על הרכב */}
+                          {selVeh && (selVeh.equipment?.length ?? 0) > 0 && (
+                            <div className="mt-1.5 text-[11px] text-slate-600"><span className="text-slate-400">📦 ציוד על הרכב: </span>{[...new Map((selVeh.equipment ?? []).map((n) => [n, (selVeh.equipment ?? []).filter((x) => x === n).length])).entries()].map(([n, c]) => `${n}${c > 1 ? ` ×${c}` : ""}`).join(" · ")}</div>
+                          )}
+                        </div>
+                        );
+                      })() : (
                         <div className="mb-2">
                           <div className="grid grid-cols-2 gap-2">
                             <input value={row.externalVehicleNumber} onChange={(e) => patchRow(row.key, { externalVehicleNumber: e.target.value })}

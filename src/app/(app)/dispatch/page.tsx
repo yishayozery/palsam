@@ -168,7 +168,18 @@ export default async function DispatchPage() {
       })),
     })),
   }));
-  const vehiclesForMission = vehicles.map((v) => ({ id: v.id, name: v.itemType.name, serial: v.serialNumber, typeName: v.itemType.name, requiredLicenseIds: vtlMap[v.itemTypeId] ?? [] }));
+  // 🆕 ציוד מורכב + סטטוס לכל רכב שאפשר לשבץ (לבורר הרכבים במודל)
+  const allVehEquip = vehicles.length ? await prisma.serialUnit.findMany({
+    where: { vehicleId: { in: vehicles.map((v) => v.id) }, battalionId: bId },
+    select: { vehicleId: true, itemType: { select: { name: true } } },
+  }) : [];
+  const equipCountByVeh = new Map<string, string[]>();
+  for (const e of allVehEquip) { if (!e.vehicleId) continue; const a = equipCountByVeh.get(e.vehicleId) ?? []; a.push(e.itemType.name); equipCountByVeh.set(e.vehicleId, a); }
+  const vehiclesForMission = vehicles.map((v) => ({
+    id: v.id, name: v.itemType.name, serial: v.serialNumber, typeName: v.itemType.name, requiredLicenseIds: vtlMap[v.itemTypeId] ?? [],
+    statusName: v.status.name, statusOk: !v.status.isWear && !v.status.isLoss, // 🔴 לא-תקין = בלאי/אובדן
+    equipment: equipCountByVeh.get(v.id) ?? [],
+  }));
   const soldiersForMission = soldiers.map((s) => {
     const procValid = !!s.drivingProcedureSignedAt && (!procUpdated || s.drivingProcedureSignedAt >= procUpdated);
     let refreshValid = false;

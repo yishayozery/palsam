@@ -6,6 +6,36 @@ import { requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 import { notifyMissionCreated } from "@/lib/dispatch-notify";
 import { createOrUpdateMission, type MissionInput } from "@/lib/mission-core";
+import { sendTelegramMessage } from "@/lib/telegram";
+import { escapeTelegram } from "@/lib/escape-html";
+
+/** 🔧 התראה לקצין רכב אם שובץ רכב לא-תקין למשימה — עם רשימת הנהגים. best-effort. */
+async function notifyUnfitVehicles(bId: string, input: MissionInput): Promise<void> {
+  try {
+    const sysVehIds = input.vehicles.filter((v) => !v.isExternal && v.vehicleSerialUnitId).map((v) => v.vehicleSerialUnitId!) as string[];
+    if (!sysVehIds.length) return;
+    const units = await prisma.serialUnit.findMany({ where: { id: { in: sysVehIds } }, select: { serialNumber: true, itemType: { select: { name: true } }, status: { select: { name: true, isWear: true, isLoss: true } } } });
+    const unfit = units.filter((u) => u.status.isWear || u.status.isLoss);
+    if (!unfit.length) return;
+    const bat = await prisma.battalion.findUnique({ where: { id: bId }, select: { telegramBotToken: true } });
+    if (!bat?.telegramBotToken) return;
+    // רשימת נהגים
+    const driverSids = input.vehicles.flatMap((v) => v.soldiers.filter((s) => "soldierId" in s && s.soldierId && s.isDriver).map((s) => (s as { soldierId: string }).soldierId));
+    const drivers = driverSids.length ? await prisma.soldier.findMany({ where: { id: { in: driverSids } }, select: { fullName: true, phone: true } }) : [];
+    const driverList = drivers.map((d) => `${d.fullName}${d.phone ? ` · ${d.phone}` : ""}`).join("\n") || "—";
+    // קציני רכב (role legacy WAREHOUSE_MANAGER, או הרשאת מסך רכב/שבצ"ק) עם צ'אט בוט מקושר
+    const officers = await prisma.appUser.findMany({
+      where: { battalionId: bId, active: true, soldier: { telegramChatId: { not: null } },
+        OR: [{ role: "WAREHOUSE_MANAGER" }, { systemRole: { permissions: { some: { screen: { in: ["driving_licenses", "dispatch"] } } } } }] },
+      select: { soldier: { select: { telegramChatId: true } } },
+    });
+    const chatIds = [...new Set(officers.map((o) => o.soldier?.telegramChatId).filter((c): c is string => !!c))];
+    if (!chatIds.length) return;
+    const vehList = unfit.map((u) => `🔧 ${escapeTelegram(u.itemType.name)} (${escapeTelegram(u.serialNumber)}) — ${escapeTelegram(u.status.name)}`).join("\n");
+    const msg = `⚠️ <b>שובץ רכב לא-תקין למשימה</b>\n${vehList}\n\n<b>נהגים במשימה:</b>\n${escapeTelegram(driverList)}`;
+    await Promise.all(chatIds.map((c) => sendTelegramMessage(bat.telegramBotToken!, c, msg).catch(() => {})));
+  } catch { /* best-effort */ }
+}
 
 type SaveInput = {
   id?: string;
@@ -164,6 +194,7 @@ export async function saveMission(formData: FormData): Promise<{ ok?: boolean; e
 
     await audit(user.id, res.isNew ? "CREATE" : "UPDATE", "Mission", res.id, { vehicles: input.vehicles.length });
     if (res.isNew) await notifyMissionCreated(res.id, bId); // התראות בוט — רק ביצירה
+    await notifyUnfitVehicles(bId, input); // 🔧 התראת רכב לא-תקין לקצין רכב (עם רשימת נהגים)
     revalidatePath("/dispatch");
     return { ok: true, id: res.id };
   } catch (e) {
