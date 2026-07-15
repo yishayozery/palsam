@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import PrintButton from "@/components/PrintButton";
 import { TRANSFER_TYPE, TRANSFER_STATUS } from "@/lib/labels";
 import { verifyLink } from "@/lib/link-token";
+import ArmoryIssueDoc, { type ArmoryIssueData } from "./ArmoryIssueDoc";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function PublicTransferDocPage({
       battalion: true,
       fromHolder: true,
       toHolder: true,
-      toSoldier: { select: { fullName: true, personalNumber: true } },
+      toSoldier: { select: { fullName: true, personalNumber: true, company: { select: { name: true } }, weaponsApprovedById: true, weaponsApprovedAt: true, weaponsApprovalSignature: true } },
       createdBy: { select: { fullName: true } },
       approvedBy: { select: { fullName: true } },
       lines: { include: { itemType: true, serialUnit: true, status: true } },
@@ -35,6 +36,37 @@ export default async function PublicTransferDocPage({
 
   const unitName = t.battalion?.name || "גדוד";
   const docNumber = t.id.slice(-8).toUpperCase();
+
+  // 🔫 טופס ניפוק נשק אישי — כשההעברה ממחסן ארמון (השלב האחרון מ-4 שלבי קבלת הנשק)
+  if (t.fromHolder?.warehouseType === "ARMORY" && t.type !== "CHECKIN") {
+    const [employment, approver] = await Promise.all([
+      prisma.employment.findFirst({ where: { battalionId: t.battalionId, active: true }, orderBy: { endDate: "desc" }, select: { endDate: true } }),
+      t.toSoldier?.weaponsApprovedById
+        ? prisma.appUser.findUnique({ where: { id: t.toSoldier.weaponsApprovedById }, select: { fullName: true, title: true } })
+        : Promise.resolve(null),
+    ]);
+    const data: ArmoryIssueData = {
+      docNumber,
+      battalionName: unitName,
+      logoData: t.battalion?.logoData ?? null,
+      motto: t.battalion?.motto ?? null,
+      soldier: t.toSoldier ? { fullName: t.toSoldier.fullName, personalNumber: t.toSoldier.personalNumber, companyName: t.toSoldier.company?.name ?? null } : null,
+      externalName: t.toSoldier ? null : (t.externalName ?? t.toHolder?.name ?? null),
+      issueDate: t.signatures[0]?.signedAt ?? t.createdAt,
+      endDate: employment?.endDate ?? null,
+      purpose: t.reason ?? null,
+      issuerName: t.createdBy.fullName,
+      issuerHolderName: t.fromHolder?.name ?? null,
+      declarationText: t.fromHolder?.weaponsAgreementText ?? null,
+      lines: t.lines.map((l) => ({ name: l.itemType.name, sku: l.itemType.sku, quantity: l.quantity, serial: l.serialUnit?.serialNumber ?? null })),
+      signature: t.signatures[0] ?? null,
+      approverName: approver?.fullName ?? null,
+      approverTitle: approver?.title ?? null,
+      approvedAt: t.toSoldier?.weaponsApprovedAt ?? null,
+      approverSignature: t.toSoldier?.weaponsApprovalSignature ?? null,
+    };
+    return <ArmoryIssueDoc d={data} />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 print:bg-white print:p-0">
