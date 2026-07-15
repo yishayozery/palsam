@@ -647,6 +647,28 @@ export async function completeSignature(token: string, signatureData: string) {
   const soldierId = sig.soldierId;
   const fromHolderId = sig.transfer!.fromHolderId;
   const bId = sig.battalionId;
+
+  // 🔒 ניפוק נשק הוא השלב האחרון — חוסמים חתימה אם לא הושלמו השלבים המקדימים
+  //    (אישור מפקד / מבחן ארמון / חתימה על נוהל שמירת נשק — לפי מדיניות הגדוד).
+  //    בדיקה גם בזמן החתימה (defense-in-depth) — לא רק ביצירת התעודה.
+  try {
+    const { areAnyItemsArmory, getSoldierWeaponsEligibility } = await import("@/lib/weapons-eligibility");
+    if (await areAnyItemsArmory(sig.transfer!.lines.map((l) => l.itemTypeId))) {
+      const elig = await getSoldierWeaponsEligibility(soldierId);
+      if (!elig || !elig.isFullyEligible) {
+        const LABELS: Record<string, string> = {
+          enlisted: "גיוס", weaponsApproved: "אישור מפקד",
+          armoryTestSubmitted: "מבחן ארמון", weaponsAgreementSigned: "חתימה על נוהל שמירת נשק",
+        };
+        const missing = (elig?.missingSteps ?? []).map((s) => LABELS[s] ?? s).join(", ");
+        return { ok: false, error: `🚫 לא ניתן לחתום על הנשק — חסרים שלבים מקדימים: ${missing}.\nיש להשלים אותם לפני החתימה.` };
+      }
+    }
+  } catch (eligErr) {
+    console.error("[completeSignature] weapons eligibility gate failed:", eligErr);
+    return { ok: false, error: "שגיאה בבדיקת זכאות לנשק. נסה/י שוב." };
+  }
+
   try {
   await prisma.$transaction(async (tx) => {
     // חתימה בדיעבד: הפריטים כבר שויכו וירדו מהמלאי — לא לחזור על השיוך, רק לסמן חתום.
