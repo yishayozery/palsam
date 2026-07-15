@@ -1,7 +1,21 @@
 import { prisma } from "./prisma";
+import { createHash } from "crypto";
 
 // שרת בלבד. guard במקום "server-only" כדי שסקריפטי DR (גיבוי/שחזור) יוכלו לייבא.
 if (typeof window !== "undefined") throw new Error("backup.ts is server-only");
+
+/** טבלאות-הייחוס/קונפיג — משתנות נדיר. נלכדות בגיבוי רק כשהשתנו (גיבוי דינמי). */
+async function fetchReferenceTables() {
+  const [categories, itemStatuses, storageLocations, companyRoles, squads, attendanceStatuses] = await Promise.all([
+    prisma.category.findMany({ select: { id: true, battalionId: true, name: true, warehouseType: true, active: true, sortOrder: true, maxPerSoldier: true } }),
+    prisma.itemStatus.findMany({ select: { id: true, battalionId: true, name: true, isDefault: true, isLoss: true, isWear: true, isConsumed: true, sortOrder: true, active: true } }),
+    prisma.storageLocation.findMany({ select: { id: true, holderId: true, column: true, row: true, label: true } }),
+    prisma.companyRole.findMany({ select: { id: true, battalionId: true, companyId: true, name: true, isCommander: true, sortOrder: true, active: true } }),
+    prisma.squad.findMany({ select: { id: true, battalionId: true, companyId: true, name: true, sortOrder: true, active: true } }),
+    prisma.attendanceStatus.findMany({ select: { id: true, battalionId: true, name: true, color: true, icon: true, isPresent: true, sortOrder: true, active: true } }),
+  ]);
+  return { categories, itemStatuses, storageLocations, companyRoles, squads, attendanceStatuses };
+}
 
 /**
  * גיבוי לוגי של הנתונים הקריטיים (נשק, חתימות, שינועים, חיילים, מלאי).
@@ -30,12 +44,22 @@ export async function runBackup(): Promise<{ id: string; status: string; sizeByt
 
     const tables = { serialUnits, signatures, transfers, transferLines, soldiers, holders, stockBalances, itemTypes, battalions, callups };
     const rowCounts: Record<string, number> = Object.fromEntries(Object.entries(tables).map(([k, v]) => [k, (v as unknown[]).length]));
-    const snapshot = { version: 1, tables };
+    const snapshot = { version: 2, tables };
     const json = JSON.stringify(snapshot);
-    const sizeBytes = Buffer.byteLength(json, "utf8");
+
+    // 🔁 גיבוי דינמי של טבלאות-הייחוס: נלכדות רק כשה-hash השתנה מהריצה האחרונה.
+    const reference = await fetchReferenceTables();
+    const refJson = JSON.stringify(reference);
+    const referenceHash = createHash("sha256").update(refJson).digest("hex");
+    const last = await prisma.backupRun.findFirst({ where: { status: "OK", referenceHash: { not: null } }, orderBy: { createdAt: "desc" }, select: { referenceHash: true } });
+    const refChanged = last?.referenceHash !== referenceHash;
+    const referenceData = refChanged ? refJson : null; // ללא שינוי → לא משכפלים (חוסך מקום)
+    Object.assign(rowCounts, Object.fromEntries(Object.entries(reference).map(([k, v]) => [`ref_${k}`, (v as unknown[]).length])));
+
+    const sizeBytes = Buffer.byteLength(json, "utf8") + (referenceData ? Buffer.byteLength(referenceData, "utf8") : 0);
 
     const run = await prisma.backupRun.create({
-      data: { status: "OK", target: "DB", sizeBytes, rowCounts, data: json },
+      data: { status: "OK", target: "DB", sizeBytes, rowCounts, data: json, referenceData, referenceHash },
     });
     await pruneBackups().catch(() => {});
     return { id: run.id, status: "OK", sizeBytes };
@@ -47,16 +71,21 @@ export async function runBackup(): Promise<{ id: string; status: string; sizeByt
   }
 }
 
-/** ניקוי: מוחק את ה-JSON הכבד מריצות ישנות, ומוחק מטא-דאטה מעבר לרף. */
+/** ניקוי: מוחק את ה-JSON הכבד (data) מריצות ישנות, אך שומר את referenceData (קטן,
+ *  ולשמירת שרשרת השחזור הדינמי). מוחק מטא-דאטה מעבר לרף — למעט מחזיק-הייחוס הנוכחי. */
 export async function pruneBackups(): Promise<void> {
+  // מנקים רק את data הכבד (לא referenceData — הוא קטן ונחוץ לשחזור דינמי)
   const recent = await prisma.backupRun.findMany({ orderBy: { createdAt: "desc" }, select: { id: true }, take: KEEP_DATA_RUNS });
   const keepIds = recent.map((r) => r.id);
   if (keepIds.length) {
     await prisma.backupRun.updateMany({ where: { id: { notIn: keepIds }, data: { not: null } }, data: { data: null } });
   }
+  // מחיקת מטא ישן — אך לעולם לא מוחקים את הריצה שמחזיקה את ה-referenceData העדכני (עוגן שחזור)
   const metaKeep = await prisma.backupRun.findMany({ orderBy: { createdAt: "desc" }, select: { id: true }, take: KEEP_META_RUNS });
-  const metaIds = metaKeep.map((r) => r.id);
-  if (metaIds.length) {
-    await prisma.backupRun.deleteMany({ where: { id: { notIn: metaIds } } });
+  const metaIds = new Set(metaKeep.map((r) => r.id));
+  const refAnchor = await prisma.backupRun.findFirst({ where: { referenceData: { not: null } }, orderBy: { createdAt: "desc" }, select: { id: true } });
+  if (refAnchor) metaIds.add(refAnchor.id);
+  if (metaIds.size) {
+    await prisma.backupRun.deleteMany({ where: { id: { notIn: [...metaIds] } } });
   }
 }

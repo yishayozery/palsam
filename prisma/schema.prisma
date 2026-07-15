@@ -2347,7 +2347,9 @@ model BackupRun {
   sizeBytes Int      @default(0)
   rowCounts Json?    // { SerialUnit: 129, Signature: 230, ... }
   blobUrl   String?  // URL אם הועלה ל-Vercel Blob
-  data      String?  // snapshot JSON (fallback ב-DB)
+  data      String?  // snapshot JSON של הטבלאות הדינמיות (חיילים/ציוד/חתימות/שינועים)
+  referenceData String? // snapshot טבלאות-ייחוס/קונפיג (קטגוריות/סטטוסים/מיקומים/תפקידים) — רק כשהשתנו
+  referenceHash String? // hash של טבלאות-הייחוס; אם זהה לריצה הקודמת → referenceData=null (גיבוי דינמי)
   error     String?
 
   @@index([createdAt])
