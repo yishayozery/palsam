@@ -90,6 +90,10 @@ export async function moveStockBetweenLocations(
   if (quantity <= 0) return { ok: false, error: "כמות חייבת להיות חיובית" };
   if (fromLocationId === toLocationId) return { ok: false, error: "המיקום זהה" };
 
+  // 🔒 אותה נעילת-סריאליזציה כמו adjustQuantity (פריט × מחזיק × סטטוס) — מונע lost-update
+  //    בהעברות-מיקום מקבילות וגם מול adjustQuantity על אותו מפתח (משתמשים באותו מפתח נעילה).
+  await tx.$queryRaw`SELECT 1 AS ok FROM (SELECT pg_advisory_xact_lock(hashtextextended(${`${itemTypeId}:${holderId}:${statusId}`}, 0))) _lock`;
+
   // הורדה מהמקור
   const fromRow = await tx.stockBalance.findFirst({
     where: { itemTypeId, holderId, statusId, equipmentLocationId: fromLocationId },
