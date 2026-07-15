@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "./prisma";
 import { hashPassword, verifyPassword } from "./password";
+import { decryptSecret } from "./crypto";
 import type { Role, PermissionLevel } from "@/generated/prisma";
 import { ROLE_LABELS, permissionsFromLegacyRole, type UserPermissions, type PermissionHolder } from "./rbac";
 
@@ -219,7 +220,7 @@ export async function completeAuthWithTotp(userId: string, token: string): Promi
     },
   });
   if (!user || !user.totpSecret || !user.active) return null;
-  if (!verifyTotp(token, user.totpSecret)) return null;
+  if (!verifyTotp(token, decryptSecret(user.totpSecret))) return null; // 🔐 מפוענח מ-rest
   return toSession(user);
 }
 

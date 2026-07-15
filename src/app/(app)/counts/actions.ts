@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 import { escapeTelegram } from "@/lib/escape-html";
+import { decryptSecret } from "@/lib/crypto";
 import type { CountType } from "@/generated/prisma";
 
 export async function saveCountDefinition(formData: FormData) {
@@ -694,7 +695,7 @@ export async function registerTelegramWebhook() {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
   const webhookUrl = `${baseUrl}/api/telegram/${bId}`;
 
-  const token = battalion.telegramBotToken;
+  const token = decryptSecret(battalion.telegramBotToken); // 🔐 מפוענח לצורך קריאות ה-API הישירות
   const apiBase = `https://api.telegram.org/bot${token}`;
 
   const res = await fetch(`${apiBase}/setWebhook`, {

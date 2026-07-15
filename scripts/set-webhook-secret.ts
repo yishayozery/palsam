@@ -11,6 +11,7 @@
  */
 import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma";
+import { decryptSecret } from "../src/lib/crypto";
 const p = new PrismaClient();
 
 async function main() {
@@ -22,7 +23,7 @@ async function main() {
   const bats = await p.battalion.findMany({ where: { telegramBotToken: { not: null } }, select: { name: true, code: true, telegramBotToken: true } });
   console.log(`נמצאו ${bats.length} גדודים עם בוט.\n`);
   for (const b of bats) {
-    const tok = b.telegramBotToken!;
+    const tok = decryptSecret(b.telegramBotToken!);
     try {
       const info: any = await fetch(`https://api.telegram.org/bot${tok}/getWebhookInfo`).then((r) => r.json());
       const url = info?.result?.url;

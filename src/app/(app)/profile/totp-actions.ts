@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/guard";
 import { generateTotpSetup, verifyTotp } from "@/lib/totp";
 import { audit } from "@/lib/audit";
+import { encryptSecret, decryptSecret } from "@/lib/crypto";
 
 export type TotpSetupState = { qrDataUrl?: string; secret?: string; error?: string };
 
@@ -30,7 +31,7 @@ export async function confirmTotpSetup(formData: FormData): Promise<{ ok?: boole
 
   await prisma.appUser.update({
     where: { id: user.id },
-    data: { totpSecret: secret, totpEnabledAt: new Date() },
+    data: { totpSecret: encryptSecret(secret), totpEnabledAt: new Date() }, // 🔐 מוצפן ב-rest
   });
   await audit(user.id, "ENABLE_2FA", "AppUser", user.id);
   revalidatePath("/profile");
@@ -43,7 +44,7 @@ export async function disableTotp(formData: FormData): Promise<{ ok?: boolean; e
   const token = String(formData.get("token") || "").trim();
   const u = await prisma.appUser.findUnique({ where: { id: user.id }, select: { totpSecret: true } });
   if (!u?.totpSecret) return { error: "2FA לא פעיל" };
-  if (!verifyTotp(token, u.totpSecret)) return { error: "❌ קוד שגוי" };
+  if (!verifyTotp(token, decryptSecret(u.totpSecret))) return { error: "❌ קוד שגוי" };
   await prisma.appUser.update({ where: { id: user.id }, data: { totpSecret: null, totpEnabledAt: null } });
   await audit(user.id, "DISABLE_2FA", "AppUser", user.id);
   revalidatePath("/profile");

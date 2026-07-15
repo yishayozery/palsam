@@ -1,3 +1,5 @@
+import { decryptSecret } from "./crypto";
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
@@ -12,6 +14,9 @@ async function telegramRequest(
   retries = 3,
   timeoutMs = 8000,
 ): Promise<unknown> {
+  // 🔐 הטוקן נשמר מוצפן ב-rest — מפענחים כאן, בנקודת-החנק היחידה של כל קריאות ה-API.
+  //    ערך legacy בטקסט גלוי מוחזר כמו-שהוא (decryptSecret עם fallback).
+  const token = decryptSecret(botToken);
   let attempt = 0;
   for (;;) {
     let res: Response;
@@ -19,7 +24,7 @@ async function telegramRequest(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      res = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, { ...init, signal: controller.signal });
+      res = await fetch(`https://api.telegram.org/bot${token}/${method}`, { ...init, signal: controller.signal });
     } catch (e) {
       if (attempt++ >= retries) throw e; // תקלת רשת / timeout — retry עד המכסה
       await sleep(Math.min(500 * 2 ** attempt, 8000));
