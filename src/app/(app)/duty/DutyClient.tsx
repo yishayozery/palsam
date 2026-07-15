@@ -11,7 +11,7 @@ type Slot = {
   companyName: string | null; squadName: string | null; responsibleName: string | null; canFill: boolean;
   assignments: { id: string; name: string }[];
 };
-type Detail = { id: string; name: string; defaultStart: string | null; defaultEnd: string | null; notes: string | null; visibility: string; fromDate: string | null; toDate: string | null; canManage: boolean; slots: Slot[] };
+type Detail = { id: string; name: string; defaultStart: string | null; defaultEnd: string | null; notes: string | null; visibility: string; fromDate: string | null; toDate: string | null; allowSelfSchedule: boolean; canManage: boolean; slots: Slot[] };
 
 // צבע רקע יציב פר-פלוגה (לקריאוּת מהירה של החלוקה)
 const COMPANY_COLORS = ["bg-sky-50 border-sky-200", "bg-amber-50 border-amber-200", "bg-violet-50 border-violet-200", "bg-teal-50 border-teal-200", "bg-rose-50 border-rose-200", "bg-lime-50 border-lime-200"];
@@ -59,6 +59,7 @@ export default function DutyClient({ isManager, boards, detail, companies, squad
               <div><label className="text-xs text-slate-500 block mb-1">עד תאריך</label><input type="date" name="toDate" defaultValue={detail.toDate ?? ""} className="rounded border border-slate-300 px-2 py-1 text-sm" /></div>
               <div><label className="text-xs text-slate-500 block mb-1">שעות ברירת-מחדל</label><span className="flex items-center gap-1"><input type="time" name="defaultStart" defaultValue={detail.defaultStart ?? ""} className="rounded border border-slate-300 px-2 py-1 text-sm" /><span>-</span><input type="time" name="defaultEnd" defaultValue={detail.defaultEnd ?? ""} className="rounded border border-slate-300 px-2 py-1 text-sm" /></span></div>
               <div><label className="text-xs text-slate-500 block mb-1">נראוּת</label><select name="visibility" defaultValue={detail.visibility} className="rounded border border-slate-300 px-2 py-1 text-sm"><option value="ALL">כל המשתמשים</option><option value="SELECTED">נבחרים בלבד</option></select></div>
+              <label className="flex items-center gap-1.5 text-sm text-slate-700 self-center"><input type="checkbox" name="allowSelfSchedule" defaultChecked={detail.allowSelfSchedule} className="w-4 h-4" />🙋 שיבוץ עצמי בבוט</label>
               <button disabled={pending} className="bg-indigo-600 text-white rounded px-4 py-1.5 text-sm disabled:opacity-50">שמור</button>
               <button type="button" onClick={() => setShowEdit(false)} className="text-sm text-slate-400">ביטול</button>
             </form>

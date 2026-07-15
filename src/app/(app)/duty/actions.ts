@@ -62,6 +62,7 @@ export async function updateBoard(formData: FormData): Promise<{ error?: string;
       defaultStart: String(formData.get("defaultStart") || "").trim() || null,
       defaultEnd: String(formData.get("defaultEnd") || "").trim() || null,
       notes: String(formData.get("notes") || "").trim() || null,
+      allowSelfSchedule: formData.get("allowSelfSchedule") === "on",
     },
   });
   revalidatePath("/duty");
@@ -204,17 +205,6 @@ export async function autoFillBoard(formData: FormData): Promise<{ error?: strin
     for (const a of s.assignments) { load.set(a.soldierId, (load.get(a.soldierId) ?? 0) + 1); byDate.get(k)!.add(a.soldierId); }
   }
 
-  // 🚫 חיילים בשמ"פ פתוח שמכסה את תאריך המשבצת — לא זמינים לשיבוץ
-  const dates = slots.map((s) => s.date);
-  const minD = new Date(Math.min(...dates.map((d) => d.getTime())));
-  const maxD = new Date(Math.max(...dates.map((d) => d.getTime())));
-  const callups = await prisma.callupPeriod.findMany({
-    where: { soldier: { battalionId: bId }, startDate: { lte: maxD }, OR: [{ endDate: null }, { endDate: { gte: minD } }] },
-    select: { soldierId: true, startDate: true, endDate: true },
-  });
-  const onLeave = (soldierId: string, date: Date) =>
-    callups.some((c) => c.soldierId === soldierId && c.startDate <= date && (c.endDate == null || c.endDate >= date));
-
   const filledAssignments: { soldierId: string; slotIdx: number }[] = [];
   for (let si = 0; si < slots.length; si++) {
     const slot = slots[si];
@@ -228,7 +218,7 @@ export async function autoFillBoard(formData: FormData): Promise<{ error?: strin
     const dateSet = byDate.get(dk)!;
     const candidates = pool
       .map((p) => p.id)
-      .filter((id) => !dateSet.has(id) && !onLeave(id, slot.date))
+      .filter((id) => !dateSet.has(id))
       .sort((a, b) => (load.get(a) ?? 0) - (load.get(b) ?? 0) || a.localeCompare(b));
     for (let i = 0; i < need && i < candidates.length; i++) {
       const sol = candidates[i];

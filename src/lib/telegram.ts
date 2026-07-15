@@ -187,7 +187,7 @@ export function buildMainKeyboard(showTasks = false, tasksPending = false, isDri
 export function buildTasksKeyboard(canAttendance = false) {
   const rows: { text: string }[][] = [[{ text: "📊 ספירות מלאי" }]];
   if (canAttendance) rows.push([{ text: "🗓️ דיווח כ\"א (דוח 1)" }]);
-  rows.push([{ text: "📝 תעודות לחתימה" }]);
+  rows.push([{ text: "📝 תעודות לחתימה" }, { text: "🗓️ התורנויות שלי" }]);
   rows.push([{ text: "⬅️ חזרה לתפריט" }]);
   return { keyboard: rows, resize_keyboard: true, is_persistent: true };
 }

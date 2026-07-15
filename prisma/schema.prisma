@@ -2775,6 +2775,7 @@ model DutyBoard {
   defaultEnd   String?        // שעת סיום "22:00"
   notes        String?
   active       Boolean        @default(true)
+  allowSelfSchedule Boolean   @default(false) // חיילים יכולים לשבץ את עצמם למשבצות פנויות דרך הבוט
   createdById  String?
   createdByName String?
   createdAt    DateTime       @default(now())
@@ -2782,6 +2783,23 @@ model DutyBoard {
   viewers      DutyBoardViewer[]
 
   @@index([battalionId])
+}
+
+/** בקשת החלפה בתורנות — חייל מבקש שמישהו יחליף אותו במשבצת (דרך הבוט). */
+model DutySwapRequest {
+  id                 String    @id @default(cuid())
+  battalionId        String
+  assignmentId       String    // השיבוץ שרוצים להחליף (DutyAssignment.id; loose — נשמר גם אחרי החלפה)
+  slotId             String    // המשבצת (לנוחות שאילתה)
+  requesterSoldierId String
+  status             String    @default("OPEN") // OPEN | TAKEN | CANCELED
+  takenBySoldierId   String?
+  reason             String?
+  createdAt          DateTime  @default(now())
+  resolvedAt         DateTime?
+
+  @@index([battalionId, status])
+  @@index([assignmentId])
 }
 
 /** מי רשאי לראות לוח (כאשר visibility=SELECTED). */

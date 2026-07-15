@@ -113,6 +113,7 @@ export async function POST(
       "🗓️ דיווח כ\"א (דוח 1)": "/attendance",
       "🗓️ דיווח נוכחות": "/attendance",
       "📝 תעודות לחתימה": "/pendingsigns",
+      "🗓️ התורנויות שלי": "/myduty",
       "⛽ כרטיסי הדלק שלי": "/myfuel",
       "🕐 ארוחות ותפילות": "/info",
       "📥 דרישות נכנסות": "/brigade-requests",
@@ -384,6 +385,14 @@ export async function POST(
     if (cmd === "/myfuel") {
       if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
       await handleMyFuel(token, chatId, soldier, buildVehicleKeyboard());
+      return NextResponse.json({ ok: true });
+    }
+
+    // 🗓️ התורנויות שלי — תורנויות קרובות (בקשת החלפה) + משבצות פנויות לשיבוץ עצמי
+    if (cmd === "/myduty") {
+      if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
+      const { handleMyDuty } = await import("@/lib/duty-bot");
+      await handleMyDuty(token, chatId, soldier.id, battalionId);
       return NextResponse.json({ ok: true });
     }
 
@@ -919,6 +928,23 @@ async function handleCallback(
         `👉 <a href="${link}">לחץ כאן לביצוע</a>`,
       ].join("\n")).catch(() => {});
     }
+    return;
+  }
+
+  // 🗓️ תורנויות — בקשת החלפה / קבלה / ביטול / שיבוץ עצמי. אימות: החייל הפועל נטען לפי chatId.
+  if (data.startsWith("dutyswap:") || data.startsWith("dutyself:")) {
+    const acting = await prisma.soldier.findFirst({ where: { battalionId, telegramChatId: chatId }, select: { id: true } });
+    if (!acting) { await answerCallbackQuery(token, callback.id, "לא מחובר למערכת"); return; }
+    const duty = await import("@/lib/duty-bot");
+    if (data.startsWith("dutyself:")) {
+      await duty.handleSelfSchedule(token, chatId, acting.id, battalionId, data.split(":")[1], messageId, callback.id);
+      return;
+    }
+    const [, action, id] = data.split(":");
+    if (action === "req") await duty.handleSwapRequest(token, chatId, acting.id, battalionId, id, messageId, callback.id);
+    else if (action === "take") await duty.handleSwapTake(token, chatId, acting.id, battalionId, id, messageId, callback.id);
+    else if (action === "cancel") await duty.handleSwapCancel(token, chatId, acting.id, battalionId, id, messageId, callback.id);
+    else await answerCallbackQuery(token, callback.id);
     return;
   }
 
