@@ -1,5 +1,10 @@
-import "server-only";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "crypto";
+
+// שמור צד-שרת בלבד (המפתח מגיע מ-env לא-ציבורי). לא משתמשים בחבילת "server-only"
+// כדי שגם סקריפטי CLI (backfill / set-webhook) יוכלו לייבא את המודול תחת tsx/node.
+if (typeof window !== "undefined") {
+  throw new Error("crypto.ts is server-only — do not import from client code");
+}
 
 /**
  * 🔐 הצפנת סודות ב-rest (AES-256-GCM).
