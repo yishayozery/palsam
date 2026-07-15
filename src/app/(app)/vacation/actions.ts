@@ -17,8 +17,9 @@ export async function saveBoard(formData: FormData) {
   if (!name || !startDate || !endDate) return;
 
   if (id) {
-    await prisma.vacationBoard.update({
-      where: { id },
+    // 🔒 מסונן לגדוד — מונע עריכת לוח של גדוד אחר (IDOR)
+    await prisma.vacationBoard.updateMany({
+      where: { id, battalionId: bId },
       data: { name, startDate: new Date(startDate), endDate: new Date(endDate) },
     });
   } else {
@@ -163,7 +164,8 @@ export async function saveVacationStatus(formData: FormData) {
   if (!name) return;
 
   if (id) {
-    await prisma.vacationStatus.update({ where: { id }, data: { name, color, icon } });
+    // 🔒 מסונן לגדוד — מונע עריכת סטטוס של גדוד אחר (IDOR)
+    await prisma.vacationStatus.updateMany({ where: { id, battalionId: bId }, data: { name, color, icon } });
   } else {
     await prisma.vacationStatus.create({ data: { battalionId: bId, name, color, icon } });
   }

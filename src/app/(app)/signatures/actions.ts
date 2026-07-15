@@ -543,7 +543,7 @@ export async function createSignout(formData: FormData): Promise<{ error: string
     // יחידות סריאליות שנבחרו ידנית
     for (const sid of serialIds) {
       const su = await tx.serialUnit.findUnique({ where: { id: sid } });
-      if (!su) continue;
+      if (!su || su.battalionId !== bId) continue; // 🔒 מונע החתמת יחידה של גדוד אחר (IDOR)
       // אם זו אצווה והגיע lotQty — שולח כמות חלקית
       const partialLotQty = parseInt(String(formData.get(`lotQty:${sid}`) || "0"), 10);
       const lineQty = partialLotQty > 0 && partialLotQty < (su.lotQuantity ?? 1) ? partialLotQty : (su.lotQuantity ?? 1);
@@ -733,6 +733,8 @@ export async function checkinSerial(formData: FormData): Promise<{ error: string
 
   const su = await prisma.serialUnit.findUnique({ where: { id: serialUnitId }, include: { signedSoldier: true } });
   if (!su || !su.signedSoldierId) return;
+  // 🔒 אימות שהיחידה שייכת לגדוד המבצע — מונע זיכוי/שינוי יחידה של גדוד אחר (IDOR)
+  if (su.battalionId !== bId) return;
 
   // 🔒 אכיפת מ.א. — אם הגדוד דורש, חייב להיות לחייל מ.א.
   if (await requiresPersonalId(bId)) {
@@ -1080,6 +1082,7 @@ export async function checkinBatch(payload: {
       for (const unitId of serialUnitIds) {
         const su = await tx.serialUnit.findUnique({ where: { id: unitId }, include: { signedSoldier: true } });
         if (!su || !su.signedSoldierId) continue;
+        if (su.battalionId !== bId) continue; // 🔒 מונע זיכוי יחידה של גדוד אחר (IDOR)
 
         const partialQty = partialLotQtys[unitId] ?? 0;
         const isLot = (su.lotQuantity ?? 1) > 1;

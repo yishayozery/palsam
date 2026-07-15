@@ -220,8 +220,11 @@ export async function openCallupBulk(soldierIds: string[], startDate: string): P
     if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
     if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return { error: "תאריך לא תקין" };
     const start = new Date(startDate + "T00:00:00Z");
+    // 🔒 רק חיילים ששייכים לגדוד המבצע — מונע פתיחת שמ"פ על חיילי גדוד אחר (IDOR)
+    const valid = new Set((await prisma.soldier.findMany({ where: { id: { in: soldierIds }, battalionId: user.battalionId! }, select: { id: true } })).map((s) => s.id));
     let opened = 0, skipped = 0;
     for (const sid of soldierIds) {
+      if (!valid.has(sid)) { skipped++; continue; }
       const existing = await prisma.callupPeriod.findFirst({ where: { soldierId: sid, endDate: null } });
       if (existing) { skipped++; continue; }
       await prisma.callupPeriod.create({ data: { soldierId: sid, startDate: start, createdById: user.id } });
@@ -241,7 +244,8 @@ export async function closeCallupBulk(soldierIds: string[], endDate: string): Pr
     const end = new Date(endDate + "T00:00:00Z");
     let closed = 0, skipped = 0;
     for (const sid of soldierIds) {
-      const period = await prisma.callupPeriod.findFirst({ where: { soldierId: sid, endDate: null } });
+      // 🔒 מסונן לגדוד המבצע — מונע סגירת שמ"פ של חיילי גדוד אחר (IDOR)
+      const period = await prisma.callupPeriod.findFirst({ where: { soldierId: sid, endDate: null, soldier: { battalionId: user.battalionId! } } });
       if (!period) { skipped++; continue; }
       await prisma.callupPeriod.update({ where: { id: period.id }, data: { endDate: end, closedById: user.id, closedAt: new Date() } });
       closed++;

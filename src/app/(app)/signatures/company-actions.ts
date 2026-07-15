@@ -47,16 +47,25 @@ export async function createCompanySign(
       return { error: "לא נבחרו פריטים להחתמה — הוסף לפחות פריט אחד לעגלה" };
     }
 
+    // 🔒 הפלוגה חייבת להיות בגדוד המבצע — מונע החתמה מול פלוגה של גדוד אחר (IDOR)
+    const company = await prisma.holder.findFirst({ where: { id: companyId, battalionId: bId }, select: { id: true } });
+    if (!company) return { error: "הפלוגה לא נמצאה בגדוד" };
+
     // 🔒 ולידציה: נמען חייב להיות מקושר לחייל ברוסטר עם שם + מ.א.
     const recipient = await prisma.appUser.findUnique({
       where: { id: recipientUserId },
       select: {
         fullName: true,
+        battalionId: true,
         soldier: { select: { fullName: true, personalNumber: true } },
       },
     });
     if (!recipient) {
       return { error: "הנמען החותם לא נמצא במערכת. רענן את הדף ונסה שוב." };
+    }
+    // 🔒 הנמען חייב להיות שייך לגדוד המבצע (IDOR)
+    if (recipient.battalionId !== bId) {
+      return { error: "הנמען אינו שייך לגדוד. רענן את הדף ונסה שוב." };
     }
     if (!recipient.soldier) {
       return {
@@ -315,6 +324,10 @@ export async function companyReturn(formData: FormData): Promise<{ ok?: boolean;
       return any?.id ?? null;
     };
 
+    // 🔒 הפלוגה חייבת להיות בגדוד המבצע — מונע זיכוי מפלוגת גדוד אחר (IDOR)
+    const companyHolder = await prisma.holder.findFirst({ where: { id: companyId, battalionId: bId }, select: { id: true } });
+    if (!companyHolder) return { error: "הפלוגה לא נמצאה בגדוד" };
+
     let transferId = "";
     await prisma.$transaction(async (tx) => {
       const sampleItemId = qtyEntries[0]?.itemTypeId ??
@@ -336,7 +349,7 @@ export async function companyReturn(formData: FormData): Promise<{ ok?: boolean;
       // סריאליים: סטטוס פר-שורה > כללי > מקור; אצוות חלקיות מתפצלות.
       for (const sid of serialIds) {
         const su = await tx.serialUnit.findUnique({ where: { id: sid } });
-        if (!su || su.currentHolderId !== companyId) continue;
+        if (!su || su.battalionId !== bId || su.currentHolderId !== companyId) continue; // 🔒 IDOR
         const destId = await findDestWarehouse(su.itemTypeId);
         const lineOverride = String(formData.get(`serialStatus:${sid}`) || "") || null;
         const finalStatus = lineOverride || newStatusId || su.statusId;

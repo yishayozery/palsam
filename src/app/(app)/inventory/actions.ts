@@ -90,6 +90,9 @@ export async function writeOffStock(formData: FormData) {
       await adjustQuantity(tx, bId, itemTypeId, warehouseId, statusId, -qty);
       await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity: qty, statusId } });
     } else if (serialUnitId) {
+      // 🔒 אימות שהיחידה שייכת לגדוד המבצע — מונע גריעת יחידה של גדוד אחר (IDOR)
+      const su = await tx.serialUnit.findUnique({ where: { id: serialUnitId }, select: { battalionId: true } });
+      if (!su || su.battalionId !== bId) throw new Error("יחידה סריאלית לא נמצאה");
       await tx.serialUnit.update({ where: { id: serialUnitId }, data: { currentHolderId: null, signedSoldierId: null, dischargedAt: new Date() } });
       await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId, quantity: 1, statusId } });
     }

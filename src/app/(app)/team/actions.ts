@@ -183,8 +183,10 @@ export async function removeSubUser(formData: FormData) {
   const user = await requireUser();
   const id = String(formData.get("id") || "");
   if (id === user.id) throw new Error("אי אפשר להסיר את עצמך");
-  const target = await prisma.appUser.findUnique({ where: { id }, select: { id: true, holderId: true, username: true } });
+  const target = await prisma.appUser.findUnique({ where: { id }, select: { id: true, holderId: true, username: true, battalionId: true } });
   if (!target || !target.holderId || !canManageHolder(user, target.holderId)) throw new Error("אין הרשאה");
+  // 🔒 canManageHolder מחזיר true לכל אדמין ללא קשר לגדוד — חוסמים השבתת משתמש של גדוד אחר (IDOR)
+  if (target.battalionId !== user.battalionId && !user.isSuperAdmin) throw new Error("אין הרשאה");
   await prisma.appUser.update({ where: { id }, data: { active: false } });
   await audit(user.id, "REMOVE_SUBUSER", "AppUser", target.username, { holderId: target.holderId });
   revalidatePath("/team");

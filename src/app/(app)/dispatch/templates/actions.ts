@@ -141,7 +141,8 @@ export async function saveDispatchRole(formData: FormData) {
   if (!name) return;
 
   if (id) {
-    await prisma.dispatchRole.update({ where: { id }, data: { name, icon, isDriver, companyRoleId, sortOrder } });
+    // 🔒 מסונן לגדוד — מונע עריכת תפקיד שבצ"ק של גדוד אחר (IDOR)
+    await prisma.dispatchRole.updateMany({ where: { id, battalionId: bId }, data: { name, icon, isDriver, companyRoleId, sortOrder } });
   } else {
     await prisma.dispatchRole.create({ data: { battalionId: bId, name, icon, isDriver, companyRoleId, sortOrder } });
   }
