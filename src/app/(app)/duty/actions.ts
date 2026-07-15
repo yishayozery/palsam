@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
-import type { DutyVisibility } from "@/generated/prisma";
+import type { DutyVisibility, Prisma } from "@/generated/prisma";
 
 type Sessionish = Awaited<ReturnType<typeof requireUser>>;
 function isManager(user: Sessionish): boolean {
@@ -172,4 +172,96 @@ export async function unassignSoldier(formData: FormData): Promise<void> {
   if (!ok) return;
   await prisma.dutyAssignment.delete({ where: { id: a.id } });
   revalidatePath("/duty");
+}
+
+/**
+ * 🤖 מנוע שיבוץ אוטומטי — ממלא את המשבצות הריקות בלוח בחלוקה הוגנת.
+ * לכל משבצת חסרה: בוחר מבריכת הזכאים (מחלקת/פלוגת המשבצת, פעילים, לא בשמ"פ באותו יום)
+ * את החיילים עם הכי מעט תורנויות בלוח (least-loaded), בלי כפילות של אותו חייל באותו יום.
+ */
+export async function autoFillBoard(formData: FormData): Promise<{ error?: string; ok?: boolean; filled?: number }> {
+  const user = await requireUser();
+  const bId = user.battalionId!;
+  const boardId = String(formData.get("boardId") || "");
+  const board = await prisma.dutyBoard.findFirst({ where: { id: boardId, battalionId: bId }, select: { id: true, name: true, createdById: true } });
+  if (!board) return { error: "לוח לא נמצא" };
+  if (board.createdById !== user.id && !isManager(user)) return { error: "רק יוזם הלוח/מפמ יכול לשבץ אוטומטית" };
+
+  const slots = await prisma.dutySlot.findMany({
+    where: { boardId },
+    select: { id: true, date: true, startTime: true, endTime: true, label: true, capacity: true, companyId: true, squadId: true, assignments: { select: { soldierId: true } } },
+    orderBy: [{ date: "asc" }, { startTime: "asc" }],
+  });
+  if (slots.length === 0) return { error: "אין משבצות בלוח" };
+
+  const dkey = (d: Date) => d.toISOString().slice(0, 10);
+  // עומס נוכחי פר-חייל (מאזן הוגן) + מי כבר משובץ באותו יום (מניעת כפילות)
+  const load = new Map<string, number>();
+  const byDate = new Map<string, Set<string>>();
+  for (const s of slots) {
+    const k = dkey(s.date);
+    if (!byDate.has(k)) byDate.set(k, new Set());
+    for (const a of s.assignments) { load.set(a.soldierId, (load.get(a.soldierId) ?? 0) + 1); byDate.get(k)!.add(a.soldierId); }
+  }
+
+  // 🚫 חיילים בשמ"פ פתוח שמכסה את תאריך המשבצת — לא זמינים לשיבוץ
+  const dates = slots.map((s) => s.date);
+  const minD = new Date(Math.min(...dates.map((d) => d.getTime())));
+  const maxD = new Date(Math.max(...dates.map((d) => d.getTime())));
+  const callups = await prisma.callupPeriod.findMany({
+    where: { soldier: { battalionId: bId }, startDate: { lte: maxD }, OR: [{ endDate: null }, { endDate: { gte: minD } }] },
+    select: { soldierId: true, startDate: true, endDate: true },
+  });
+  const onLeave = (soldierId: string, date: Date) =>
+    callups.some((c) => c.soldierId === soldierId && c.startDate <= date && (c.endDate == null || c.endDate >= date));
+
+  const filledAssignments: { soldierId: string; slotIdx: number }[] = [];
+  for (let si = 0; si < slots.length; si++) {
+    const slot = slots[si];
+    const need = slot.capacity - slot.assignments.length - filledAssignments.filter((f) => f.slotIdx === si).length;
+    if (need <= 0) continue;
+    const where: Prisma.SoldierWhereInput = { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } };
+    if (slot.squadId) where.squadId = slot.squadId;
+    else if (slot.companyId) where.companyId = slot.companyId;
+    const pool = await prisma.soldier.findMany({ where, select: { id: true } });
+    const dk = dkey(slot.date);
+    const dateSet = byDate.get(dk)!;
+    const candidates = pool
+      .map((p) => p.id)
+      .filter((id) => !dateSet.has(id) && !onLeave(id, slot.date))
+      .sort((a, b) => (load.get(a) ?? 0) - (load.get(b) ?? 0) || a.localeCompare(b));
+    for (let i = 0; i < need && i < candidates.length; i++) {
+      const sol = candidates[i];
+      await prisma.dutyAssignment.create({ data: { slotId: slot.id, soldierId: sol, assignedById: user.id, assignedByName: `${user.fullName ?? ""} (אוטומטי)` } });
+      load.set(sol, (load.get(sol) ?? 0) + 1);
+      dateSet.add(sol);
+      filledAssignments.push({ soldierId: sol, slotIdx: si });
+    }
+  }
+
+  // 🔔 התראות בבוט (batched) — רק למי שמקושר
+  if (filledAssignments.length) {
+    const solIds = [...new Set(filledAssignments.map((f) => f.soldierId))];
+    const [bat, chats] = await Promise.all([
+      prisma.battalion.findUnique({ where: { id: bId }, select: { telegramBotToken: true } }),
+      prisma.soldier.findMany({ where: { id: { in: solIds } }, select: { id: true, telegramChatId: true } }),
+    ]);
+    const chatMap = new Map(chats.map((c) => [c.id, c.telegramChatId]));
+    if (bat?.telegramBotToken) {
+      const { sendTelegramMessage } = await import("@/lib/telegram");
+      const { escapeTelegram } = await import("@/lib/escape-html");
+      for (const f of filledAssignments) {
+        const chatId = chatMap.get(f.soldierId);
+        if (!chatId) continue;
+        const slot = slots[f.slotIdx];
+        const when = `${new Date(slot.date).toLocaleDateString("he-IL")}${slot.startTime ? ` ${slot.startTime}${slot.endTime ? `-${slot.endTime}` : ""}` : ""}`;
+        await sendTelegramMessage(bat.telegramBotToken, chatId,
+          `🗓️ <b>שובצת למשימה — ${escapeTelegram(board.name)}</b>\n📅 ${when}${slot.label ? `\n📍 ${escapeTelegram(slot.label)}` : ""}`).catch(() => {});
+      }
+    }
+  }
+
+  await audit(user.id, "AUTO_FILL_DUTY", "DutyBoard", boardId, { filled: filledAssignments.length });
+  revalidatePath("/duty");
+  return { ok: true, filled: filledAssignments.length };
 }

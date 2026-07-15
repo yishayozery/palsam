@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader, Card, Badge } from "@/components/ui";
-import { createBoard, deleteBoard, addSlot, deleteSlot, assignSoldier, unassignSoldier, updateBoard } from "./actions";
+import { createBoard, deleteBoard, addSlot, deleteSlot, assignSoldier, unassignSoldier, updateBoard, autoFillBoard } from "./actions";
 import MonthCalendar from "./MonthCalendar";
 
 type Slot = {
@@ -70,6 +70,16 @@ export default function DutyClient({ isManager, boards, detail, companies, squad
             <div className="flex items-center gap-2">
               <button onClick={() => setShowSlot((v) => !v)} className="text-sm bg-blue-600 text-white rounded px-3 py-1.5 hover:bg-blue-700">➕ משבצת חדשה</button>
               <button onClick={() => { setShowEdit((v) => !v); setShowSlot(false); }} className="text-sm bg-indigo-50 border border-indigo-200 text-indigo-700 rounded px-3 py-1.5 hover:bg-indigo-100">✏️ ערוך לוח</button>
+              <form
+                action={(fd) => {
+                  if (!confirm("לשבץ אוטומטית את כל המשבצות הפנויות? החלוקה הוגנת (least-loaded) לפי מחלקה/פלוגה, והחיילים יקבלו התראה בבוט.")) return;
+                  fd.set("boardId", detail.id);
+                  start(async () => { const r = await autoFillBoard(fd); if (r.error) alert(r.error); else alert(r.filled ? `🤖 שובצו ${r.filled} חיילים אוטומטית ✅` : "אין משבצות פנויות לשיבוץ"); });
+                }}
+                className="inline"
+              >
+                <button disabled={pending} className="text-sm bg-emerald-600 text-white rounded px-3 py-1.5 hover:bg-emerald-700 disabled:opacity-50">🤖 שבץ אוטומטית</button>
+              </form>
             </div>
             {showSlot && (
               <form action={(fd) => act(addSlot, fd, () => setShowSlot(false))} className="flex flex-wrap items-end gap-2 mt-3">
