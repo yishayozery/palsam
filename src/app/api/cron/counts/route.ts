@@ -3,7 +3,7 @@ import { generatePendingTasks } from "@/lib/countScheduler";
 import { isAuthorizedCron } from "@/lib/cron-auth";
 
 // יצירת משימות ספירה + התראות ל-4 גדודים — מרחיב את חלון הריצה (Vercel Pro)
-export const maxDuration = 60;
+export const maxDuration = 300; // Vercel Pro — חלון רחב לברודקאסט רב-גדודי בלי חיתוך
 
 export async function GET(req: Request) {
   if (!isAuthorizedCron(req)) {

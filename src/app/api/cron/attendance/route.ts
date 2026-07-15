@@ -5,7 +5,7 @@ import { processMaintenanceReminders } from "@/lib/maintenanceReminder";
 import { isAuthorizedCron } from "@/lib/cron-auth";
 
 // ברודקאסטים ל-4 גדודים עם throttling עשויים לקחת עד דקה — מרחיב את חלון הריצה (Vercel Pro)
-export const maxDuration = 60;
+export const maxDuration = 300; // Vercel Pro — חלון רחב לברודקאסט רב-גדודי בלי חיתוך
 
 // רץ כל 30 דק' (vercel.json). מפעיל תזכורת פתיחה ב-07:00 ותזכורת חוזרת חצי שעה לפני שעת הגג.
 export async function GET(req: Request) {

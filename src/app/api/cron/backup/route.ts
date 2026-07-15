@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { runBackup } from "@/lib/backup";
 import { isAuthorizedCron } from "@/lib/cron-auth";
 
+export const maxDuration = 300; // Vercel Pro — גיבוי לוגי עשוי לקחת זמן על DB גדל
+
 export async function GET(req: Request) {
   if (!isAuthorizedCron(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
