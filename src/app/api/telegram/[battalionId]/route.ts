@@ -478,9 +478,11 @@ async function handleContactShare(
 ) {
   const contact = message.contact;
   const fromId = message.from?.id;
-  // חייב לשתף את המספר של עצמו (לא איש קשר אחר / מועבר)
-  if (!contact?.phone_number || (contact.user_id != null && fromId != null && String(contact.user_id) !== String(fromId))) {
-    await sendTelegramMessage(token, chatId, "⚠️ יש לשתף את <b>המספר שלך</b> דרך הכפתור, לא איש קשר אחר.");
+  // 🔐 חייב לשתף את המספר של עצמו דרך כפתור request_contact (שכולל תמיד user_id של השולח).
+  //    דחייה אם user_id חסר/לא-תואם — מונע צירוף כרטיס-איש-קשר ידני עם מספר של חייל אחר
+  //    (מספר שלא רשום בטלגרם מגיע ללא user_id, ואז אפשר היה "לטעון" בעלות על מספר לא-שלך).
+  if (!contact?.phone_number || contact.user_id == null || fromId == null || String(contact.user_id) !== String(fromId)) {
+    await sendTelegramMessage(token, chatId, "⚠️ יש לשתף את <b>המספר שלך</b> דרך הכפתור בלבד (לא כרטיס איש-קשר אחר).");
     return;
   }
   const challenge = await prisma.telegramBindChallenge.findUnique({ where: { battalionId_chatId: { battalionId, chatId } } });
