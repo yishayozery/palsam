@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateTelegramInitData } from "@/lib/telegram-auth";
+import { decryptSecret } from "@/lib/crypto";
 import { audit } from "@/lib/audit";
 import { notifyMissionCreated } from "@/lib/dispatch-notify";
 import { createOrUpdateMission, type MissionInput } from "@/lib/mission-core";
@@ -15,7 +16,7 @@ async function authenticate(req: NextRequest, battalionId: string) {
   });
   if (!battalion?.telegramBotToken) return null;
 
-  const tgUser = validateTelegramInitData(initData, battalion.telegramBotToken);
+  const tgUser = validateTelegramInitData(initData, decryptSecret(battalion.telegramBotToken)); // 🔐 טוקן מוצפן ב-rest
   if (!tgUser) return null;
 
   const soldier = await prisma.soldier.findFirst({

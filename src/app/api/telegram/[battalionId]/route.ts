@@ -9,6 +9,7 @@ import { linkTokenQuery } from "@/lib/link-token";
 import { escapeTelegram } from "@/lib/escape-html";
 import { normalizePhone } from "@/lib/phone";
 import { notifyBattalionResponsibles } from "@/lib/request-notify";
+import { decryptSecret } from "@/lib/crypto";
 
 export async function POST(
   req: NextRequest,
@@ -17,14 +18,18 @@ export async function POST(
   try {
     const { battalionId } = await params;
 
-    // 🔒 אימות שהבקשה באמת מטלגרם — רק אם הוגדר TELEGRAM_WEBHOOK_SECRET (opt-in,
-    //    כדי לא לשבור בוטים קיימים). לאחר הגדרת ה-env + רישום ה-webhook עם secret_token,
-    //    כל POST מזויף (בלי ה-header התואם) נדחה.
+    // 🔒 אימות שהבקשה באמת מטלגרם. בפרודקשן — TELEGRAM_WEBHOOK_SECRET הוא חובה (opt-out):
+    //    אם חסר → דחייה 500 (Telegram יחזור) + לוג, כדי שתקלת-קונפיג תתגלה ולא תיפתח דלת
+    //    לזיופים. בדב — מותר בלי סוד (לא לשבור פיתוח מקומי).
     const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
-    if (expectedSecret) {
+    if (!expectedSecret) {
+      if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
+        console.error("[telegram] TELEGRAM_WEBHOOK_SECRET missing in production — rejecting webhook");
+        return NextResponse.json({ ok: false }, { status: 500 });
+      }
+    } else {
       const provided = req.headers.get("x-telegram-bot-api-secret-token") ?? "";
-      // השוואה בזמן-קבוע (מונע timing attacks). timingSafeEqual דורש אורך זהה —
-      // מוודאים אורך קודם כדי לא לזרוק, ומשווים על אורך שווה בלבד.
+      // השוואה בזמן-קבוע (מונע timing attacks). timingSafeEqual דורש אורך זהה.
       const a = Buffer.from(provided);
       const b = Buffer.from(expectedSecret);
       if (a.length !== b.length || !timingSafeEqual(a, b)) {
@@ -57,7 +62,9 @@ export async function POST(
     }
 
     const body = await req.json();
-    const token = battalion.telegramBotToken;
+    // 🔐 מפענחים פעם אחת — הטוקן מוצפן ב-rest. כך גם fetch ישיר (getFile/הורדת קובץ)
+    //    וגם עוזרי telegram.ts (שם decryptSecret אידמפוטנטי על plaintext) עובדים.
+    const token = decryptSecret(battalion.telegramBotToken);
 
     // --- Inline keyboard callback (verification responses) ---
     const callback = body?.callback_query;
