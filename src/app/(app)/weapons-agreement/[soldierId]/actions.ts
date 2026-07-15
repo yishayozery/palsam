@@ -6,14 +6,16 @@ import { revalidatePath } from "next/cache";
 
 /** שמירת תוצאת אימות OCR של צילום מבחן הארמון (מריצים בצד-לקוח, מאמתים כאן הרשאה). */
 export async function saveArmoryTestVerification(
-  soldierId: string, verified: boolean, ocrText: string,
+  soldierId: string, verified: boolean, _ocrText: string,
 ): Promise<{ ok?: boolean; error?: string }> {
   const user = await requireCapability("weapons.view");
   const soldier = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true } });
   if (!soldier || soldier.battalionId !== user.battalionId) return { error: "לא נמצא" };
+  // 🔒 פרטיות: לא משמרים את טקסט ה-OCR הגולמי (מסמך צבאי) — שדה write-only שלא מוצג בשום מסך.
+  //    שומרים רק את דגל האימות; טקסט קיים נמחק בכל אימות מחדש.
   await prisma.soldier.update({
     where: { id: soldierId },
-    data: { armoryTestVerified: verified, armoryTestOcrText: ocrText.slice(0, 2000) },
+    data: { armoryTestVerified: verified, armoryTestOcrText: null },
   });
   revalidatePath("/armory-ineligibility");
   return { ok: true };

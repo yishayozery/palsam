@@ -261,7 +261,7 @@ model AppUser {
   soldier      Soldier?   @relation("SoldierAsUser", fields: [soldierId], references: [id])
   active       Boolean    @default(true)
   // 🔐 2FA TOTP (Google Authenticator) — אופציונלי, מומלץ לאדמינים
-  totpSecret   String? // base32 secret, מוצפן בעתיד
+  totpSecret   String? // base32 secret — מוצפן ב-rest (AES-256-GCM, src/lib/crypto.ts)
   totpEnabledAt DateTime? // נקבע ברגע ההפעלה
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
