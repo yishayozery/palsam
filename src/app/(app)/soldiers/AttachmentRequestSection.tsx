@@ -30,7 +30,9 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
 
 function StatusTimeline({ log }: { log: StatusLogEntry[] }) {
@@ -63,6 +65,7 @@ export default function AttachmentRequestSection({ companies, requests }: {
   const [error, setError] = useState<string | null>(null);
   const [fullEmployment, setFullEmployment] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [listOpen, setListOpen] = useState(false);
 
   const active = requests.filter((r) => r.status !== "APPROVED" && r.status !== "REJECTED");
   const done = requests.filter((r) => r.status === "APPROVED" || r.status === "REJECTED");
@@ -81,10 +84,15 @@ export default function AttachmentRequestSection({ companies, requests }: {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="font-bold text-slate-800 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => active.length > 0 && setListOpen((v) => !v)}
+          className={`font-bold text-slate-800 flex items-center gap-2 ${active.length > 0 ? "cursor-pointer" : "cursor-default"}`}
+        >
           📌 בקשות סיפוח
           {active.length > 0 && <Badge className="bg-amber-100 text-amber-700">{active.length} פתוחות</Badge>}
-        </h2>
+          {active.length > 0 && <span className="text-xs font-normal text-slate-400">{listOpen ? "▾ הסתר" : "▸ הצג"}</span>}
+        </button>
         <button
           onClick={() => setFormOpen(!formOpen)}
           className="text-sm bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700"
@@ -165,7 +173,7 @@ export default function AttachmentRequestSection({ companies, requests }: {
         <p className="text-xs text-slate-400">אין בקשות סיפוח. לחץ &quot;+ בקשת סיפוח&quot; להגשת בקשה חדשה.</p>
       )}
 
-      {active.length > 0 && (
+      {active.length > 0 && listOpen && (
         <div className="space-y-2 mb-3">
           {active.map((r) => (
             <div key={r.id} className={`border rounded-lg p-3 ${STATUS_COLORS[r.status] ?? "border-slate-200"}`}>
