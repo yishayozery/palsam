@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { authenticate, completeAuthWithTotp, createSession } from "@/lib/auth";
+import { authenticate, completeAuthWithTotp, createSession, verifyPendingTotp } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { checkRateLimit, getClientIp, RateLimitError } from "@/lib/rate-limit";
 
@@ -40,9 +40,21 @@ export async function loginAction(
     throw e;
   }
 
-  // 🔐 שלב 2 — אימות קוד 2FA אחרי סיסמה תקינה
+  // 🔐 שלב 2 — אימות קוד 2FA. pendingUserId הוא טוקן חתום (ניתן להשגה רק אחרי סיסמה תקינה).
   if (pendingUserId && totpToken) {
-    const sessionUser = await completeAuthWithTotp(pendingUserId, totpToken);
+    const uid = await verifyPendingTotp(pendingUserId);
+    if (!uid) return { error: "⏱️ פג תוקף האימות. התחבר/י מחדש." };
+    // 🛡️ הגבלת קצב per-חשבון על שלב-2 (מונע brute-force על קוד 6 הספרות)
+    try {
+      await checkRateLimit("totp", uid, { max: 5, windowSec: 900 });
+    } catch (e) {
+      if (e instanceof RateLimitError) {
+        const min = Math.ceil(e.retryAfterSec / 60);
+        return { error: `🛡️ יותר מדי ניסיונות. נסה שוב בעוד ${min} דקות.` };
+      }
+      throw e;
+    }
+    const sessionUser = await completeAuthWithTotp(uid, totpToken);
     if (!sessionUser) {
       return { step: "totp", pendingUserId, error: "❌ קוד שגוי" };
     }
@@ -62,7 +74,7 @@ export async function loginAction(
     return { error: "שם משתמש, סיסמה או מספר גדוד שגויים" };
   }
   if (result.kind === "totp_required") {
-    return { step: "totp", pendingUserId: result.userId };
+    return { step: "totp", pendingUserId: result.pendingToken };
   }
 
   // התחברות הצליחה בלי 2FA

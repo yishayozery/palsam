@@ -155,8 +155,31 @@ function toSession(user: {
 /** תוצאה של ניסיון התחברות */
 export type AuthResult =
   | { kind: "ok"; user: SessionUser }
-  | { kind: "totp_required"; userId: string } // צריך לבקש קוד 2FA
+  | { kind: "totp_required"; pendingToken: string } // צריך לבקש קוד 2FA — טוקן חתום קצר-מועד
   | { kind: "fail" };
+
+const PENDING_TTL = 5 * 60; // 5 דקות
+
+/** טוקן-ביניים חתום לשלב-2 של 2FA. ניתן להשגה רק אחרי סיסמה תקינה — מונע הזרקת userId. */
+export async function signPendingTotp(userId: string): Promise<string> {
+  return new SignJWT({ purpose: "totp-pending" })
+    .setProtectedHeader({ alg: JWT_ALG })
+    .setSubject(userId)
+    .setIssuedAt()
+    .setExpirationTime(`${PENDING_TTL}s`)
+    .sign(getSecret());
+}
+
+/** מאמת טוקן-ביניים ומחזיר את ה-userId, או null אם פג/מזויף. */
+export async function verifyPendingTotp(token: string): Promise<string | null> {
+  try {
+    const { payload } = await jwtVerify(token, getSecret(), { algorithms: [JWT_ALG] });
+    if (payload.purpose !== "totp-pending" || !payload.sub) return null;
+    return String(payload.sub);
+  } catch {
+    return null;
+  }
+}
 
 /** מאמת שם משתמש + סיסמה + מספר גדוד (אופציונלי לאדמין-על). case-insensitive על שם משתמש */
 export async function authenticate(
@@ -201,7 +224,7 @@ export async function authenticate(
     if (!ok) continue;
 
     // 🔐 2FA — אם המשתמש הפעיל TOTP, נדרש קוד נוסף
-    if (user.totpSecret) return { kind: "totp_required", userId: user.id };
+    if (user.totpSecret) return { kind: "totp_required", pendingToken: await signPendingTotp(user.id) };
     return { kind: "ok", user: toSession(user) };
   }
   return { kind: "fail" };
