@@ -4,6 +4,7 @@ import EditableItemList from "./EditableItemList";
 import CenteredWithRedirect from "./CenteredWithRedirect";
 import { WEAPONS_AGREEMENT_TITLE, WEAPONS_AGREEMENT_CLAUSES, WEAPONS_AGREEMENT_FOOTER } from "@/lib/weapons-agreement-text";
 import { linkTokenQuery } from "@/lib/link-token";
+import { getSoldierWeaponsEligibility } from "@/lib/weapons-eligibility";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export default async function PublicSignPage({
       transfer: {
         include: {
           lines: { include: { itemType: true, serialUnit: true } },
-          fromHolder: { select: { signatureClause: true, weaponsAgreementText: true, name: true, warehouseType: true } },
+          fromHolder: { select: { signatureClause: true, weaponsAgreementText: true, name: true, warehouseType: true, armoryTestUrl: true } },
         },
       },
     },
@@ -126,6 +127,63 @@ export default async function PublicSignPage({
   }
   if (sig.status === "EXPIRED" || (sig.tokenExpires && sig.tokenExpires < new Date())) {
     return <CenteredWithRedirect title="פג תוקף" text="הקישור אינו בתוקף. פנה לאחראי." tone="error" />;
+  }
+
+  // 🔒 חתימה על נשק מהארמון — מסך-הכוונה אם חסרים שלבים מקדימים (במקום לתת להיחסם בשקט).
+  //    כל שלב מציג מה חסר + לינק/הנחיה ישירה. הנוהל נחתם שוב אינליין בחתימה עצמה (כפילות מכוונת).
+  if (isArmoryTransfer && sig.soldier) {
+    const elig = await getSoldierWeaponsEligibility(sig.soldier.id);
+    if (elig && !elig.isFullyEligible) {
+      const soldierId = sig.soldier.id;
+      const testUrl = sig.transfer?.fromHolder?.armoryTestUrl ?? null;
+      const noholLink = `/weapons-sign/${soldierId}${linkTokenQuery("weapons-sign", soldierId)}`;
+      const steps: { ok: boolean; label: string; action: { text: string; href: string; external?: boolean } | null; note: string }[] = [
+        { ok: elig.enlisted, label: "גיוס", action: null, note: "פנה/י לשלישות להשלמת גיוס" },
+        { ok: elig.weaponsApproved, label: "אישור מפקד לנשיאת נשק", action: null, note: "פנה/י למפקד (מג\"ד/סמג\"ד) לאישור" },
+        { ok: elig.armoryTestSubmitted, label: "מבחן נוהל ארמון", action: testUrl ? { text: "📝 לביצוע המבחן", href: testUrl, external: true } : null, note: "לאחר המבחן — שלח/י צילום תוצאה בבוט (🔫 נשקייה)" },
+        { ok: elig.weaponsAgreementSigned, label: "חתימה על נוהל שמירת נשק", action: { text: "✍️ חתום/י על הנוהל", href: noholLink }, note: "חתימה נפרדת חד-פעמית — לחיצה נכנסת ישר" },
+      ];
+      return (
+        <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div className="bg-amber-500 text-white p-5 flex items-center gap-3">
+              {logo && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logo} alt="סמל הגדוד" className="w-12 h-12 object-contain bg-white/10 rounded p-1" />
+              )}
+              <div>
+                <div className="text-xs text-amber-100">PALMY · {unitName}</div>
+                <h1 className="text-lg font-bold">🔒 טרם ניתן לחתום על הנשק</h1>
+                <p className="text-sm text-amber-50 mt-1">{signerName}</p>
+              </div>
+            </div>
+            <div className="p-5 space-y-2.5">
+              <p className="text-sm text-slate-600 mb-1">כדי לחתום על הנשק יש להשלים קודם את השלבים החסרים:</p>
+              {steps.map((s, i) => (
+                <div key={i} className={`rounded-lg border p-3 ${s.ok ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{s.ok ? "✅" : "⬜"}</span>
+                    <span className={`font-bold text-sm ${s.ok ? "text-emerald-800" : "text-rose-800"}`}>{s.label}</span>
+                  </div>
+                  {!s.ok && (
+                    <div className="mt-2 pr-7 space-y-1">
+                      {s.action && (
+                        <a href={s.action.href} {...(s.action.external ? { target: "_blank", rel: "noreferrer" } : {})}
+                          className="inline-block bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5 text-sm font-medium">
+                          {s.action.text}
+                        </a>
+                      )}
+                      <p className="text-xs text-slate-500">{s.note}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <p className="text-[11px] text-slate-400 text-center pt-2">לאחר השלמת כל השלבים — פתח/י שוב את קישור החתימה על הנשק.</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
   }
 
   return (
