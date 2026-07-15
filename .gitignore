@@ -57,3 +57,8 @@ _m.txt
 /*.docx
 /*.xlsx
 commit_msg.txt
+
+# גיבויי DB / drill — לעולם לא ל-git (מכילים מידע רגיש)
+/backups/
+*.dump
+*.sql.gz
