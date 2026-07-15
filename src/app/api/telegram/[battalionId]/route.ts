@@ -177,7 +177,7 @@ export async function POST(
       await sendTelegramMessage(
         token,
         chatId,
-        `שלום! 👋\nאני הבוט של <b>${escapeTelegram(battalion.name)}</b> במערכת PALMY.\n\nשלח/י את <b>המספר האישי</b> שלך כדי להתחבר.`,
+        `שלום! 👋\nאני הבוט של <b>${escapeTelegram(battalion.name)}</b> במערכת PALMY.\n\n<b>חיבור מהיר ב-2 שלבים:</b>\n1️⃣ שלח/י כעת את <b>המספר האישי</b> שלך.\n2️⃣ מיד לאחר מכן — אימות טלפון בלחיצה על כפתור שיופיע למטה.\n\n👇 שלח/י עכשיו את המספר האישי שלך.`,
       );
       return NextResponse.json({ ok: true });
     }
@@ -465,7 +465,7 @@ async function startBindChallenge(token: string, chatId: string, battalionId: st
   });
   await sendTelegramMessage(
     token, chatId,
-    `כמעט שם, ${escapeTelegram(fullName)}! 🔐\nלאימות זהות — שתף/י את מספר הטלפון שלך בלחיצה על הכפתור למטה.\n(רק המספר שלך; חייב להתאים למספר הרשום במערכת)`,
+    `כמעט סיימנו, ${escapeTelegram(fullName)}! 🔐\n\n<b>שלב 2 מתוך 2 — אימות טלפון</b>\nלחצ/י על הכפתור <b>« 📱 שתף מספר לאימות »</b> שהופיע <b>למטה</b>, מתחת לשורת ההקלדה 👇\n\n• משתף <b>רק את המספר שלך</b>, שחייב להתאים למספר הרשום במערכת.\n• לא רואה/ה את הכפתור? לחצ/י על סמל ה־⌨️ / ⊞ שליד שדה ההקלדה כדי להציג אותו.`,
     SHARE_CONTACT_KEYBOARD,
   );
 }
@@ -919,7 +919,10 @@ async function handleCallback(
   await answerCallbackQuery(token, callback.id);
 }
 
-const HELP_TEXT = `📋 <b>מה כל כפתור עושה:</b>
+const HELP_TEXT = `🎖️ <b>ברוך/ה הבא ל-PALMY</b>
+המערכת הגדודית לניהול תעסוקה — נשק וציוד, נוכחות, רכבים, ספירות ותעודות לחתימה. כל מה שהיה בטפסים ובניירת — עכשיו מהטלפון, ישירות מהצ'אט הזה.
+
+📋 <b>מה כל כפתור עושה:</b>
 
 🔫 <b>נשקייה</b> — שלבי החתמת הנשק (אישור מפקד, מבחן ארמון, חתימה על נוהל) + רשימת הצל"ם הסריאלי שחתום עליך מול הארמון
 
@@ -1003,30 +1006,32 @@ async function handleStatus(token: string, chatId: string, soldier: SoldierCtx, 
   lines.push("");
 
   // Weapon signing status
-  lines.push("<b>📋 טפסים להחתמה:</b>");
+  lines.push("<b>📋 שלבים לקבלת נשק — 3 שלבים:</b>");
+  lines.push("");
 
   const step1 = soldier.weaponsApprovedAt;
-  lines.push(`${step1 ? "✅" : "⬜"} אישור מג״ד/סמג״ד${step1 ? ` (${fmtDate(step1)})` : ""}`);
+  lines.push(`<b>שלב 1.</b> ${step1 ? "✅" : "⬜"} אישור מג״ד/סמג״ד${step1 ? ` — בוצע ${fmtDate(step1)}` : " — <i>ממתין</i>"}`);
 
   const step2 = soldier.armoryTestProofAt;
-  lines.push(`${step2 ? "✅" : "⬜"} מבחן נוהל ארמון${step2 ? ` (${fmtDate(step2)})` : ""}`);
+  lines.push(`<b>שלב 2.</b> ${step2 ? "✅" : "⬜"} מבחן נוהל ארמון${step2 ? ` — בוצע ${fmtDate(step2)}` : " — <i>ממתין</i>"}`);
   if (!step2) {
     if (battalion.armoryTestUrl) {
-      lines.push(`   👉 <a href="${battalion.armoryTestUrl}">לחץ כאן למבחן</a>`);
+      lines.push(`     👉 <a href="${battalion.armoryTestUrl}">לחץ כאן לביצוע המבחן</a>`);
     }
-    lines.push(`   📸 שלח צילום מסך של תוצאת המבחן כדי לאשר`);
+    lines.push(`     📸 בסיום — שלח/י כאן צילום מסך של התוצאה לאישור`);
   }
 
   const step3 = soldier.weaponsAgreementSignedAt;
-  lines.push(`${step3 ? "✅" : "⬜"} חתימה על נוהל שמירת נשק${step3 ? ` (${fmtDate(step3)})` : ""}`);
+  lines.push(`<b>שלב 3.</b> ${step3 ? "✅" : "⬜"} חתימה על נוהל שמירת נשק${step3 ? ` — בוצע ${fmtDate(step3)}` : " — <i>ממתין</i>"}`);
   if (!step3) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
-    lines.push(`   👉 <a href="${baseUrl}/weapons-sign/${soldier.id}${linkTokenQuery("weapons-sign", soldier.id)}">לחץ כאן לחתימה על הנוהל</a> (נכנס ישר, חותם, זהו)`);
+    lines.push(`     👉 <a href="${baseUrl}/weapons-sign/${soldier.id}${linkTokenQuery("weapons-sign", soldier.id)}">לחץ כאן לחתימה מהירה</a> (נכנס/ת, חותם/ת, זהו)`);
   }
 
   const allDone = step1 && step2 && step3;
   lines.push("");
-  lines.push(allDone ? "✅ <b>כל השלבים הושלמו — ניתן לחתום על נשק</b>" : "⏳ <b>יש שלבים שלא הושלמו</b>");
+  lines.push(allDone ? "✅ <b>כל השלבים הושלמו — אפשר לגשת לנשקייה ולחתום על נשק</b>" : "⏳ <b>נותרו שלבים — השלם/י אותם כדי לקבל נשק</b>");
+  lines.push("➖➖➖➖➖➖➖➖➖➖");
 
   // צל"ם סריאלי חתום מול הארמון — רשימה מלאה (נשק, אמל"ח, כוונות וכו')
   const serialItems = await prisma.serialUnit.findMany({
