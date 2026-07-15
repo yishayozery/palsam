@@ -16,7 +16,8 @@ export { hashPassword, verifyPassword };
 function getSecret(): Uint8Array {
   const raw = process.env.AUTH_SECRET;
   if (!raw) {
-    if (process.env.NODE_ENV === "production") {
+    // כל סביבת דפלוי (production / Vercel / CI) חייבת AUTH_SECRET — fallback רק בדב מקומי
+    if (process.env.NODE_ENV === "production" || process.env.VERCEL || process.env.CI) {
       throw new Error("AUTH_SECRET must be set in production for session JWT signing");
     }
     return new TextEncoder().encode("dev-secret-change-me-please-32-characters");

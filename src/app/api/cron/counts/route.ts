@@ -1,19 +1,12 @@
 import { NextResponse } from "next/server";
 import { generatePendingTasks } from "@/lib/countScheduler";
+import { isAuthorizedCron } from "@/lib/cron-auth";
 
 // יצירת משימות ספירה + התראות ל-4 גדודים — מרחיב את חלון הריצה (Vercel Pro)
 export const maxDuration = 60;
 
 export async function GET(req: Request) {
-  const expected = process.env.CRON_SECRET || "";
-  if (!expected) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
-  const url = new URL(req.url);
-  const auth = req.headers.get("authorization") || "";
-  const provided = auth.replace(/^Bearer\s+/i, "") || url.searchParams.get("secret") || "";
-  if (provided !== expected) {
+  if (!isAuthorizedCron(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
