@@ -20,14 +20,16 @@ export async function adjustQuantity(
   if (delta === 0) return;
 
   if (delta > 0) {
-    // הוספה: מעלים את שורת ה-NULL location (יוצרים אם צריך)
+    // הוספה: מעלים את שורת ה-NULL location (יוצרים אם צריך).
+    // ⚙️ increment אטומי (לא read-modify-write) — מונע lost-update בהוספות מקבילות.
     const nullRow = await tx.stockBalance.findFirst({
       where: { itemTypeId, holderId, statusId, equipmentLocationId: null },
+      select: { id: true },
     });
     if (nullRow) {
       await tx.stockBalance.update({
         where: { id: nullRow.id },
-        data: { quantity: nullRow.quantity + delta },
+        data: { quantity: { increment: delta } },
       });
     } else {
       await tx.stockBalance.create({
