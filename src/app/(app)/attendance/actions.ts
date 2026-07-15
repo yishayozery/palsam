@@ -330,13 +330,14 @@ async function requireRoster() {
   return user;
 }
 
-/** סימון/ביטול נאמן כ"א לחייל. */
-export async function toggleAttendanceReporter(soldierId: string): Promise<{ ok?: boolean; error?: string }> {
+/** סימון/ביטול נאמן כ"א לחייל. allCompany=true → מדווח על כל הפלוגה (גם אם יש לו מחלקה). */
+export async function toggleAttendanceReporter(soldierId: string, allCompany = false): Promise<{ ok?: boolean; error?: string }> {
   try {
     const user = await requireRoster();
     const s = await prisma.soldier.findUnique({ where: { id: soldierId }, select: { battalionId: true, isAttendanceReporter: true } });
     if (!s || s.battalionId !== user.battalionId) return { error: "חייל לא נמצא" };
-    await prisma.soldier.update({ where: { id: soldierId }, data: { isAttendanceReporter: !s.isAttendanceReporter } });
+    const on = !s.isAttendanceReporter;
+    await prisma.soldier.update({ where: { id: soldierId }, data: { isAttendanceReporter: on, attendanceReporterAllCompany: on ? allCompany : false } });
     revalidatePath("/roster/control");
     return { ok: true };
   } catch (e) { return { error: e instanceof Error ? e.message : "שגיאה" }; }

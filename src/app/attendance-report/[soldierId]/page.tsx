@@ -19,14 +19,16 @@ export default async function AttendanceReportPage({ params, searchParams }: { p
 
   const reporter = await prisma.soldier.findUnique({
     where: { id: soldierId },
-    select: { id: true, fullName: true, battalionId: true, companyId: true, squadId: true, isAttendanceReporter: true,
+    select: { id: true, fullName: true, battalionId: true, companyId: true, squadId: true, isAttendanceReporter: true, attendanceReporterAllCompany: true,
       appUser: { select: { role: true } }, company: { select: { name: true } }, squad: { select: { name: true } }, battalion: { select: { name: true } } },
   });
   if (!reporter) notFound();
   const canReport = reporter.isAttendanceReporter || reporter.appUser?.role === "COMPANY_REP";
   if (!canReport) notFound();
 
-  const scopeWhere = reporter.squadId ? { squadId: reporter.squadId } : { companyId: reporter.companyId };
+  // היקף: כל הפלוגה אם סומן allCompany (או אין מחלקה); אחרת המחלקה שלו
+  const companyWide = reporter.attendanceReporterAllCompany || !reporter.squadId;
+  const scopeWhere = companyWide ? { companyId: reporter.companyId } : { squadId: reporter.squadId };
   const soldiers = await prisma.soldier.findMany({
     where: { battalionId: reporter.battalionId, status: { notIn: ["DISCHARGED", "INACTIVE"] }, ...scopeWhere },
     select: { id: true, fullName: true, personalNumber: true, squad: { select: { name: true } } },
@@ -56,9 +58,9 @@ export default async function AttendanceReportPage({ params, searchParams }: { p
     prisma.attendanceRecord.findMany({ where: { date: yObj, soldierId: { in: sids } }, select: { soldierId: true, statusId: true } }),
   ]);
 
-  const scopeName = reporter.squadId ? (reporter.squad?.name ?? "המחלקה") : (reporter.company?.name ?? "הפלוגה");
+  const scopeName = companyWide ? (reporter.company?.name ?? "הפלוגה") : (reporter.squad?.name ?? "המחלקה");
   // מצב נוכחות ראשוני — מי עוד פעיל על אותה קבוצה + מי דיווח לאחרונה (תיאום בין 2 נאמנים)
-  const scopeKey = reporter.squadId ?? reporter.companyId ?? "";
+  const scopeKey = (companyWide ? reporter.companyId : reporter.squadId) ?? "";
   const presence = scopeKey ? await readPresence(scopeKey, dateObj, reporter.id) : { others: [], lastSubmit: null };
   return (
     <AttendanceReportClient

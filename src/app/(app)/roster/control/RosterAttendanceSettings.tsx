@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toggleAttendanceReporter, saveReportWindow, saveReportOverride, deleteReportOverride } from "../../attendance/actions";
 
-type Sol = { id: string; name: string; squadName: string | null; isReporter: boolean };
+type Sol = { id: string; name: string; squadName: string | null; isReporter: boolean; allCompany?: boolean };
 type Comp = { companyId: string; companyName: string; soldiers: Sol[] };
 type Override = { id: string; date: string; daysForward: number; note: string | null };
 const DOW = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
@@ -88,7 +88,7 @@ export default function RosterAttendanceSettings({ companies, window, overrides 
                     {addableSoldiers.map((s) => <option key={s.id} value={s.id}>{s.name}{s.squadName ? ` · ${s.squadName}` : ""}</option>)}
                   </select>
                 </div>
-                <button disabled={!selSol || pending} onClick={() => start(async () => { await toggleAttendanceReporter(selSol); setSelSol(""); router.refresh(); })}
+                <button disabled={!selSol || pending} onClick={() => start(async () => { await toggleAttendanceReporter(selSol, !selSquad); setSelSol(""); router.refresh(); })}
                   className="mt-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">{pending ? "…" : "➕ סמן כנאמן"}</button>
               </div>
 
@@ -104,7 +104,7 @@ export default function RosterAttendanceSettings({ companies, window, overrides 
                       <div className="flex flex-wrap gap-1.5">
                         {reps.map((s) => (
                           <span key={s.id} className="inline-flex items-center gap-1 text-xs bg-sky-100 text-sky-800 rounded-full pl-1 pr-2 py-0.5">
-                            {s.name}{s.squadName && <span className="text-[10px] text-sky-500">· {s.squadName}</span>}
+                            {s.name}<span className="text-[10px] text-sky-600">· {s.allCompany || !s.squadName ? "כל הפלוגה" : s.squadName}</span>
                             <button onClick={() => start(async () => { await toggleAttendanceReporter(s.id); router.refresh(); })} disabled={pending} className="text-sky-500 hover:text-rose-600 font-bold">✕</button>
                           </span>
                         ))}

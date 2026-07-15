@@ -31,7 +31,7 @@ export default async function RosterControlPage({
 
   const [companies, soldiers, statuses, employments, callups] = await Promise.all([
     prisma.holder.findMany({ where: { battalionId: bId, kind: "COMPANY", active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.soldier.findMany({ where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } }, orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }], select: { id: true, fullName: true, personalNumber: true, companyId: true, isAttendanceReporter: true, squad: { select: { name: true } } } }),
+    prisma.soldier.findMany({ where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } }, orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }], select: { id: true, fullName: true, personalNumber: true, companyId: true, isAttendanceReporter: true, attendanceReporterAllCompany: true, squad: { select: { name: true } } } }),
     prisma.attendanceStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, color: true, icon: true, isPresent: true } }),
     prisma.employment.findMany({ where: { battalionId: bId }, orderBy: [{ active: "desc" }, { startDate: "desc" }], select: { id: true, name: true, startDate: true, endDate: true, active: true } }),
     prisma.callupPeriod.findMany({ where: { soldier: { battalionId: bId } }, orderBy: { startDate: "desc" }, select: { id: true, soldierId: true, startDate: true, endDate: true } }),
@@ -164,7 +164,7 @@ export default async function RosterControlPage({
   const reportWindow = Array.isArray(batWin?.attendanceReportWindowDow) ? (batWin!.attendanceReportWindowDow as unknown[]).map((n) => Number(n) || 0) : [0, 0, 0, 0, 0, 0, 0];
   const reporterCompanies = companies.map((c) => ({
     companyId: c.id, companyName: c.name,
-    soldiers: soldiers.filter((s) => s.companyId === c.id).map((s) => ({ id: s.id, name: s.fullName, squadName: s.squad?.name ?? null, isReporter: s.isAttendanceReporter })),
+    soldiers: soldiers.filter((s) => s.companyId === c.id).map((s) => ({ id: s.id, name: s.fullName, squadName: s.squad?.name ?? null, isReporter: s.isAttendanceReporter, allCompany: s.attendanceReporterAllCompany })),
   })).filter((c) => c.soldiers.length > 0);
 
   return (
