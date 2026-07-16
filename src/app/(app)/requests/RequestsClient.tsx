@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { REQUEST_TYPE_LABEL, REQUEST_PRIORITY_LABEL, REQUEST_STATUS_LABEL, REQUEST_STATUS_STYLE, REQUEST_TYPES, REQUEST_PRIORITIES } from "@/lib/request-labels";
 import type { RequestType, RequestPriority, RequestStatus } from "@/generated/prisma";
-import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus, assignTypeHandler, removeTypeHandler, setTypeConfig, addFieldDef, removeFieldDef, saveHandlerFields, addResponsible, removeResponsible, ensureTransportParties } from "./actions";
+import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus, assignTypeHandler, removeTypeHandler, setTypeConfig, addFieldDef, removeFieldDef, saveHandlerFields, addResponsible, removeResponsible, ensureTransportParties, broadcastToResponsibles } from "./actions";
 
 import FuelCardsClient, { type FuelCard } from "./FuelCardsClient";
 
@@ -64,6 +64,10 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
   const [replyText, setReplyText] = useState("");
   const [handlerFor, setHandlerFor] = useState<string | null>(null);
   const [transportLinks, setTransportLinks] = useState<Record<string, TransportLink[]>>({});
+  const bcTypes = myTypes ?? REQUEST_TYPES;
+  const [showBroadcast, setShowBroadcast] = useState(false);
+  const [bcType, setBcType] = useState<RequestType>(bcTypes[0] ?? "SUPPLY");
+  const [bcMsg, setBcMsg] = useState("");
 
   const OPEN_STATUSES: RequestStatus[] = ["PENDING_APPROVAL", "IN_PROGRESS", "NEEDS_INFO"];
   const filtered = useMemo(() => requests.filter((r) => {
@@ -118,6 +122,42 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
       )}
       {myTypes && (
         <div className="text-xs text-slate-500 mb-2">בעל תפקיד — סוגים באחריותך: <b>{myTypes.length ? myTypes.map((t) => REQUEST_TYPE_LABEL[t]).join(", ") : "טרם הוקצו סוגים"}</b></div>
+      )}
+
+      {/* 📢 עדכון יזום לרפרנטים בכל הגדודים — מפקד תא / מלכ"א */}
+      {mode === "brigade" && tab === "list" && bcTypes.length > 0 && (
+        <Card className="mb-3 p-3 border-sky-200">
+          <button onClick={() => setShowBroadcast((v) => !v)} className="text-sm bg-sky-600 text-white rounded-lg px-3 py-1.5 hover:bg-sky-700">
+            📢 שלח עדכון לרפרנטים {showBroadcast ? "▾" : "▸"}
+          </button>
+          {showBroadcast && (
+            <form
+              action={(fd) => {
+                fd.set("type", bcType);
+                start(async () => {
+                  const r = await broadcastToResponsibles(fd);
+                  if (r.error) { alert(r.error); return; }
+                  alert(r.sent ? `📢 העדכון נשלח ל-${r.sent} רפרנטים בגדודים ✅` : "אין רפרנטים מחוברים-לבוט לנושא זה");
+                  setBcMsg(""); setShowBroadcast(false);
+                });
+              }}
+              className="mt-3 space-y-2"
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <label className="text-xs text-slate-500">נושא</label>
+                <select value={bcType} onChange={(e) => setBcType(e.target.value as RequestType)} className="rounded border border-slate-300 px-2 py-1 text-sm">
+                  {bcTypes.map((t) => <option key={t} value={t}>{REQUEST_TYPE_LABEL[t]}</option>)}
+                </select>
+              </div>
+              <textarea name="message" value={bcMsg} onChange={(e) => setBcMsg(e.target.value)} required rows={3}
+                placeholder="ההודעה שתישלח לכל אחראי-התחום של הנושא בכל הגדודים (שינוי שעת קליטה, עדכון נוהל, סטטוס כללי...)"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <div className="flex justify-end">
+                <button disabled={pending} className="bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white rounded-lg px-4 py-1.5 text-sm font-medium">שלח לרפרנטים</button>
+              </div>
+            </form>
+          )}
+        </Card>
       )}
 
       {/* הגדרות בעלי-תפקיד — מלכ"א */}

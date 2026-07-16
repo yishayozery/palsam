@@ -34,6 +34,26 @@ async function canHandleType(user: Sessionish, type: RequestType): Promise<boole
   return !!h;
 }
 
+/** 📢 מפקד-תא בחטיבה שולח עדכון יזום לכל הרפרנטים (אחראי-תחום) של הנושא בכל גדודי-הבת. */
+export async function broadcastToResponsibles(formData: FormData): Promise<{ error?: string; ok?: boolean; sent?: number }> {
+  const user = await requireUser();
+  const unit = await myUnit(user);
+  if (unit?.level !== "BRIGADE") return { error: "פעולה זו זמינה רק ביחידת חטיבה" };
+  const type = String(formData.get("type") || "") as RequestType;
+  const message = String(formData.get("message") || "").trim();
+  if (!type) return { error: "בחר נושא" };
+  if (!message) return { error: "הזן הודעה" };
+  if (!(await canHandleType(user, type))) return { error: "אינך אחראי על נושא זה" };
+
+  const children = await prisma.battalion.findMany({ where: { parentId: unit.id }, select: { id: true } });
+  const childIds = children.map((c) => c.id);
+  const text = `📢 <b>עדכון מהחטיבה — ${escapeTelegram(REQUEST_TYPE_LABEL[type])}</b>\n${escapeTelegram(message)}\n\n<i>— ${escapeTelegram(user.fullName ?? "מפקד תא")}</i>`;
+  const sent = await prisma.requestResponsible.count({ where: { battalionId: { in: childIds }, type, chatId: { not: null } } });
+  await Promise.all(children.map((c) => notifyBattalionResponsibles(c.id, type, text)));
+  await audit(user.id, "BROADCAST_RESPONSIBLES", "RequestType", type, { sent });
+  return { ok: true, sent };
+}
+
 /** מלכ"א מקצה בעל-תפקיד לסוג דרישה. */
 export async function assignTypeHandler(formData: FormData): Promise<{ error?: string; ok?: boolean }> {
   const user = await requireUser();
