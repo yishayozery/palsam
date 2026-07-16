@@ -160,6 +160,7 @@ export default async function DispatchPage() {
         ? `${v.externalVehicleTypeName || "רכב חוץ"} ${v.externalVehicleNumber || ""}`.trim()
         : `${v.vehicleSerialUnit?.itemType.name || "רכב"} · ${v.vehicleSerialUnit?.serialNumber || ""}`,
       typeName: v.isExternal ? (v.externalVehicleTypeName || "רכב חוץ") : (v.vehicleSerialUnit?.itemType.name || "רכב"),
+      ident: v.isExternal ? (v.externalVehicleNumber || null) : (v.vehicleSerialUnit?.serialNumber || null),
       equipment: v.vehicleSerialUnitId ? (equipByVehicle.get(v.vehicleSerialUnitId) ?? []) : [],
       soldiers: v.soldiers.map((s) => ({
         vasId: s.id, soldierId: s.soldierId, externalName: s.externalName, externalPersonalNumber: s.externalPersonalNumber, isDriver: s.isDriver,

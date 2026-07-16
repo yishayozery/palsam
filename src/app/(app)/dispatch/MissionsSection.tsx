@@ -3,14 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
-import ConvoyView, { vehicleIcon } from "./ConvoyView";
+import { ConvoyStrip, vehicleIcon } from "./ConvoyView";
 import MissionModal, { type MVehicle, type MSoldier, type MTemplate, type MRole, type EditMission } from "./MissionModal";
 import { toggleMissionComplete, deleteMission, startMission, toggleTripConfirmed } from "./actions";
 
 type MSoldierFull = { vasId: string; soldierId: string | null; externalName: string | null; externalPersonalNumber: string | null; isDriver: boolean; name: string; pn: string | null; tripConfirmedAt: string | null; dispatchRoleId?: string | null };
 type MVehicleFull = {
   isExternal: boolean; vehicleSerialUnitId: string | null; externalVehicleNumber: string | null; externalVehicleTypeName: string | null;
-  label: string; typeName: string; soldiers: MSoldierFull[];
+  label: string; typeName: string; ident: string | null; soldiers: MSoldierFull[];
   equipment?: { name: string; serial: string; holder: string | null }[];
 };
 export type MissionFull = {
@@ -142,7 +142,7 @@ export default function MissionsSection({
                   </div>
                 </div>
                 <div className="p-3 space-y-3">
-                  <ConvoyView vehicles={m.vehicles.map((v) => ({ typeName: v.typeName }))} />
+                  <ConvoyStrip vehicles={m.vehicles.map((v) => ({ isExternal: v.isExternal, typeName: v.typeName, ident: v.ident }))} battalionLogo={battalionLogo} />
                   <div className="text-xs text-slate-400">{m.vehicles.length} רכבים · {totalSoldiers} חיילים · נוצר ע&quot;י {m.createdByName}</div>
                   <div className="grid md:grid-cols-2 gap-2">
                     {m.vehicles.map((v, vi) => (
