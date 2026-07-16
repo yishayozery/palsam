@@ -22,7 +22,7 @@ export type MissionFull = {
 };
 
 export default function MissionsSection({
-  missions, companies, vehicles, soldiers, templates, dispatchRoles = [], soldierRoleMap = {}, presentSoldierIds = [], myCompanyId,
+  missions, companies, vehicles, soldiers, templates, dispatchRoles = [], soldierRoleMap = {}, presentSoldierIds = [], myCompanyId, battalionLogo = null,
 }: {
   missions: MissionFull[];
   companies: { id: string; name: string }[];
@@ -33,6 +33,7 @@ export default function MissionsSection({
   soldierRoleMap?: Record<string, string[]>;
   presentSoldierIds?: string[];
   myCompanyId: string | null;
+  battalionLogo?: string | null;
 }) {
   const router = useRouter();
   const [, start] = useTransition();
@@ -191,7 +192,7 @@ export default function MissionsSection({
       {modal.open && (
         <MissionModal
           companies={companies} vehicles={vehicles} soldiers={soldiers} templates={templates} dispatchRoles={dispatchRoles}
-          soldierRoleMap={soldierRoleMap} presentSoldierIds={presentSoldierIds} myCompanyId={myCompanyId}
+          soldierRoleMap={soldierRoleMap} presentSoldierIds={presentSoldierIds} myCompanyId={myCompanyId} battalionLogo={battalionLogo}
           edit={modal.edit} reuse={modal.reuse} onClose={() => setModal({ open: false, edit: null })}
         />
       )}

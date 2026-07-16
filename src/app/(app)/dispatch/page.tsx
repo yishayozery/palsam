@@ -29,7 +29,7 @@ export default async function DispatchPage() {
   }
 
   const [battalion, vehicles, soldiers, templates, vehicleTypeLicenses, missions] = await Promise.all([
-    prisma.battalion.findUnique({ where: { id: bId }, select: { name: true } }),
+    prisma.battalion.findUnique({ where: { id: bId }, select: { name: true, logoData: true } }),
     // כל רכבי הגדוד התקינים
     prisma.serialUnit.findMany({
       where: {
@@ -219,6 +219,7 @@ export default async function DispatchPage() {
         soldierRoleMap={soldierRoleMap}
         presentSoldierIds={presentSoldierIds}
         myCompanyId={effectiveCompanyId}
+        battalionLogo={battalion?.logoData ?? null}
       />
 
       {vehicles.length === 0 && (

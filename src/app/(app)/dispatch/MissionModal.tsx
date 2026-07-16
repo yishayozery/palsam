@@ -42,7 +42,7 @@ let keySeq = 0;
 const nextKey = () => `k${++keySeq}`; // מונה מודול — ייחודי לכל קריאה, ללא Date.now (טהור ל-react-compiler)
 
 export default function MissionModal({
-  companies, vehicles, soldiers, templates, dispatchRoles = [], soldierRoleMap = {}, presentSoldierIds = [], myCompanyId, edit, reuse, onClose,
+  companies, vehicles, soldiers, templates, dispatchRoles = [], soldierRoleMap = {}, presentSoldierIds = [], myCompanyId, battalionLogo = null, edit, reuse, onClose,
 }: {
   companies: { id: string; name: string }[];
   vehicles: MVehicle[];
@@ -52,6 +52,7 @@ export default function MissionModal({
   soldierRoleMap?: Record<string, string[]>;
   presentSoldierIds?: string[];
   myCompanyId: string | null;
+  battalionLogo?: string | null;
   edit?: EditMission | null;
   reuse?: boolean;
   onClose: () => void;
@@ -296,7 +297,13 @@ export default function MissionModal({
                       onDragOver={(e) => e.preventDefault()} onDrop={() => { if (dragKey) reorderRow(dragKey, row.key); setDragKey(null); }}
                       onClick={() => setActiveVehKey(row.key)} title={`רכב ${ri + 1} · ${type} · ${ident}${bad ? " · לא תקין" : ""} — גרור/לחץ`}
                       className={`relative flex flex-col items-center rounded-lg border px-2 py-1 min-w-[76px] cursor-grab active:cursor-grabbing ${active ? "bg-slate-800 text-white border-slate-800 ring-2 ring-slate-400" : "bg-white border-slate-300 hover:bg-slate-100"} ${bad ? "!border-rose-400" : ""} ${dragKey === row.key ? "opacity-40" : ""}`}>
-                      <span className="text-[10px] opacity-70">רכב {ri + 1}</span>
+                      <span className="text-[10px] opacity-70 flex items-center gap-0.5">
+                        {row.source === "system" && (battalionLogo
+                          // eslint-disable-next-line @next/next/no-img-element
+                          ? <img src={battalionLogo} alt="גדוד" title="רכב הגדוד" className="w-3.5 h-3.5 object-contain rounded-sm bg-white" />
+                          : <span title="רכב הגדוד">🚩</span>)}
+                        רכב {ri + 1}
+                      </span>
                       <span className="text-2xl leading-none">{vehicleIcon(type)}</span>
                       <span className="text-[10px] font-semibold mt-0.5 max-w-[72px] truncate" title={type}>{type}</span>
                       <span className="text-[9px] opacity-70 max-w-[72px] truncate" title={ident}>{row.source === "external" ? "🔶 " : ""}{ident}</span>
