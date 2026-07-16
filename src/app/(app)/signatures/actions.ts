@@ -1217,16 +1217,46 @@ export async function createSoldierTransfer(formData: FormData): Promise<{ ok?: 
   const serialIds = formData.getAll("serial").map(String).filter(Boolean);
   const keepLocation = formData.get("keepLocation") === "true";
   const equipmentLocationId = String(formData.get("equipmentLocationId") || "") || null;
+  // פריטים כמותיים: qty:${itemTypeId}:${statusId} = כמות
+  const qtyEntries: { itemTypeId: string; statusId: string; qty: number }[] = [];
+  for (const [key, val] of formData.entries()) {
+    if (key.startsWith("qty:")) {
+      const [, itemTypeId, statusId] = key.split(":");
+      const qty = parseInt(String(val), 10);
+      if (qty > 0 && itemTypeId && statusId) qtyEntries.push({ itemTypeId, statusId, qty });
+    }
+  }
   if (!fromSoldierId || !toSoldierId) return { error: "בחר חייל מוסר וחייל מקבל" };
   if (fromSoldierId === toSoldierId) return { error: "החייל המוסר והמקבל זהים" };
-  if (serialIds.length === 0) return { error: "בחר לפחות פריט אחד להעברה" };
+  if (serialIds.length === 0 && qtyEntries.length === 0) return { error: "בחר לפחות פריט אחד להעברה" };
 
-  // ולידציה: כל היחידות חתומות על החייל המוסר ושייכות לגדוד
-  const units = await prisma.serialUnit.findMany({
+  // ולידציה: כל היחידות הסריאליות חתומות על החייל המוסר ושייכות לגדוד
+  const units = serialIds.length === 0 ? [] : await prisma.serialUnit.findMany({
     where: { id: { in: serialIds }, battalionId: bId, signedSoldierId: fromSoldierId },
-    select: { id: true, itemTypeId: true, statusId: true, lotQuantity: true },
+    select: { id: true, itemTypeId: true, statusId: true, lotQuantity: true, serialNumber: true, currentHolderId: true, equipmentLocationId: true },
   });
-  if (units.length === 0) return { error: "לא נמצאו פריטים חתומים על החייל המוסר" };
+  if (serialIds.length > 0 && units.length === 0) return { error: "לא נמצאו פריטים חתומים על החייל המוסר" };
+
+  // ולידציה כמותית: הכמות המבוקשת לא חורגת מהיתרה של המוסר (SIGNOUT פחות CHECKIN)
+  if (qtyEntries.length > 0) {
+    const heldLines = await prisma.transferLine.findMany({
+      where: { serialUnitId: null, transfer: { battalionId: bId, status: "COMPLETED", type: { in: ["SIGNOUT", "CHECKIN"] }, toSoldierId: fromSoldierId } },
+      select: { itemTypeId: true, statusId: true, quantity: true, transfer: { select: { type: true } } },
+    });
+    const held = new Map<string, number>();
+    for (const l of heldLines) {
+      if (!l.statusId) continue;
+      const k = `${l.itemTypeId}|${l.statusId}`;
+      held.set(k, (held.get(k) ?? 0) + (l.transfer.type === "SIGNOUT" ? 1 : -1) * l.quantity);
+    }
+    for (const e of qtyEntries) {
+      const avail = held.get(`${e.itemTypeId}|${e.statusId}`) ?? 0;
+      if (e.qty > avail) {
+        const it = await prisma.itemType.findUnique({ where: { id: e.itemTypeId }, select: { name: true } });
+        return { error: `כמות להעברה של "${it?.name ?? "פריט"}" (${e.qty}) חורגת מהיתרה של המוסר (${avail})` };
+      }
+    }
+  }
 
   const [toSoldier, fromSoldier] = await Promise.all([
     prisma.soldier.findFirst({ where: { id: toSoldierId, battalionId: bId }, select: { id: true, fullName: true, telegramChatId: true } }),
@@ -1247,12 +1277,46 @@ export async function createSoldierTransfer(formData: FormData): Promise<{ ok?: 
       });
       transferId = transfer.id;
       for (const su of units) {
+        const isLot = (su.lotQuantity ?? 1) > 1;
+        const reqLot = parseInt(String(formData.get(`lotQty:${su.id}`) || "0"), 10);
+        const moveQty = isLot && reqLot > 0 && reqLot < (su.lotQuantity ?? 1) ? reqLot : (su.lotQuantity ?? 1);
         await tx.transferLine.create({
-          data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: su.id, statusId: su.statusId },
+          data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: moveQty, serialUnitId: su.id, statusId: su.statusId },
         });
-        const data: { signedSoldierId: string; equipmentLocationId?: string | null } = { signedSoldierId: toSoldierId };
-        if (!keepLocation) data.equipmentLocationId = equipmentLocationId; // העברה למיקום חדש / ניקוי
-        await tx.serialUnit.update({ where: { id: su.id }, data });
+        if (isLot && moveQty < (su.lotQuantity ?? 1)) {
+          // אצווה חלקית — יוצרים יחידת-בת למקבל ומקטינים את יתרת המוסר
+          let suffix = 1;
+          while (await tx.serialUnit.findFirst({ where: { itemTypeId: su.itemTypeId, serialNumber: `${su.serialNumber}/${suffix}` } })) suffix++;
+          await tx.serialUnit.create({
+            data: {
+              battalionId: bId, itemTypeId: su.itemTypeId, serialNumber: `${su.serialNumber}/${suffix}`,
+              lotQuantity: moveQty, statusId: su.statusId, signedSoldierId: toSoldierId, currentHolderId: su.currentHolderId,
+              equipmentLocationId: keepLocation ? su.equipmentLocationId : equipmentLocationId,
+            },
+          });
+          await tx.serialUnit.update({ where: { id: su.id }, data: { lotQuantity: (su.lotQuantity ?? 1) - moveQty } });
+        } else {
+          const data: { signedSoldierId: string; equipmentLocationId?: string | null } = { signedSoldierId: toSoldierId };
+          if (!keepLocation) data.equipmentLocationId = equipmentLocationId; // העברה למיקום חדש / ניקוי
+          await tx.serialUnit.update({ where: { id: su.id }, data });
+        }
+      }
+      // פריטים כמותיים — שורות SIGNOUT על תעודת המקבל (היתרה מחושבת מיד; לא נוגעים במלאי מחסן)
+      for (const e of qtyEntries) {
+        await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: e.itemTypeId, quantity: e.qty, statusId: e.statusId } });
+      }
+      // זיכוי המוסר — תעודת CHECKIN מיידית (מקטינה את יתרת הכמותי של המוסר)
+      if (qtyEntries.length > 0) {
+        const back = await tx.transfer.create({
+          data: {
+            battalionId: bId, type: "CHECKIN", status: "COMPLETED", toSoldierId: fromSoldierId, fromHolderId: null,
+            createdById: user.id, approvedAt: new Date(),
+            notes: `העברה בין חיילים — זיכוי מוסר: ${fromSoldier?.fullName ?? "מוסר"} → ${toSoldier.fullName}`,
+          },
+        });
+        for (const e of qtyEntries) {
+          await tx.transferLine.create({ data: { transferId: back.id, itemTypeId: e.itemTypeId, quantity: e.qty, statusId: e.statusId } });
+        }
       }
       await tx.signature.create({
         data: { battalionId: bId, soldierId: toSoldierId, transferId: transfer.id, method: "QR" as SignatureMethod, status: "PENDING", token, tokenExpires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7) },
@@ -1262,7 +1326,7 @@ export async function createSoldierTransfer(formData: FormData): Promise<{ ok?: 
     return { error: e instanceof Error ? e.message : "שגיאה ביצירת ההעברה" };
   }
 
-  await audit(user.id, "SOLDIER_TRANSFER", "Transfer", transferId, { fromSoldierId, toSoldierId, count: units.length });
+  await audit(user.id, "SOLDIER_TRANSFER", "Transfer", transferId, { fromSoldierId, toSoldierId, serialCount: units.length, qtyCount: qtyEntries.length });
   await notifySoldierSignRequest(toSoldierId, bId, token);
   await notifyIssuerTelegram(user.id, bId, transferId, "signout");
   try {

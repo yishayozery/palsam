@@ -265,6 +265,10 @@ export async function companyReturn(formData: FormData): Promise<{ ok?: boolean;
       }
     }
     if (!companyId) return { error: "חסרה פלוגה" };
+    // 🔒 רס"פ/מפלג — מזכה רק את הפלוגה שלו (חסימת פעולה על פלוגה אחרת)
+    if (user.role === "COMPANY_REP" && user.holderId && companyId !== user.holderId) {
+      return { error: "אין הרשאה לזכות פלוגה שאינה שלך" };
+    }
     if (serialIds.length === 0 && qtyEntries.length === 0) return { error: "בחר לפחות פריט אחד" };
     if (!recipientName) return { error: "🔒 חובה למלא את שם המוסר מהפלוגה" };
 

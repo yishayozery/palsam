@@ -76,7 +76,8 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
   // אבל הפרופיל הראשי שלו במקום אחר.
   const companiesForSignRaw = (user.holderId || isMafam)
     ? await prisma.holder.findMany({
-        where: { battalionId: bId, kind: "COMPANY", active: true },
+        // 🔒 רס"פ/מפלג — רק הפלוגה שלו; קצין מחסן/מפ"מ — כל הפלוגות
+        where: { battalionId: bId, kind: "COMPANY", active: true, ...(isCompanyRep ? { id: user.holderId! } : {}) },
         include: {
           users: {
             where: { active: true },
@@ -378,8 +379,8 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                   signMode: b.itemType.signMode,
                 }))}
               />}
-              {/* 🆕 זיכוי פלוגה — לקצין מחסן ולמפ"מ (לא לרס"פ). מקבל ציוד מפלוגה למחסן. */}
-              {!isCompanyRep && (
+              {/* 🆕 זיכוי פלוגה→גדוד — קצין מחסן/מפ"מ (כל הפלוגות) + רס"פ/מפלג (הפלוגה שלו בלבד). */}
+              {(
                 <CompanyCheckinModal
                   companies={companiesForSign.map((c) => ({ id: c.id, name: c.name }))}
                   serials={companySerials.map((u) => ({
@@ -428,6 +429,11 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                   id: u.id, serial: u.serialNumber, itemName: u.itemType.name,
                   soldierId: u.signedSoldierId!, soldierName: u.signedSoldier!.fullName, soldierPN: u.signedSoldier!.personalNumber,
                   statusName: u.status.name, lotQuantity: u.lotQuantity,
+                }))}
+                qtyHoldings={soldierQtyHoldings.map((q) => ({
+                  soldierId: q.soldierId, soldierName: q.soldierName, soldierPN: q.soldierPN,
+                  itemTypeId: q.itemTypeId, itemName: q.itemName, sku: q.sku, unit: q.unit,
+                  statusId: q.statusId, statusName: q.statusName, quantity: q.quantity,
                 }))}
                 soldiers={soldiers.map((s) => ({ id: s.id, name: s.fullName, pn: s.personalNumber }))}
                 equipmentLocations={allCompanyLocations.map((l) => ({ id: l.id, name: l.name }))}

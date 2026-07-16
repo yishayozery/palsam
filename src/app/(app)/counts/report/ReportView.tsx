@@ -6,6 +6,7 @@ import { Card, Badge, Table, Th, Td } from "@/components/ui";
 type Row = {
   itemId: string; itemName: string; sku: string | null; trackingMethod: string;
   categoryId: string | null; categoryName: string | null;
+  sourceWarehouse: string | null;
   holderId: string | null; holderName: string | null;
   soldierName: string | null; soldierPN: string | null;
   serialNumber: string | null;
@@ -33,7 +34,7 @@ export default function ReportView({
   const [categoryFilter, setCategoryFilter] = useState("");
   const [search, setSearch] = useState("");
   const [onlyGaps, setOnlyGaps] = useState(false);
-  const [groupBy, setGroupBy] = useState<"holder" | "item" | "flat">("holder");
+  const [groupBy, setGroupBy] = useState<"holder" | "item" | "source" | "flat">("holder");
 
   const filtered = useMemo(() => {
     let result = rows;
@@ -46,7 +47,8 @@ export default function ReportView({
         r.sku?.toLowerCase().includes(q) ||
         r.soldierName?.toLowerCase().includes(q) ||
         r.soldierPN?.includes(q) ||
-        r.serialNumber?.toLowerCase().includes(q)
+        r.serialNumber?.toLowerCase().includes(q) ||
+        r.sourceWarehouse?.toLowerCase().includes(q)
       );
     }
     if (onlyGaps) result = result.filter((r) => r.lastCounted !== null && r.lastCounted !== r.quantity);
@@ -59,7 +61,7 @@ export default function ReportView({
 
   const grouped = useMemo(() => {
     if (groupBy === "flat") return { "": filtered };
-    const key = groupBy === "holder" ? "holderName" : "itemName";
+    const key = groupBy === "holder" ? "holderName" : groupBy === "source" ? "sourceWarehouse" : "itemName";
     const groups: Record<string, Row[]> = {};
     for (const r of filtered) {
       const g = (r as Record<string, unknown>)[key] as string ?? "ללא שיוך";
@@ -126,6 +128,7 @@ export default function ReportView({
             <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as "holder" | "item" | "flat")}
               className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
               <option value="holder">לפי מחזיק</option>
+              <option value="source">לפי מחסן מחתים</option>
               <option value="item">לפי פריט</option>
               <option value="flat">רשימה שטוחה</option>
             </select>
@@ -151,6 +154,7 @@ export default function ReportView({
               <tr>
                 <Th>פריט</Th>
                 <Th>מק״ט</Th>
+                {groupBy !== "source" && <Th>מחסן מחתים</Th>}
                 {groupBy !== "holder" && <Th>מחזיק</Th>}
                 <Th>חייל</Th>
                 <Th>סריאלי</Th>
@@ -172,6 +176,9 @@ export default function ReportView({
                       {r.categoryName && <div className="text-[10px] text-slate-400">{r.categoryName}</div>}
                     </Td>
                     <Td className="text-xs text-slate-500 font-mono">{r.sku || "—"}</Td>
+                    {groupBy !== "source" && (
+                      <Td className="text-xs text-amber-700">{r.sourceWarehouse || "—"}</Td>
+                    )}
                     {groupBy !== "holder" && (
                       <Td className="text-xs">{r.holderName || "—"}</Td>
                     )}
