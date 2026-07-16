@@ -34,6 +34,15 @@ async function canHandleType(user: Sessionish, type: RequestType): Promise<boole
   return !!h;
 }
 
+/** 📷 טעינת תמונות בקשה (lazy) — לצד המבקש (גדוד) או הממונה (חטיבה). */
+export async function getRequestImages(requestId: string): Promise<{ images: { id: string; imageData: string; caption: string | null }[] }> {
+  const user = await requireUser();
+  const req = await prisma.request.findUnique({ where: { id: requestId }, select: { battalionId: true, targetUnitId: true } });
+  if (!req || (req.battalionId !== user.battalionId && req.targetUnitId !== user.battalionId)) return { images: [] };
+  const images = await prisma.requestImage.findMany({ where: { requestId }, select: { id: true, imageData: true, caption: true }, orderBy: { createdAt: "asc" } });
+  return { images };
+}
+
 /** 📢 מפקד-תא בחטיבה שולח עדכון יזום לכל הרפרנטים (אחראי-תחום) של הנושא בכל גדודי-הבת. */
 export async function broadcastToResponsibles(formData: FormData): Promise<{ error?: string; ok?: boolean; sent?: number }> {
   const user = await requireUser();
@@ -117,7 +126,12 @@ export async function createRequest(formData: FormData): Promise<{ error?: strin
       openedById: user.id, openedByName: user.fullName ?? null,
     },
   });
-  await audit(user.id, "CREATE_REQUEST", "Request", req.id, { type, targetUnitId: unit.parentId });
+  // 📷 תמונות מצורפות (תקלות בינוי וכד') — עד 6, base64 data-URL
+  const images = formData.getAll("image").map(String).filter((s) => s.startsWith("data:image/")).slice(0, 6);
+  if (images.length) {
+    await prisma.requestImage.createMany({ data: images.map((imageData) => ({ requestId: req.id, imageData, createdById: user.id })) });
+  }
+  await audit(user.id, "CREATE_REQUEST", "Request", req.id, { type, targetUnitId: unit.parentId, images: images.length });
   revalidatePath("/requests");
   return { ok: true };
 }
@@ -215,21 +229,19 @@ export async function setTypeConfig(formData: FormData): Promise<{ error?: strin
   if (!bId) return { error: "רק מלכ\"א" };
   const type = String(formData.get("type") || "") as RequestType;
   if (!type) return { error: "חסר סוג" };
+  const cutoffRaw = String(formData.get("cutoffHour") || "").trim();
+  const cutoffHour = cutoffRaw === "" ? null : Math.max(0, Math.min(23, parseInt(cutoffRaw, 10) || 0));
+  const shared = {
+    requiresApproval: formData.get("requiresApproval") === "on",
+    requestDays: String(formData.get("requestDays") || "").trim() || null,
+    requestHours: String(formData.get("requestHours") || "").trim() || null,
+    supplyTiming: String(formData.get("supplyTiming") || "").trim() || null,
+    cutoffHour,
+  };
   await prisma.requestTypeConfig.upsert({
     where: { brigadeUnitId_type: { brigadeUnitId: bId, type } },
-    update: {
-      requiresApproval: formData.get("requiresApproval") === "on",
-      requestDays: String(formData.get("requestDays") || "").trim() || null,
-      requestHours: String(formData.get("requestHours") || "").trim() || null,
-      supplyTiming: String(formData.get("supplyTiming") || "").trim() || null,
-    },
-    create: {
-      brigadeUnitId: bId, type,
-      requiresApproval: formData.get("requiresApproval") === "on",
-      requestDays: String(formData.get("requestDays") || "").trim() || null,
-      requestHours: String(formData.get("requestHours") || "").trim() || null,
-      supplyTiming: String(formData.get("supplyTiming") || "").trim() || null,
-    },
+    update: shared,
+    create: { brigadeUnitId: bId, type, ...shared },
   });
   revalidatePath("/requests");
   return { ok: true };

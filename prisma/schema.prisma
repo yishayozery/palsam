@@ -2655,9 +2655,23 @@ model Request {
   resolvedAt   DateTime?
   updates      RequestUpdate[]
   transportParties TransportParty[]
+  images       RequestImage[]
 
   @@index([battalionId])
   @@index([targetUnitId, status])
+}
+
+/** תמונה מצורפת לבקשה (תקלות בינוי וכד'). data-URL base64 — יעבור ל-Blob במיגרציה עתידית. */
+model RequestImage {
+  id          String   @id @default(cuid())
+  requestId   String
+  request     Request  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  imageData   String   // data-URL (base64)
+  caption     String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([requestId])
 }
 
 /** שרשור עדכונים/דיווחי-טיפול על דרישה (thread). */
@@ -2873,6 +2887,7 @@ model RequestTypeConfig {
   requestDays   String?     // ימי בקשה מותרים (מלל, למשל "א,ג,ה")
   requestHours  String?     // שעות בקשה "08:00-12:00"
   supplyTiming  String?     // מתי אספקה (לא חובה)
+  cutoffHour    Int?        // עד שעה זו (0-23) בקשה נכנסת לטיפול היום; אחריה — "לטיפול מחר"
 
   @@unique([brigadeUnitId, type])
 }

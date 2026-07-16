@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { REQUEST_TYPE_LABEL, REQUEST_PRIORITY_LABEL, REQUEST_STATUS_LABEL, REQUEST_STATUS_STYLE, REQUEST_TYPES, REQUEST_PRIORITIES } from "@/lib/request-labels";
 import type { RequestType, RequestPriority, RequestStatus } from "@/generated/prisma";
-import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus, assignTypeHandler, removeTypeHandler, setTypeConfig, addFieldDef, removeFieldDef, saveHandlerFields, addResponsible, removeResponsible, ensureTransportParties, broadcastToResponsibles } from "./actions";
+import { createRequest, approveAndEscalate, cancelRequest, addRequestUpdate, setRequestStatus, assignTypeHandler, removeTypeHandler, setTypeConfig, addFieldDef, removeFieldDef, saveHandlerFields, addResponsible, removeResponsible, ensureTransportParties, broadcastToResponsibles, getRequestImages } from "./actions";
 
 import FuelCardsClient, { type FuelCard } from "./FuelCardsClient";
 
@@ -14,7 +14,7 @@ type Upd = { id: string; authorName: string | null; text: string; statusFrom: Re
 type DynField = { fieldKey: string; label: string; fieldType: string; options: string[]; required: boolean };
 type Req = {
   id: string; type: RequestType; title: string; description: string | null; priority: RequestPriority; status: RequestStatus;
-  openerName: string; openedByName: string | null; assignedName: string | null; data: Record<string, string> | null; createdAt: string; escalatedAt: string | null; updates: Upd[];
+  openerName: string; openedByName: string | null; assignedName: string | null; data: Record<string, string> | null; createdAt: string; escalatedAt: string | null; updates: Upd[]; imageCount?: number;
 };
 
 function DynFieldInput({ f, defaultValue, namePrefix = "f_" }: { f: DynField; defaultValue?: string; namePrefix?: string }) {
@@ -30,11 +30,11 @@ function DynFieldInput({ f, defaultValue, namePrefix = "f_" }: { f: DynField; de
 }
 
 type SettingsDef = { id: string; type: RequestType; side: string; label: string; fieldType: string; options: string[]; required: boolean };
-type TypeConfig = { type: RequestType; requiresApproval: boolean; requestDays: string | null; requestHours: string | null; supplyTiming: string | null };
+type TypeConfig = { type: RequestType; requiresApproval: boolean; requestDays: string | null; requestHours: string | null; supplyTiming: string | null; cutoffHour: number | null };
 
 type Responsible = { id: string; type: RequestType; name: string; phone: string | null; hasAccount: boolean; bound: boolean; token: string };
 
-export default function RequestsClient({ mode, unitName, parentName, isCommander, isMalka, myTypes, companies, requests, fieldsByType, handlerFieldsByType, brigadeUsers, handlers, settingsDefs, typeConfigs, responsibles, battalionUsers, botUsername, foodMetric, showFuel, fuelCards, childBattalions }: {
+export default function RequestsClient({ mode, unitName, parentName, isCommander, isMalka, myTypes, companies, requests, fieldsByType, handlerFieldsByType, brigadeUsers, handlers, settingsDefs, typeConfigs, responsibles, battalionUsers, botUsername, foodMetric, showFuel, fuelCards, childBattalions, cutoffByType = {} }: {
   mode: "brigade" | "battalion";
   unitName: string; parentName: string | null; isCommander: boolean; isMalka: boolean;
   myTypes: RequestType[] | null;
@@ -53,6 +53,7 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
   showFuel: boolean;
   fuelCards: FuelCard[];
   childBattalions: { id: string; name: string }[];
+  cutoffByType?: Record<string, number>;
 }) {
   const [pending, start] = useTransition();
   const [showNew, setShowNew] = useState(false);
@@ -68,6 +69,27 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
   const [showBroadcast, setShowBroadcast] = useState(false);
   const [bcType, setBcType] = useState<RequestType>(bcTypes[0] ?? "SUPPLY");
   const [bcMsg, setBcMsg] = useState("");
+  const [newImages, setNewImages] = useState<string[]>([]); // תמונות לבקשה חדשה (base64)
+  const [imagesFor, setImagesFor] = useState<{ id: string; imageData: string; caption: string | null }[] | null>(null); // תצוגת תמונות בקשה
+
+  function onPickImages(files: FileList | null) {
+    if (!files) return;
+    const list = Array.from(files).slice(0, 6);
+    list.forEach((f) => {
+      if (!f.type.startsWith("image/")) return;
+      const reader = new FileReader();
+      reader.onload = () => setNewImages((prev) => prev.length >= 6 ? prev : [...prev, String(reader.result)]);
+      reader.readAsDataURL(f);
+    });
+  }
+  async function openImages(requestId: string) {
+    setImagesFor([]);
+    const r = await getRequestImages(requestId);
+    setImagesFor(r.images);
+  }
+  function hourInIsrael(iso: string): number {
+    return Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", hour12: false }).format(new Date(iso)));
+  }
 
   const OPEN_STATUSES: RequestStatus[] = ["PENDING_APPROVAL", "IN_PROGRESS", "NEEDS_INFO"];
   const filtered = useMemo(() => requests.filter((r) => {
@@ -88,7 +110,7 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
   const act = (fn: (fd: FormData) => Promise<{ error?: string; ok?: boolean }>, fd: FormData) =>
     start(async () => { const r = await fn(fd); if (r.error) alert(r.error); });
 
-  const submitNew = (fd: FormData) => start(async () => { const r = await createRequest(fd); if (r.error) alert(r.error); else setShowNew(false); });
+  const submitNew = (fd: FormData) => start(async () => { const r = await createRequest(fd); if (r.error) alert(r.error); else { setShowNew(false); setNewImages([]); } });
   const sendReply = (id: string) => { const fd = new FormData(); fd.set("id", id); fd.set("text", replyText); start(async () => { const r = await addRequestUpdate(fd); if (r.error) alert(r.error); else { setReplyTo(null); setReplyText(""); } }); };
   const setStatus = (id: string, status: RequestStatus) => { const note = prompt(`דיווח טיפול (${REQUEST_STATUS_LABEL[status]}):`, ""); if (note === null) return; const fd = new FormData(); fd.set("id", id); fd.set("status", status); fd.set("note", note); act(setRequestStatus, fd); };
   const loadTransport = (id: string) => start(async () => { const res = await ensureTransportParties(id); if (res.error) alert(res.error); else setTransportLinks((m) => ({ ...m, [id]: res.links ?? [] })); });
@@ -202,6 +224,7 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
                   <input name="requestDays" defaultValue={typeConfigs.find((c) => c.type === t)?.requestDays ?? ""} placeholder="ימי בקשה" className="rounded border border-slate-300 px-1.5 py-0.5 w-20" />
                   <input name="requestHours" defaultValue={typeConfigs.find((c) => c.type === t)?.requestHours ?? ""} placeholder="שעות" className="rounded border border-slate-300 px-1.5 py-0.5 w-24" />
                   <input name="supplyTiming" defaultValue={typeConfigs.find((c) => c.type === t)?.supplyTiming ?? ""} placeholder="מתי אספקה" className="rounded border border-slate-300 px-1.5 py-0.5 w-28" />
+                  <label className="flex items-center gap-1" title="בקשה שנפתחה אחרי שעה זו תיכנס לחיתוך של מחר">🕐 עד שעה <input type="number" name="cutoffHour" min={0} max={23} defaultValue={typeConfigs.find((c) => c.type === t)?.cutoffHour ?? ""} placeholder="—" className="rounded border border-slate-300 px-1.5 py-0.5 w-14" /></label>
                   <button className="bg-slate-700 text-white rounded px-2 py-0.5">שמור</button>
                 </form>
 
@@ -348,6 +371,23 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
               </div>
             )}
             <textarea name="description" placeholder="פירוט/הערות (לא חובה)" rows={2} className="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
+            {/* 📷 תמונות — לתקלות בינוי וכד' */}
+            <div className="border-t border-slate-100 pt-2">
+              <label className="text-xs text-slate-500 block mb-1">📷 תמונות (למשל תקלות בינוי — עד 6)</label>
+              <input type="file" accept="image/*" multiple capture="environment" onChange={(e) => onPickImages(e.target.files)} className="text-xs" />
+              {newImages.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {newImages.map((img, i) => (
+                    <div key={i} className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img} alt="תמונה" className="w-16 h-16 object-cover rounded border border-slate-200" />
+                      <button type="button" onClick={() => setNewImages((p) => p.filter((_, j) => j !== i))} className="absolute -top-1 -left-1 bg-rose-500 text-white rounded-full w-4 h-4 text-[11px] leading-none flex items-center justify-center">×</button>
+                      <input type="hidden" name="image" value={img} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <button disabled={pending} className="bg-blue-600 text-white rounded px-4 py-1.5 text-sm hover:bg-blue-700 disabled:opacity-50">שלח דרישה</button>
           </form>
         </Card>
@@ -375,6 +415,12 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
                   <span className="font-semibold">{REQUEST_TYPE_LABEL[r.type]} · {r.title}</span>
                   {r.priority !== "ROUTINE" && <span className="text-xs">{REQUEST_PRIORITY_LABEL[r.priority]}</span>}
                   <Badge className={REQUEST_STATUS_STYLE[r.status]}>{REQUEST_STATUS_LABEL[r.status]}</Badge>
+                  {cutoffByType[r.type] != null && r.status !== "RESOLVED" && r.status !== "REJECTED" && hourInIsrael(r.createdAt) >= cutoffByType[r.type] && (
+                    <span className="text-[11px] bg-amber-100 text-amber-800 border border-amber-200 rounded px-1.5 py-0.5" title={`נפתחה אחרי שעת ה-cutoff (${cutoffByType[r.type]}:00) — תיכנס לחיתוך של מחר`}>🕐 לטיפול מחר</span>
+                  )}
+                  {!!r.imageCount && (
+                    <button onClick={() => openImages(r.id)} className="text-[11px] text-indigo-600 hover:underline">📷 {r.imageCount} תמונות</button>
+                  )}
                 </div>
                 <div className="text-xs text-slate-500 mt-0.5">
                   {mode === "brigade" && <span className="font-medium text-slate-600">מ: {r.openerName} · </span>}
@@ -500,6 +546,28 @@ export default function RequestsClient({ mode, unitName, parentName, isCommander
         ))}
       </div>
       </>)}
+
+      {/* 📷 מציג תמונות בקשה */}
+      {imagesFor !== null && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setImagesFor(null)}>
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="font-bold text-slate-800">📷 תמונות הבקשה</span>
+              <button onClick={() => setImagesFor(null)} className="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+            </div>
+            {imagesFor.length === 0 ? (
+              <div className="text-center text-slate-400 py-8">טוען…</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {imagesFor.map((img) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <a key={img.id} href={img.imageData} target="_blank" rel="noreferrer"><img src={img.imageData} alt="תמונת בקשה" className="w-full rounded-lg border border-slate-200" /></a>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

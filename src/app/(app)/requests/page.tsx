@@ -44,16 +44,25 @@ export default async function RequestsPage() {
     include: {
       battalion: { select: { name: true } },
       updates: { orderBy: { createdAt: "asc" }, select: { id: true, authorName: true, text: true, statusFrom: true, statusTo: true, createdAt: true } },
+      _count: { select: { images: true } },
     },
     orderBy: [{ createdAt: "desc" }],
     take: 300,
   });
+
+  // 🕐 שעת cutoff פר-סוג (מהחטיבה הרלוונטית) — לחישוב "לטיפול מחר"
+  const cutoffUnitId = isBrigade ? bId : unit?.parentId ?? null;
+  const cutoffCfgs = cutoffUnitId
+    ? await prisma.requestTypeConfig.findMany({ where: { brigadeUnitId: cutoffUnitId, cutoffHour: { not: null } }, select: { type: true, cutoffHour: true } })
+    : [];
+  const cutoffByType: Record<string, number> = Object.fromEntries(cutoffCfgs.map((c) => [c.type, c.cutoffHour!]));
 
   const rows = requests.map((r) => ({
     id: r.id, type: r.type, title: r.title, description: r.description, priority: r.priority, status: r.status,
     openerName: r.battalion.name, openedByName: r.openedByName, assignedName: r.assignedName,
     data: (r.data as Record<string, string> | null) ?? null,
     createdAt: r.createdAt.toISOString(), escalatedAt: r.escalatedAt?.toISOString() ?? null,
+    imageCount: r._count.images,
     updates: r.updates.map((u) => ({ id: u.id, authorName: u.authorName, text: u.text, statusFrom: u.statusFrom, statusTo: u.statusTo, createdAt: u.createdAt.toISOString() })),
   }));
 
@@ -73,7 +82,7 @@ export default async function RequestsPage() {
     ? await prisma.requestFieldDef.findMany({ where: { brigadeUnitId: bId }, orderBy: [{ sortOrder: "asc" }], select: { id: true, type: true, side: true, label: true, fieldType: true, options: true, required: true } })
     : [];
   const typeConfigs = isBrigade && isMalka
-    ? await prisma.requestTypeConfig.findMany({ where: { brigadeUnitId: bId }, select: { type: true, requiresApproval: true, requestDays: true, requestHours: true, supplyTiming: true } })
+    ? await prisma.requestTypeConfig.findMany({ where: { brigadeUnitId: bId }, select: { type: true, requiresApproval: true, requestDays: true, requestHours: true, supplyTiming: true, cutoffHour: true } })
     : [];
 
   // אחראי-תחום ברמת הגדוד (צד המבקש) — נטענים בגדוד (עריכה למפקד בלבד)
@@ -152,6 +161,7 @@ export default async function RequestsPage() {
       showFuel={showFuel}
       fuelCards={fuelCards}
       childBattalions={childBattalions}
+      cutoffByType={cutoffByType}
     />
   );
 }
