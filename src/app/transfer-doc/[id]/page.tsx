@@ -55,7 +55,7 @@ export default async function PublicTransferDocPage({
     const [employment, approver] = await Promise.all([
       prisma.employment.findFirst({ where: { battalionId: t.battalionId, active: true }, orderBy: { endDate: "desc" }, select: { endDate: true } }),
       t.toSoldier?.weaponsApprovedById
-        ? prisma.appUser.findUnique({ where: { id: t.toSoldier.weaponsApprovedById }, select: { fullName: true, title: true } })
+        ? prisma.appUser.findUnique({ where: { id: t.toSoldier.weaponsApprovedById }, select: { fullName: true, title: true, soldier: { select: { personalNumber: true } } } })
         : Promise.resolve(null),
     ]);
     const data: ArmoryIssueData = {
@@ -74,6 +74,7 @@ export default async function PublicTransferDocPage({
       lines: t.lines.map((l) => ({ name: l.itemType.name, sku: l.itemType.sku, quantity: l.quantity, serial: l.serialUnit?.serialNumber ?? null })),
       signature: t.signatures[0] ?? null,
       approverName: approver?.fullName ?? null,
+      approverPersonalNumber: approver?.soldier?.personalNumber ?? null,
       approverTitle: approver?.title ?? null,
       approvedAt: t.toSoldier?.weaponsApprovedAt ?? null,
       approverSignature: t.toSoldier?.weaponsApprovalSignature ?? null,

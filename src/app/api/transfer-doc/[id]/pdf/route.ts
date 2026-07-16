@@ -51,7 +51,7 @@ export async function GET(
     const [employment, approver] = await Promise.all([
       prisma.employment.findFirst({ where: { battalionId: t.battalionId, active: true }, orderBy: { endDate: "desc" }, select: { endDate: true } }),
       t.toSoldier?.weaponsApprovedById
-        ? prisma.appUser.findUnique({ where: { id: t.toSoldier.weaponsApprovedById }, select: { fullName: true, title: true } })
+        ? prisma.appUser.findUnique({ where: { id: t.toSoldier.weaponsApprovedById }, select: { fullName: true, title: true, soldier: { select: { personalNumber: true } } } })
         : Promise.resolve(null),
     ]);
     const clauses = t.fromHolder?.weaponsAgreementText
@@ -75,6 +75,7 @@ export async function GET(
       soldierSignature: t.signatures[0]?.signatureData ?? null,
       signedAt: t.signatures[0]?.signedAt ?? null,
       approverName: approver?.fullName ?? null,
+      approverPersonalNumber: approver?.soldier?.personalNumber ?? null,
       approverTitle: approver?.title ?? null,
       approvedAt: t.toSoldier?.weaponsApprovedAt ?? null,
       approverSignature: t.toSoldier?.weaponsApprovalSignature ?? null,

@@ -208,6 +208,7 @@ export type ArmoryPdfData = {
   soldierSignature: string | null;
   signedAt: Date | null;
   approverName: string | null;
+  approverPersonalNumber: string | null;
   approverTitle: string | null;
   approvedAt: Date | null;
   approverSignature: string | null;
@@ -233,7 +234,13 @@ const a = StyleSheet.create({
   cv: { fontSize: 11, fontWeight: 700, marginTop: 2 },
   declare: { borderWidth: 1, borderColor: "#9aa085", backgroundColor: "#eef0e4", padding: 10, marginBottom: 6 },
   clauseLine: { fontSize: 8.5, marginBottom: 3, lineHeight: 1.4 },
-  warn: { borderWidth: 1, borderColor: "#7a2a1e", backgroundColor: "#f7ece7", color: "#7a2a1e", fontSize: 8.5, padding: 6, marginBottom: 12 },
+  warn: { borderWidth: 1, borderColor: "#7a2a1e", backgroundColor: "#f7ece7", color: "#7a2a1e", fontSize: 8.5, padding: 6, marginBottom: 8 },
+  dsRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "flex-end", borderWidth: 1, borderColor: "#cdd0c0", padding: 8, marginBottom: 12 },
+  dsFields: { flexDirection: "column", gap: 3 },
+  dsF: { fontSize: 8.5 },
+  dsSig: { flexDirection: "row-reverse", alignItems: "flex-end", gap: 6 },
+  dsImg: { height: 34, width: 120, objectFit: "contain" as never },
+  dsSlot: { width: 120, height: 30, borderBottomWidth: 1, borderBottomColor: "#3b4038" },
   table: { marginBottom: 14 },
   tHead: { flexDirection: "row-reverse", backgroundColor: "#38471f" },
   tRow: { flexDirection: "row-reverse", borderColor: "#cdd0c0" },
@@ -279,7 +286,7 @@ function ArmoryIssuePDF({ d }: { d: ArmoryPdfData }) {
         </View>
 
         <View style={a.titleWrap}>
-          <Text style={a.eyebrow}>אישור שלישות · חטיבה 2</Text>
+          <Text style={a.eyebrow}>טופס 1008 · אישור שלישות חטיבה 2</Text>
           <Text style={a.docTitle}>אישור לניפוק נשק אישי</Text>
         </View>
 
@@ -298,6 +305,18 @@ function ArmoryIssuePDF({ d }: { d: ArmoryPdfData }) {
           {d.declarationClauses.map((c, i) => <Text key={i} style={a.clauseLine}>{i + 1}. {c}</Text>)}
         </View>
         <Text style={a.warn}>⚠ {d.warning}</Text>
+
+        <View style={a.dsRow}>
+          <View style={a.dsFields}>
+            <Text style={a.dsF}>שם מלא: {d.recipientName}</Text>
+            <Text style={a.dsF}>מ.א.: {d.soldier?.personalNumber ?? "—"}</Text>
+            <Text style={a.dsF}>תאריך: {fmtD(d.signedAt ?? d.issueDate)}</Text>
+          </View>
+          <View style={a.dsSig}>
+            <Text style={a.dsF}>חתימת החייל:</Text>
+            {d.soldierSignature ? <Image src={d.soldierSignature} style={a.dsImg} /> : <View style={a.dsSlot} />}
+          </View>
+        </View>
 
         <Text style={a.slabel}>פירוט הנשק והציוד המנופק</Text>
         <View style={a.table}>
@@ -319,24 +338,12 @@ function ArmoryIssuePDF({ d }: { d: ArmoryPdfData }) {
           ))}
         </View>
 
-        <Text style={a.slabel}>חתימות</Text>
+        <Text style={a.slabel}>אישור מאשר נשיאת הנשק</Text>
         <View style={a.sigs}>
-          <View style={a.sig}>
-            <Text style={a.sigRole}>מנפק (מוסר)</Text>
-            <Text style={a.sigF}>שם: <Text style={a.sigFb}>{d.issuerName}</Text></Text>
-            {d.issuerHolderName && <Text style={a.sigF}>מחסן: <Text style={a.sigFb}>{d.issuerHolderName}</Text></Text>}
-            <View style={a.sigSlot} />
-          </View>
-          <View style={a.sig}>
-            <Text style={a.sigRole}>מקבל (החייל)</Text>
-            <Text style={a.sigF}>שם: <Text style={a.sigFb}>{d.recipientName}</Text></Text>
-            <Text style={a.sigF}>מ.א.: <Text style={a.sigFb}>{d.soldier?.personalNumber ?? "—"}</Text></Text>
-            <Text style={a.sigF}>תאריך: <Text style={a.sigFb}>{fmtD(d.signedAt ?? d.issueDate)}</Text></Text>
-            {d.soldierSignature ? <Image src={d.soldierSignature} style={a.sigImg} /> : <View style={a.sigSlot} />}
-          </View>
-          <View style={a.sig}>
-            <Text style={a.sigRole}>מאשר הנשק</Text>
+          <View style={[a.sig, { flex: 0, width: "50%" }]}>
+            <Text style={a.sigRole}>מאשר נשיאת הנשק</Text>
             <Text style={a.sigF}>שם: <Text style={a.sigFb}>{d.approverName ?? "________"}</Text></Text>
+            <Text style={a.sigF}>מ.א.: <Text style={a.sigFb}>{d.approverPersonalNumber ?? "—"}</Text></Text>
             <Text style={a.sigF}>תפקיד: <Text style={a.sigFb}>{d.approverTitle ?? "מג\"ד / סמג\"ד / קמב\"ץ"}</Text></Text>
             <Text style={a.sigF}>תאריך: <Text style={a.sigFb}>{d.approvedAt ? fmtD(d.approvedAt) : "____"}</Text></Text>
             {d.approverSignature ? <Image src={d.approverSignature} style={a.sigImg} /> : <View style={a.sigSlot} />}

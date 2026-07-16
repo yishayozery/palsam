@@ -21,6 +21,7 @@ export type ArmoryIssueData = {
   lines: { name: string; sku: string | null; quantity: number; serial: string | null }[];
   signature: Sig | null;
   approverName: string | null;
+  approverPersonalNumber: string | null;
   approverTitle: string | null;
   approvedAt: Date | null;
   approverSignature: string | null;
@@ -70,7 +71,7 @@ export default function ArmoryIssueDoc({ d, hideToolbar = false, extraToolbar }:
 
         {/* Title */}
         <div className="aid-title-wrap">
-          <div className="aid-eyebrow">אישור שלישות · חטיבה 2</div>
+          <div className="aid-eyebrow">טופס 1008 · אישור שלישות חטיבה 2</div>
           <h1 className="aid-title">{ARMORY_ISSUE_TITLE}</h1>
           <div className="aid-title-rule" />
         </div>
@@ -95,6 +96,24 @@ export default function ArmoryIssueDoc({ d, hideToolbar = false, extraToolbar }:
           </ol>
         </div>
         <div className="aid-warn">⚠ {ARMORY_ISSUE_WARNING}</div>
+
+        {/* חתימת החייל — מתחת להצהרה ("החתימה למטה מהווה אישור...") */}
+        <div className="aid-declare-sig">
+          <div className="aid-ds-fields">
+            <span>שם מלא: <b>{recipientName}</b></span>
+            <span>מ.א.: <b className="mono">{recipientPn ?? "—"}</b></span>
+            <span>תאריך: <b className="mono">{fmt(d.signature?.signedAt ?? d.issueDate)}</b></span>
+          </div>
+          <div className="aid-ds-sig">
+            <span className="aid-ds-label">חתימת החייל:</span>
+            {d.signature?.signatureData ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={d.signature.signatureData} alt="חתימת חייל" className="aid-ds-img" />
+            ) : (
+              <span className="aid-ds-slot" />
+            )}
+          </div>
+        </div>
 
         {/* Items */}
         <div className="aid-slabel">פירוט הנשק והציוד המנופק</div>
@@ -123,35 +142,13 @@ export default function ArmoryIssueDoc({ d, hideToolbar = false, extraToolbar }:
           </table>
         </div>
 
-        {/* Signatures */}
-        <div className="aid-slabel">חתימות</div>
-        <div className="aid-sigs">
-          {/* מנפק */}
+        {/* אישור מאשר הנשק */}
+        <div className="aid-slabel">אישור מאשר נשיאת הנשק</div>
+        <div className="aid-sigs-one">
           <div className="aid-sig">
-            <div className="aid-role">מנפק (מוסר)</div>
-            <div className="aid-f">שם: <b>{d.issuerName}</b></div>
-            {d.issuerHolderName && <div className="aid-f">מחסן: <b>{d.issuerHolderName}</b></div>}
-            <div className="aid-sig-slot">חתימת המנפק</div>
-          </div>
-          {/* חייל */}
-          <div className="aid-sig">
-            <div className="aid-role">מקבל (החייל)</div>
-            <div className="aid-f">שם: <b>{recipientName}</b></div>
-            <div className="aid-f">מ.א.: <b className="mono">{recipientPn ?? "—"}</b></div>
-            <div className="aid-f">תאריך: <b className="mono">{fmt(d.signature?.signedAt ?? d.issueDate)}</b></div>
-            {d.signature?.signatureData ? (
-              <div className="aid-sig-img">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={d.signature.signatureData} alt="חתימת חייל" />
-              </div>
-            ) : (
-              <div className="aid-sig-slot">חתימה דיגיטלית</div>
-            )}
-          </div>
-          {/* מאשר */}
-          <div className="aid-sig">
-            <div className="aid-role">מאשר הנשק</div>
+            <div className="aid-role">מאשר נשיאת הנשק</div>
             <div className="aid-f">שם: <b>{d.approverName ?? "________________"}</b></div>
+            <div className="aid-f">מ.א.: <b className="mono">{d.approverPersonalNumber ?? "—"}</b></div>
             <div className="aid-f">תפקיד: <b>{d.approverTitle ?? 'מג"ד / סמג"ד / קמב"ץ'}</b></div>
             <div className="aid-f">תאריך: <b className="mono">{d.approvedAt ? fmt(d.approvedAt) : "____ / ____ / ____"}</b></div>
             {d.approverSignature ? (
@@ -223,8 +220,18 @@ const CSS = `
 .aid-declare h3{margin:0 0 9px;font-size:13px;color:var(--olive);font-weight:700;}
 .aid-declare ol{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:5px;}
 .aid-declare li{font-size:12.3px;line-height:1.5;color:var(--ink-soft);}
-.aid-warn{margin:10px 0 20px;padding:8px 12px;border:1px solid var(--danger);background:var(--danger-bg);
+.aid-warn{margin:10px 0 12px;padding:8px 12px;border:1px solid var(--danger);background:var(--danger-bg);
   color:var(--danger);font-size:11.6px;font-weight:600;}
+.aid-declare-sig{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;
+  border:1px solid var(--rule);border-inline-start:3px solid var(--olive);padding:8px 12px;margin-bottom:20px;}
+.aid-ds-fields{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--label);}
+.aid-ds-fields b{color:var(--ink);font-size:12.5px;}
+.aid-ds-sig{display:flex;align-items:flex-end;gap:8px;}
+.aid-ds-label{font-size:10px;color:var(--label);}
+.aid-ds-img{max-height:46px;max-width:150px;object-fit:contain;}
+.aid-ds-slot{display:inline-block;width:150px;border-bottom:1px solid var(--ink-soft);height:36px;}
+.aid-sigs-one{display:flex;}
+.aid-sigs-one .aid-sig{width:50%;}
 .aid-tbl-wrap{overflow-x:auto;margin-bottom:22px;}
 .aid-tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
 .aid-tbl thead th{background:var(--olive);color:#fff;font-weight:600;padding:8px 10px;text-align:right;
