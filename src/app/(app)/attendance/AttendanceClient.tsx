@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import { saveAttendance, assignSquad, openCallup, closeCallup, deleteCallup } from "./actions";
@@ -55,6 +55,8 @@ export default function AttendanceClient({
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [pendingChanges, setPendingChanges] = useState<Map<string, string | null>>(new Map());
+  const [autoSavedAt, setAutoSavedAt] = useState<string | null>(null);
+  const autoSaving = useRef(false);
   const [selectedSquadId, setSelectedSquadId] = useState<string>("");
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
   const [onlyShmap, setOnlyShmap] = useState<boolean>(true); // ברירת מחדל: מציג רק חיילים בשמ"פ פעיל (ניתן לכבות)
@@ -163,6 +165,41 @@ export default function AttendanceClient({
     setSaving(false);
     router.refresh();
   }
+
+  // 💾 שמירה אוטומטית (debounced) — כדי שסימון לא יאבד אם שוכחים ללחוץ "שמור",
+  //    או אם עוברים בין ימים/חלונות (ניווט מאפס שינויים לא-שמורים). כל שינוי נשמר אחרי 1 שנ.
+  useEffect(() => {
+    if (pendingChanges.size === 0 || autoSaving.current) return;
+    const h = setTimeout(async () => {
+      autoSaving.current = true;
+      const entries = Array.from(pendingChanges.entries()).map(([key, statusId]) => {
+        const [soldierId, date] = key.split(":");
+        return { soldierId, date, statusId, type: mode };
+      });
+      try {
+        const r = await saveAttendance(entries);
+        if (!r?.error) {
+          setPendingChanges((prev) => {
+            const m = new Map(prev);
+            for (const [key] of entries.map((e) => [`${e.soldierId}:${e.date}`] as const)) m.delete(key);
+            return m;
+          });
+          setAutoSavedAt(new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" }));
+          router.refresh();
+        }
+      } catch { /* לא קריטי — נשאר כפתור "שמור" הידני */ }
+      autoSaving.current = false;
+    }, 1000);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingChanges, mode]);
+
+  // הסתרת חיווי "נשמר" אחרי כמה שניות
+  useEffect(() => {
+    if (!autoSavedAt) return;
+    const h = setTimeout(() => setAutoSavedAt(null), 2500);
+    return () => clearTimeout(h);
+  }, [autoSavedAt]);
 
   // Filter soldiers by selected squad and role
   const filteredSoldiers = useMemo(() => {
@@ -960,19 +997,19 @@ export default function AttendanceClient({
       )}
 
       {/* Save bar */}
-      {pendingChanges.size > 0 && (
+      {pendingChanges.size > 0 ? (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-blue-700 text-white rounded-xl shadow-2xl px-6 py-3 flex items-center gap-4">
-          <span className="text-sm">{pendingChanges.size} שינויים ממתינים</span>
+          <span className="text-sm">💾 נשמר אוטומטית · {pendingChanges.size} ממתינים</span>
           <button onClick={handleSave} disabled={saving}
             className="bg-white text-blue-700 font-bold rounded-lg px-4 py-1.5 text-sm hover:bg-blue-50 disabled:opacity-50">
-            {saving ? "שומר..." : "💾 שמור"}
-          </button>
-          <button onClick={() => setPendingChanges(new Map())}
-            className="text-blue-200 hover:text-white text-sm">
-            ביטול
+            {saving ? "שומר..." : "שמור עכשיו"}
           </button>
         </div>
-      )}
+      ) : autoSavedAt ? (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-emerald-600 text-white rounded-xl shadow-lg px-5 py-2 text-sm font-medium">
+          ✓ נשמר אוטומטית ({autoSavedAt})
+        </div>
+      ) : null}
 
       {/* שמ"פ Modal */}
       {showCallupModal && (
