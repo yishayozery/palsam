@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition, useEffect, useCallback } from "react";
+import { useState, useMemo, useTransition, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { submitAttendanceReport, heartbeatPresence } from "./actions";
 
@@ -57,6 +57,26 @@ export default function AttendanceReportClient({
 
   const otherDates = windowDates.filter((d) => d !== date);
   const targetDates = [date, ...extraDates].filter((d, i, a) => a.indexOf(d) === i).sort();
+
+  // 💾 שמירה אוטומטית (debounced) — כדי שדיווח לא יאבד אם שוכחים ללחוץ "שלח"
+  const [autoSavedAt, setAutoSavedAt] = useState<string | null>(null);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const skipFirst = useRef(true);
+  useEffect(() => {
+    if (skipFirst.current) { skipFirst.current = false; return; }
+    if (done) return; // אחרי שליחה סופית — אין צורך
+    const h = setTimeout(async () => {
+      setAutoSaving(true);
+      try {
+        const entries = soldiers.map((s) => ({ soldierId: s.id, statusId: marks[s.id] ?? null }));
+        const r = await submitAttendanceReport(soldierId, token, targetDates, mode, entries);
+        if (!r.error) setAutoSavedAt(new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" }));
+      } catch { /* לא קריטי — נשאר כפתור שמירה */ }
+      setAutoSaving(false);
+    }, 1200);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marks, extraDates, mode]);
 
   const nav = (patch: Record<string, string>) => {
     const p = new URLSearchParams({ t: token, date, mode, ...patch });
@@ -242,7 +262,11 @@ export default function AttendanceReportClient({
           <button onClick={submit} disabled={pending} className="w-full disabled:opacity-50 text-white rounded-xl py-3 font-bold" style={{ background: accent }}>
             {pending ? "שומר…" : isPlan ? `📝 שמור תכנון (${present} נוכחים)` : `✅ שלח דיווח (${present} נוכחים)${targetDates.length > 1 ? ` · ${targetDates.length} ימים` : ""}`}
           </button>
-          <p className="text-[11px] text-slate-400 text-center mt-1">אפשר לשמור שוב לעדכון.</p>
+          <p className="text-[11px] text-center mt-1">
+            {autoSaving ? <span className="text-slate-400">💾 שומר…</span>
+              : autoSavedAt ? <span className="text-emerald-600 font-medium">✓ נשמר אוטומטית ({autoSavedAt})</span>
+              : <span className="text-slate-400">💾 נשמר אוטומטית בכל שינוי — אין צורך לזכור</span>}
+          </p>
         </div>
       )}
     </div>
