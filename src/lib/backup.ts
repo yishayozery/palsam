@@ -1,8 +1,36 @@
 import { prisma } from "./prisma";
 import { createHash } from "crypto";
+import { gzipSync } from "zlib";
+import { encryptSecret } from "./crypto";
 
 // שרת בלבד. guard במקום "server-only" כדי שסקריפטי DR (גיבוי/שחזור) יוכלו לייבא.
 if (typeof window !== "undefined") throw new Error("backup.ts is server-only");
+
+/**
+ * 📤 עותק off-site — שולח את ה-snapshot כצרופת מייל מוצפנת (ENCRYPTION_KEY),
+ *    כדי שיהיה גיבוי מחוץ ל-Neon (נוחת בתיבת הדואר — נפרד לגמרי מ-DB ומ-Vercel).
+ *    התהליך: gzip → base64 → הצפנת AES-256-GCM → צרופה. שקוף לכשל (לא שובר את הגיבוי ל-DB).
+ *    היעד נקבע ע"י env BACKUP_EMAIL; אם חסר — מדלגים. שחזור: scripts/decrypt-backup.ts.
+ */
+async function sendOffsiteBackup(plain: string, ts: string): Promise<"sent" | "skipped" | "failed"> {
+  const to = process.env.BACKUP_EMAIL;
+  if (!to) return "skipped";
+  try {
+    const gz = gzipSync(Buffer.from(plain, "utf8")).toString("base64");
+    const enc = encryptSecret(gz); // "v1:iv:tag:ct" — ASCII, ניתן לפענוח רק עם ENCRYPTION_KEY
+    const attachment = { filename: `palmy-backup-${ts}.json.gz.enc`, content: Buffer.from(enc, "utf8").toString("base64") };
+    const { sendEmail } = await import("./email"); // דינמי — email.ts הוא server-only ולא נטען בסקריפטי DR
+    const r = await sendEmail({
+      to,
+      subject: `🗄️ גיבוי PALMY off-site — ${ts}`,
+      text: `מצורף גיבוי מוצפן של מסד הנתונים (${(Buffer.byteLength(enc, "utf8") / 1024).toFixed(0)}KB).\nלשחזור: npx tsx scripts/decrypt-backup.ts <קובץ> (דורש ENCRYPTION_KEY של הפרודקשן).`,
+      attachments: [attachment],
+    });
+    return r.ok ? "sent" : "failed";
+  } catch {
+    return "failed";
+  }
+}
 
 /** טבלאות-הייחוס/קונפיג — משתנות נדיר. נלכדות בגיבוי רק כשהשתנו (גיבוי דינמי). */
 async function fetchReferenceTables() {
@@ -58,8 +86,14 @@ export async function runBackup(): Promise<{ id: string; status: string; sizeByt
 
     const sizeBytes = Buffer.byteLength(json, "utf8") + (referenceData ? Buffer.byteLength(referenceData, "utf8") : 0);
 
+    // 📤 עותק off-site מוצפן (מייל) — self-contained: תמיד כולל את טבלאות-הייחוס
+    const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const offsitePlain = JSON.stringify({ version: 2, tables, reference });
+    const offsite = await sendOffsiteBackup(offsitePlain, ts);
+    rowCounts._offsite = offsite === "sent" ? 1 : 0;
+
     const run = await prisma.backupRun.create({
-      data: { status: "OK", target: "DB", sizeBytes, rowCounts, data: json, referenceData, referenceHash },
+      data: { status: "OK", target: offsite === "sent" ? "DB+OFFSITE" : "DB", sizeBytes, rowCounts, data: json, referenceData, referenceHash },
     });
     await pruneBackups().catch(() => {});
     return { id: run.id, status: "OK", sizeBytes };

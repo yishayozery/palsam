@@ -31,9 +31,12 @@ export default async function BackupsPage() {
   const okRuns = runs.filter((r) => r.status === "OK");
   const lastOk = okRuns[0] ?? null;
   // חיווי בריאות — גיבוי פעמיים ביום (כל ~12ש'); מתריע אם עברו 14+ שעות מאז גיבוי תקין
+  // eslint-disable-next-line react-hooks/purity -- Server Component (force-dynamic); הזמן נקרא בכל בקשה
   const hoursSinceOk = lastOk ? (Date.now() - lastOk.createdAt.getTime()) / 3600000 : Infinity;
   const healthy = hoursSinceOk < 14;
   const lastFailed = runs[0] && runs[0].status !== "OK";
+  // 📤 האם הגיבוי התקין האחרון נשלח גם off-site (מייל מוצפן)
+  const offsiteOn = !!lastOk && (lastOk.target?.includes("OFFSITE") || (lastOk.rowCounts as Record<string, number> | null)?._offsite === 1);
 
   return (
     <div>
@@ -52,6 +55,12 @@ export default async function BackupsPage() {
         {lastFailed && " · הריצה האחרונה נכשלה."}
       </div>
 
+      <div className={`rounded-xl p-3 mb-4 text-sm font-medium border ${offsiteOn ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-amber-50 border-amber-300 text-amber-800"}`}>
+        {offsiteOn
+          ? "📤 עותק off-site פעיל — הגיבוי האחרון נשלח כצרופת מייל מוצפנת (מחוץ ל-Neon)."
+          : "⚠️ עותק off-site לא פעיל — הגדר את משתנה הסביבה BACKUP_EMAIL (ב-Vercel) כדי לשלוח כל גיבוי כצרופה מוצפנת מחוץ למסד הנתונים. שחזור: scripts/decrypt-backup.ts."}
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         <Card className="p-4">
           <div className="text-xs text-slate-500">גיבוי אחרון תקין</div>
@@ -68,7 +77,7 @@ export default async function BackupsPage() {
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800 mb-4">
-        ℹ️ הגיבוי כולל את נתוני הליבה (נשק, חתימות, שינועים, חיילים, מלאי). צילומי base64 (חתימות/רישיונות) אינם ב-snapshot — הם מגובים ב-Neon PITR. להורדה חיצונית: לחצו על ⬇️ ליד ריצה אחרונה ושמרו את הקובץ מחוץ למערכת.
+        ℹ️ הגיבוי כולל את נתוני הליבה (נשק, חתימות, שינועים, חיילים, מלאי). צילומי base64 (חתימות/רישיונות) אינם ב-snapshot — הם מגובים ב-Neon PITR. עותק off-site: אם הוגדר BACKUP_EMAIL, כל גיבוי נשלח אוטומטית כצרופה מוצפנת למייל (📤). להורדה ידנית: לחצו על ⬇️ ליד ריצה אחרונה.
       </div>
 
       {runs.length === 0 ? (
@@ -88,11 +97,12 @@ export default async function BackupsPage() {
             <tbody>
               {runs.map((r) => {
                 const counts = (r.rowCounts as Record<string, number> | null) ?? {};
-                const total = Object.values(counts).reduce((a, b) => a + b, 0);
+                const total = Object.entries(counts).filter(([k]) => !k.startsWith("_")).reduce((a, [, v]) => a + v, 0);
+                const rowOffsite = r.target?.includes("OFFSITE") || counts._offsite === 1;
                 return (
                   <tr key={r.id} className="border-b last:border-0">
                     <Td>{fmtIL(r.createdAt)}</Td>
-                    <Td>{r.status === "OK" ? <Badge className="bg-emerald-100 text-emerald-700">✅ תקין</Badge> : <Badge className="bg-rose-100 text-rose-700">❌ נכשל</Badge>}</Td>
+                    <Td className="whitespace-nowrap">{r.status === "OK" ? <Badge className="bg-emerald-100 text-emerald-700">✅ תקין</Badge> : <Badge className="bg-rose-100 text-rose-700">❌ נכשל</Badge>}{rowOffsite && <span title="נשלח off-site (מייל מוצפן)" className="mr-1">📤</span>}</Td>
                     <Td>{r.status === "OK" ? fmtBytes(r.sizeBytes) : <span className="text-rose-500 text-xs" title={r.error ?? ""}>{r.error?.slice(0, 40) ?? "שגיאה"}</span>}</Td>
                     <Td><span className="text-xs text-slate-500" title={Object.entries(counts).map(([k, v]) => `${k}: ${v}`).join("\n")}>{total} רשומות</span></Td>
                     <Td>
