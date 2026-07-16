@@ -41,7 +41,7 @@ export async function submitAttendanceReport(
   if (!verifyLink("attendance-report", soldierId, token)) return { error: "קישור לא תקין" };
   const reporter = await prisma.soldier.findUnique({
     where: { id: soldierId },
-    select: { battalionId: true, companyId: true, squadId: true, isAttendanceReporter: true, appUser: { select: { id: true, role: true } } },
+    select: { battalionId: true, companyId: true, squadId: true, isAttendanceReporter: true, attendanceReporterAllCompany: true, appUser: { select: { id: true, role: true } } },
   });
   if (!reporter) return { error: "לא נמצא" };
   const canReport = reporter.isAttendanceReporter || reporter.appUser?.role === "COMPANY_REP";
@@ -62,8 +62,10 @@ export async function submitAttendanceReport(
     if (bad) return { error: "תכנון הוא קדימה בלבד (מהיום והלאה)" };
   }
 
-  // היקף — המחלקה של הנאמן אם משויך, אחרת כל הפלוגה
-  const scopeWhere = reporter.squadId ? { squadId: reporter.squadId } : { companyId: reporter.companyId };
+  // היקף — כל הפלוגה אם סומן allCompany (או אין מחלקה); אחרת המחלקה של הנאמן.
+  //   ⚠️ חייב להתאים לעמוד (companyWide) — אחרת חיילים מחוץ למחלקה נזרקים בשמירה.
+  const companyWide = reporter.attendanceReporterAllCompany || !reporter.squadId;
+  const scopeWhere = companyWide ? { companyId: reporter.companyId } : { squadId: reporter.squadId };
   const allowed = new Set((await prisma.soldier.findMany({
     where: { battalionId: reporter.battalionId, status: { notIn: ["DISCHARGED", "INACTIVE"] }, ...scopeWhere },
     select: { id: true },

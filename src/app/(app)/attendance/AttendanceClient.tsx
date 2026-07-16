@@ -57,7 +57,7 @@ export default function AttendanceClient({
   const [pendingChanges, setPendingChanges] = useState<Map<string, string | null>>(new Map());
   const [selectedSquadId, setSelectedSquadId] = useState<string>("");
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
-  const [onlyShmap, setOnlyShmap] = useState<boolean>(false);
+  const [onlyShmap, setOnlyShmap] = useState<boolean>(true); // ברירת מחדל: מציג רק חיילים בשמ"פ פעיל (ניתן לכבות)
   const [copiedPn, setCopiedPn] = useState<string | null>(null);
 
   function copyPn(pn: string) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toggleAttendanceReporter, saveReportWindow, saveReportOverride, deleteReportOverride } from "../../attendance/actions";
 
@@ -15,6 +15,18 @@ export default function RosterAttendanceSettings({ companies, window, overrides 
   const [open, setOpen] = useState<"reporters" | "window" | null>(null);
   const [win, setWin] = useState<number[]>(() => Array.from({ length: 7 }, (_, i) => window[i] ?? 0));
   const [winMsg, setWinMsg] = useState<string | null>(null);
+  // 💾 שמירה אוטומטית של החלון בכל שינוי (debounced) — אין צורך ללחוץ "שמור"
+  const winFirst = useRef(true);
+  useEffect(() => {
+    if (winFirst.current) { winFirst.current = false; return; }
+    const h = setTimeout(async () => {
+      const r = await saveReportWindow(win);
+      setWinMsg(r?.error ? "❌ " + r.error : "✓ נשמר");
+      router.refresh();
+    }, 900);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [win]);
   const [ovDate, setOvDate] = useState(""); const [ovFwd, setOvFwd] = useState(2); const [ovNote, setOvNote] = useState("");
   // בוררים מדורגים: פלוגה → מחלקה → חייל
   const [selComp, setSelComp] = useState(""); const [selSquad, setSelSquad] = useState(""); const [selSol, setSelSol] = useState("");
@@ -139,11 +151,7 @@ export default function RosterAttendanceSettings({ companies, window, overrides 
                     </label>
                   ))}
                 </div>
-                <div className="flex items-center gap-2 mt-2">
-                  <button onClick={() => { setWinMsg(null); start(async () => { const r = await saveReportWindow(win); if (r?.error) { setWinMsg("❌ " + r.error); } else { setWinMsg("✅ נשמר"); router.refresh(); } }); }} disabled={pending}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">{pending ? "שומר…" : "💾 שמור חלון"}</button>
-                  {winMsg && <span className={`text-sm font-medium ${winMsg.startsWith("✅") ? "text-emerald-700" : "text-rose-600"}`}>{winMsg}</span>}
-                </div>
+                <div className="mt-2 text-sm text-slate-500">💾 נשמר אוטומטית בכל שינוי {winMsg && <span className={`font-medium ${winMsg.startsWith("❌") ? "text-rose-600" : "text-emerald-700"}`}>· {winMsg}</span>}</div>
               </div>
 
               <div className="border-t border-slate-200 pt-3">

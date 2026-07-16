@@ -29,7 +29,16 @@ export default async function AttendanceReportPage({ params, searchParams }: { p
   // היקף: כל הפלוגה אם סומן allCompany (או אין מחלקה); אחרת המחלקה שלו
   const companyWide = reporter.attendanceReporterAllCompany || !reporter.squadId;
   const scopeWhere = companyWide ? { companyId: reporter.companyId } : { squadId: reporter.squadId };
-  const soldiers = await prisma.soldier.findMany({
+  const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
+  const todayDate = new Date(todayIL + "T00:00:00.000Z");
+  // 🎖️ מציגים רק חיילים ב-שמ"פ פעיל (בבסיס). גדוד שלא מנהל שמ"פ (אין תוצאות) → מציגים את כולם.
+  let soldiers = await prisma.soldier.findMany({
+    where: { battalionId: reporter.battalionId, status: { notIn: ["DISCHARGED", "INACTIVE"] }, ...scopeWhere,
+      callupPeriods: { some: { startDate: { lte: todayDate }, OR: [{ endDate: null }, { endDate: { gte: todayDate } }] } } },
+    select: { id: true, fullName: true, personalNumber: true, squad: { select: { name: true } } },
+    orderBy: [{ squad: { name: "asc" } }, { fullName: "asc" }],
+  });
+  if (soldiers.length === 0) soldiers = await prisma.soldier.findMany({
     where: { battalionId: reporter.battalionId, status: { notIn: ["DISCHARGED", "INACTIVE"] }, ...scopeWhere },
     select: { id: true, fullName: true, personalNumber: true, squad: { select: { name: true } } },
     orderBy: [{ squad: { name: "asc" } }, { fullName: "asc" }],
@@ -38,7 +47,6 @@ export default async function AttendanceReportPage({ params, searchParams }: { p
     where: { battalionId: reporter.battalionId, active: true },
     orderBy: { sortOrder: "asc" }, select: { id: true, name: true, icon: true, color: true, isPresent: true },
   });
-  const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
   const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayIL;
 
   // חלון דיווח: ביצוע — עד התאריך המותר בגדוד להיום; תכנון — קדימה (עד שבועיים ב-chips).
