@@ -141,11 +141,16 @@ export async function addRequestUpdate(formData: FormData): Promise<{ error?: st
   const id = String(formData.get("id") || "");
   const text = String(formData.get("text") || "").trim();
   if (!text) return { error: "הזן טקסט לעדכון" };
-  const req = await prisma.request.findUnique({ where: { id }, select: { battalionId: true, targetUnitId: true } });
+  const req = await prisma.request.findUnique({ where: { id }, select: { battalionId: true, targetUnitId: true, type: true, title: true } });
   if (!req) return { error: "דרישה לא נמצאה" };
   // הרשאה: היחידה הפותחת (גדוד) או היחידה הממונה (חטיבה)
   if (req.battalionId !== user.battalionId && req.targetUnitId !== user.battalionId) return { error: "אין הרשאה" };
   await prisma.requestUpdate.create({ data: { requestId: id, authorId: user.id, authorName: user.fullName ?? null, text } });
+  // 🔔 אם החטיבה הגיבה (עדכון בלי שינוי-סטטוס) — מתריעים לאחראי-התחום בגדוד (היה חסר)
+  if (req.targetUnitId === user.battalionId) {
+    await notifyBattalionResponsibles(req.battalionId, req.type,
+      `💬 עדכון בדרישה — <b>${escapeTelegram(REQUEST_TYPE_LABEL[req.type])}</b>\n${escapeTelegram(req.title)}\n${escapeTelegram(text.slice(0, 300))}`).catch(() => {});
+  }
   revalidatePath("/requests");
   return { ok: true };
 }

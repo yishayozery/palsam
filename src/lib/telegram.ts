@@ -179,7 +179,7 @@ export function buildMainKeyboard(showTasks = false, tasksPending = false, isDri
   // "📋 משימות" — ספירות / דיווח כ"א / תעודות לחתימה. 🔴 = יש פעולה שממתינה למשתמש.
   if (showTasks) rows.push([{ text: tasksPending ? "📋 משימות 🔴" : "📋 משימות" }, { text: "🚗 רכבים" }]);
   else rows.push([{ text: "🚗 רכבים" }]);
-  rows.push([{ text: "🕐 ארוחות ותפילות" }]);
+  rows.push([{ text: "🕐 ארוחות ותפילות" }, { text: "🍽️ עדכון מזון" }]);
   return { keyboard: rows, resize_keyboard: true, is_persistent: true };
 }
 

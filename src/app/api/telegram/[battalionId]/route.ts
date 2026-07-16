@@ -114,6 +114,7 @@ export async function POST(
       "🗓️ דיווח נוכחות": "/attendance",
       "📝 תעודות לחתימה": "/pendingsigns",
       "🗓️ התורנויות שלי": "/myduty",
+      "🍽️ עדכון מזון": "/mydiet",
       "⛽ כרטיסי הדלק שלי": "/myfuel",
       "🕐 ארוחות ותפילות": "/info",
       "📥 דרישות נכנסות": "/brigade-requests",
@@ -388,6 +389,15 @@ export async function POST(
       return NextResponse.json({ ok: true });
     }
 
+    // 🍽️ עדכון מזון/כשרות — ניתן לשנות בכל עת (לא רק ב-onboarding)
+    if (cmd === "/mydiet") {
+      if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
+      const { DIET_OPTIONS } = await import("@/lib/diet");
+      const buttons = DIET_OPTIONS.map((d, i) => [{ text: d, callback_data: `diet:${i}` }]);
+      await sendTelegramMessage(token, chatId, "🍽️ <b>עדכון מזון/כשרות</b>\nבחר/י את סוג המזון שלך (משפיע על הזמנות האוכל ביחידה):", { inline_keyboard: buttons });
+      return NextResponse.json({ ok: true });
+    }
+
     // 🗓️ התורנויות שלי — תורנויות קרובות (בקשת החלפה) + משבצות פנויות לשיבוץ עצמי
     if (cmd === "/myduty") {
       if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
@@ -559,7 +569,7 @@ async function handleCallback(
     const soldier = await prisma.soldier.findFirst({ where: { battalionId, telegramChatId: chatId }, select: { id: true } });
     if (!soldier) { await answerCallbackQuery(token, callback.id, "לא נמצא"); return; }
     await prisma.soldier.update({ where: { id: soldier.id }, data: { dietType: choice === "ללא" ? null : choice } });
-    await editMessageText(token, chatId, messageId, `🍽️ עודכן: <b>${choice}</b>\nתודה! ניתן לעדכן שוב בכל עת מול המפקד.`);
+    await editMessageText(token, chatId, messageId, `🍽️ עודכן: <b>${choice}</b>\nתודה! ניתן לשנות שוב בכל עת בכפתור "🍽️ עדכון מזון".`);
     await answerCallbackQuery(token, callback.id, "עודכן ✅");
     return;
   }
@@ -567,7 +577,7 @@ async function handleCallback(
   // 📥 בוט חטיבה — עדכון סטטוס דרישה: breq:<id>:<RESOLVED|NEEDS_INFO>
   if (data.startsWith("breq:")) {
     const [, id, statusRaw] = data.split(":");
-    const req = await prisma.request.findFirst({ where: { id, targetUnitId: battalionId }, select: { id: true, status: true, type: true } });
+    const req = await prisma.request.findFirst({ where: { id, targetUnitId: battalionId }, select: { id: true, status: true, type: true, battalionId: true, title: true } });
     if (!req) { await answerCallbackQuery(token, callback.id, "לא נמצא"); return; }
     const soldier = await prisma.soldier.findFirst({ where: { battalionId, telegramChatId: chatId }, select: { appUser: { select: { id: true, role: true, fullName: true } } } });
     const au = soldier?.appUser;
@@ -583,6 +593,9 @@ async function handleCallback(
       prisma.request.update({ where: { id }, data: { status: newStatus, ...(newStatus === "RESOLVED" ? { resolvedAt: new Date() } : {}), assignedName: au?.fullName ?? "בוט חטיבה", assignedToId: au?.id ?? null } }),
       prisma.requestUpdate.create({ data: { requestId: id, authorName: au?.fullName ?? "בוט חטיבה", text: newStatus === "RESOLVED" ? "נסגר מהבוט" : "סומן 'דרוש מידע' מהבוט", statusFrom: req.status, statusTo: newStatus } }),
     ]);
+    // 🔔 התראה לאחראי-התחום בגדוד (כמו מהאתר — היה חסר בבוט)
+    await notifyBattalionResponsibles(req.battalionId, req.type,
+      `🔔 עדכון דרישה — <b>${escapeTelegram(REQUEST_TYPE_LABEL[req.type])}</b>\n${escapeTelegram(req.title)}\nסטטוס: <b>${escapeTelegram(REQUEST_STATUS_LABEL[newStatus])}</b>`).catch(() => {});
     await editMessageText(token, chatId, messageId, `✅ עודכן: <b>${REQUEST_STATUS_LABEL[newStatus]}</b>`);
     await answerCallbackQuery(token, callback.id, "עודכן ✅");
     return;

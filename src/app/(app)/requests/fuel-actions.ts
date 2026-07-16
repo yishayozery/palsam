@@ -31,7 +31,7 @@ export async function importFuelCards(formData: FormData): Promise<{ error?: str
     skipDuplicates: true,
   });
   await audit(user.id, "IMPORT_FUEL_CARDS", "BrigadeFuelCard", bId, { count: res.count });
-  revalidatePath("/requests");
+  revalidatePath("/requests"); revalidatePath("/driving-licenses");
   return { added: res.count };
 }
 
@@ -52,7 +52,7 @@ export async function allocateFuelCards(formData: FormData): Promise<{ error?: s
   });
   // התראה לאחראי-כרטיסי-דלק בגדוד היעד
   await notifyBattalionResponsibles(battalion.id, "FUEL_CARDS", `⛽ הוקצו לגדוד <b>${ids.length}</b> כרטיסי דלק מהחטיבה. יש לחתום על קבלתם.`);
-  revalidatePath("/requests");
+  revalidatePath("/requests"); revalidatePath("/driving-licenses");
   return { ok: true };
 }
 
@@ -66,7 +66,7 @@ export async function unallocateFuelCard(formData: FormData): Promise<{ error?: 
   if (!card) return { error: "כרטיס לא נמצא" };
   if (card.status === "SIGNED") return { error: "כרטיס חתום — לא ניתן לבטל" };
   await prisma.brigadeFuelCard.update({ where: { id }, data: { status: "AVAILABLE", allocatedBattalionId: null, allocatedName: null, allocatedAt: null } });
-  revalidatePath("/requests");
+  revalidatePath("/requests"); revalidatePath("/driving-licenses");
   return { ok: true };
 }
 
@@ -80,7 +80,7 @@ export async function deleteFuelCard(formData: FormData): Promise<{ error?: stri
   if (!card) return { error: "כרטיס לא נמצא" };
   if (card.status !== "AVAILABLE") return { error: "ניתן למחוק רק כרטיס במאגר" };
   await prisma.brigadeFuelCard.delete({ where: { id } });
-  revalidatePath("/requests");
+  revalidatePath("/requests"); revalidatePath("/driving-licenses");
   return { ok: true };
 }
 
@@ -101,6 +101,6 @@ export async function signFuelCard(formData: FormData): Promise<{ error?: string
   await prisma.brigadeFuelCard.update({ where: { id }, data: { status: "SIGNED", signedByName, signedByPersonal, signatureData, signedAt: new Date() } });
   await audit(user.id, "SIGN_FUEL_CARD", "BrigadeFuelCard", id, { cardNumber: card.cardNumber });
   await notifyBattalionResponsibles(user.battalionId!, "FUEL_CARDS", `⛽ כרטיס דלק <b>${escapeTelegram(card.cardNumber)}</b> נחתם ע"י ${escapeTelegram(signedByName)} (מ"א ${escapeTelegram(signedByPersonal)}).`);
-  revalidatePath("/requests");
+  revalidatePath("/requests"); revalidatePath("/driving-licenses");
   return { ok: true };
 }

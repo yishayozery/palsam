@@ -23,7 +23,8 @@ export default async function DrivingLicensesPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const user = await requireUser();
-  if (!can(user, "dispatch.manage")) redirect("/dashboard");
+  // מסך קצין הרכב — נגיש גם לבעלי driving_licenses (לא רק dispatch.manage), כדי שהמסך הכפול של הדלק לא יקרוס
+  if (!(can(user, "dispatch.manage") || can(user, "driving_licenses") || can(user, "battalion.profile") || user.isAdmin)) redirect("/dashboard");
   const bId = user.battalionId!;
   const { tab = "soldiers" } = await searchParams;
 
