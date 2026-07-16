@@ -142,9 +142,32 @@ export default function ArmoryIssueDoc({ d, hideToolbar = false, extraToolbar }:
           </table>
         </div>
 
-        {/* אישור מאשר הנשק */}
-        <div className="aid-slabel">אישור מאשר נשיאת הנשק</div>
-        <div className="aid-sigs-one">
+        {/* חתימות — מוסר (מפקד הארמון) · מקבל (חתימה חוזרת) · מאשר הנשק */}
+        <div className="aid-slabel">חתימות</div>
+        <div className="aid-sigs">
+          {/* מוסר — מפקד הארמון */}
+          <div className="aid-sig">
+            <div className="aid-role">מוסר (מפקד הארמון)</div>
+            <div className="aid-f">שם: <b>{d.issuerName}</b></div>
+            {d.issuerHolderName && <div className="aid-f">מחסן: <b>{d.issuerHolderName}</b></div>}
+            <div className="aid-sig-slot">חתימת המוסר</div>
+          </div>
+          {/* מקבל — חתימה חוזרת + פרטים */}
+          <div className="aid-sig">
+            <div className="aid-role">מקבל (החייל)</div>
+            <div className="aid-f">שם: <b>{recipientName}</b></div>
+            <div className="aid-f">מ.א.: <b className="mono">{recipientPn ?? "—"}</b></div>
+            <div className="aid-f">תאריך: <b className="mono">{fmt(d.signature?.signedAt ?? d.issueDate)}</b></div>
+            {d.signature?.signatureData ? (
+              <div className="aid-sig-img">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={d.signature.signatureData} alt="חתימת חייל" />
+              </div>
+            ) : (
+              <div className="aid-sig-slot">חתימה</div>
+            )}
+          </div>
+          {/* מאשר הנשק */}
           <div className="aid-sig">
             <div className="aid-role">מאשר נשיאת הנשק</div>
             <div className="aid-f">שם: <b>{d.approverName ?? "________________"}</b></div>

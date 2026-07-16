@@ -338,9 +338,22 @@ function ArmoryIssuePDF({ d }: { d: ArmoryPdfData }) {
           ))}
         </View>
 
-        <Text style={a.slabel}>אישור מאשר נשיאת הנשק</Text>
+        <Text style={a.slabel}>חתימות</Text>
         <View style={a.sigs}>
-          <View style={[a.sig, { flex: 0, width: "50%" }]}>
+          <View style={a.sig}>
+            <Text style={a.sigRole}>מוסר (מפקד הארמון)</Text>
+            <Text style={a.sigF}>שם: <Text style={a.sigFb}>{d.issuerName}</Text></Text>
+            {d.issuerHolderName && <Text style={a.sigF}>מחסן: <Text style={a.sigFb}>{d.issuerHolderName}</Text></Text>}
+            <View style={a.sigSlot} />
+          </View>
+          <View style={a.sig}>
+            <Text style={a.sigRole}>מקבל (החייל)</Text>
+            <Text style={a.sigF}>שם: <Text style={a.sigFb}>{d.recipientName}</Text></Text>
+            <Text style={a.sigF}>מ.א.: <Text style={a.sigFb}>{d.soldier?.personalNumber ?? "—"}</Text></Text>
+            <Text style={a.sigF}>תאריך: <Text style={a.sigFb}>{fmtD(d.signedAt ?? d.issueDate)}</Text></Text>
+            {d.soldierSignature ? <Image src={d.soldierSignature} style={a.sigImg} /> : <View style={a.sigSlot} />}
+          </View>
+          <View style={a.sig}>
             <Text style={a.sigRole}>מאשר נשיאת הנשק</Text>
             <Text style={a.sigF}>שם: <Text style={a.sigFb}>{d.approverName ?? "________"}</Text></Text>
             <Text style={a.sigF}>מ.א.: <Text style={a.sigFb}>{d.approverPersonalNumber ?? "—"}</Text></Text>
