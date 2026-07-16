@@ -7,6 +7,19 @@ import ArmoryIssueDoc, { type ArmoryIssueData } from "./ArmoryIssueDoc";
 
 export const dynamic = "force-dynamic";
 
+// כותרת מסמך תיאורית — משפיעה על שם-הקובץ בהדפסה/שמירה כ-PDF מהדפדפן
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const t = await prisma.transfer.findUnique({
+    where: { id },
+    select: { type: true, fromHolder: { select: { warehouseType: true } }, toSoldier: { select: { fullName: true } } },
+  });
+  const name = t?.toSoldier?.fullName ?? "";
+  const isArmory = t?.fromHolder?.warehouseType === "ARMORY" && t?.type !== "CHECKIN";
+  const base = isArmory ? "אישור ניפוק נשק" : "תעודת ציוד";
+  return { title: name ? `${base} - ${name}` : base };
+}
+
 export default async function PublicTransferDocPage({
   params,
   searchParams,

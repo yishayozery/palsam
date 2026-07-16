@@ -188,3 +188,168 @@ export async function buildTransferPdfBuffer(transferData: TransferData): Promis
   const buffer = await renderToBuffer(<TransferPDF t={transferData} />);
   return Buffer.from(buffer);
 }
+
+// ===================== אישור ניפוק נשק אישי (טופס 1008) — פורמט ארמון =====================
+export type ArmoryPdfData = {
+  docNumber: string;
+  battalionName: string;
+  logoData: string | null;
+  motto: string | null;
+  soldier: { fullName: string; personalNumber: string | null; companyName: string | null } | null;
+  recipientName: string;
+  issueDate: Date;
+  endDate: Date | null;
+  purpose: string | null;
+  issuerName: string;
+  issuerHolderName: string | null;
+  declarationClauses: string[];
+  warning: string;
+  lines: { name: string; sku: string | null; quantity: number; serial: string | null }[];
+  soldierSignature: string | null;
+  signedAt: Date | null;
+  approverName: string | null;
+  approverTitle: string | null;
+  approvedAt: Date | null;
+  approverSignature: string | null;
+};
+
+const a = StyleSheet.create({
+  page: { fontFamily: "Heebo", fontSize: 10, padding: 34, direction: "rtl" as never, color: "#181c17" },
+  head: { borderBottomWidth: 2, borderBottomColor: "#38471f", paddingBottom: 12, marginBottom: 10, flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "flex-start" },
+  unitBox: { flexDirection: "row-reverse", gap: 8, alignItems: "center" },
+  logo: { width: 54, height: 54, objectFit: "contain" as never },
+  uname: { fontSize: 16, fontWeight: 700, color: "#38471f" },
+  umotto: { fontSize: 9, color: "#8a7440" },
+  usys: { fontSize: 8, color: "#6b6f61", marginTop: 3 },
+  meta: { textAlign: "left" as never, fontSize: 9, color: "#3b4038" },
+  metaRow: { flexDirection: "row-reverse", justifyContent: "space-between", gap: 10 },
+  titleWrap: { alignItems: "center", marginBottom: 12 },
+  eyebrow: { fontSize: 8, color: "#8a7440", fontWeight: 700, letterSpacing: 1 },
+  docTitle: { fontSize: 20, fontWeight: 700, marginTop: 3 },
+  slabel: { fontSize: 9, fontWeight: 700, color: "#38471f", marginBottom: 5, marginTop: 4 },
+  grid: { flexDirection: "row-reverse", flexWrap: "wrap", borderWidth: 1, borderColor: "#cdd0c0", marginBottom: 12 },
+  cell: { width: "33.33%", padding: 6, borderColor: "#cdd0c0", borderLeftWidth: 1, borderBottomWidth: 1 },
+  ck: { fontSize: 7.5, color: "#6b6f61" },
+  cv: { fontSize: 11, fontWeight: 700, marginTop: 2 },
+  declare: { borderWidth: 1, borderColor: "#9aa085", backgroundColor: "#eef0e4", padding: 10, marginBottom: 6 },
+  clauseLine: { fontSize: 8.5, marginBottom: 3, lineHeight: 1.4 },
+  warn: { borderWidth: 1, borderColor: "#7a2a1e", backgroundColor: "#f7ece7", color: "#7a2a1e", fontSize: 8.5, padding: 6, marginBottom: 12 },
+  table: { marginBottom: 14 },
+  tHead: { flexDirection: "row-reverse", backgroundColor: "#38471f" },
+  tRow: { flexDirection: "row-reverse", borderColor: "#cdd0c0" },
+  th: { padding: 5, fontSize: 8, fontWeight: 700, color: "#fff", borderWidth: 0.5, borderColor: "#38471f", textAlign: "right" as never },
+  td: { padding: 5, fontSize: 8.5, borderWidth: 0.5, borderColor: "#cdd0c0", textAlign: "right" as never },
+  cNum: { width: "7%", textAlign: "center" as never },
+  cSku: { width: "20%" },
+  cName: { width: "38%" },
+  cQty: { width: "12%", textAlign: "center" as never },
+  cSerial: { width: "23%" },
+  sigs: { flexDirection: "row-reverse", gap: 10, marginTop: 4 },
+  sig: { flex: 1, borderWidth: 1, borderColor: "#cdd0c0", borderTopWidth: 3, borderTopColor: "#38471f", padding: 8, minHeight: 90 },
+  sigRole: { fontSize: 8.5, fontWeight: 700, color: "#38471f", marginBottom: 4 },
+  sigF: { fontSize: 8, color: "#6b6f61", marginBottom: 2 },
+  sigFb: { fontSize: 9.5, fontWeight: 700, color: "#181c17" },
+  sigImg: { height: 40, objectFit: "contain" as never, marginTop: 4 },
+  sigSlot: { marginTop: 6, height: 34, borderWidth: 1, borderColor: "#9aa085", borderStyle: "dashed" as never },
+  foot: { fontSize: 7.5, color: "#6b6f61", textAlign: "center" as never, marginTop: 16, borderTopWidth: 1, borderTopColor: "#cdd0c0", paddingTop: 6 },
+});
+
+function fmtD(d: Date | null | undefined): string {
+  return d ? new Date(d).toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" }) : "—";
+}
+
+function ArmoryIssuePDF({ d }: { d: ArmoryPdfData }) {
+  return (
+    <Document>
+      <Page size="A4" style={a.page}>
+        <View style={a.head}>
+          <View style={a.unitBox}>
+            {d.logoData && <Image src={d.logoData} style={a.logo} />}
+            <View>
+              <Text style={a.uname}>{d.battalionName}</Text>
+              {d.motto && <Text style={a.umotto}>״{d.motto}״</Text>}
+              <Text style={a.usys}>PALMY · מערכת ניהול מלאי</Text>
+            </View>
+          </View>
+          <View style={a.meta}>
+            <View style={a.metaRow}><Text>טופס</Text><Text style={{ fontWeight: 700 }}>1008</Text></View>
+            <View style={a.metaRow}><Text>אסמכתא</Text><Text style={{ fontWeight: 700 }}>{d.docNumber}</Text></View>
+            <View style={a.metaRow}><Text>תאריך</Text><Text style={{ fontWeight: 700 }}>{fmtD(d.issueDate)}</Text></View>
+          </View>
+        </View>
+
+        <View style={a.titleWrap}>
+          <Text style={a.eyebrow}>אישור שלישות · חטיבה 2</Text>
+          <Text style={a.docTitle}>אישור לניפוק נשק אישי</Text>
+        </View>
+
+        <Text style={a.slabel}>פרטי מקבל הנשק</Text>
+        <View style={a.grid}>
+          <View style={a.cell}><Text style={a.ck}>שם מלא</Text><Text style={a.cv}>{d.recipientName}</Text></View>
+          <View style={a.cell}><Text style={a.ck}>מספר אישי (מ.א.)</Text><Text style={a.cv}>{d.soldier?.personalNumber ?? "—"}</Text></View>
+          <View style={a.cell}><Text style={a.ck}>פלוגה</Text><Text style={a.cv}>{d.soldier?.companyName ?? "—"}</Text></View>
+          <View style={a.cell}><Text style={a.ck}>מתאריך</Text><Text style={a.cv}>{fmtD(d.issueDate)}</Text></View>
+          <View style={a.cell}><Text style={a.ck}>עד תאריך (סיום תעסוקה)</Text><Text style={a.cv}>{fmtD(d.endDate)}</Text></View>
+          <View style={a.cell}><Text style={a.ck}>לצורך</Text><Text style={a.cv}>{d.purpose ?? "תע\"מ"}</Text></View>
+        </View>
+
+        <Text style={a.slabel}>הצהרת החייל</Text>
+        <View style={a.declare}>
+          {d.declarationClauses.map((c, i) => <Text key={i} style={a.clauseLine}>{i + 1}. {c}</Text>)}
+        </View>
+        <Text style={a.warn}>⚠ {d.warning}</Text>
+
+        <Text style={a.slabel}>פירוט הנשק והציוד המנופק</Text>
+        <View style={a.table}>
+          <View style={a.tHead}>
+            <Text style={[a.th, a.cNum]}>#</Text>
+            <Text style={[a.th, a.cSku]}>מק״ט</Text>
+            <Text style={[a.th, a.cName]}>שם פריט</Text>
+            <Text style={[a.th, a.cQty]}>כמות</Text>
+            <Text style={[a.th, a.cSerial]}>מסט״ב</Text>
+          </View>
+          {d.lines.map((l, i) => (
+            <View style={a.tRow} key={i}>
+              <Text style={[a.td, a.cNum]}>{i + 1}</Text>
+              <Text style={[a.td, a.cSku]}>{l.sku ?? "—"}</Text>
+              <Text style={[a.td, a.cName]}>{l.name}</Text>
+              <Text style={[a.td, a.cQty]}>{l.quantity}</Text>
+              <Text style={[a.td, a.cSerial]}>{l.serial ?? "—"}</Text>
+            </View>
+          ))}
+        </View>
+
+        <Text style={a.slabel}>חתימות</Text>
+        <View style={a.sigs}>
+          <View style={a.sig}>
+            <Text style={a.sigRole}>מנפק (מוסר)</Text>
+            <Text style={a.sigF}>שם: <Text style={a.sigFb}>{d.issuerName}</Text></Text>
+            {d.issuerHolderName && <Text style={a.sigF}>מחסן: <Text style={a.sigFb}>{d.issuerHolderName}</Text></Text>}
+            <View style={a.sigSlot} />
+          </View>
+          <View style={a.sig}>
+            <Text style={a.sigRole}>מקבל (החייל)</Text>
+            <Text style={a.sigF}>שם: <Text style={a.sigFb}>{d.recipientName}</Text></Text>
+            <Text style={a.sigF}>מ.א.: <Text style={a.sigFb}>{d.soldier?.personalNumber ?? "—"}</Text></Text>
+            <Text style={a.sigF}>תאריך: <Text style={a.sigFb}>{fmtD(d.signedAt ?? d.issueDate)}</Text></Text>
+            {d.soldierSignature ? <Image src={d.soldierSignature} style={a.sigImg} /> : <View style={a.sigSlot} />}
+          </View>
+          <View style={a.sig}>
+            <Text style={a.sigRole}>מאשר הנשק</Text>
+            <Text style={a.sigF}>שם: <Text style={a.sigFb}>{d.approverName ?? "________"}</Text></Text>
+            <Text style={a.sigF}>תפקיד: <Text style={a.sigFb}>{d.approverTitle ?? "מג\"ד / סמג\"ד / קמב\"ץ"}</Text></Text>
+            <Text style={a.sigF}>תאריך: <Text style={a.sigFb}>{d.approvedAt ? fmtD(d.approvedAt) : "____"}</Text></Text>
+            {d.approverSignature ? <Image src={d.approverSignature} style={a.sigImg} /> : <View style={a.sigSlot} />}
+          </View>
+        </View>
+
+        <Text style={a.foot}>מסמך זה הופק אוטומטית ממערכת PALMY · אסמכתא {d.docNumber}</Text>
+      </Page>
+    </Document>
+  );
+}
+
+export async function buildArmoryIssuePdfBuffer(d: ArmoryPdfData): Promise<Buffer> {
+  const buffer = await renderToBuffer(<ArmoryIssuePDF d={d} />);
+  return Buffer.from(buffer);
+}
