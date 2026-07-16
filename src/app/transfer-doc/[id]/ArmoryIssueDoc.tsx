@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import PrintButton from "@/components/PrintButton";
 import { ARMORY_ISSUE_TITLE, ARMORY_ISSUE_CLAUSES, ARMORY_ISSUE_WARNING } from "@/lib/armory-issue-text";
 
@@ -30,7 +31,7 @@ function fmt(d: Date | null | undefined): string {
   return d.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" });
 }
 
-export default function ArmoryIssueDoc({ d }: { d: ArmoryIssueData }) {
+export default function ArmoryIssueDoc({ d, hideToolbar = false, extraToolbar }: { d: ArmoryIssueData; hideToolbar?: boolean; extraToolbar?: ReactNode }) {
   const recipientName = d.soldier?.fullName ?? d.externalName ?? "________________";
   const recipientPn = d.soldier?.personalNumber ?? null;
   const clauses = d.declarationText

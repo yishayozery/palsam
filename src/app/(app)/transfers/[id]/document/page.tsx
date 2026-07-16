@@ -3,15 +3,27 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import PrintButton from "@/components/PrintButton";
+import BackButton from "@/components/BackButton";
 import { TRANSFER_TYPE, TRANSFER_STATUS } from "@/lib/labels";
+import { linkTokenQuery } from "@/lib/link-token";
+import ArmoryIssueDoc, { type ArmoryIssueData } from "@/app/transfer-doc/[id]/ArmoryIssueDoc";
 
 export const dynamic = "force-dynamic";
 
-export default async function TransferDocumentPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+// כותרת מסמך תיאורית — משפיעה על שם-הקובץ בהדפסה/שמירה כ-PDF
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const t = await prisma.transfer.findUnique({
+    where: { id },
+    select: { type: true, fromHolder: { select: { warehouseType: true } }, toSoldier: { select: { fullName: true } } },
+  });
+  const name = t?.toSoldier?.fullName ?? "";
+  const isArmory = t?.fromHolder?.warehouseType === "ARMORY" && t?.type !== "CHECKIN";
+  const base = isArmory ? "אישור ניפוק נשק" : "תעודת ציוד";
+  return { title: name ? `${base} - ${name}` : base };
+}
+
+export default async function TransferDocumentPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
 
@@ -19,9 +31,9 @@ export default async function TransferDocumentPage({
     where: { id },
     include: {
       battalion: true,
-      fromHolder: true, // כולל signatureClause
+      fromHolder: { select: { name: true, signatureClause: true, warehouseType: true, weaponsAgreementText: true } },
       toHolder: true,
-      toSoldier: { select: { fullName: true, personalNumber: true, phone: true } },
+      toSoldier: { select: { fullName: true, personalNumber: true, phone: true, company: { select: { name: true } }, weaponsApprovedById: true, weaponsApprovedAt: true, weaponsApprovalSignature: true } },
       createdBy: true,
       approvedBy: true,
       lines: { include: { itemType: true, serialUnit: true, status: true } },
@@ -32,12 +44,55 @@ export default async function TransferDocumentPage({
 
   const unitName = t.battalion?.name || "גדוד";
   const docNumber = t.id.slice(-8).toUpperCase();
-
   const base = process.env.NEXT_PUBLIC_APP_URL || "";
-  const docUrl = `${base}/transfers/${id}/document`;
   const recipientName = t.toSoldier?.fullName ?? t.toHolder?.name ?? "";
   const recipientPhone = t.toSoldier?.phone ?? null;
-  const certWaText = encodeURIComponent(`שלום ${recipientName}, מצורף אישור העברת ציוד:\n${docUrl}`);
+  const pdfUrl = `${base}/api/transfer-doc/${id}/pdf${linkTokenQuery("transfer-doc", id)}`;
+
+  // 🔫 ניפוק מארמון → טופס 1008 (זהה לתעודה הציבורית וה-PDF)
+  const isArmory = t.fromHolder?.warehouseType === "ARMORY" && t.type !== "CHECKIN";
+  if (isArmory) {
+    const [employment, approver] = await Promise.all([
+      prisma.employment.findFirst({ where: { battalionId: t.battalionId, active: true }, orderBy: { endDate: "desc" }, select: { endDate: true } }),
+      t.toSoldier?.weaponsApprovedById
+        ? prisma.appUser.findUnique({ where: { id: t.toSoldier.weaponsApprovedById }, select: { fullName: true, title: true } })
+        : Promise.resolve(null),
+    ]);
+    const data: ArmoryIssueData = {
+      docNumber, battalionName: unitName, logoData: t.battalion?.logoData ?? null, motto: t.battalion?.motto ?? null,
+      soldier: t.toSoldier ? { fullName: t.toSoldier.fullName, personalNumber: t.toSoldier.personalNumber, companyName: t.toSoldier.company?.name ?? null } : null,
+      externalName: t.toSoldier ? null : (t.toHolder?.name ?? t.externalName ?? null),
+      issueDate: t.signatures[0]?.signedAt ?? t.createdAt,
+      endDate: employment?.endDate ?? null,
+      purpose: t.reason ?? null,
+      issuerName: t.createdBy.fullName,
+      issuerHolderName: t.fromHolder?.name ?? null,
+      declarationText: t.fromHolder?.weaponsAgreementText ?? null,
+      lines: t.lines.map((l) => ({ name: l.itemType.name, sku: l.itemType.sku, quantity: l.quantity, serial: l.serialUnit?.serialNumber ?? null })),
+      signature: t.signatures[0] ?? null,
+      approverName: approver?.fullName ?? null,
+      approverTitle: approver?.title ?? null,
+      approvedAt: t.toSoldier?.weaponsApprovedAt ?? null,
+      approverSignature: t.toSoldier?.weaponsApprovalSignature ?? null,
+    };
+    const waText = encodeURIComponent(`שלום ${recipientName}, מצורף אישור ניפוק נשק:\n${pdfUrl}`);
+    const waUrl = recipientPhone ? `https://wa.me/${recipientPhone.replace(/\D/g, "").replace(/^0/, "972")}?text=${waText}` : `https://wa.me/?text=${waText}`;
+    return (
+      <div>
+        <div className="flex justify-between items-center mb-4 print:hidden max-w-3xl mx-auto">
+          <BackButton />
+          <div className="flex gap-2">
+            <a href={waUrl} target="_blank" rel="noreferrer" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 text-xs font-medium">📲 שלח</a>
+            <a href={pdfUrl} download className="border border-slate-300 hover:bg-slate-50 rounded-lg px-3 py-2 text-xs font-medium">⬇️ PDF</a>
+            <PrintButton />
+          </div>
+        </div>
+        <ArmoryIssueDoc d={data} hideToolbar />
+      </div>
+    );
+  }
+
+  const certWaText = encodeURIComponent(`שלום ${recipientName}, מצורף אישור העברת ציוד:\n${pdfUrl}`);
   const certWaUrl = recipientPhone
     ? `https://wa.me/${recipientPhone.replace(/\D/g, "").replace(/^0/, "972")}?text=${certWaText}`
     : `https://wa.me/?text=${certWaText}`;
@@ -45,12 +100,13 @@ export default async function TransferDocumentPage({
   return (
     <div>
       <div className="flex justify-between items-center mb-4 print:hidden">
-        <Link href="/transfers" className="text-sm text-slate-500 hover:text-slate-800">→ חזרה להעברות</Link>
+        <BackButton />
         <div className="flex gap-2">
           <a href={certWaUrl} target="_blank" rel="noreferrer"
             className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 text-xs font-medium">
             📲 שלח תעודה
           </a>
+          <a href={pdfUrl} download className="border border-slate-300 hover:bg-slate-50 rounded-lg px-3 py-2 text-xs font-medium">⬇️ PDF</a>
           <PrintButton />
         </div>
       </div>
@@ -159,7 +215,6 @@ export default async function TransferDocumentPage({
                 <span className="text-slate-400"> · {t.approvedAt.toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" })}</span>
               )}
             </div>
-            {/* חתימת גורם חיצוני */}
             {t.externalSignature && (
               <div className="mt-3 border border-slate-200 rounded-lg p-2 bg-slate-50">
                 <div className="text-[10px] text-slate-500 mb-1">חתימת הגורם החיצוני:</div>
@@ -167,7 +222,6 @@ export default async function TransferDocumentPage({
                 <img src={t.externalSignature} alt="חתימת גורם חיצוני" className="max-h-24 object-contain" />
               </div>
             )}
-            {/* חתימה דיגיטלית — אם קיימת */}
             {t.signatures[0]?.signatureData && (
               <div className="mt-3 border border-slate-200 rounded-lg p-2 bg-slate-50">
                 <div className="text-[10px] text-slate-500 mb-1">חתימה דיגיטלית:</div>
