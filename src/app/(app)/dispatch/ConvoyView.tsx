@@ -19,7 +19,11 @@ export function vehicleIcon(name: string): string {
   for (const [re, ic] of ICONS) if (re.test(name || "")) return ic;
   return "🚗";
 }
-const iconFor = vehicleIcon;
+/** אייקון רכב מהופך אופקית — אימוג'י הרכב פונה שמאלה כברירת מחדל, ובפריסת RTL
+ *  ראש-השיירה (רכב 1) יושב מימין; ההיפוך גורם לרכבים לפנות ימינה = לכיוון הנסיעה. */
+export function VehicleIcon({ name, className = "" }: { name: string; className?: string }) {
+  return <span className={`inline-block ${className}`} style={{ transform: "scaleX(-1)" }}>{vehicleIcon(name)}</span>;
+}
 
 /** תצוגה ויזואלית של הרכב השיירה — אייקוני רכב מקובצים לפי סוג עם כמות. */
 export default function ConvoyView({ vehicles, size = "md" }: { vehicles: { typeName: string }[]; size?: "sm" | "md" }) {
@@ -33,7 +37,7 @@ export default function ConvoyView({ vehicles, size = "md" }: { vehicles: { type
         <div key={type} className="flex items-center gap-1" title={`${count}× ${type}`}>
           <span className="flex">
             {Array.from({ length: count }).map((_, i) => (
-              <span key={i} className={`${cls} leading-none`}>{iconFor(type)}</span>
+              <VehicleIcon key={i} name={type} className={`${cls} leading-none`} />
             ))}
           </span>
           <span className="text-xs text-slate-500 whitespace-nowrap">{count}× {type}</span>
@@ -71,7 +75,7 @@ export function ConvoyStrip({ vehicles, battalionLogo = null }: {
           title={`רכב ${i + 1} · ${v.typeName} · ${v.ident ?? "—"}`}>
           <span className="conv-veh">
             {!v.isExternal && <BattalionFlag logo={battalionLogo} />}
-            <span className="text-2xl leading-none">{vehicleIcon(v.typeName)}</span>
+            <VehicleIcon name={v.typeName} className="text-2xl leading-none" />
           </span>
           <span className="text-[10px] text-slate-500">רכב {i + 1}</span>
           <span className="text-[10px] font-semibold text-slate-700 mt-0.5 max-w-[72px] truncate" title={v.typeName}>{v.typeName}</span>

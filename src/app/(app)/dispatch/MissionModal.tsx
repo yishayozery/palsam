@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { vehicleIcon, BattalionFlag } from "./ConvoyView";
+import { VehicleIcon, BattalionFlag } from "./ConvoyView";
 import { saveMission } from "./actions";
 
 export type MVehicle = { id: string; name: string; serial: string; typeName: string; requiredLicenseIds?: string[]; statusName?: string; statusOk?: boolean; equipment?: string[] };
@@ -299,7 +299,7 @@ export default function MissionModal({
                       className={`relative flex flex-col items-center rounded-lg border px-2 pb-1 pt-4 min-w-[76px] cursor-grab active:cursor-grabbing ${active ? "bg-slate-800 text-white border-slate-800 ring-2 ring-slate-400" : "bg-white border-slate-300 hover:bg-slate-100"} ${bad ? "!border-rose-400" : ""} ${dragKey === row.key ? "opacity-40" : ""}`}>
                       <span className="conv-veh">
                         {row.source === "system" && <BattalionFlag logo={battalionLogo} />}
-                        <span className="text-2xl leading-none">{vehicleIcon(type)}</span>
+                        <VehicleIcon name={type} className="text-2xl leading-none" />
                       </span>
                       <span className="text-[10px] opacity-70">רכב {ri + 1}</span>
                       <span className="text-[10px] font-semibold mt-0.5 max-w-[72px] truncate" title={type}>{type}</span>

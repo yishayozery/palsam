@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
-import { ConvoyStrip, vehicleIcon } from "./ConvoyView";
+import { ConvoyStrip, VehicleIcon } from "./ConvoyView";
 import MissionModal, { type MVehicle, type MSoldier, type MTemplate, type MRole, type EditMission } from "./MissionModal";
 import { toggleMissionComplete, deleteMission, startMission, toggleTripConfirmed } from "./actions";
 
@@ -149,7 +149,7 @@ export default function MissionsSection({
                       <div key={vi} className="border border-slate-200 rounded-lg p-2">
                         <div className="font-medium text-sm text-slate-700 mb-1 flex items-center gap-1.5">
                           <span className="bg-slate-800 text-white rounded-full w-5 h-5 inline-flex items-center justify-center text-[10px] shrink-0" title="מיקום בשיירה">{vi + 1}</span>
-                          {v.isExternal ? "🔶 " : `${vehicleIcon(v.typeName)} `}{v.label}
+                          {v.isExternal ? "🔶 " : <VehicleIcon name={v.typeName} className="ml-1" />}{v.label}
                         </div>
                         {v.equipment && v.equipment.length > 0 && (
                           <details className="mb-1">
