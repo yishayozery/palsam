@@ -296,10 +296,12 @@ export default function MissionModal({
                     <button key={row.key} draggable onDragStart={() => setDragKey(row.key)} onDragEnd={() => setDragKey(null)}
                       onDragOver={(e) => e.preventDefault()} onDrop={() => { if (dragKey) reorderRow(dragKey, row.key); setDragKey(null); }}
                       onClick={() => setActiveVehKey(row.key)} title={`רכב ${ri + 1} · ${type} · ${ident}${bad ? " · לא תקין" : ""} — גרור/לחץ`}
-                      className={`relative flex flex-col items-center rounded-lg border px-2 py-1 min-w-[76px] cursor-grab active:cursor-grabbing ${active ? "bg-slate-800 text-white border-slate-800 ring-2 ring-slate-400" : "bg-white border-slate-300 hover:bg-slate-100"} ${bad ? "!border-rose-400" : ""} ${dragKey === row.key ? "opacity-40" : ""}`}>
-                      {row.source === "system" ? <BattalionFlag logo={battalionLogo} /> : <span className="h-[22px]" />}
+                      className={`relative flex flex-col items-center rounded-lg border px-2 pb-1 pt-4 min-w-[76px] cursor-grab active:cursor-grabbing ${active ? "bg-slate-800 text-white border-slate-800 ring-2 ring-slate-400" : "bg-white border-slate-300 hover:bg-slate-100"} ${bad ? "!border-rose-400" : ""} ${dragKey === row.key ? "opacity-40" : ""}`}>
+                      <span className="conv-veh">
+                        {row.source === "system" && <BattalionFlag logo={battalionLogo} />}
+                        <span className="text-2xl leading-none">{vehicleIcon(type)}</span>
+                      </span>
                       <span className="text-[10px] opacity-70">רכב {ri + 1}</span>
-                      <span className="text-2xl leading-none">{vehicleIcon(type)}</span>
                       <span className="text-[10px] font-semibold mt-0.5 max-w-[72px] truncate" title={type}>{type}</span>
                       <span className="text-[9px] opacity-70 max-w-[72px] truncate" title={ident}>{row.source === "external" ? "🔶 " : ""}{ident}</span>
                       {bad && <span className="absolute -top-1 -left-1 text-[10px]" title="רכב לא תקין">🔴</span>}

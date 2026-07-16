@@ -63,11 +63,13 @@ export function ConvoyStrip({ vehicles, battalionLogo = null }: {
   return (
     <div className="flex flex-wrap items-stretch gap-2">
       {vehicles.map((v, i) => (
-        <div key={i} className="flex flex-col items-center rounded-lg border border-slate-300 bg-white px-2 pb-1 pt-0.5 min-w-[76px]"
+        <div key={i} className="flex flex-col items-center rounded-lg border border-slate-300 bg-white px-2 pb-1 pt-4 min-w-[76px]"
           title={`רכב ${i + 1} · ${v.typeName} · ${v.ident ?? "—"}`}>
-          {!v.isExternal ? <BattalionFlag logo={battalionLogo} /> : <span className="h-[22px]" />}
+          <span className="conv-veh">
+            {!v.isExternal && <BattalionFlag logo={battalionLogo} />}
+            <span className="text-2xl leading-none">{vehicleIcon(v.typeName)}</span>
+          </span>
           <span className="text-[10px] text-slate-500">רכב {i + 1}</span>
-          <span className="text-2xl leading-none">{vehicleIcon(v.typeName)}</span>
           <span className="text-[10px] font-semibold text-slate-700 mt-0.5 max-w-[72px] truncate" title={v.typeName}>{v.typeName}</span>
           <span className="text-[9px] text-slate-500 max-w-[72px] truncate" title={v.ident ?? ""}>{v.isExternal ? "🔶 " : ""}{v.ident ?? "—"}</span>
         </div>

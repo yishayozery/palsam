@@ -13,27 +13,32 @@ body {
   scrollbar-width: thin;
 }
 
-/* 🚩 דגל גדוד מתנופף על מוט — רכבי-גדוד בשיירת השבצ"ק */
-.conv-flag { position: relative; display: inline-block; width: 18px; height: 22px; }
-.conv-flag-pole {
-  position: absolute; bottom: 0; right: 1px; width: 2px; height: 22px;
-  background: linear-gradient(to bottom, #cbd5e1, #64748b); border-radius: 1px;
+/* 🚩 דגל גדוד מתנופף על מוט — נעוץ ברכב-הגדוד ומתנופף מעליו */
+.conv-veh { position: relative; display: inline-flex; }
+/* הדגל ממוקם אבסולוטית מעל אייקון הרכב — המוט נעוץ בו */
+.conv-flag {
+  position: absolute; left: 50%; bottom: 100%; margin-bottom: -5px;
+  transform: translateX(-50%); width: 22px; height: 24px; pointer-events: none; z-index: 2;
 }
-.conv-flag-pole::before { /* כפתור בראש המוט */
-  content: ""; position: absolute; top: -2px; right: -1px; width: 4px; height: 4px;
+.conv-flag-pole {
+  position: absolute; bottom: 0; left: 10px; width: 2px; height: 24px;
+  background: linear-gradient(to bottom, #cbd5e1, #475569); border-radius: 1px;
+}
+.conv-flag-pole::before { /* כפתור זהב בראש המוט */
+  content: ""; position: absolute; top: -2px; left: -1px; width: 4px; height: 4px;
   background: #f59e0b; border-radius: 50%;
 }
 .conv-flag-cloth {
-  position: absolute; top: 1px; right: 3px; height: 12px; width: 15px;
-  transform-origin: right center; animation: convFlagWave 1.15s ease-in-out infinite;
+  position: absolute; top: 1px; left: 12px; height: 11px; width: 14px;
+  transform-origin: left center; animation: convFlagWave 1.1s ease-in-out infinite;
   display: flex; align-items: center; justify-content: center; overflow: hidden;
-  border-radius: 1px 3px 3px 1px; box-shadow: 0 1px 1px rgba(0,0,0,.12);
+  border-radius: 1px 2px 2px 1px; box-shadow: 0 1px 1px rgba(0,0,0,.15);
 }
-.conv-flag-img { height: 12px; width: 15px; object-fit: cover; }
-.conv-flag-emoji { font-size: 12px; line-height: 1; }
+.conv-flag-img { height: 11px; width: 14px; object-fit: cover; }
+.conv-flag-emoji { font-size: 11px; line-height: 1; }
 @keyframes convFlagWave {
-  0%, 100% { transform: perspective(28px) rotateY(0deg) skewX(0deg); }
-  50%      { transform: perspective(28px) rotateY(22deg) skewX(-5deg); }
+  0%, 100% { transform: perspective(26px) rotateY(0deg) skewX(0deg); }
+  50%      { transform: perspective(26px) rotateY(26deg) skewX(-6deg); }
 }
 @media (prefers-reduced-motion: reduce) { .conv-flag-cloth { animation: none; } }
 
