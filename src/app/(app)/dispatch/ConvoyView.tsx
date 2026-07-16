@@ -39,6 +39,21 @@ export default function ConvoyView({ vehicles, size = "md" }: { vehicles: { type
   );
 }
 
+/** 🚩 דגל גדוד מתנופף על מוט — מסמן רכב-גדוד בשיירה. */
+export function BattalionFlag({ logo = null }: { logo?: string | null }) {
+  return (
+    <span className="conv-flag" title="רכב הגדוד">
+      <span className="conv-flag-pole" />
+      <span className="conv-flag-cloth">
+        {logo
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={logo} alt="דגל הגדוד" className="conv-flag-img" />
+          : <span className="conv-flag-emoji">🚩</span>}
+      </span>
+    </span>
+  );
+}
+
 /** רצועת שיירה — כרטיס פר-רכב עם דגל-גדוד/🔶, אייקון, סוג ומספר זיהוי (קריאה-בלבד, זהה לעורך). */
 export function ConvoyStrip({ vehicles, battalionLogo = null }: {
   vehicles: { isExternal: boolean; typeName: string; ident: string | null }[];
@@ -48,15 +63,10 @@ export function ConvoyStrip({ vehicles, battalionLogo = null }: {
   return (
     <div className="flex flex-wrap items-stretch gap-2">
       {vehicles.map((v, i) => (
-        <div key={i} className="flex flex-col items-center rounded-lg border border-slate-300 bg-white px-2 py-1 min-w-[76px]"
+        <div key={i} className="flex flex-col items-center rounded-lg border border-slate-300 bg-white px-2 pb-1 pt-0.5 min-w-[76px]"
           title={`רכב ${i + 1} · ${v.typeName} · ${v.ident ?? "—"}`}>
-          <span className="text-[10px] text-slate-500 flex items-center gap-0.5">
-            {!v.isExternal && (battalionLogo
-              // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={battalionLogo} alt="גדוד" title="רכב הגדוד" className="w-3.5 h-3.5 object-contain rounded-sm bg-white" />
-              : <span title="רכב הגדוד">🚩</span>)}
-            רכב {i + 1}
-          </span>
+          {!v.isExternal ? <BattalionFlag logo={battalionLogo} /> : <span className="h-[22px]" />}
+          <span className="text-[10px] text-slate-500">רכב {i + 1}</span>
           <span className="text-2xl leading-none">{vehicleIcon(v.typeName)}</span>
           <span className="text-[10px] font-semibold text-slate-700 mt-0.5 max-w-[72px] truncate" title={v.typeName}>{v.typeName}</span>
           <span className="text-[9px] text-slate-500 max-w-[72px] truncate" title={v.ident ?? ""}>{v.isExternal ? "🔶 " : ""}{v.ident ?? "—"}</span>

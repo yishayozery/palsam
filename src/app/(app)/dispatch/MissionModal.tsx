@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { vehicleIcon } from "./ConvoyView";
+import { vehicleIcon, BattalionFlag } from "./ConvoyView";
 import { saveMission } from "./actions";
 
 export type MVehicle = { id: string; name: string; serial: string; typeName: string; requiredLicenseIds?: string[]; statusName?: string; statusOk?: boolean; equipment?: string[] };
@@ -297,13 +297,8 @@ export default function MissionModal({
                       onDragOver={(e) => e.preventDefault()} onDrop={() => { if (dragKey) reorderRow(dragKey, row.key); setDragKey(null); }}
                       onClick={() => setActiveVehKey(row.key)} title={`רכב ${ri + 1} · ${type} · ${ident}${bad ? " · לא תקין" : ""} — גרור/לחץ`}
                       className={`relative flex flex-col items-center rounded-lg border px-2 py-1 min-w-[76px] cursor-grab active:cursor-grabbing ${active ? "bg-slate-800 text-white border-slate-800 ring-2 ring-slate-400" : "bg-white border-slate-300 hover:bg-slate-100"} ${bad ? "!border-rose-400" : ""} ${dragKey === row.key ? "opacity-40" : ""}`}>
-                      <span className="text-[10px] opacity-70 flex items-center gap-0.5">
-                        {row.source === "system" && (battalionLogo
-                          // eslint-disable-next-line @next/next/no-img-element
-                          ? <img src={battalionLogo} alt="גדוד" title="רכב הגדוד" className="w-3.5 h-3.5 object-contain rounded-sm bg-white" />
-                          : <span title="רכב הגדוד">🚩</span>)}
-                        רכב {ri + 1}
-                      </span>
+                      {row.source === "system" ? <BattalionFlag logo={battalionLogo} /> : <span className="h-[22px]" />}
+                      <span className="text-[10px] opacity-70">רכב {ri + 1}</span>
                       <span className="text-2xl leading-none">{vehicleIcon(type)}</span>
                       <span className="text-[10px] font-semibold mt-0.5 max-w-[72px] truncate" title={type}>{type}</span>
                       <span className="text-[9px] opacity-70 max-w-[72px] truncate" title={ident}>{row.source === "external" ? "🔶 " : ""}{ident}</span>

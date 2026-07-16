@@ -13,6 +13,30 @@ body {
   scrollbar-width: thin;
 }
 
+/* 🚩 דגל גדוד מתנופף על מוט — רכבי-גדוד בשיירת השבצ"ק */
+.conv-flag { position: relative; display: inline-block; width: 18px; height: 22px; }
+.conv-flag-pole {
+  position: absolute; bottom: 0; right: 1px; width: 2px; height: 22px;
+  background: linear-gradient(to bottom, #cbd5e1, #64748b); border-radius: 1px;
+}
+.conv-flag-pole::before { /* כפתור בראש המוט */
+  content: ""; position: absolute; top: -2px; right: -1px; width: 4px; height: 4px;
+  background: #f59e0b; border-radius: 50%;
+}
+.conv-flag-cloth {
+  position: absolute; top: 1px; right: 3px; height: 12px; width: 15px;
+  transform-origin: right center; animation: convFlagWave 1.15s ease-in-out infinite;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  border-radius: 1px 3px 3px 1px; box-shadow: 0 1px 1px rgba(0,0,0,.12);
+}
+.conv-flag-img { height: 12px; width: 15px; object-fit: cover; }
+.conv-flag-emoji { font-size: 12px; line-height: 1; }
+@keyframes convFlagWave {
+  0%, 100% { transform: perspective(28px) rotateY(0deg) skewX(0deg); }
+  50%      { transform: perspective(28px) rotateY(22deg) skewX(-5deg); }
+}
+@media (prefers-reduced-motion: reduce) { .conv-flag-cloth { animation: none; } }
+
 /* כותרות טבלה דביקות */
 .table-sticky thead th {
   position: sticky;
