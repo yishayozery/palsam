@@ -55,7 +55,34 @@ async function fetchReferenceTables() {
 const KEEP_DATA_RUNS = 6;   // נשמור את ה-JSON המלא רק ל-6 ריצות אחרונות (3 ימים)
 const KEEP_META_RUNS = 90;  // מטא-דאטה (ללא data) — 90 ריצות אחרונות (~45 יום)
 
-export async function runBackup(): Promise<{ id: string; status: string; sizeBytes: number }> {
+const DEDUPE_MINUTES = 30; // חלון מניעת-כפילות לריצות cron
+
+/**
+ * @param opts.force הפעלה ידנית מהמסך — תמיד רצה, בלי בדיקת כפילות.
+ */
+export async function runBackup(opts: { force?: boolean } = {}): Promise<{ id: string; status: string; sizeBytes: number }> {
+  // 🔒 מניעת כפילות: 3 פרויקטי Vercel פורסים את אותו ריפו ויורים את אותו cron על אותו DB,
+  //    אז כל גיבוי נוצר 3× (ועם off-site — 3 מיילים זהים). בדיקה תמימה "האם רץ לאחרונה"
+  //    לא מספיקה — שלושתם יורים באותה שנייה ויעברו אותה לפני שמישהו הספיק לכתוב.
+  //    לכן: advisory lock (מסדר בתור) + שורת-תפיסה RUNNING בתוך אותה טרנזקציה קצרה.
+  let claimId: string | null = null;
+  if (!opts.force) {
+    claimId = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 AS ok FROM (SELECT pg_advisory_xact_lock(hashtextextended('palmy:backup:cron', 0))) _lock`;
+      const recent = await tx.backupRun.findFirst({
+        where: { createdAt: { gte: new Date(Date.now() - DEDUPE_MINUTES * 60_000) }, status: { in: ["OK", "RUNNING"] } },
+        select: { id: true },
+      });
+      if (recent) return null; // מישהו כבר גיבה/מגבה עכשיו — מדלגים
+      const claim = await tx.backupRun.create({ data: { status: "RUNNING", target: "DB" }, select: { id: true } });
+      return claim.id;
+    });
+    if (!claimId) {
+      console.log("[backup] דילוג — גיבוי אחר רץ/הסתיים בחלון האחרון (כפילות cron מ-3 הפרויקטים)");
+      return { id: "", status: "SKIPPED_DUPLICATE", sizeBytes: 0 };
+    }
+  }
+
   try {
     const [serialUnits, signatures, transfers, transferLines, soldiers, holders, stockBalances, itemTypes, battalions, callups] = await Promise.all([
       prisma.serialUnit.findMany({ select: { id: true, battalionId: true, itemTypeId: true, serialNumber: true, statusId: true, currentHolderId: true, signedSoldierId: true, lotQuantity: true, dischargedAt: true, createdAt: true } }),
@@ -92,15 +119,18 @@ export async function runBackup(): Promise<{ id: string; status: string; sizeByt
     const offsite = await sendOffsiteBackup(offsitePlain, ts);
     rowCounts._offsite = offsite === "sent" ? 1 : 0;
 
-    const run = await prisma.backupRun.create({
-      data: { status: "OK", target: offsite === "sent" ? "DB+OFFSITE" : "DB", sizeBytes, rowCounts, data: json, referenceData, referenceHash },
-    });
+    const payload = { status: "OK", target: offsite === "sent" ? "DB+OFFSITE" : "DB", sizeBytes, rowCounts, data: json, referenceData, referenceHash };
+    const run = claimId
+      ? await prisma.backupRun.update({ where: { id: claimId }, data: payload, select: { id: true } })
+      : await prisma.backupRun.create({ data: payload, select: { id: true } });
     await pruneBackups().catch(() => {});
     return { id: run.id, status: "OK", sizeBytes };
   } catch (e) {
-    const run = await prisma.backupRun.create({
-      data: { status: "FAIL", target: "DB", error: e instanceof Error ? e.message.slice(0, 500) : String(e).slice(0, 500) },
-    }).catch(() => ({ id: "unknown" }));
+    // כשל — מסמנים את שורת-התפיסה (או יוצרים חדשה בהרצה ידנית), כדי שלא תישאר תקועה RUNNING
+    const err = e instanceof Error ? e.message.slice(0, 500) : String(e).slice(0, 500);
+    const run = claimId
+      ? await prisma.backupRun.update({ where: { id: claimId }, data: { status: "FAIL", error: err }, select: { id: true } }).catch(() => ({ id: claimId! }))
+      : await prisma.backupRun.create({ data: { status: "FAIL", target: "DB", error: err }, select: { id: true } }).catch(() => ({ id: "unknown" }));
     return { id: run.id, status: "FAIL", sizeBytes: 0 };
   }
 }

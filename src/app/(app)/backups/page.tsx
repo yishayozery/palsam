@@ -34,7 +34,7 @@ export default async function BackupsPage() {
   // eslint-disable-next-line react-hooks/purity -- Server Component (force-dynamic); הזמן נקרא בכל בקשה
   const hoursSinceOk = lastOk ? (Date.now() - lastOk.createdAt.getTime()) / 3600000 : Infinity;
   const healthy = hoursSinceOk < 14;
-  const lastFailed = runs[0] && runs[0].status !== "OK";
+  const lastFailed = runs[0]?.status === "FAIL";
   // 📤 האם הגיבוי התקין האחרון נשלח גם off-site (מייל מוצפן)
   const offsiteOn = !!lastOk && (lastOk.target?.includes("OFFSITE") || (lastOk.rowCounts as Record<string, number> | null)?._offsite === 1);
 
@@ -102,7 +102,12 @@ export default async function BackupsPage() {
                 return (
                   <tr key={r.id} className="border-b last:border-0">
                     <Td>{fmtIL(r.createdAt)}</Td>
-                    <Td className="whitespace-nowrap">{r.status === "OK" ? <Badge className="bg-emerald-100 text-emerald-700">✅ תקין</Badge> : <Badge className="bg-rose-100 text-rose-700">❌ נכשל</Badge>}{rowOffsite && <span title="נשלח off-site (מייל מוצפן)" className="mr-1">📤</span>}</Td>
+                    <Td className="whitespace-nowrap">
+                      {r.status === "OK" ? <Badge className="bg-emerald-100 text-emerald-700">✅ תקין</Badge>
+                        : r.status === "RUNNING" ? <Badge className="bg-sky-100 text-sky-700">⏳ רץ…</Badge>
+                        : <Badge className="bg-rose-100 text-rose-700">❌ נכשל</Badge>}
+                      {rowOffsite && <span title="נשלח off-site (מייל מוצפן)" className="mr-1">📤</span>}
+                    </Td>
                     <Td>{r.status === "OK" ? fmtBytes(r.sizeBytes) : <span className="text-rose-500 text-xs" title={r.error ?? ""}>{r.error?.slice(0, 40) ?? "שגיאה"}</span>}</Td>
                     <Td><span className="text-xs text-slate-500" title={Object.entries(counts).map(([k, v]) => `${k}: ${v}`).join("\n")}>{total} רשומות</span></Td>
                     <Td>
