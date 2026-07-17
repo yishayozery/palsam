@@ -2,7 +2,8 @@ import "server-only";
 import ExcelJS from "exceljs";
 import { prisma } from "./prisma";
 import { TRANSFER_TYPE, TRANSFER_STATUS } from "./labels";
-import { buildTransferPdfBuffer } from "./email-pdf";
+import { buildTransferPdfBuffer, buildArmoryIssuePdfBuffer } from "./email-pdf";
+import { loadArmoryPdfData } from "./armory-pdf-data";
 
 type TransferWithDetails = NonNullable<Awaited<ReturnType<typeof loadTransfer>>>;
 
@@ -359,14 +360,17 @@ export async function buildTransferAttachments(transferId: string): Promise<{
     const subject = buildSubject(t);
     const baseName = sanitizeFilename(subject);
     const html = buildEmailHtml(t);
+    // 🔫 החתמת ארמון → טופס 1008 (אישור ניפוק נשק); אחרת התעודה הגנרית. מקור-אמת משותף עם ה-route.
+    const armoryData = await loadArmoryPdfData(transferId).catch(() => null);
     const [excelBuf, pdfBuf] = await Promise.all([
       buildExcelBuffer(t),
-      buildTransferPdfBuffer(t).catch(() => null),
+      (armoryData ? buildArmoryIssuePdfBuffer(armoryData) : buildTransferPdfBuffer(t)).catch(() => null),
     ]);
 
     const attachments: { filename: string; content: string }[] = [];
     if (pdfBuf) {
-      attachments.push({ filename: `${baseName}.pdf`, content: pdfBuf.toString("base64") });
+      const pdfName = armoryData ? sanitizeFilename(`אישור ניפוק נשק - ${armoryData.recipientName} (${armoryData.docNumber})`) : baseName;
+      attachments.push({ filename: `${pdfName}.pdf`, content: pdfBuf.toString("base64") });
     }
     attachments.push({ filename: `${baseName}.xlsx`, content: excelBuf.toString("base64") });
 

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { buildTransferPdfBuffer, buildArmoryIssuePdfBuffer, type ArmoryPdfData } from "@/lib/email-pdf";
+import { buildTransferPdfBuffer, buildArmoryIssuePdfBuffer } from "@/lib/email-pdf";
+import { loadArmoryPdfData } from "@/lib/armory-pdf-data";
 import { verifyLink } from "@/lib/link-token";
-import { ARMORY_ISSUE_CLAUSES, ARMORY_ISSUE_WARNING } from "@/lib/armory-issue-text";
 
 export async function GET(
   req: NextRequest,
@@ -43,44 +43,13 @@ export async function GET(
   const docNumber = t.id.slice(-8).toUpperCase();
   const soldierName = t.toSoldier?.fullName ?? "document";
 
-  // 🔫 ארמון — טופס 1008 (אישור ניפוק נשק אישי), פורמט זהה ל-HTML
-  const isArmory = t.fromHolder?.warehouseType === "ARMORY" && t.type !== "CHECKIN";
+  // 🔫 ארמון — טופס 1008 (אישור ניפוק נשק אישי). מקור-אמת משותף עם צרופת המייל.
+  const armoryData = await loadArmoryPdfData(id);
+  const isArmory = !!armoryData;
   let buf: Buffer;
   let filenameBase: string;
-  if (isArmory) {
-    const [employment, approver] = await Promise.all([
-      prisma.employment.findFirst({ where: { battalionId: t.battalionId, active: true }, orderBy: { endDate: "desc" }, select: { endDate: true } }),
-      t.toSoldier?.weaponsApprovedById
-        ? prisma.appUser.findUnique({ where: { id: t.toSoldier.weaponsApprovedById }, select: { fullName: true, title: true, soldier: { select: { fullName: true, personalNumber: true } } } })
-        : Promise.resolve(null),
-    ]);
-    const clauses = t.fromHolder?.weaponsAgreementText
-      ? t.fromHolder.weaponsAgreementText.split("\n").map((x) => x.trim()).filter(Boolean)
-      : [...ARMORY_ISSUE_CLAUSES];
-    const d: ArmoryPdfData = {
-      docNumber,
-      battalionName: t.battalion?.name ?? "גדוד",
-      logoData: t.battalion?.logoData ?? null,
-      motto: t.battalion?.motto ?? null,
-      soldier: t.toSoldier ? { fullName: t.toSoldier.fullName, personalNumber: t.toSoldier.personalNumber, companyName: t.toSoldier.company?.name ?? null } : null,
-      recipientName: t.toSoldier?.fullName ?? t.toHolder?.name ?? "________________",
-      issueDate: t.signatures[0]?.signedAt ?? t.createdAt,
-      endDate: employment?.endDate ?? null,
-      purpose: t.reason ?? null,
-      issuerName: t.createdBy.fullName,
-      issuerHolderName: t.fromHolder?.name ?? null,
-      declarationClauses: clauses,
-      warning: ARMORY_ISSUE_WARNING,
-      lines: t.lines.map((l) => ({ name: l.itemType.name, sku: l.itemType.sku, quantity: l.quantity, serial: l.serialUnit?.serialNumber ?? null })),
-      soldierSignature: t.signatures[0]?.signatureData ?? null,
-      signedAt: t.signatures[0]?.signedAt ?? null,
-      approverName: approver?.soldier?.fullName ?? approver?.fullName ?? null,
-      approverPersonalNumber: approver?.soldier?.personalNumber ?? null,
-      approverTitle: approver?.title ?? null,
-      approvedAt: t.toSoldier?.weaponsApprovedAt ?? null,
-      approverSignature: t.toSoldier?.weaponsApprovalSignature ?? null,
-    };
-    buf = await buildArmoryIssuePdfBuffer(d);
+  if (armoryData) {
+    buf = await buildArmoryIssuePdfBuffer(armoryData);
     filenameBase = `אישור ניפוק נשק - ${soldierName}`;
   } else {
     buf = await buildTransferPdfBuffer(t as Parameters<typeof buildTransferPdfBuffer>[0]);
