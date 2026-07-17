@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { nanoid } from "nanoid";
@@ -710,13 +711,17 @@ export async function completeSignature(token: string, signatureData: string) {
   // בבוט גם למחתים (יוצר התעודה) — אישור שהמקבל חתם
   await notifyIssuerTelegram(sig.transfer!.createdById, bId, sig.transferId, "signed");
 
-  // 📧 מייל למחסן/פלוגה/גדוד: החייל חתם על התעודה (עם PDF התעודה מצורף)
-  try {
-    const { notifyTransactionEmail } = await import("@/lib/email");
-    void notifyTransactionEmail({ battalionId: bId, userId: null, action: "SIGN", entity: "Transfer", entityId: sig.transferId, holderId: fromHolderId, details: { soldierId } });
-  } catch (emailErr) {
-    console.error("[completeSignature] email failed (non-fatal):", emailErr);
-  }
+  // 📧 מייל למחסן/פלוגה/גדוד: החייל חתם על התעודה (עם PDF התעודה מצורף).
+  //    after() — נשלח אחרי מתן התשובה ו-Vercel משאיר את הפונקציה חיה עד שיסתיים.
+  //    (void לא-awaited נחתך ב-serverless — ה-lambda מסתיים לפני שה-fetch ל-Resend מסתיים.)
+  after(async () => {
+    try {
+      const { notifyTransactionEmail } = await import("@/lib/email");
+      await notifyTransactionEmail({ battalionId: bId, userId: null, action: "SIGN", entity: "Transfer", entityId: sig.transferId, holderId: fromHolderId, details: { soldierId } });
+    } catch (emailErr) {
+      console.error("[completeSignature] email failed (non-fatal):", emailErr);
+    }
+  });
 
   revalidatePath("/signatures");
   return { ok: true, telegramSent };
@@ -814,8 +819,10 @@ export async function checkinSerial(formData: FormData): Promise<{ error: string
   await audit(user.id, "CHECKIN", "SerialUnit", serialUnitId, { soldier: su.signedSoldier?.fullName, partial: isPartial ? partialLotQty : null });
   // מייל התראה + PDF — דרך ישות Transfer (ה-audit רושם SerialUnit ולכן אינו מפעיל מייל לבדו)
   {
-    const { notifyTransactionEmail } = await import("@/lib/email");
-    void notifyTransactionEmail({ battalionId: bId, userId: user.id, action: "CHECKIN", entity: "Transfer", entityId: serialCheckinTransferId, holderId: su.currentHolderId, details: { serialUnitId, soldier: su.signedSoldier?.fullName } });
+    after(async () => {
+      const { notifyTransactionEmail } = await import("@/lib/email");
+      await notifyTransactionEmail({ battalionId: bId, userId: user.id, action: "CHECKIN", entity: "Transfer", entityId: serialCheckinTransferId, holderId: su.currentHolderId, details: { serialUnitId, soldier: su.signedSoldier?.fullName } });
+    });
   }
 
   // 🔫 איפוס דגלי נשק אם החייל החזיר את הנשק האחרון
@@ -894,8 +901,10 @@ export async function checkinQuantity(formData: FormData): Promise<{ error: stri
 
   await audit(user.id, "CHECKIN_QTY", "Soldier", soldierId, { itemTypeId, quantity });
   // מייל התראה + PDF — דרך ישות Transfer (ה-audit רושם Soldier ולכן אינו מפעיל מייל לבדו)
-  const { notifyTransactionEmail } = await import("@/lib/email");
-  void notifyTransactionEmail({ battalionId: bId, userId: user.id, action: "CHECKIN_QTY", entity: "Transfer", entityId: checkinTransferId, holderId: toHolderId, details: { itemTypeId, quantity, soldierId } });
+  after(async () => {
+    const { notifyTransactionEmail } = await import("@/lib/email");
+    await notifyTransactionEmail({ battalionId: bId, userId: user.id, action: "CHECKIN_QTY", entity: "Transfer", entityId: checkinTransferId, holderId: toHolderId, details: { itemTypeId, quantity, soldierId } });
+  });
   // טלגרם עם PDF תעודת הזיכוי
   void notifySoldierTelegram(soldierId, bId, checkinTransferId, "CHECKIN");
 
@@ -1175,8 +1184,10 @@ export async function checkinBatch(payload: {
     await audit(user.id, "CHECKIN_BATCH", "Soldier", soldierId, { items: serialUnitIds.length + qtyItems.length });
     // מייל התראה + PDF — דרך ישות Transfer (ה-audit רושם Soldier ולכן אינו מפעיל מייל לבדו)
     {
-      const { notifyTransactionEmail } = await import("@/lib/email");
-      void notifyTransactionEmail({ battalionId: bId, userId: user.id, action: "CHECKIN_BATCH", entity: "Transfer", entityId: transferId, holderId: toHolderId || null, details: { soldierId, items: serialUnitIds.length + qtyItems.length } });
+      after(async () => {
+        const { notifyTransactionEmail } = await import("@/lib/email");
+        await notifyTransactionEmail({ battalionId: bId, userId: user.id, action: "CHECKIN_BATCH", entity: "Transfer", entityId: transferId, holderId: toHolderId || null, details: { soldierId, items: serialUnitIds.length + qtyItems.length } });
+      });
     }
 
     for (const unitId of serialUnitIds) {
