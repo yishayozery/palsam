@@ -27,12 +27,10 @@ export default async function AttendanceReportPage({ params, searchParams }: { p
   if (!canReport) notFound();
 
   // היקף: כל הפלוגה אם סומן allCompany (או אין מחלקה); אחרת המחלקה שלו
+  // סקופ הנאמן = היחידה שהוגדרה עליו (פלוגה אם allCompany/ללא מחלקה, אחרת המחלקה) —
+  // ללא קשר לשיוך האישי שלו. הגדרה מפורשת דרך מסך השלישות.
   const companyWide = reporter.attendanceReporterAllCompany || !reporter.squadId;
-  // 🔒 סקופ-מחלקה מצטלב תמיד עם הפלוגה של הנאמן — מונע דליפה חוצת-פלוגה
-  //    (מחלקה עשויה לכלול חברים מפלוגה אחרת אם נתוני השיוך לא עקביים).
-  const scopeWhere = companyWide
-    ? { companyId: reporter.companyId }
-    : { squadId: reporter.squadId, ...(reporter.companyId ? { companyId: reporter.companyId } : {}) };
+  const scopeWhere = companyWide ? { companyId: reporter.companyId } : { squadId: reporter.squadId };
   const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
   const todayDate = new Date(todayIL + "T00:00:00.000Z");
   // 🎖️ מציגים רק חיילים ב-שמ"פ פעיל (בבסיס). גדוד שלא מנהל שמ"פ (אין תוצאות) → מציגים את כולם.

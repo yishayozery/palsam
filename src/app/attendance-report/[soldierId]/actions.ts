@@ -65,10 +65,7 @@ export async function submitAttendanceReport(
   // היקף — כל הפלוגה אם סומן allCompany (או אין מחלקה); אחרת המחלקה של הנאמן.
   //   ⚠️ חייב להתאים לעמוד (companyWide) — אחרת חיילים מחוץ למחלקה נזרקים בשמירה.
   const companyWide = reporter.attendanceReporterAllCompany || !reporter.squadId;
-  // 🔒 סקופ-מחלקה מצטלב עם פלוגת הנאמן — מונע שמירת נוכחות לחיילי פלוגה אחרת (דליפה חוצת-פלוגה)
-  const scopeWhere = companyWide
-    ? { companyId: reporter.companyId }
-    : { squadId: reporter.squadId, ...(reporter.companyId ? { companyId: reporter.companyId } : {}) };
+  const scopeWhere = companyWide ? { companyId: reporter.companyId } : { squadId: reporter.squadId };
   const allowed = new Set((await prisma.soldier.findMany({
     where: { battalionId: reporter.battalionId, status: { notIn: ["DISCHARGED", "INACTIVE"] }, ...scopeWhere },
     select: { id: true },
