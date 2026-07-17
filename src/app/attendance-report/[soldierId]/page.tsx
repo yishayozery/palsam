@@ -28,7 +28,11 @@ export default async function AttendanceReportPage({ params, searchParams }: { p
 
   // היקף: כל הפלוגה אם סומן allCompany (או אין מחלקה); אחרת המחלקה שלו
   const companyWide = reporter.attendanceReporterAllCompany || !reporter.squadId;
-  const scopeWhere = companyWide ? { companyId: reporter.companyId } : { squadId: reporter.squadId };
+  // 🔒 סקופ-מחלקה מצטלב תמיד עם הפלוגה של הנאמן — מונע דליפה חוצת-פלוגה
+  //    (מחלקה עשויה לכלול חברים מפלוגה אחרת אם נתוני השיוך לא עקביים).
+  const scopeWhere = companyWide
+    ? { companyId: reporter.companyId }
+    : { squadId: reporter.squadId, ...(reporter.companyId ? { companyId: reporter.companyId } : {}) };
   const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
   const todayDate = new Date(todayIL + "T00:00:00.000Z");
   // 🎖️ מציגים רק חיילים ב-שמ"פ פעיל (בבסיס). גדוד שלא מנהל שמ"פ (אין תוצאות) → מציגים את כולם.
@@ -76,6 +80,7 @@ export default async function AttendanceReportPage({ params, searchParams }: { p
       token={tok ?? ""}
       date={date}
       today={todayIL}
+      maxDate={maxDate}
       mode={mode}
       windowDates={windowDates}
       scopeName={scopeName}

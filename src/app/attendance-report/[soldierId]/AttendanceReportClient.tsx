@@ -15,9 +15,9 @@ const heDate = (ymd: string, opts: Intl.DateTimeFormatOptions) =>
 const hhmm = (iso: string) => new Intl.DateTimeFormat("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
 
 export default function AttendanceReportClient({
-  soldierId, token, date, today, mode, windowDates, scopeName, battalionName, reporterName, soldiers, statuses, records, plans, yesterday, presence,
+  soldierId, token, date, today, maxDate, mode, windowDates, scopeName, battalionName, reporterName, soldiers, statuses, records, plans, yesterday, presence,
 }: {
-  soldierId: string; token: string; date: string; today: string; mode: "plan" | "record"; windowDates: string[];
+  soldierId: string; token: string; date: string; today: string; maxDate: string; mode: "plan" | "record"; windowDates: string[];
   scopeName: string; battalionName: string; reporterName: string;
   soldiers: Sol[]; statuses: Status[]; records: Mark[]; plans: Mark[]; yesterday: Mark[]; presence: Presence;
 }) {
@@ -160,7 +160,9 @@ export default function AttendanceReportClient({
             </div>
             {/* תאריך ראשי + חיפוש */}
             <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <input type="date" value={date} onChange={(e) => nav({ date: e.target.value })} className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white" />
+              <input type="date" value={date} max={maxDate} min={isPlan ? today : undefined}
+                onChange={(e) => { const v = e.target.value; if (v > maxDate) { setErr(isPlan ? "תכנון עד שבועיים קדימה בלבד" : "לא ניתן לדווח ביצוע על תאריך עתידי (מעבר לחלון שאושר בשלישות)"); return; } setErr(null); nav({ date: v }); }}
+                className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white" />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 חייל…" className="flex-1 min-w-[100px] border border-slate-300 rounded-lg px-3 py-2 text-sm" />
             </div>
 
