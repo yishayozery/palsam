@@ -23,6 +23,7 @@
     "@hebcal/core": "^6.5.3",
     "@prisma/client": "^6.19.3",
     "@react-pdf/renderer": "^4.5.1",
+    "@vercel/blob": "^2.6.1",
     "argon2": "^0.44.0",
     "bcryptjs": "^3.0.3",
     "exceljs": "^4.4.0",

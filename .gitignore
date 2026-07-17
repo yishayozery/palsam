@@ -62,3 +62,5 @@ commit_msg.txt
 /backups/
 *.dump
 *.sql.gz
+
+.vercel

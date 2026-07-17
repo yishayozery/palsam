@@ -185,6 +185,7 @@ model Battalion {
   companyAllocations   CompanyAllocation[]  @relation("BattalionAllocations")
   vehicleAssignments   VehicleAssignment[] @relation("BattalionDispatch")
   missions             Mission[]           @relation("BattalionMissions")
+  accidentReports      AccidentReport[]    @relation("BattalionAccidents")
   serialUnits   SerialUnit[]
   kitInstances  KitInstance[]
   transfers     Transfer[]
@@ -2907,4 +2908,100 @@ model RequestFieldDef {
   active        Boolean          @default(true)
 
   @@index([brigadeUnitId, type, side])
+}
+
+// ============================================================
+// 🚗 דיווח תאונה (קצין רכב) — חלק א (חייל/בוט) → חלק ב (ק.רכב) → מג"ד → בוחן (לינק) → PDF
+// ============================================================
+enum AccidentType {
+  ARMY_SELF // צבא עצמי (רכב צבאי בודד)
+  ARMY_ARMY // צבא עם צבא
+  CIVILIAN  // מעורבות אזרח
+}
+
+enum AccidentStatus {
+  DRAFT           // חלק א — החייל ממלא בבוט
+  OFFICER_REVIEW  // חלק ב — קצין רכב
+  MAGAD_REVIEW    // אישור מג"ד
+  EXAMINER_REVIEW // אישור בוחן רכב (לינק חיצוני)
+  APPROVED        // הושלם — PDF מוכן
+}
+
+enum AccidentPhotoKind {
+  VEHICLE_FRONT
+  VEHICLE_BACK
+  VEHICLE_LEFT
+  VEHICLE_RIGHT
+  SCENE               // צילום התאונה
+  CIVIL_LICENSE_FRONT // רישיון אזרחי — קדימה
+  CIVIL_LICENSE_BACK  // רישיון אזרחי — אחורה
+  MILITARY_LICENSE    // רישיון צבאי
+  OTHER_VEHICLE               // רכב שני (צבא-צבא / אזרח)
+  OTHER_CIVIL_LICENSE_FRONT
+  OTHER_CIVIL_LICENSE_BACK
+  OTHER_MILITARY_LICENSE
+  OTHER
+}
+
+model AccidentReport {
+  id          String         @id @default(cuid())
+  battalionId String
+  battalion   Battalion      @relation("BattalionAccidents", fields: [battalionId], references: [id])
+  type        AccidentType
+  status      AccidentStatus @default(DRAFT)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  // 🔗 טוקנים (HMAC-gated): מילוי חלק א בבוט/דפדפן + חתימת בוחן חיצוני
+  fillToken     String? @unique
+  examinerToken String? @unique
+
+  // חלק א — החייל בשטח
+  reportingSoldierId String?
+  driverName         String?
+  driverPersonalId   String?
+  driverPhone        String?
+  accidentAt         DateTime?
+  location           String?
+  description        String?
+  ourVehiclePlate    String?
+  ourVehicleType     String?
+
+  // צד שני (צבא-צבא: מ"א+יחידה · אזרח: ת"ז+ביטוח) — נרשם ע"י המדווח
+  otherPartyName    String?
+  otherPartyId      String?
+  otherPartyPhone   String?
+  otherVehiclePlate String?
+  otherVehicleUnit  String?
+  otherInsurance    String?
+
+  // חלק ב — קצין רכב
+  officerUserId String?
+  officerNotes  String?
+  officerAt     DateTime?
+
+  // אישור מג"ד
+  magadUserId    String?
+  magadSignature String?
+  magadAt        DateTime?
+
+  // אישור בוחן רכב (חיצוני, לינק)
+  examinerName      String?
+  examinerSignature String?
+  examinerAt        DateTime?
+
+  photos AccidentPhoto[]
+
+  @@index([battalionId, status])
+}
+
+model AccidentPhoto {
+  id        String            @id @default(cuid())
+  reportId  String
+  report    AccidentReport    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  kind      AccidentPhotoKind
+  blobUrl   String
+  createdAt DateTime          @default(now())
+
+  @@index([reportId])
 }
