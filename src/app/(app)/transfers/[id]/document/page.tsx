@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import PrintButton from "@/components/PrintButton";
 import BackButton from "@/components/BackButton";
+import SendDocEmailButton from "./SendDocEmailButton";
 import { TRANSFER_TYPE, TRANSFER_STATUS } from "@/lib/labels";
 import { linkTokenQuery } from "@/lib/link-token";
 import ArmoryIssueDoc, { type ArmoryIssueData } from "@/app/transfer-doc/[id]/ArmoryIssueDoc";
@@ -84,6 +85,7 @@ export default async function TransferDocumentPage({ params }: { params: Promise
           <BackButton />
           <div className="flex gap-2">
             <a href={waUrl} target="_blank" rel="noreferrer" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 text-xs font-medium">📲 שלח</a>
+            <SendDocEmailButton transferId={id} />
             <a href={pdfUrl} download className="border border-slate-300 hover:bg-slate-50 rounded-lg px-3 py-2 text-xs font-medium">⬇️ PDF</a>
             <PrintButton />
           </div>
@@ -107,6 +109,7 @@ export default async function TransferDocumentPage({ params }: { params: Promise
             className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 text-xs font-medium">
             📲 שלח תעודה
           </a>
+          <SendDocEmailButton transferId={id} />
           <a href={pdfUrl} download className="border border-slate-300 hover:bg-slate-50 rounded-lg px-3 py-2 text-xs font-medium">⬇️ PDF</a>
           <PrintButton />
         </div>

@@ -80,13 +80,13 @@ export async function notifyTransactionEmail(params: {
   entityId?: string | null;
   details?: unknown;
   holderId?: string | null;
-}): Promise<void> {
+}): Promise<{ ok: boolean; error?: string; recipients?: string[] }> {
   try {
     const battalion = await prisma.battalion.findUnique({
       where: { id: params.battalionId },
       select: { name: true, code: true, senderEmail: true, notificationEmail: true, emailToBattalion: true },
     });
-    if (!battalion) return;
+    if (!battalion) return { ok: false, error: "גדוד לא נמצא" };
 
     const user = params.userId ? await prisma.appUser.findUnique({
       where: { id: params.userId }, select: { fullName: true, title: true },
@@ -142,7 +142,7 @@ export async function notifyTransactionEmail(params: {
       }
     }
 
-    if (allRecipients.size === 0) return;
+    if (allRecipients.size === 0) return { ok: false, error: "אין נמענים מוגדרים — הפעל 'מייל לגדוד' עם כתובת, או הגדר מייל התראות למחסן/פלוגה" };
 
     const replyTo = battalion.notificationEmail || undefined;
     const senderFrom = battalion.senderEmail ? `${battalion.name} <${battalion.senderEmail}>` : undefined;
@@ -157,19 +157,23 @@ export async function notifyTransactionEmail(params: {
     if (transferId) {
       const rich = await buildTransferAttachments(transferId).catch(() => null);
       if (rich) {
-        logResult(await sendEmail({
+        const r = await sendEmail({
           to: recipients, subject: rich.subject,
           text, from: senderFrom, replyTo,
           html: rich.html,
           attachments: rich.attachments,
-        }));
-        return;
+        });
+        logResult(r);
+        return { ok: r.ok, error: r.error, recipients };
       }
     }
 
-    logResult(await sendEmail({ to: recipients, subject, text, from: senderFrom, replyTo }));
-  } catch {
+    const r = await sendEmail({ to: recipients, subject, text, from: senderFrom, replyTo });
+    logResult(r);
+    return { ok: r.ok, error: r.error, recipients };
+  } catch (e) {
     // לא מפיל שום פעולה אם המייל נכשל
+    return { ok: false, error: e instanceof Error ? e.message : "שגיאה בשליחת המייל" };
   }
 }
 
