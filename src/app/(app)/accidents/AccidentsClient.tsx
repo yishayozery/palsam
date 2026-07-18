@@ -89,7 +89,7 @@ export default function AccidentsClient({ reports }: { reports: Report[] }) {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {r.status === "DRAFT" && <button onClick={() => showLink(r.id)} className="text-xs bg-sky-600 text-white rounded-lg px-3 py-1.5">🔗 לינק</button>}
-                  {r.status !== "DRAFT" && <span className="text-xs text-slate-400">חלק ב — בקרוב</span>}
+                  {r.status !== "DRAFT" && <a href={`/accidents/${r.id}`} className="text-xs bg-slate-700 text-white rounded-lg px-3 py-1.5">פתח</a>}
                   {r.status === "DRAFT" && <button onClick={() => del(r.id)} className="text-xs text-rose-500 hover:text-rose-700">🗑️</button>}
                 </div>
               </Card>
