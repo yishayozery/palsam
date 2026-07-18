@@ -4,9 +4,10 @@ import { put } from "@vercel/blob";
 // אחסון תמונות דיווחי-תאונה מחוץ ל-DB (ה-DB המשותף נשאר קל).
 if (typeof window !== "undefined") throw new Error("blob.ts is server-only");
 
-/** האם אחסון ה-Blob מוגדר (יש token). מאפשר כשל ידידותי אם ה-Store לא נוצר עדיין. */
+/** האם אחסון ה-Blob מוגדר. תומך בשני מודלי-אימות של @vercel/blob v2:
+ *  (א) BLOB_READ_WRITE_TOKEN הישן, או (ב) BLOB_STORE_ID + VERCEL_OIDC_TOKEN (מוזרק אוטומטית ב-Vercel). */
 export function isBlobConfigured(): boolean {
-  return !!process.env.BLOB_READ_WRITE_TOKEN;
+  return !!(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
 }
 
 /**
