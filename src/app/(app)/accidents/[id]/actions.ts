@@ -3,6 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
+import { linkTokenQuery } from "@/lib/link-token";
+
+/** לינק לחתימת בוחן רכב חיצוני (לשליחה בוואטסאפ). */
+export async function getExaminerLink(id: string): Promise<{ link?: string; error?: string }> {
+  const s = await scoped(id);
+  if (!s) return { error: "לא נמצא" };
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+  return { link: `${base}/accident-sign/${id}${linkTokenQuery("accident-sign", id)}` };
+}
 
 /** אימות הרשאה + שייכות לגדוד. מחזיר את הדיווח או null. */
 async function scoped(id: string) {

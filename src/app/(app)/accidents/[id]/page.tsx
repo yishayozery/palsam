@@ -41,6 +41,9 @@ export default async function AccidentDetailPage({ params }: { params: Promise<{
       magadName={nameOf(r.magadUserId)?.fullName ?? null}
       magadSignature={r.magadSignature}
       magadAt={r.magadAt?.toISOString() ?? null}
+      examinerName={r.examinerName}
+      examinerSignature={r.examinerSignature}
+      examinerAt={r.examinerAt?.toISOString() ?? null}
     />
   );
 }

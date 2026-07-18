@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, Badge } from "@/components/ui";
 import BackButton from "@/components/BackButton";
 import SignaturePad from "@/components/SignaturePad";
-import { saveOfficerNotes, sendToMagad, magadApprove, returnToOfficer } from "./actions";
+import { saveOfficerNotes, sendToMagad, magadApprove, returnToOfficer, getExaminerLink } from "./actions";
 
 type PartA = {
   accidentAt: string | null; location: string | null; description: string | null;
@@ -38,6 +38,7 @@ export default function AccidentDetailClient(props: {
   partA: PartA; photos: { kind: string; url: string }[];
   officerNotes: string; officerName: string | null; officerAt: string | null;
   magadName: string | null; magadSignature: string | null; magadAt: string | null;
+  examinerName: string | null; examinerSignature: string | null; examinerAt: string | null;
 }) {
   const { id, type, status, partA, photos } = props;
   const router = useRouter();
@@ -45,7 +46,10 @@ export default function AccidentDetailClient(props: {
   const [sig, setSig] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [exLink, setExLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [pending, start] = useTransition();
+  const wa = (link: string) => `https://wa.me/?text=${encodeURIComponent(`אישור תחקיר תאונה — נא לחתום:\n${link}`)}`;
   const stepIdx = STEPS.findIndex((x) => x.s === status);
 
   const run = (fn: () => Promise<{ ok?: boolean; error?: string }>) => start(async () => {
@@ -135,12 +139,40 @@ export default function AccidentDetailClient(props: {
         ) : <p className="text-xs text-slate-400">ממתין לשלב קצין הרכב.</p>}
       </Card>
 
-      {/* בוחן רכב + PDF — פאזה 4 */}
+      {/* בוחן רכב */}
       {(status === "EXAMINER_REVIEW" || status === "APPROVED") && (
-        <Card className="p-4 border-dashed">
-          <h3 className="font-bold text-slate-800 mb-1">אישור בוחן רכב + PDF</h3>
-          <p className="text-xs text-slate-400">בקרוב — שליחת התחקיר לבוחן לחתימה (וואטסאפ) והפקת PDF מלא למצ״ח.</p>
+        <Card className="p-4">
+          <h3 className="font-bold text-slate-800 mb-2">אישור בוחן רכב {props.examinerName && <span className="text-xs text-slate-400 font-normal">· {props.examinerName}</span>}</h3>
+          {props.examinerSignature ? (
+            <div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={props.examinerSignature} alt="חתימת בוחן" className="max-h-24 border border-slate-200 rounded-lg bg-white" />
+              <p className="text-[11px] text-slate-400 mt-1">נחתם {props.examinerAt ? new Date(props.examinerAt).toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" }) : ""}</p>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-slate-500 mb-2">שלח את התחקיר לבוחן הרכב לחתימה (וואטסאפ):</p>
+              {!exLink ? (
+                <button disabled={pending} onClick={() => start(async () => { const r = await getExaminerLink(id); if (r.link) { setExLink(r.link); setCopied(false); } })}
+                  className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50">🔗 צור לינק לבוחן</button>
+              ) : (
+                <div className="flex gap-2 flex-wrap items-center">
+                  <input readOnly value={exLink} onFocus={(e) => e.target.select()} className="flex-1 min-w-[180px] border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-white font-mono" />
+                  <button onClick={() => { navigator.clipboard.writeText(exLink); setCopied(true); }} className="bg-slate-700 text-white rounded-lg px-3 py-1.5 text-xs">{copied ? "✓ הועתק" : "העתק"}</button>
+                  <a href={wa(exLink)} target="_blank" rel="noreferrer" className="bg-emerald-600 text-white rounded-lg px-3 py-1.5 text-xs">📲 וואטסאפ</a>
+                </div>
+              )}
+            </>
+          )}
         </Card>
+      )}
+
+      {/* PDF / הדפסה — כשהושלם */}
+      {status === "APPROVED" && (
+        <a href={`/accidents/${id}/document`} target="_blank" rel="noreferrer"
+          className="block text-center bg-slate-800 hover:bg-slate-900 text-white rounded-xl py-3 font-bold">
+          📄 תעודה מלאה / הורדת PDF (למצ״ח)
+        </a>
       )}
 
       {err && <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{err}</div>}
