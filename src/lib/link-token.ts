@@ -22,7 +22,7 @@ function getSecret(): string {
   return "insecure-fallback-secret";
 }
 
-export type LinkKind = "weapons-sign" | "driver-form" | "transfer-doc" | "fuel-sign" | "attendance-report" | "armory-inspection";
+export type LinkKind = "weapons-sign" | "driver-form" | "transfer-doc" | "fuel-sign" | "attendance-report" | "armory-inspection" | "accident-fill" | "accident-sign";
 
 /** מייצר את הטוקן החתום עבור (kind,id). */
 export function signLink(kind: LinkKind, id: string): string {
