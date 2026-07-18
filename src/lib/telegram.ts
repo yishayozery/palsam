@@ -203,7 +203,7 @@ export function buildVehicleKeyboard(_canManageTeam = false, _isDriver = false) 
   const rows: { text: string }[][] = [
     [{ text: "🚗 משימות ושבצ\"ק" }],
     [{ text: "📁 תיק נהג" }, { text: "🪪 בדיקת הסמכות" }],
-    [{ text: "⛽ כרטיסי הדלק שלי" }],
+    [{ text: "⛽ כרטיסי הדלק שלי" }, { text: "🚧 דיווח תאונה" }],
     [{ text: "⬅️ חזרה לתפריט" }],
   ];
   return { keyboard: rows, resize_keyboard: true, is_persistent: true };

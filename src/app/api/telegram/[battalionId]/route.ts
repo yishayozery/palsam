@@ -122,6 +122,7 @@ export async function POST(
       "🪪 בדיקת רישיון": "/license",
       "📁 תיק נהג": "/driverforms",
       "📁 טפסי נהג": "/driverforms",
+      "🚧 דיווח תאונה": "/accident",
       "❓ עזרה": "/help",
       // backward compat — old button labels
       "📋 טפסים להחתמה": "/status",
@@ -271,6 +272,18 @@ export async function POST(
         `• ⛽ <b>כרטיסי הדלק שלי</b>` +
         linkLines,
         buildVehicleKeyboard(canManageTeam, isDriver));
+      return NextResponse.json({ ok: true });
+    }
+    // 🚧 דיווח תאונה — החייל בוחר סוג, הבוט יוצר דיווח ושולח לינק למילוי חלק א
+    if (cmd === "/accident") {
+      if (!soldier) { await sendTelegramMessage(token, chatId, NOT_REGISTERED); return NextResponse.json({ ok: true }); }
+      await sendTelegramMessage(token, chatId,
+        `🚧 <b>דיווח תאונת דרכים</b>\n\n${escapeTelegram(soldier.fullName)}, בחר/י את סוג התאונה — ואשלח לך קישור למילוי (פרטים + תמונות):`,
+        { inline_keyboard: [
+          [{ text: "🚙 צבא עצמי (רכב צבאי בודד)", callback_data: "acc:ARMY_SELF" }],
+          [{ text: "🚙💥🚙 צבא עם צבא", callback_data: "acc:ARMY_ARMY" }],
+          [{ text: "🚗 מעורבות אזרח", callback_data: "acc:CIVILIAN" }],
+        ] });
       return NextResponse.json({ ok: true });
     }
     // חזרה לתפריט הראשי
@@ -571,6 +584,27 @@ async function handleCallback(
     await prisma.soldier.update({ where: { id: soldier.id }, data: { dietType: choice === "ללא" ? null : choice } });
     await editMessageText(token, chatId, messageId, `🍽️ עודכן: <b>${choice}</b>\nתודה! ניתן לשנות שוב בכל עת בכפתור "🍽️ עדכון מזון".`);
     await answerCallbackQuery(token, callback.id, "עודכן ✅");
+    return;
+  }
+
+  // 🚧 דיווח תאונה: acc:<TYPE> — יוצר דיווח (DRAFT) ושולח לחייל לינק למילוי חלק א
+  if (data.startsWith("acc:")) {
+    const type = data.split(":")[1];
+    if (!["ARMY_SELF", "ARMY_ARMY", "CIVILIAN"].includes(type)) { await answerCallbackQuery(token, callback.id, "בחירה לא תקינה"); return; }
+    const soldier = await prisma.soldier.findFirst({ where: { battalionId, telegramChatId: chatId }, select: { id: true, fullName: true, personalNumber: true, phone: true } });
+    if (!soldier) { await answerCallbackQuery(token, callback.id, "לא מחובר"); return; }
+    const rep = await prisma.accidentReport.create({
+      data: {
+        battalionId, type: type as "ARMY_SELF" | "ARMY_ARMY" | "CIVILIAN", status: "DRAFT",
+        reportingSoldierId: soldier.id, driverName: soldier.fullName, driverPersonalId: soldier.personalNumber, driverPhone: soldier.phone,
+      },
+      select: { id: true },
+    });
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
+    const link = `${baseUrl}/accident-report/${rep.id}${linkTokenQuery("accident-fill", rep.id)}`;
+    await editMessageText(token, chatId, messageId,
+      `🚧 <b>דיווח תאונה נפתח</b>\nמלא/י את הפרטים והעלה/י תמונות (נשמר אוטומטית):\n👉 <a href="${link}">פתח טופס דיווח</a>`);
+    await answerCallbackQuery(token, callback.id, "נפתח דיווח ✅");
     return;
   }
 
