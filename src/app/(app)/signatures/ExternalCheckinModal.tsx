@@ -6,38 +6,49 @@ import { externalCheckin } from "./external-actions";
 import { useEscClose } from "@/lib/useEscClose";
 
 type Held = { id: string; itemName: string; serial: string; holder: string; status: string };
+type QtyHeld = { itemTypeId: string; itemName: string; unit: string; statusId: string; statusName: string; holder: string; qty: number };
 
-export default function ExternalCheckinModal({ warehouses, defaultWarehouseId, held }: {
-  warehouses: { id: string; name: string }[]; defaultWarehouseId: string | null; held: Held[];
+export default function ExternalCheckinModal({ warehouses, defaultWarehouseId, held, qtyHeld = [] }: {
+  warehouses: { id: string; name: string }[]; defaultWarehouseId: string | null; held: Held[]; qtyHeld?: QtyHeld[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState(defaultWarehouseId ?? warehouses[0]?.id ?? "");
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [qtyPick, setQtyPick] = useState<Record<string, number>>({}); // `${itemTypeId}|${statusId}|${holder}` → כמות לזיכוי
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   useEscClose(open, () => setOpen(false));
 
   const filt = useMemo(() => search ? held.filter((h) => h.itemName.includes(search) || h.serial.includes(search) || h.holder.includes(search)) : held, [held, search]);
+  const qtyFilt = useMemo(() => search ? qtyHeld.filter((q) => q.itemName.includes(search) || q.holder.includes(search)) : qtyHeld, [qtyHeld, search]);
   function toggle(id: string) { setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; }); }
+  const qKey = (q: QtyHeld) => `${q.itemTypeId}|${q.statusId}|${q.holder}`;
+  const qtyTotal = Object.values(qtyPick).reduce((a, b) => a + (b || 0), 0);
+  const totalPicked = picked.size + qtyTotal;
 
   async function submit() {
     setErr(null);
     if (!target) { setErr("בחר מחסן יעד"); return; }
-    if (picked.size === 0) { setErr("בחר לפחות פריט"); return; }
+    if (totalPicked === 0) { setErr("בחר לפחות פריט"); return; }
+    // כמותי — מקבצים לפי פריט+סטטוס (הגורם החיצוני רק לתצוגה)
+    const qtyItems = qtyHeld
+      .map((q) => ({ q, n: qtyPick[qKey(q)] || 0 }))
+      .filter((x) => x.n > 0)
+      .map((x) => ({ itemTypeId: x.q.itemTypeId, statusId: x.q.statusId, quantity: x.n }));
     setBusy(true);
-    const r = await externalCheckin({ warehouseId: target, serialUnitIds: [...picked], qtyItems: [] });
+    const r = await externalCheckin({ warehouseId: target, serialUnitIds: [...picked], qtyItems });
     setBusy(false);
     if (!r.ok) { setErr(r.error); return; }
-    setPicked(new Set()); setOpen(false);
+    setPicked(new Set()); setQtyPick({}); setOpen(false);
     router.push(`/transfers/${r.transferId}/document`);
   }
 
   return (
     <>
       <button onClick={() => setOpen(true)} className="bg-white border border-emerald-300 text-emerald-700 rounded-lg px-3 py-2 text-xs md:text-sm font-medium hover:bg-emerald-50">
-        ↩️ זיכוי חוץ ({held.length})
+        ↩️ זיכוי חוץ ({held.length + qtyHeld.length})
       </button>
       {open && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-start sm:items-center justify-center p-0 sm:p-4 overflow-y-auto" dir="rtl">
@@ -66,14 +77,36 @@ export default function ExternalCheckinModal({ warehouses, defaultWarehouseId, h
                     <span className="text-[11px] text-indigo-700">🌐 {h.holder}</span>
                   </label>
                 ))}
-                {filt.length === 0 && <div className="text-center text-slate-400 text-sm py-4">אין ציוד אצל גורמי חוץ.</div>}
+                {filt.length === 0 && qtyFilt.length === 0 && <div className="text-center text-slate-400 text-sm py-4">אין ציוד אצל גורמי חוץ.</div>}
               </div>
+
+              {/* פריטים כמותיים שנמצאים בחוץ — נגזר מ-EXTERNAL_OUT פחות EXTERNAL_IN */}
+              {qtyFilt.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-bold text-slate-600 mb-1">פריטים כמותיים בחוץ</div>
+                  <div className="space-y-1 max-h-56 overflow-y-auto">
+                    {qtyFilt.map((q) => {
+                      const k = qKey(q);
+                      return (
+                        <div key={k} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${(qtyPick[k] ?? 0) > 0 ? "bg-emerald-50 border border-emerald-200" : "bg-slate-50"}`}>
+                          <span className="text-sm flex-1">{q.itemName} <span className="text-[10px] text-slate-400">· {q.statusName}</span></span>
+                          <span className="text-[11px] text-indigo-700">🌐 {q.holder}</span>
+                          <span className="text-[11px] text-slate-500">בחוץ {q.qty} {q.unit}</span>
+                          <input type="number" min={0} max={q.qty} value={qtyPick[k] ?? 0}
+                            onChange={(e) => setQtyPick((p) => ({ ...p, [k]: Math.max(0, Math.min(q.qty, parseInt(e.target.value || "0", 10))) }))}
+                            className="w-16 border border-slate-300 rounded px-2 py-1 text-sm" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {err && <p className="text-rose-600 text-sm text-center">{err}</p>}
             </div>
             <div className="border-t border-slate-200 p-3 bg-white shrink-0 flex items-center gap-2">
               <button onClick={() => setOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm">ביטול</button>
-              <button onClick={submit} disabled={busy || picked.size === 0 || !target} className="flex-1 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-lg px-4 py-2.5 text-sm font-bold">
-                {busy ? "מזכה…" : `↩️ זכה למחסן (${picked.size})`}
+              <button onClick={submit} disabled={busy || totalPicked === 0 || !target} className="flex-1 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-lg px-4 py-2.5 text-sm font-bold">
+                {busy ? "מזכה…" : `↩️ זכה למחסן (${totalPicked})`}
               </button>
             </div>
           </div>

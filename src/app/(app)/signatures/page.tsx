@@ -325,6 +325,29 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
     include: { itemType: { select: { name: true } }, status: { select: { name: true } } },
     orderBy: [{ externalHolderName: "asc" }, { itemType: { name: "asc" } }],
   });
+
+  // 🆕 יתרה כמותית שנמצאת אצל גורם חיצוני — נגזרת מ-EXTERNAL_OUT פחות EXTERNAL_IN.
+  //    לפריט כמותי אין externalHolderName (בניגוד לסריאלי), ולכן בלי החישוב הזה
+  //    הוא "נעלם" — לא ניתן היה לזכות אותו ולא הופיע בדוחות.
+  const extQtyLines = await prisma.transferLine.findMany({
+    where: { serialUnitId: null, transfer: { battalionId: bId, status: "COMPLETED", type: { in: ["EXTERNAL_OUT", "EXTERNAL_IN"] } } },
+    select: {
+      quantity: true, itemTypeId: true, statusId: true,
+      itemType: { select: { name: true, unit: true } }, status: { select: { name: true } },
+      transfer: { select: { type: true, externalName: true } },
+    },
+  });
+  const extQtyMap = new Map<string, { itemTypeId: string; itemName: string; unit: string; statusId: string; statusName: string; holder: string; qty: number }>();
+  for (const l of extQtyLines) {
+    if (!l.statusId || !l.status) continue;
+    const holder = l.transfer.externalName?.trim() || "גורם חיצוני";
+    const k = `${l.itemTypeId}|${l.statusId}|${holder}`;
+    const cur = extQtyMap.get(k);
+    const delta = (l.transfer.type === "EXTERNAL_OUT" ? 1 : -1) * l.quantity;
+    if (cur) cur.qty += delta;
+    else extQtyMap.set(k, { itemTypeId: l.itemTypeId, itemName: l.itemType.name, unit: l.itemType.unit, statusId: l.statusId, statusName: l.status.name, holder, qty: delta });
+  }
+  const externalQtyHeld = [...extQtyMap.values()].filter((x) => x.qty > 0);
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
 
   _step = "render-start";
@@ -346,11 +369,12 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                   balances={warehouseBalances.map((b) => ({ itemTypeId: b.itemTypeId, itemName: b.itemType.name, unit: b.itemType.unit, statusId: b.statusId, status: b.status.name, quantity: b.quantity }))}
                 />
               )}
-              {!isCompanyRep && externalHeld.length > 0 && (
+              {!isCompanyRep && (externalHeld.length > 0 || externalQtyHeld.length > 0) && (
                 <ExternalCheckinModal
                   warehouses={(myWarehouses.length > 0 ? myWarehouses.map((w) => ({ id: w.id, name: w.name })) : allWarehouses)}
                   defaultWarehouseId={activeHolderId}
                   held={externalHeld.map((u) => ({ id: u.id, itemName: u.itemType.name, serial: u.serialNumber, holder: u.externalHolderName!, status: u.status.name }))}
+                  qtyHeld={externalQtyHeld}
                 />
               )}
               {/* החתמת פלוגה — רק למפ"מ ולקצין מחסן (לא לרס"פ פלוגה) */}
