@@ -9,7 +9,9 @@ type Comp = { companyId: string; companyName: string; soldiers: Sol[] };
 type Override = { id: string; date: string; daysForward: number; note: string | null };
 const DOW = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 
-export default function RosterAttendanceSettings({ companies, window, overrides }: { companies: Comp[]; window: number[]; overrides: Override[] }) {
+type CoverageGaps = { total: number; byCompany: { company: string; count: number }[] };
+
+export default function RosterAttendanceSettings({ companies, window, coverageGaps, overrides }: { companies: Comp[]; window: number[]; coverageGaps: CoverageGaps; overrides: Override[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [open, setOpen] = useState<"reporters" | "window" | null>(null);
@@ -37,14 +39,6 @@ export default function RosterAttendanceSettings({ companies, window, overrides 
   const squadsOf = (c: Comp | undefined) => c ? [...new Set(c.soldiers.map((s) => s.squadName || SQUAD_NONE))].sort((a, b) => a.localeCompare(b, "he")) : [];
   const addableSoldiers = (activeComp?.soldiers ?? [])
     .filter((s) => !s.isReporter && (!selSquad || (s.squadName || SQUAD_NONE) === selSquad));
-  // כיסוי: פלוגה ללא נאמן, ומחלקות ללא נאמן בתוך פלוגה שיש בה נאמן
-  const coverage = companies.map((c) => {
-    const squads = [...new Set(c.soldiers.map((s) => s.squadName || SQUAD_NONE))];
-    const squadGaps = squads.filter((sq) => !c.soldiers.some((s) => (s.squadName || SQUAD_NONE) === sq && s.isReporter));
-    const hasAny = c.soldiers.some((s) => s.isReporter);
-    return { id: c.companyId, name: c.companyName, hasAny, squadGaps };
-  });
-  const compsNoReporter = coverage.filter((c) => !c.hasAny);
 
   return (
     <>
@@ -65,23 +59,22 @@ export default function RosterAttendanceSettings({ companies, window, overrides 
             <div className="p-4 space-y-4">
               <p className="text-xs text-slate-500">נאמן כ״א מקבל את תזכורת הבוקר בבוט ויכול לדווח נוכחות (גם מהבית). היקף: המחלקה שלו אם נבחרה מחלקה, אחרת כל הפלוגה.</p>
 
-              {/* כיסוי — מי עדיין ללא נאמן */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                <div className="text-xs font-bold text-slate-600 mb-2">📊 כיסוי נאמנים</div>
-                {compsNoReporter.length > 0 && (
-                  <div className="mb-2">
-                    <span className="text-[11px] text-rose-600 font-semibold">פלוגות ללא נאמן: </span>
-                    {compsNoReporter.map((c) => <span key={c.id} className="inline-block text-[11px] bg-rose-100 text-rose-700 rounded px-2 py-0.5 ml-1 mb-1">⚠️ {c.name}</span>)}
-                  </div>
+              {/* כיסוי מדויק — חיילים שאין מי שידווח עליהם (לפי הסקופ המוגדר של כל נאמן) */}
+              <div className={`border rounded-xl p-3 ${coverageGaps.total === 0 ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200"}`}>
+                <div className="text-xs font-bold text-slate-600 mb-1">📊 כיסוי נאמנים</div>
+                {coverageGaps.total === 0 ? (
+                  <div className="text-[12px] text-emerald-700 font-medium">✅ כל החיילים הפעילים מכוסים ע״י נאמן.</div>
+                ) : (
+                  <>
+                    <div className="text-[12px] text-rose-700 font-semibold mb-1">⚠️ {coverageGaps.total} חיילים ללא נאמן שידווח עליהם:</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {coverageGaps.byCompany.map((g) => (
+                        <span key={g.company} className="text-[11px] rounded px-2 py-0.5 bg-rose-100 text-rose-700">{g.company} · {g.count}</span>
+                      ))}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1">מחושב לפי הסקופ שהוגדר לכל נאמן (פלוגה/מחלקה) — לא לפי חברות בפלוגה.</div>
+                  </>
                 )}
-                <div className="flex flex-wrap gap-1.5">
-                  {coverage.map((c) => (
-                    <span key={c.id} title={c.squadGaps.length ? `מחלקות ללא נאמן: ${c.squadGaps.join(", ")}` : "מכוסה"}
-                      className={`text-[11px] rounded px-2 py-0.5 ${c.hasAny ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
-                      {c.hasAny ? "✅" : "⚠️"} {c.name}{c.hasAny && c.squadGaps.length > 0 ? ` · ${c.squadGaps.length} מחלקות חסרות` : ""}
-                    </span>
-                  ))}
-                </div>
               </div>
 
               {/* הוספת נאמן — פלוגה → מחלקה → חייל */}

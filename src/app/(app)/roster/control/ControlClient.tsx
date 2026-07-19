@@ -34,6 +34,7 @@ export default function ControlClient({
   attendanceSettings: {
     companies: { companyId: string; companyName: string; soldiers: { id: string; name: string; squadName: string | null; isReporter: boolean }[] }[];
     window: number[];
+    coverageGaps: { total: number; byCompany: { company: string; count: number }[] };
     overrides: { id: string; date: string; daysForward: number; note: string | null }[];
   };
 }) {
@@ -90,7 +91,7 @@ export default function ControlClient({
           דיווחו: <b>{totals.reported}</b>/{totals.soldiers} חיילים · <b>{totals.companiesReported}</b>/{totals.companiesTotal} פלוגות
         </div>
         <div className="mr-auto flex gap-2 flex-wrap">
-          <RosterAttendanceSettings companies={attendanceSettings.companies} window={attendanceSettings.window} overrides={attendanceSettings.overrides} />
+          <RosterAttendanceSettings companies={attendanceSettings.companies} window={attendanceSettings.window} coverageGaps={attendanceSettings.coverageGaps} overrides={attendanceSettings.overrides} />
           <button onClick={() => lockAll(true)} disabled={pending} className="text-xs bg-rose-600 text-white rounded-lg px-3 py-1.5 hover:bg-rose-700 disabled:opacity-50">🔒 נעל הכל</button>
           <button onClick={() => lockAll(false)} disabled={pending} className="text-xs border border-slate-300 text-slate-600 rounded-lg px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50">🔓 פתח הכל</button>
         </div>

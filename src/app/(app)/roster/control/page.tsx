@@ -31,7 +31,7 @@ export default async function RosterControlPage({
 
   const [companies, soldiers, statuses, employments, callups] = await Promise.all([
     prisma.holder.findMany({ where: { battalionId: bId, kind: "COMPANY", active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.soldier.findMany({ where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } }, orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }], select: { id: true, fullName: true, personalNumber: true, companyId: true, isAttendanceReporter: true, attendanceReporterAllCompany: true, squad: { select: { name: true } } } }),
+    prisma.soldier.findMany({ where: { battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } }, orderBy: [{ company: { name: "asc" } }, { fullName: "asc" }], select: { id: true, fullName: true, personalNumber: true, companyId: true, squadId: true, isAttendanceReporter: true, attendanceReporterAllCompany: true, squad: { select: { name: true } } } }),
     prisma.attendanceStatus.findMany({ where: { battalionId: bId, active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, color: true, icon: true, isPresent: true } }),
     prisma.employment.findMany({ where: { battalionId: bId }, orderBy: [{ active: "desc" }, { startDate: "desc" }], select: { id: true, name: true, startDate: true, endDate: true, active: true } }),
     prisma.callupPeriod.findMany({ where: { soldier: { battalionId: bId } }, orderBy: { startDate: "desc" }, select: { id: true, soldierId: true, startDate: true, endDate: true } }),
@@ -167,6 +167,27 @@ export default async function RosterControlPage({
     soldiers: soldiers.filter((s) => s.companyId === c.id).map((s) => ({ id: s.id, name: s.fullName, squadName: s.squad?.name ?? null, isReporter: s.isAttendanceReporter, allCompany: s.attendanceReporterAllCompany })),
   })).filter((c) => c.soldiers.length > 0);
 
+  // 🎯 כיסוי מדויק לפי הסקופ המוגדר של כל נאמן (פלוגה אם allCompany/ללא מחלקה, אחרת המחלקה) —
+  //    לא לפי חברות-בפלוגה. עונה על "האם יש חיילים שאין מי שידווח עליהם".
+  const reporters = soldiers.filter((s) => s.isAttendanceReporter);
+  const covered = new Set<string>();
+  for (const rep of reporters) {
+    const companyWide = rep.attendanceReporterAllCompany || !rep.squadId;
+    for (const s of soldiers) {
+      if (companyWide ? s.companyId === rep.companyId : s.squadId === rep.squadId) covered.add(s.id);
+    }
+  }
+  const companyNameById = new Map(companies.map((c) => [c.id, c.name]));
+  const gapMap = new Map<string, number>();
+  for (const s of soldiers) if (!covered.has(s.id)) {
+    const key = (s.companyId && companyNameById.get(s.companyId)) || "ללא פלוגה";
+    gapMap.set(key, (gapMap.get(key) ?? 0) + 1);
+  }
+  const coverageGaps = {
+    total: soldiers.length - covered.size,
+    byCompany: [...gapMap.entries()].map(([company, count]) => ({ company, count })).sort((a, b) => b.count - a.count),
+  };
+
   return (
     <div>
       <PageHeader helpKey="roster" title="🎛️ מסך שליטה — שלישות" subtitle="נעילת דיווחים · פילוח יומי · רצף נוכחות מצטבר לפי תעסוקה · הצלבת שמ״פ" />
@@ -184,7 +205,7 @@ export default async function RosterControlPage({
         aggRows={aggRows}
         shmpSoldiers={shmpSoldiers}
         today={todayStr}
-        attendanceSettings={{ companies: reporterCompanies, window: reportWindow, overrides: overrides.map((o) => ({ id: o.id, date: iso(o.date), daysForward: o.daysForward, note: o.note })) }}
+        attendanceSettings={{ companies: reporterCompanies, window: reportWindow, coverageGaps, overrides: overrides.map((o) => ({ id: o.id, date: iso(o.date), daysForward: o.daysForward, note: o.note })) }}
       />
     </div>
   );
