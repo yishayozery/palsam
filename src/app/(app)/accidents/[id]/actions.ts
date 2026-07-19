@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireCapability } from "@/lib/guard";
+import { requireVehicleAccess } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { linkTokenQuery } from "@/lib/link-token";
 
@@ -15,7 +15,7 @@ export async function getExaminerLink(id: string): Promise<{ link?: string; erro
 
 /** אימות הרשאה + שייכות לגדוד. מחזיר את הדיווח או null. */
 async function scoped(id: string) {
-  const user = await requireCapability("maintenance.manage");
+  const user = await requireVehicleAccess();
   const r = await prisma.accidentReport.findFirst({ where: { id, battalionId: user.battalionId! }, select: { id: true, status: true } });
   return r ? { user, r } : null;
 }

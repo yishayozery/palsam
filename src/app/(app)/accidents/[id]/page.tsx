@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
-import { requireCapability } from "@/lib/guard";
+import { requireVehicleAccess } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import AccidentDetailClient from "./AccidentDetailClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccidentDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requireCapability("maintenance.manage");
+  const user = await requireVehicleAccess();
   const { id } = await params;
   const r = await prisma.accidentReport.findFirst({
     where: { id, battalionId: user.battalionId! },

@@ -17,6 +17,16 @@ export async function requireCapability(cap: Capability): Promise<SessionUser> {
   return user;
 }
 
+/** גישת "קצין רכב" — תואם למסך /driving-licenses (רישיונות/שבצ"ק/תחזוקה/אדמין). */
+export function canVehicleAccess(user: SessionUser): boolean {
+  return user.isAdmin || can(user, "dispatch.manage") || can(user, "driving_licenses") || can(user, "maintenance.manage") || can(user, "battalion.profile");
+}
+export async function requireVehicleAccess(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!canVehicleAccess(user)) redirect("/");
+  return user;
+}
+
 /** הרשאה פר-משתמש לאשר חיילים לנשק (canApproveWeapons) — אדמין תמיד מורשה. */
 export function canApproveWeapons(user: SessionUser): boolean {
   return user.isSuperAdmin || user.isAdmin || user.canApproveWeapons;

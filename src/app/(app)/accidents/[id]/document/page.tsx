@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { requireCapability } from "@/lib/guard";
+import { requireVehicleAccess } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import PrintButton from "@/components/PrintButton";
 import BackButton from "@/components/BackButton";
@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 export default async function AccidentDocumentPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requireCapability("maintenance.manage");
+  const user = await requireVehicleAccess();
   const { id } = await params;
   const r = await prisma.accidentReport.findFirst({
     where: { id, battalionId: user.battalionId! },

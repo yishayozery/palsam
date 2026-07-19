@@ -12,6 +12,7 @@ import RefreshDaysSettings from "./RefreshDaysSettings";
 import DriverFileSettings from "./DriverFileSettings";
 import FuelCardsManager from "./FuelCardsManager";
 import FuelCardsClient from "../requests/FuelCardsClient";
+import AccidentsClient from "../accidents/AccidentsClient";
 import VehicleLinksManager from "./VehicleLinksManager";
 import { FORM_ORDER, FORM_TITLES, DEFAULT_VALIDITY_DAYS } from "@/lib/driverForms";
 
@@ -102,11 +103,19 @@ export default async function DrivingLicensesPage({
     : [];
   const soldierOpts = soldiers.map((s) => ({ id: s.id, name: s.fullName }));
 
+  const accidentReports = tab === "accidents"
+    ? await prisma.accidentReport.findMany({
+        where: { battalionId: bId }, orderBy: { createdAt: "desc" }, take: 100,
+        select: { id: true, type: true, status: true, createdAt: true, location: true, ourVehiclePlate: true, driverName: true, _count: { select: { photos: true } } },
+      })
+    : [];
+
   const TABS = [
     { key: "soldiers", label: "רשיונות והיתרים" },
     { key: "types", label: "סוגי הרשאות" },
     { key: "vehicles", label: "שיוך רכבים" },
     { key: "fuelcards", label: "⛽ כרטיסי דלק" },
+    { key: "accidents", label: "🚧 דיווחי תאונה" },
     { key: "links", label: "🔗 קישורים" },
     { key: "driverfile", label: "📁 תיק נהג" },
   ] as const;
@@ -174,6 +183,17 @@ export default async function DrivingLicensesPage({
             <FuelCardsManager cards={fuelCards} soldiers={soldierOpts} />
           </div>
         </div>
+      )}
+
+      {tab === "accidents" && (
+        <AccidentsClient
+          reports={accidentReports.map((r) => ({
+            id: r.id, type: r.type, status: r.status,
+            createdAt: r.createdAt.toISOString(),
+            location: r.location, plate: r.ourVehiclePlate, driver: r.driverName,
+            photos: r._count.photos,
+          }))}
+        />
       )}
 
       {tab === "links" && <VehicleLinksManager links={vehicleLinks} />}
