@@ -167,3 +167,71 @@ export async function deleteSquad(
     return { error: e instanceof Error ? e.message : "שגיאה" };
   }
 }
+
+// ===================== סטטוסי תחזית הגעה (שלב הצווים) =====================
+
+async function requireForecastAdmin() {
+  const user = await requireUser();
+  if (!can(user, "attendance.manage") && !can(user, "battalion.profile")) throw new Error("אין הרשאה");
+  return user;
+}
+
+export async function upsertForecastStatus(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireForecastAdmin();
+    const bId = user.battalionId!;
+    const id = String(formData.get("id") || "");
+    const name = String(formData.get("name") || "").trim();
+    const color = String(formData.get("color") || "#64748b");
+    const icon = String(formData.get("icon") || "").trim() || null;
+    const inService = formData.get("inService") === "true";
+    const sortOrder = parseInt(String(formData.get("sortOrder") || "0"), 10);
+    if (!name) return { error: "שם סטטוס חובה" };
+
+    if (id) {
+      const row = await prisma.forecastStatus.findUnique({ where: { id }, select: { battalionId: true } });
+      if (!row || row.battalionId !== bId) return { error: "לא נמצא" };
+      await prisma.forecastStatus.update({ where: { id }, data: { name, color, icon, inService, sortOrder } });
+      await audit(user.id, "UPDATE", "ForecastStatus", id, { name });
+    } else {
+      const created = await prisma.forecastStatus.create({ data: { battalionId: bId, name, color, icon, inService, sortOrder } });
+      await audit(user.id, "CREATE", "ForecastStatus", created.id, { name });
+    }
+    revalidatePath("/attendance-settings");
+    revalidatePath("/attendance/forecast");
+    return { ok: true };
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message.includes("Unique constraint")) return { error: "סטטוס עם שם זהה כבר קיים" };
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+export async function deleteForecastStatus(id: string): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireForecastAdmin();
+    const row = await prisma.forecastStatus.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!row || row.battalionId !== user.battalionId) return { error: "לא נמצא" };
+    const used = await prisma.forecastEntry.count({ where: { statusId: id } });
+    if (used > 0) return { error: `לא ניתן למחוק — הסטטוס בשימוש ב-${used} סימונים. ניתן לכבות אותו.` };
+    await prisma.forecastStatus.delete({ where: { id } });
+    await audit(user.id, "DELETE", "ForecastStatus", id, {});
+    revalidatePath("/attendance-settings");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+export async function toggleForecastStatus(id: string, active: boolean): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const user = await requireForecastAdmin();
+    const row = await prisma.forecastStatus.findUnique({ where: { id }, select: { battalionId: true } });
+    if (!row || row.battalionId !== user.battalionId) return { error: "לא נמצא" };
+    await prisma.forecastStatus.update({ where: { id }, data: { active } });
+    revalidatePath("/attendance-settings");
+    revalidatePath("/attendance/forecast");
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}

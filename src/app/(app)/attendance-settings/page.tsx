@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card } from "@/components/ui";
 import AttendanceSettingsClient from "./AttendanceSettingsClient";
+import ForecastStatusSettings from "./ForecastStatusSettings";
 import { saveAttendanceReminder } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,12 @@ export default async function AttendanceSettingsPage() {
   const statuses = await prisma.attendanceStatus.findMany({
     where: { battalionId: bId },
     orderBy: { sortOrder: "asc" },
+  });
+
+  const forecastStatuses = await prisma.forecastStatus.findMany({
+    where: { battalionId: bId },
+    orderBy: [{ inService: "desc" }, { sortOrder: "asc" }],
+    select: { id: true, name: true, icon: true, color: true, inService: true, sortOrder: true, active: true },
   });
 
   const companies = await prisma.holder.findMany({
@@ -70,6 +77,8 @@ export default async function AttendanceSettingsPage() {
           <button className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-4 py-2 text-sm font-medium">💾 שמור הגדרות</button>
         </form>
       </Card>
+
+      <ForecastStatusSettings statuses={forecastStatuses} />
 
       <AttendanceSettingsClient
         statuses={statuses}

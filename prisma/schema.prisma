@@ -200,6 +200,7 @@ model Battalion {
   squads             Squad[]
   companyRoles       CompanyRole[]
   attendanceStatuses AttendanceStatus[]
+  forecastStatuses   ForecastStatus[]
   attendanceLocks    AttendanceLock[] @relation("BattalionAttendanceLocks")
   vacationBoards     VacationBoard[]
   vacationStatuses   VacationStatus[]
@@ -689,6 +690,7 @@ model Soldier {
   attendancePlans    AttendancePlan[]
   attendanceRecords  AttendanceRecord[]
   callupPeriods      CallupPeriod[]
+  forecastEntries    ForecastEntry[]
   scheduleDaySoldiers ScheduleDaySoldier[] @relation("SoldierScheduleDay")
   attachmentRequests  AttachmentRequest[]
   operationalKits     OperationalKit[] @relation("SoldierOpKits")
@@ -1533,6 +1535,51 @@ model AttendanceLock {
 
   @@unique([companyId, date])
   @@index([battalionId, date])
+}
+
+// ===================== תחזית הגעה (שלב הצווים — לפני התעסוקה) =====================
+// שכבה נפרדת מהנוכחות: מקבלים צווים לתעסוקה, וכל פלוגה מעדכנת מי מגיע ומתי.
+// AttendancePlan/Record הם התכנון והביצוע *בתוך* התעסוקה — כאן זה השלב המקדים.
+
+/**
+ * סטטוס תחזית — פר גדוד, ניתן לעריכה. `inService` הוא הבינארי שהגדוד סופר:
+ * true = בשמ"פ באותו יום, false = לא בשמ"פ (והשם הוא הסיבה: חול / לימודים / אישי…).
+ */
+model ForecastStatus {
+  id          String    @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation(fields: [battalionId], references: [id], onDelete: Cascade)
+  name        String
+  icon        String?
+  color       String    @default("#64748b")
+  inService   Boolean   @default(false) // בשמ"פ?
+  sortOrder   Int       @default(0)
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  entries     ForecastEntry[]
+
+  @@unique([battalionId, name])
+  @@index([battalionId])
+}
+
+/** סימון תחזית לחייל ביום בודד. ימים מפוצלים = כמה שורות בתאריכים שונים. */
+model ForecastEntry {
+  id           String         @id @default(cuid())
+  soldierId    String
+  soldier      Soldier        @relation(fields: [soldierId], references: [id], onDelete: Cascade)
+  date         DateTime       @db.Date
+  statusId     String
+  status       ForecastStatus @relation(fields: [statusId], references: [id], onDelete: Cascade)
+  employmentId String? // התעסוקה שאליה שויך הסימון (לתיעוד; הציר הוא התאריך)
+  note         String?
+  updatedById  String?
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([soldierId, date])
+  @@index([soldierId])
+  @@index([date])
+  @@index([statusId])
 }
 
 // ===================== שמ"פ (שירות מילואים פעיל) =====================
