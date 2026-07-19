@@ -40,7 +40,7 @@ const OTHER_CIVIL_PHOTOS = [
   { kind: "OTHER_CIVIL_LICENSE_BACK", label: "רישיון האזרח — אחורה" },
 ];
 
-function PhotoSlot({ label, url, busy, onFile }: { label: string; url?: string; busy: boolean; onFile: (f: File) => void }) {
+function PhotoSlot({ label, url, busy, fromSystem, onFile }: { label: string; url?: string; busy: boolean; fromSystem?: boolean; onFile: (f: File) => void }) {
   return (
     <label className="block border-2 border-dashed border-slate-300 rounded-xl p-2 text-center cursor-pointer hover:bg-slate-50 bg-white">
       {url ? (
@@ -49,7 +49,8 @@ function PhotoSlot({ label, url, busy, onFile }: { label: string; url?: string; 
       ) : (
         <div className="h-24 flex items-center justify-center text-3xl text-slate-300">{busy ? "⏳" : "📷"}</div>
       )}
-      <span className="text-[11px] text-slate-600 leading-tight block">{url ? "✅ " : ""}{label}</span>
+      <span className="text-[11px] text-slate-600 leading-tight block">{url ? (fromSystem ? "🗂️ " : "✅ ") : ""}{label}</span>
+      {fromSystem && <span className="text-[9px] text-emerald-600 block">קיים במערכת · לחצו להחלפה</span>}
       <input type="file" accept="image/*" capture="environment" className="hidden"
         onChange={(e) => { const file = e.target.files?.[0]; if (file) onFile(file); e.target.value = ""; }} />
     </label>
@@ -67,10 +68,10 @@ function FieldRow({ label, value, onChange, type = "text", ph }: { label: string
 }
 
 export default function AccidentFormClient({
-  id, token, type, done: initialDone, battalionName, initial, photos: initialPhotos,
+  id, token, type, done: initialDone, battalionName, initial, photos: initialPhotos, existingLicenses = {},
 }: {
   id: string; token: string; type: Type; done: boolean; battalionName: string;
-  initial: Fields; photos: Record<string, string>;
+  initial: Fields; photos: Record<string, string>; existingLicenses?: Record<string, string>;
 }) {
   const [f, setF] = useState<Fields>(initial);
   const [photos, setPhotos] = useState<Record<string, string>>(initialPhotos);
@@ -108,9 +109,13 @@ export default function AccidentFormClient({
 
   function submit() {
     setErr(null);
-    const missing = ["VEHICLE_FRONT", "VEHICLE_BACK", "VEHICLE_LEFT", "VEHICLE_RIGHT", "SCENE"].filter((k) => !photos[k]);
-    if (!f.location.trim()) { setErr("חסר מיקום התאונה"); return; }
-    if (missing.length) { setErr("חסרות תמונות חובה: 4 צדדי הרכב + זירה"); return; }
+    const REQUIRED = [
+      { k: "VEHICLE_FRONT", l: "חזית" }, { k: "VEHICLE_BACK", l: "אחור" },
+      { k: "VEHICLE_LEFT", l: "צד שמאל" }, { k: "VEHICLE_RIGHT", l: "צד ימין" }, { k: "SCENE", l: "זירת התאונה" },
+    ];
+    const missing = REQUIRED.filter((r) => !photos[r.k]);
+    if (!f.location.trim()) { setErr("חסר שדה חובה: מיקום התאונה"); return; }
+    if (missing.length) { setErr(`חסרות תמונות חובה: ${missing.map((m) => m.l).join(", ")}`); return; }
     start(async () => {
       const r = await submitAccidentPartA(id, token);
       if (r.error) { setErr(r.error); return; }
@@ -178,7 +183,10 @@ export default function AccidentFormClient({
         <div className="bg-white rounded-xl border border-slate-200 p-3">
           <div className="text-xs font-bold text-slate-500 mb-2">תמונות רכבנו + מסמכים</div>
           <div className="grid grid-cols-3 gap-2">
-            {OUR_PHOTOS.map((p) => <PhotoSlot key={p.kind} label={p.label} url={photos[p.kind]} busy={uploading === p.kind} onFile={(file) => upload(p.kind, file)} />)}
+            {OUR_PHOTOS.map((p) => {
+              const uploaded = photos[p.kind]; const existing = existingLicenses[p.kind];
+              return <PhotoSlot key={p.kind} label={p.label} url={uploaded ?? existing} fromSystem={!uploaded && !!existing} busy={uploading === p.kind} onFile={(file) => upload(p.kind, file)} />;
+            })}
           </div>
           {otherPhotos.length > 0 && (
             <>

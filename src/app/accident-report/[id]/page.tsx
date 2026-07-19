@@ -18,7 +18,7 @@ export default async function AccidentReportFillPage({
   const report = await prisma.accidentReport.findUnique({
     where: { id },
     select: {
-      id: true, type: true, status: true,
+      id: true, type: true, status: true, reportingSoldierId: true,
       accidentAt: true, location: true, description: true,
       ourVehiclePlate: true, ourVehicleType: true,
       driverName: true, driverPersonalId: true, driverPhone: true,
@@ -29,6 +29,18 @@ export default async function AccidentReportFillPage({
     },
   });
   if (!report) notFound();
+
+  // 🪪 רישיונות שכבר קיימים במערכת על החייל המדווח — לא לבקש שוב
+  const existingLicenses: Record<string, string> = {};
+  if (report.reportingSoldierId) {
+    const sol = await prisma.soldier.findUnique({
+      where: { id: report.reportingSoldierId },
+      select: { civilianLicenseFrontData: true, civilianLicenseBackData: true, militaryLicenseFrontData: true },
+    });
+    if (sol?.civilianLicenseFrontData) existingLicenses.CIVIL_LICENSE_FRONT = sol.civilianLicenseFrontData;
+    if (sol?.civilianLicenseBackData) existingLicenses.CIVIL_LICENSE_BACK = sol.civilianLicenseBackData;
+    if (sol?.militaryLicenseFrontData) existingLicenses.MILITARY_LICENSE = sol.militaryLicenseFrontData;
+  }
 
   return (
     <AccidentFormClient
@@ -46,6 +58,7 @@ export default async function AccidentReportFillPage({
         otherVehiclePlate: report.otherVehiclePlate ?? "", otherVehicleUnit: report.otherVehicleUnit ?? "", otherInsurance: report.otherInsurance ?? "",
       }}
       photos={Object.fromEntries(report.photos.map((p) => [p.kind, p.blobUrl]))}
+      existingLicenses={existingLicenses}
     />
   );
 }

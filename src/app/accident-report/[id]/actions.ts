@@ -60,9 +60,34 @@ export async function uploadAccidentPhotoAction(
   }
 }
 
-/** הגשת חלק א — מעביר את הדיווח לטיפול קצין הרכב (OFFICER_REVIEW). */
+/** הגשת חלק א — מעביר לטיפול קצין הרכב (OFFICER_REVIEW).
+ *  לפני ההגשה: מעתיק רישיונות שכבר קיימים במערכת על החייל לדיווח (אם לא הועלו ידנית),
+ *  כדי שהתעודה תהיה שלמה בלי לבקש מהחייל לצלם שוב מה שכבר יש. */
 export async function submitAccidentPartA(id: string, token: string): Promise<{ ok?: boolean; error?: string }> {
   if (!(await loadDraft(id, token))) return { error: "קישור לא תקין או שהדיווח כבר נשלח" };
+
+  const rep = await prisma.accidentReport.findUnique({
+    where: { id },
+    select: { reportingSoldierId: true, photos: { select: { kind: true } } },
+  });
+  if (rep?.reportingSoldierId) {
+    const have = new Set(rep.photos.map((p) => p.kind));
+    const sol = await prisma.soldier.findUnique({
+      where: { id: rep.reportingSoldierId },
+      select: { civilianLicenseFrontData: true, civilianLicenseBackData: true, militaryLicenseFrontData: true },
+    });
+    const copy: { kind: AccidentPhotoKind; data: string | null }[] = [
+      { kind: "CIVIL_LICENSE_FRONT", data: sol?.civilianLicenseFrontData ?? null },
+      { kind: "CIVIL_LICENSE_BACK", data: sol?.civilianLicenseBackData ?? null },
+      { kind: "MILITARY_LICENSE", data: sol?.militaryLicenseFrontData ?? null },
+    ];
+    for (const c of copy) {
+      if (c.data && !have.has(c.kind)) {
+        await prisma.accidentPhoto.create({ data: { reportId: id, kind: c.kind, blobUrl: c.data } });
+      }
+    }
+  }
+
   await prisma.accidentReport.update({ where: { id }, data: { status: "OFFICER_REVIEW" } });
   return { ok: true };
 }
