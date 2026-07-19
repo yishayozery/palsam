@@ -71,7 +71,7 @@ export default function ArmoryIssueDoc({ d, hideToolbar = false, extraToolbar }:
 
         {/* Title */}
         <div className="aid-title-wrap">
-          <div className="aid-eyebrow">טופס 1008 · אישור שלישות חטיבה 2</div>
+          <div className="aid-eyebrow">במרום טופס 1008 · אישור שלישות חטיבה 2</div>
           <h1 className="aid-title">{ARMORY_ISSUE_TITLE}</h1>
           <div className="aid-title-rule" />
         </div>
@@ -292,9 +292,15 @@ const CSS = `
   .aid-meta{direction:rtl;text-align:right;width:100%;}
 }
 @media print{
+  @page{size:A4;margin:10mm;}
   .aid-wrap{background:#fff;padding:0;min-height:0;}
   .aid-toolbar{display:none;}
-  .aid-sheet{box-shadow:none;border:none;width:100%;}
+  /* ⚠️ overflow:hidden חותך את התעודה באמצע בהדפסה/ייצוא PDF — חייב visible כדי שתזרום לעמוד הבא */
+  .aid-sheet{box-shadow:none;border:none;width:100%;overflow:visible;}
+  .aid-tbl-wrap{overflow:visible;}
+  /* לא לפצל בלוקים באמצע בין עמודים */
+  .aid-tbl tr,.aid-sig-box,.aid-warn,.aid-declare li,.aid-ds{break-inside:avoid;page-break-inside:avoid;}
+  .aid-tbl thead{display:table-header-group;}
   .aid-tbl thead th,.aid-declare,.aid-warn,.aid-sheet::before{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 }
 `;

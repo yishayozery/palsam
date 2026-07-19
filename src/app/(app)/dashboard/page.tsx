@@ -238,6 +238,12 @@ export default async function DashboardPage({
 
   const fmt = (d: Date) => d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" });
 
+  // 🚧 בטיחות — תאונות דרכים
+  const [accidentsTotal, accidentsOpen] = await Promise.all([
+    prisma.accidentReport.count({ where: { battalionId: bId } }),
+    prisma.accidentReport.count({ where: { battalionId: bId, status: { not: "APPROVED" } } }),
+  ]);
+
   return (
     <div>
       <PageHeader
@@ -455,6 +461,22 @@ export default async function DashboardPage({
                 </tbody>
               </table>
             )}
+          </Card>
+        </div>
+      </div>
+
+      {/* ============ בטיחות ============ */}
+      <div className="mb-6">
+        <h2 className="text-sm font-bold text-slate-500 mb-2">🚧 בטיחות</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card className="p-4 text-center">
+            <div className="text-3xl font-bold text-slate-800">{accidentsTotal}</div>
+            <div className="text-sm text-slate-600">תאונות (סה״כ)</div>
+          </Card>
+          <Card className={`p-4 text-center ${accidentsOpen > 0 ? "bg-amber-50 border-amber-200" : ""}`}>
+            <div className={`text-3xl font-bold ${accidentsOpen > 0 ? "text-amber-600" : "text-slate-800"}`}>{accidentsOpen}</div>
+            <div className="text-sm text-slate-600">דוחות פתוחים</div>
+            <Link href="/driving-licenses?tab=accidents" className="text-xs text-blue-600 hover:underline">לדיווחי תאונה →</Link>
           </Card>
         </div>
       </div>
