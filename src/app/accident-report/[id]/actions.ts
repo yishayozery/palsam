@@ -2,7 +2,6 @@
 
 import { prisma } from "@/lib/prisma";
 import { verifyLink } from "@/lib/link-token";
-import { uploadAccidentPhoto, isBlobConfigured } from "@/lib/blob";
 import type { AccidentPhotoKind } from "@/generated/prisma";
 
 /** ולידציית טוקן מילוי + טעינת דיווח פתוח (DRAFT). null אם לא תקין. */
@@ -40,23 +39,20 @@ export async function saveAccidentPartA(
   return { ok: true };
 }
 
-/** העלאת תמונה (Blob) לפי סוג — מחליפה תמונה קיימת מאותו סוג. */
-export async function uploadAccidentPhotoAction(
-  id: string, token: string, kind: AccidentPhotoKind, formData: FormData,
+/** שמירת תמונה (data-URL — הוקטנה בצד-הלקוח) לפי סוג — מחליפה קיימת מאותו סוג.
+ *  עקבי עם שאר התמונות במערכת (רישיונות/חתימות = data-URL ב-DB). */
+export async function saveAccidentPhotoData(
+  id: string, token: string, kind: AccidentPhotoKind, dataUrl: string,
 ): Promise<{ ok?: boolean; url?: string; error?: string }> {
   if (!(await loadDraft(id, token))) return { error: "קישור לא תקין" };
-  if (!isBlobConfigured()) return { error: "אחסון התמונות לא הוגדר עדיין — פנה למנהל המערכת" };
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) return { error: "לא נבחרה תמונה" };
-  if (file.size > 12 * 1024 * 1024) return { error: "תמונה גדולה מדי (מקסימום 12MB)" };
+  if (!dataUrl.startsWith("data:image/")) return { error: "קובץ לא תקין" };
+  if (dataUrl.length > 2_500_000) return { error: "תמונה גדולה מדי — נסה/י שוב (מוקטנת אוטומטית)" };
   try {
-    const buf = Buffer.from(await file.arrayBuffer());
-    const url = await uploadAccidentPhoto(id, kind, buf, file.type || "image/jpeg");
     await prisma.accidentPhoto.deleteMany({ where: { reportId: id, kind } });
-    await prisma.accidentPhoto.create({ data: { reportId: id, kind, blobUrl: url } });
-    return { ok: true, url };
+    await prisma.accidentPhoto.create({ data: { reportId: id, kind, blobUrl: dataUrl } });
+    return { ok: true, url: dataUrl };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "שגיאה בהעלאה" };
+    return { error: e instanceof Error ? e.message : "שגיאה בשמירה" };
   }
 }
 

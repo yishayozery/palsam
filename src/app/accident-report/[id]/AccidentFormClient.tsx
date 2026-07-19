@@ -1,7 +1,31 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useTransition } from "react";
-import { saveAccidentPartA, uploadAccidentPhotoAction, submitAccidentPartA } from "./actions";
+import { saveAccidentPartA, saveAccidentPhotoData, submitAccidentPartA } from "./actions";
+
+// הקטנת תמונה בצד-הלקוח → data-URL (JPEG). מונע ניפוח ה-DB ומאיץ העלאה מהשטח.
+function downscaleToDataUrl(file: File, maxDim = 1280, quality = 0.72): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (Math.max(width, height) > maxDim) {
+        const s = maxDim / Math.max(width, height);
+        width = Math.round(width * s); height = Math.round(height * s);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("no ctx")); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("load failed")); };
+    img.src = url;
+  });
+}
 
 type Type = "ARMY_SELF" | "ARMY_ARMY" | "CIVILIAN";
 type Fields = {
@@ -97,10 +121,12 @@ export default function AccidentFormClient({
 
   const upload = useCallback(async (kind: string, file: File) => {
     setErr(null); setUploading(kind);
-    const fd = new FormData(); fd.set("file", file);
-    const r = await uploadAccidentPhotoAction(id, token, kind as never, fd);
-    if (r.error) setErr(r.error);
-    else if (r.url) setPhotos((p) => ({ ...p, [kind]: r.url! }));
+    try {
+      const dataUrl = await downscaleToDataUrl(file);
+      const r = await saveAccidentPhotoData(id, token, kind as never, dataUrl);
+      if (r.error) setErr(r.error);
+      else if (r.url) setPhotos((p) => ({ ...p, [kind]: r.url! }));
+    } catch { setErr("שגיאה בעיבוד התמונה — נסה/י שוב"); }
     setUploading(null);
   }, [id, token]);
 
