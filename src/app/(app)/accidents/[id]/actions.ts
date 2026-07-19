@@ -41,6 +41,14 @@ export async function sendToMagad(id: string, notes: string): Promise<{ ok?: boo
     where: { id },
     data: { officerNotes: notes, officerUserId: s.user.id, officerAt: new Date(), status: "MAGAD_REVIEW" },
   });
+  // 🔔 התראה למג"ד
+  const d = await prisma.accidentReport.findUnique({ where: { id }, select: { type: true, driverName: true, ourVehiclePlate: true, location: true } });
+  if (d) {
+    const TYPE_LABEL: Record<string, string> = { ARMY_SELF: "צבא עצמי", ARMY_ARMY: "צבא עם צבא", CIVILIAN: "מעורבות אזרח" };
+    const summary = [TYPE_LABEL[d.type] ?? d.type, d.driverName, d.ourVehiclePlate && `רכב ${d.ourVehiclePlate}`, d.location].filter(Boolean).join(" · ");
+    const { notifyMagadAccident } = await import("@/lib/accident-notify");
+    await notifyMagadAccident(s.user.battalionId!, id, summary).catch(() => {});
+  }
   revalidatePath(`/accidents/${id}`);
   return { ok: true };
 }

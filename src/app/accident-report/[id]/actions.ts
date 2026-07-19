@@ -64,7 +64,7 @@ export async function submitAccidentPartA(id: string, token: string): Promise<{ 
 
   const rep = await prisma.accidentReport.findUnique({
     where: { id },
-    select: { reportingSoldierId: true, photos: { select: { kind: true } } },
+    select: { reportingSoldierId: true, battalionId: true, type: true, driverName: true, location: true, ourVehiclePlate: true, photos: { select: { kind: true } } },
   });
   if (rep?.reportingSoldierId) {
     const have = new Set(rep.photos.map((p) => p.kind));
@@ -85,5 +85,13 @@ export async function submitAccidentPartA(id: string, token: string): Promise<{ 
   }
 
   await prisma.accidentReport.update({ where: { id }, data: { status: "OFFICER_REVIEW" } });
+
+  // 🔔 התראה לקצין הרכב
+  if (rep) {
+    const TYPE_LABEL: Record<string, string> = { ARMY_SELF: "צבא עצמי", ARMY_ARMY: "צבא עם צבא", CIVILIAN: "מעורבות אזרח" };
+    const summary = [TYPE_LABEL[rep.type] ?? rep.type, rep.driverName, rep.ourVehiclePlate && `רכב ${rep.ourVehiclePlate}`, rep.location].filter(Boolean).join(" · ");
+    const { notifyVehicleOfficersAccident } = await import("@/lib/accident-notify");
+    await notifyVehicleOfficersAccident(rep.battalionId, id, summary).catch(() => {});
+  }
   return { ok: true };
 }
