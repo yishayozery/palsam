@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/guard";
 import { can } from "@/lib/rbac";
+import { linkTokenQuery } from "@/lib/link-token";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui";
@@ -192,6 +193,7 @@ export default async function DrivingLicensesPage({
             createdAt: r.createdAt.toISOString(),
             location: r.location, plate: r.ourVehiclePlate, driver: r.driverName,
             photos: r._count.photos,
+            fillPath: `/accident-report/${r.id}${linkTokenQuery("accident-fill", r.id)}`,
           }))}
         />
       )}

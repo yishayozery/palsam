@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Badge } from "@/components/ui";
 import { createAccidentReport, getAccidentFillLink, deleteAccidentReport } from "./actions";
@@ -8,22 +8,26 @@ import { createAccidentReport, getAccidentFillLink, deleteAccidentReport } from 
 type Report = {
   id: string; type: string; status: string; createdAt: string;
   location: string | null; plate: string | null; driver: string | null; photos: number;
+  fillPath: string;
 };
 
 const TYPE_LABEL: Record<string, string> = { ARMY_SELF: "צבא עצמי", ARMY_ARMY: "צבא עם צבא", CIVILIAN: "מעורבות אזרח" };
 const STATUS: Record<string, { label: string; cls: string }> = {
-  DRAFT: { label: "ממתין למילוי חייל", cls: "bg-amber-100 text-amber-700" },
+  DRAFT: { label: "ממתין למילוי", cls: "bg-amber-100 text-amber-700" },
   OFFICER_REVIEW: { label: "אצל קצין הרכב", cls: "bg-sky-100 text-sky-700" },
-  MAGAD_REVIEW: { label: 'אישור מג"ד', cls: "bg-violet-100 text-violet-700" },
+  MAGAD_REVIEW: { label: 'אישור מג״ד', cls: "bg-violet-100 text-violet-700" },
   EXAMINER_REVIEW: { label: "אישור בוחן רכב", cls: "bg-indigo-100 text-indigo-700" },
   APPROVED: { label: "הושלם", cls: "bg-emerald-100 text-emerald-700" },
 };
+const STATUS_ORDER = ["DRAFT", "OFFICER_REVIEW", "MAGAD_REVIEW", "EXAMINER_REVIEW", "APPROVED"];
 
 export default function AccidentsClient({ reports }: { reports: Report[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [linkFor, setLinkFor] = useState<{ id: string; link: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [q, setQ] = useState("");
+  const [statusF, setStatusF] = useState("");
 
   function create(type: string) {
     start(async () => {
@@ -42,11 +46,20 @@ export default function AccidentsClient({ reports }: { reports: Report[] }) {
   }
   const wa = (link: string) => `https://wa.me/?text=${encodeURIComponent(`מילוי דיווח תאונה — חלק א:\n${link}`)}`;
 
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return reports.filter((r) => {
+      if (statusF && r.status !== statusF) return false;
+      if (!term) return true;
+      return [r.driver, r.plate, r.location, TYPE_LABEL[r.type]].some((v) => (v ?? "").toLowerCase().includes(term));
+    });
+  }, [reports, q, statusF]);
+
   return (
     <div className="space-y-4">
       {/* יצירת דיווח */}
       <Card className="p-3">
-        <div className="text-xs font-bold text-slate-600 mb-2">➕ דיווח תאונה חדש — בחר סוג ושלח לחייל למילוי</div>
+        <div className="text-xs font-bold text-slate-600 mb-2">➕ דיווח תאונה חדש — בחר סוג. אפשר למלא כאן ישירות, או לשלוח לינק לחייל.</div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <button disabled={pending} onClick={() => create("ARMY_SELF")} className="bg-amber-600 hover:bg-amber-700 text-white rounded-lg py-2.5 text-sm font-medium disabled:opacity-50">🚙 צבא עצמי</button>
           <button disabled={pending} onClick={() => create("ARMY_ARMY")} className="bg-amber-600 hover:bg-amber-700 text-white rounded-lg py-2.5 text-sm font-medium disabled:opacity-50">🚙💥🚙 צבא עם צבא</button>
@@ -57,7 +70,7 @@ export default function AccidentsClient({ reports }: { reports: Report[] }) {
       {/* לינק שנוצר */}
       {linkFor && (
         <Card className="p-3 border-emerald-300 bg-emerald-50">
-          <div className="text-xs font-bold text-emerald-800 mb-2">🔗 לינק למילוי חלק א — שלח לחייל:</div>
+          <div className="text-xs font-bold text-emerald-800 mb-2">🔗 לינק למילוי חלק א — שלח לחייל (או פתח כאן ב״✏️ מלא״):</div>
           <div className="flex gap-2 flex-wrap items-center">
             <input readOnly value={linkFor.link} className="flex-1 min-w-[180px] border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-white font-mono" onFocus={(e) => e.target.select()} />
             <button onClick={() => { navigator.clipboard.writeText(linkFor.link); setCopied(true); }} className="bg-slate-700 text-white rounded-lg px-3 py-1.5 text-xs">{copied ? "✓ הועתק" : "העתק"}</button>
@@ -67,13 +80,29 @@ export default function AccidentsClient({ reports }: { reports: Report[] }) {
         </Card>
       )}
 
+      {/* חיפוש + סינון */}
+      {reports.length > 0 && (
+        <div className="flex gap-2 flex-wrap items-center">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 חיפוש — נהג / רכב / מיקום…"
+            className="flex-1 min-w-[160px] border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          <select value={statusF} onChange={(e) => setStatusF(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
+            <option value="">כל הסטטוסים</option>
+            {STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS[s].label}</option>)}
+          </select>
+          <span className="text-xs text-slate-400">{filtered.length}/{reports.length}</span>
+        </div>
+      )}
+
       {/* רשימה */}
       {reports.length === 0 ? (
         <Card className="p-8 text-center text-slate-400">אין דיווחי תאונה עדיין</Card>
+      ) : filtered.length === 0 ? (
+        <Card className="p-6 text-center text-slate-400">אין תוצאות לחיפוש</Card>
       ) : (
         <div className="space-y-2">
-          {reports.map((r) => {
+          {filtered.map((r) => {
             const st = STATUS[r.status] ?? { label: r.status, cls: "bg-slate-100 text-slate-600" };
+            const isDraft = r.status === "DRAFT";
             return (
               <Card key={r.id} className="p-3 flex items-center justify-between gap-2 flex-wrap">
                 <div className="min-w-0">
@@ -88,9 +117,15 @@ export default function AccidentsClient({ reports }: { reports: Report[] }) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {r.status === "DRAFT" && <button onClick={() => showLink(r.id)} className="text-xs bg-sky-600 text-white rounded-lg px-3 py-1.5">🔗 לינק</button>}
-                  {r.status !== "DRAFT" && <a href={`/accidents/${r.id}`} className="text-xs bg-slate-700 text-white rounded-lg px-3 py-1.5">פתח</a>}
-                  {r.status === "DRAFT" && <button onClick={() => del(r.id)} className="text-xs text-rose-500 hover:text-rose-700">🗑️</button>}
+                  {isDraft ? (
+                    <>
+                      <a href={r.fillPath} className="text-xs bg-amber-600 text-white rounded-lg px-3 py-1.5">✏️ מלא</a>
+                      <button onClick={() => showLink(r.id)} className="text-xs bg-sky-600 text-white rounded-lg px-3 py-1.5">🔗 לינק לחייל</button>
+                      <button onClick={() => del(r.id)} className="text-xs text-rose-500 hover:text-rose-700">🗑️</button>
+                    </>
+                  ) : (
+                    <a href={`/accidents/${r.id}`} className="text-xs bg-slate-700 text-white rounded-lg px-3 py-1.5">פתח</a>
+                  )}
                 </div>
               </Card>
             );
