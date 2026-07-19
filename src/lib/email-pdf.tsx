@@ -303,7 +303,7 @@ function ArmoryIssuePDF({ d }: { d: ArmoryPdfData }) {
         </View>
 
         <View style={a.titleWrap}>
-          <Text style={a.eyebrow}>במרום טופס 1008 · אישור שלישות חטיבה 2</Text>
+          <Text style={a.eyebrow}>במקום טופס 1008 · אישור שלישות חטיבה 2</Text>
           <Text style={a.docTitle}>אישור לניפוק נשק אישי</Text>
         </View>
 

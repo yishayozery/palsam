@@ -71,7 +71,7 @@ export default function ArmoryIssueDoc({ d, hideToolbar = false, extraToolbar }:
 
         {/* Title */}
         <div className="aid-title-wrap">
-          <div className="aid-eyebrow">במרום טופס 1008 · אישור שלישות חטיבה 2</div>
+          <div className="aid-eyebrow">במקום טופס 1008 · אישור שלישות חטיבה 2</div>
           <h1 className="aid-title">{ARMORY_ISSUE_TITLE}</h1>
           <div className="aid-title-rule" />
         </div>
