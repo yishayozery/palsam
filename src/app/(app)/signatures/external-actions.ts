@@ -9,9 +9,12 @@ import { revalidatePath } from "next/cache";
 type Recipient = { name: string; personalId?: string; phone?: string; affiliation?: string };
 type QtyLine = { itemTypeId: string; statusId: string; quantity: number };
 
-/** מאמת שהמחסן שייך למשתמש (או שהוא אדמין). */
-async function assertWarehouse(userHolderIds: string[], isAdmin: boolean, warehouseId: string): Promise<boolean> {
-  if (isAdmin) return true;
+/** מאמת שהמחסן שייך למשתמש; אדמין — כל מחסן בגדוד שלו בלבד. */
+async function assertWarehouse(userHolderIds: string[], isAdmin: boolean, warehouseId: string, battalionId: string): Promise<boolean> {
+  if (isAdmin) {
+    const h = await prisma.holder.findUnique({ where: { id: warehouseId }, select: { battalionId: true } });
+    return h?.battalionId === battalionId;
+  }
   return userHolderIds.includes(warehouseId);
 }
 
@@ -26,7 +29,7 @@ export async function createExternalSignout(payload: {
 
   if (!recipient?.name?.trim()) return { ok: false, error: "נא להזין שם מלא של הגורם החיצוני" };
   if (!warehouseId) return { ok: false, error: "בחר מחסן" };
-  if (!(await assertWarehouse(user.holderIds, user.isAdmin, warehouseId))) return { ok: false, error: "אין הרשאה למחסן זה" };
+  if (!(await assertWarehouse(user.holderIds, user.isAdmin, warehouseId, bId))) return { ok: false, error: "אין הרשאה למחסן זה" };
   if (serialUnitIds.length === 0 && qtyItems.length === 0) return { ok: false, error: "בחר לפחות פריט אחד" };
 
   try {
@@ -76,7 +79,7 @@ export async function externalCheckin(payload: {
   const bId = user.battalionId!;
   const { warehouseId, serialUnitIds, qtyItems, recipientName } = payload;
   if (!warehouseId) return { ok: false, error: "בחר מחסן יעד" };
-  if (!(await assertWarehouse(user.holderIds, user.isAdmin, warehouseId))) return { ok: false, error: "אין הרשאה למחסן זה" };
+  if (!(await assertWarehouse(user.holderIds, user.isAdmin, warehouseId, bId))) return { ok: false, error: "אין הרשאה למחסן זה" };
   if (serialUnitIds.length === 0 && qtyItems.length === 0) return { ok: false, error: "בחר לפחות פריט אחד" };
 
   try {

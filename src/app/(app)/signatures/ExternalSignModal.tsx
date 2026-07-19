@@ -6,14 +6,17 @@ import SigPadInline from "./SigPadInline";
 import { createExternalSignout } from "./external-actions";
 import { useEscClose } from "@/lib/useEscClose";
 
-type Unit = { id: string; itemTypeId: string; itemName: string; serial: string; statusId: string; lotQuantity: number | null };
-type Balance = { itemTypeId: string; itemName: string; unit: string; statusId: string; status: string; quantity: number };
+type Unit = { id: string; itemTypeId: string; itemName: string; serial: string; statusId: string; lotQuantity: number | null; holderId?: string | null };
+type Balance = { itemTypeId: string; itemName: string; unit: string; statusId: string; status: string; quantity: number; holderId?: string | null };
 
-export default function ExternalSignModal({ warehouseId, warehouseName, units, balances }: {
+export default function ExternalSignModal({ warehouseId, warehouseName, units, balances, warehouses = [], defaultWarehouseId = null }: {
   warehouseId: string | null; warehouseName: string | null; units: Unit[]; balances: Balance[];
+  warehouses?: { id: string; name: string }[]; defaultWarehouseId?: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  // מחסן-מקור נבחר בתוך המודל — כדי שגם מי שאין לו מחסן פעיל (מפ"מ/אדמין) יוכל להחתים
+  const [wh, setWh] = useState<string>(warehouseId ?? defaultWarehouseId ?? warehouses[0]?.id ?? "");
   const [name, setName] = useState("");
   const [personalId, setPersonalId] = useState("");
   const [phone, setPhone] = useState("");
@@ -26,9 +29,13 @@ export default function ExternalSignModal({ warehouseId, warehouseName, units, b
   const [err, setErr] = useState<string | null>(null);
   useEscClose(open, () => setOpen(false));
 
+  const whName = warehouses.find((w) => w.id === wh)?.name ?? (wh && wh === warehouseId ? warehouseName : null);
   const total = serials.size + Object.values(qty).filter((n) => n > 0).length;
-  const filtUnits = useMemo(() => search ? units.filter((u) => u.itemName.includes(search) || u.serial.includes(search)) : units, [units, search]);
-  const filtBal = useMemo(() => search ? balances.filter((b) => b.itemName.includes(search)) : balances, [balances, search]);
+  // מסננים למחסן הנבחר (אם יש holderId בנתונים — אחרת המלאי כבר מסונן בשרת)
+  const whUnits = useMemo(() => units.filter((u) => !u.holderId || !wh || u.holderId === wh), [units, wh]);
+  const whBal = useMemo(() => balances.filter((b) => !b.holderId || !wh || b.holderId === wh), [balances, wh]);
+  const filtUnits = useMemo(() => search ? whUnits.filter((u) => u.itemName.includes(search) || u.serial.includes(search)) : whUnits, [whUnits, search]);
+  const filtBal = useMemo(() => search ? whBal.filter((b) => b.itemName.includes(search)) : whBal, [whBal, search]);
 
   function reset() { setName(""); setPersonalId(""); setPhone(""); setAffiliation(""); setSerials(new Set()); setQty({}); setSig(""); setSearch(""); setErr(null); }
   function toggleSerial(id: string) { setSerials((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; }); }
@@ -36,11 +43,12 @@ export default function ExternalSignModal({ warehouseId, warehouseName, units, b
 
   async function submit() {
     setErr(null);
+    if (!wh) { setErr("בחר מחסן מקור"); return; }
     if (!name.trim()) { setErr("נא להזין שם מלא"); return; }
     if (total === 0) { setErr("בחר לפחות פריט אחד"); return; }
     const qtyItems = Object.entries(qty).filter(([, n]) => n > 0).map(([k, n]) => { const [itemTypeId, statusId] = k.split("|"); return { itemTypeId, statusId, quantity: n }; });
     setBusy(true);
-    const r = await createExternalSignout({ warehouseId: warehouseId ?? "", recipient: { name, personalId, phone, affiliation }, serialUnitIds: [...serials], qtyItems, signature: sig || undefined });
+    const r = await createExternalSignout({ warehouseId: wh, recipient: { name, personalId, phone, affiliation }, serialUnitIds: [...serials], qtyItems, signature: sig || undefined });
     setBusy(false);
     if (!r.ok) { setErr(r.error); return; }
     reset(); setOpen(false);
@@ -57,13 +65,25 @@ export default function ExternalSignModal({ warehouseId, warehouseName, units, b
           <div className="bg-white w-full sm:max-w-2xl sm:rounded-2xl rounded-t-2xl max-h-[92dvh] flex flex-col overflow-hidden">
             <div className="bg-gradient-to-r from-indigo-700 to-indigo-800 text-white p-4 flex items-center justify-between shrink-0">
               <div>
-                <h3 className="font-bold text-lg">🌐 החתמת חוץ{warehouseName ? ` — ${warehouseName}` : ""}</h3>
+                <h3 className="font-bold text-lg">🌐 החתמת חוץ{whName ? ` — ${whName}` : ""}</h3>
                 <p className="text-xs text-indigo-200 mt-0.5">מסירת ציוד לגורם חיצוני — יורד מהמלאי ומופק אישור</p>
               </div>
               <button onClick={() => setOpen(false)} className="text-indigo-200 hover:text-white text-2xl">✕</button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {/* מחסן מקור — מוצג רק כשיש יותר ממחסן אחד לבחירה */}
+              {warehouses.length > 0 && (
+                <div>
+                  <label className="block text-[11px] text-slate-600 mb-1">מחסן מקור</label>
+                  <select value={wh} onChange={(e) => { setWh(e.target.value); setSerials(new Set()); setQty({}); }}
+                    className="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
+                    <option value="">— בחר מחסן —</option>
+                    {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                  </select>
+                </div>
+              )}
+
               {/* פרטי הגורם החיצוני */}
               <div className="grid grid-cols-2 gap-2">
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="שם מלא *" className="border border-slate-300 rounded-lg px-2 py-2 text-sm col-span-2" />
@@ -115,7 +135,7 @@ export default function ExternalSignModal({ warehouseId, warehouseName, units, b
 
             <div className="border-t border-slate-200 p-3 bg-white shrink-0 flex items-center gap-2">
               <button onClick={() => setOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm">ביטול</button>
-              <button onClick={submit} disabled={busy || total === 0 || !name.trim()} className="flex-1 bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white rounded-lg px-4 py-2.5 text-sm font-bold">
+              <button onClick={submit} disabled={busy || total === 0 || !name.trim() || !wh} className="flex-1 bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white rounded-lg px-4 py-2.5 text-sm font-bold">
                 {busy ? "מפיק תעודה…" : `🌐 החתם והפק תעודה (${total})`}
               </button>
             </div>

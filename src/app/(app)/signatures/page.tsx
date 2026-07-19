@@ -361,12 +361,14 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
           canSign ? (
             <div className="flex gap-2 flex-wrap items-center">
               <WarehouseSwitcher warehouses={myWarehouses.map((w) => ({ id: w.id, name: w.name }))} activeId={activeHolderId} />
-              {!isCompanyRep && activeHolderId && (
+              {!isCompanyRep && (activeHolderId || myWarehouses.length > 0 || allWarehouses.length > 0) && (
                 <ExternalSignModal
                   warehouseId={activeHolderId}
                   warehouseName={activeWarehouseName}
-                  units={availableUnits.map((u) => ({ id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber, statusId: u.statusId, lotQuantity: u.lotQuantity }))}
-                  balances={warehouseBalances.map((b) => ({ itemTypeId: b.itemTypeId, itemName: b.itemType.name, unit: b.itemType.unit, statusId: b.statusId, status: b.status.name, quantity: b.quantity }))}
+                  warehouses={myWarehouses.length > 0 ? myWarehouses.map((w) => ({ id: w.id, name: w.name })) : allWarehouses}
+                  defaultWarehouseId={activeHolderId}
+                  units={availableUnits.map((u) => ({ id: u.id, itemTypeId: u.itemTypeId, itemName: u.itemType.name, serial: u.serialNumber, statusId: u.statusId, lotQuantity: u.lotQuantity, holderId: u.currentHolderId }))}
+                  balances={warehouseBalances.map((b) => ({ itemTypeId: b.itemTypeId, itemName: b.itemType.name, unit: b.itemType.unit, statusId: b.statusId, status: b.status.name, quantity: b.quantity, holderId: b.holderId }))}
                 />
               )}
               {!isCompanyRep && (externalHeld.length > 0 || externalQtyHeld.length > 0) && (
