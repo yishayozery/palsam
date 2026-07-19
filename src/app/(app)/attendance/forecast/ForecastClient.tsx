@@ -6,6 +6,7 @@ import Link from "next/link";
 import { PageHeader, Card } from "@/components/ui";
 import { markForecastRange } from "./actions";
 import { useEscClose } from "@/lib/useEscClose";
+import SoldierForecastView from "./SoldierForecastView";
 
 type Employment = { id: string; name: string; startDate: string; endDate: string; active: boolean };
 type Day = { date: string; dayLabel: string; gregDay: number; gregMonth: number; isShabbat: boolean; isHoliday: boolean; holiday: string | null };
@@ -33,9 +34,10 @@ function cellTone(c: Cell): string {
 }
 
 export default function ForecastClient({
-  employments, selectedEmploymentId, startDate, dayCount, days,
+  view, employments, selectedEmploymentId, startDate, dayCount, days,
   soldiers, entries, statuses, allocations, canManage,
 }: {
+  view: "soldiers" | "matrix";
   employments: Employment[]; selectedEmploymentId: string | null;
   startDate: string; dayCount: number; days: Day[];
   soldiers: Soldier[]; entries: Entry[]; statuses: Status[]; allocations: Allocation[]; canManage: boolean;
@@ -101,6 +103,7 @@ export default function ForecastClient({
     const q = new URLSearchParams();
     if (selectedEmploymentId) q.set("employmentId", selectedEmploymentId);
     else { q.set("start", startDate); q.set("days", String(dayCount)); }
+    q.set("view", view);
     for (const [k, v] of Object.entries(params)) q.set(k, v);
     router.push(`/attendance/forecast?${q.toString()}`);
   }
@@ -116,19 +119,31 @@ export default function ForecastClient({
         action={
           <div className="flex gap-2 flex-wrap items-center">
             <Link href="/attendance" className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs md:text-sm hover:bg-slate-50">← נוכחות</Link>
-            {canManage && (
+            {canManage && view === "matrix" && (
               <button onClick={() => setShowRange(true)} className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs md:text-sm font-medium">
-                🗓️ סימון טווח
+                🗓️ סימון קבוצתי
               </button>
             )}
           </div>
         }
       />
 
+      {/* מעבר בין תצוגת עדכון (חייל-חייל) לתצוגת פיקוד (תאריכים × פלוגות) */}
+      <div className="flex rounded-xl overflow-hidden border-2 border-slate-200 text-sm font-bold mb-3 w-fit">
+        <button onClick={() => go({ view: "soldiers" })}
+          className={`px-4 py-2 transition-colors ${view === "soldiers" ? "bg-blue-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+          🙋 לפי חייל
+        </button>
+        <button onClick={() => go({ view: "matrix" })}
+          className={`px-4 py-2 transition-colors ${view === "matrix" ? "bg-slate-700 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+          📊 לפי תאריך
+        </button>
+      </div>
+
       <Card className="p-3 mb-4">
         <div className="flex items-center gap-2 flex-wrap">
           <label className="text-xs text-slate-600">תעסוקה</label>
-          <select value={selectedEmploymentId ?? ""} onChange={(e) => router.push(`/attendance/forecast?employmentId=${e.target.value}`)}
+          <select value={selectedEmploymentId ?? ""} onChange={(e) => router.push(`/attendance/forecast?employmentId=${e.target.value}&view=${view}`)}
             className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white">
             {employments.length === 0 && <option value="">— לא הוגדרו תעסוקות —</option>}
             {employments.map((e) => <option key={e.id} value={e.id}>{e.active ? "🟢 " : ""}{e.name} ({e.startDate} → {e.endDate})</option>)}
@@ -147,6 +162,12 @@ export default function ForecastClient({
         </div>
       </Card>
 
+      {view === "soldiers" && (
+        <SoldierForecastView days={days} soldiers={soldiers} entries={entries} statuses={statuses}
+          employmentId={selectedEmploymentId} canManage={canManage} />
+      )}
+
+      {view === "matrix" && (
       <Card className="p-0 overflow-x-auto">
         <table className="text-xs border-collapse min-w-max">
           <thead className="sticky top-0 z-10">
@@ -232,6 +253,7 @@ export default function ForecastClient({
           </tbody>
         </table>
       </Card>
+      )}
 
       {detail && (() => {
         const list = detail.soldiers;

@@ -15,7 +15,7 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 export default async function AttendanceForecastPage({
   searchParams,
 }: {
-  searchParams: Promise<{ employmentId?: string; start?: string; days?: string }>;
+  searchParams: Promise<{ employmentId?: string; start?: string; days?: string; view?: string }>;
 }) {
   const user = await requireUser();
   const canManage = can(user, "attendance.manage");
@@ -105,8 +105,14 @@ export default async function AttendanceForecastPage({
       : Promise.resolve([]),
   ]);
 
+  // מ"פ / נציג פלוגה — סקופ פלוגתי; פותחים לו את תצוגת החיילים, שם הוא מעדכן.
+  // מטה / שלישות — מטריצת פלוגות × תאריכים, מסך הפיקוד.
+  const isCompanyScoped = companyHolderIds.length > 0 || user.squadIds.length > 0;
+  const view = sp.view === "matrix" || sp.view === "soldiers" ? sp.view : (isCompanyScoped ? "soldiers" : "matrix");
+
   return (
     <ForecastClient
+      view={view}
       employments={employments.map((e) => ({ id: e.id, name: e.name, startDate: iso(e.startDate), endDate: iso(e.endDate), active: e.active }))}
       selectedEmploymentId={selectedEmp?.id ?? null}
       startDate={startStr}
