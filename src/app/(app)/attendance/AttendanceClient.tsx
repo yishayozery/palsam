@@ -512,6 +512,10 @@ export default function AttendanceClient({
             📋 העתק תכנון → ביצוע (היום)
           </button>
         )}
+        <a href="/attendance/forecast" className="mr-auto text-sm bg-white border border-slate-300 rounded-lg px-3 py-2 hover:bg-slate-50 whitespace-nowrap"
+          title="כמה מגיעים בכל תאריך, לפי פלוגה ומחלקה">
+          📅 תחזית הגעה
+        </a>
       </div>
 
       {/* Dashboard */}

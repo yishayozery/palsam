@@ -393,3 +393,84 @@ export async function deleteReportOverride(id: string): Promise<{ ok?: boolean; 
     return { ok: true };
   } catch (e) { return { error: e instanceof Error ? e.message : "שגיאה" }; }
 }
+
+/**
+ * 🗓️ סימון טווח תאריכים בתכנון — לחייל בודד או לקבוצת חיילים.
+ * כותב ל-AttendancePlan בלבד (תכנון), לא לביצוע בפועל. statusId=null מנקה את הטווח.
+ * ימים מפוצלים נתמכים ע"י הרצה חוזרת על טווחים שונים.
+ */
+export async function markPlanRange(payload: {
+  soldierIds: string[];
+  startDate: string;
+  endDate: string;
+  statusId: string | null;
+  overwrite?: boolean; // ברירת מחדל: דורס. false = ממלא רק ימים ריקים
+}): Promise<{ ok?: boolean; days?: number; written?: number; error?: string }> {
+  try {
+    const user = await requireUser();
+    if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
+    const bId = user.battalionId!;
+    const { soldierIds, startDate, endDate, statusId, overwrite = true } = payload;
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return { error: "תאריך לא תקין" };
+    if (endDate < startDate) return { error: "תאריך הסיום מוקדם מתאריך ההתחלה" };
+    if (soldierIds.length === 0) return { error: "בחר לפחות חייל אחד" };
+
+    // 🔒 IDOR: רק חיילים מהגדוד, ורק בתוך הסקופ הפלוגתי/מחלקתי של המשתמש
+    const { resolveHolderKinds } = await import("@/lib/scope");
+    const { companyHolderIds } = await resolveHolderKinds(user);
+    const valid = await prisma.soldier.findMany({
+      where: {
+        id: { in: soldierIds }, battalionId: bId,
+        ...(companyHolderIds.length > 0 ? { companyId: { in: companyHolderIds } } : {}),
+        ...(user.squadIds.length > 0 ? { squadId: { in: user.squadIds } } : {}),
+      },
+      select: { id: true },
+    });
+    if (valid.length === 0) return { error: "לא נמצאו חיילים בהרשאה שלך" };
+
+    // 🔒 IDOR: הסטטוס חייב להיות של הגדוד
+    if (statusId) {
+      const st = await prisma.attendanceStatus.findFirst({ where: { id: statusId, battalionId: bId }, select: { id: true } });
+      if (!st) return { error: "סטטוס לא נמצא" };
+    }
+
+    // בניית רשימת התאריכים (UTC, כמו שאר המערכת)
+    const dates: Date[] = [];
+    for (let d = new Date(startDate + "T00:00:00Z"); d.toISOString().slice(0, 10) <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
+      dates.push(new Date(d));
+      if (dates.length > 400) return { error: "טווח ארוך מדי (מקסימום 400 ימים)" };
+    }
+
+    let written = 0;
+    for (const sid of valid.map((s) => s.id)) {
+      if (!statusId) {
+        const r = await prisma.attendancePlan.deleteMany({ where: { soldierId: sid, date: { in: dates } } });
+        written += r.count;
+        continue;
+      }
+      const existing = overwrite
+        ? new Set<string>()
+        : new Set((await prisma.attendancePlan.findMany({
+            where: { soldierId: sid, date: { in: dates } }, select: { date: true },
+          })).map((p) => p.date.toISOString().slice(0, 10)));
+      for (const date of dates) {
+        if (existing.has(date.toISOString().slice(0, 10))) continue;
+        await prisma.attendancePlan.upsert({
+          where: { soldierId_date: { soldierId: sid, date } },
+          update: { statusId, updatedById: user.id },
+          create: { soldierId: sid, date, statusId, updatedById: user.id },
+        });
+        written++;
+      }
+    }
+
+    const { audit } = await import("@/lib/audit");
+    await audit(user.id, "MARK_PLAN_RANGE", "Battalion", bId, { soldiers: valid.length, startDate, endDate, statusId, written });
+    revalidatePath("/attendance");
+    revalidatePath("/attendance/forecast");
+    return { ok: true, days: dates.length, written };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
