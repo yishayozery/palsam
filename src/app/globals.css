@@ -74,3 +74,10 @@ button, a, input, select, textarea {
 
 /* viewport תקין למובייל — height עם שורות כתובת */
 html, body { height: 100%; }
+
+/* 🖨️ הדפסה — משחררים את כליאת-הגובה של מעטפת האפליקציה.
+   html/body בגובה 100% + MobileShell עם h-screen/overflow-hidden גרמו לכך
+   שהדפסה מתוך המערכת נחתכה אחרי מסך אחד ("סה\"כ: 1 דף") במקום לזרום לעמודים. */
+@media print {
+  html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
+}

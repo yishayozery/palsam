@@ -33,7 +33,7 @@ export default function MobileShell({
   }, [open]);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden print:block print:h-auto print:overflow-visible">
       {/* Desktop sidebar — תמיד גלוי ב-md+ */}
       <aside className="hidden md:flex w-60 bg-slate-900 text-white flex-col shrink-0 print:hidden">
         {sidebar}
@@ -63,7 +63,7 @@ export default function MobileShell({
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto bg-slate-100 flex flex-col min-w-0">
+      <main className="flex-1 overflow-y-auto bg-slate-100 flex flex-col min-w-0 print:block print:overflow-visible print:bg-white">
         {/* Top bar — מובייל בלבד */}
         <header className="md:hidden sticky top-0 z-30 bg-slate-900 text-white flex items-center justify-between px-3 py-2.5 shadow-md print:hidden">
           <button
@@ -77,8 +77,8 @@ export default function MobileShell({
           <div className="flex-1 mr-2 min-w-0">{headerBrand}</div>
         </header>
 
-        <div className="flex-1 p-3 md:p-6">
-          <div className="max-w-7xl mx-auto">{children}</div>
+        <div className="flex-1 p-3 md:p-6 print:p-0">
+          <div className="max-w-7xl mx-auto print:max-w-none">{children}</div>
         </div>
       </main>
     </div>
