@@ -87,8 +87,8 @@ export async function getSoldierWeaponsEligibility(
 }
 
 /**
- * איפוס דגלי תהליך הנשק — רק בסוף התעסוקה (סגירת שמ"פ / ביטול אישור / שחרור).
- * ⚠️ לא מופעל בזיכוי ציוד: חייל שמחליף נשק שומר על האישור, המבחן וחתימת הנוהל.
+ * איפוס דגלי תהליך הנשק — רק בביטול אישור שלישות ובשחרור חייל.
+ * ⚠️ לא בזיכוי ציוד (חייל שמחליף נשק שומר על האישור) ולא בסגירת שמ"פ.
  */
 export async function resetSoldierWeaponsFlags(soldierId: string): Promise<void> {
   await prisma.soldier.update({

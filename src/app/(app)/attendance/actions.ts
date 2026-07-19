@@ -184,11 +184,7 @@ export async function closeCallup(
       where: { id: callupId },
       data: { endDate: new Date(endDate + "T00:00:00Z"), closedById: user.id, closedAt: new Date() },
     });
-    // 🔫 סוף תעסוקה — כאן מתאפסים דגלי הנשק (ולא בזיכוי, כדי לא לפגוע במחליפי נשק)
-    {
-      const { resetSoldierWeaponsFlags } = await import("@/lib/weapons-eligibility");
-      await resetSoldierWeaponsFlags(period.soldierId);
-    }
+    // 🔫 דגלי הנשק לא מתאפסים כאן — האיפוס רק בביטול אישור שלישות ובשחרור.
     revalidatePath("/attendance");
     return { ok: true };
   } catch (e) {
@@ -253,9 +249,6 @@ export async function closeCallupBulk(soldierIds: string[], endDate: string): Pr
       const period = await prisma.callupPeriod.findFirst({ where: { soldierId: sid, endDate: null, soldier: { battalionId: user.battalionId! } } });
       if (!period) { skipped++; continue; }
       await prisma.callupPeriod.update({ where: { id: period.id }, data: { endDate: end, closedById: user.id, closedAt: new Date() } });
-      // 🔫 סוף תעסוקה — איפוס דגלי הנשק
-      const { resetSoldierWeaponsFlags } = await import("@/lib/weapons-eligibility");
-      await resetSoldierWeaponsFlags(sid);
       closed++;
     }
     revalidatePath("/roster/control"); revalidatePath("/attendance");

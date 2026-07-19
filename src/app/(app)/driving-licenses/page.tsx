@@ -4,6 +4,7 @@ import { linkTokenQuery } from "@/lib/link-token";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui";
+import BulkTrainingModal from "./BulkTrainingModal";
 import CrudSection from "@/components/CrudSection";
 import { saveLicenseType, toggleLicenseType, updateRefreshDays, saveDrivingProcedureText } from "./actions";
 import ProcedureTextForm from "./ProcedureTextForm";
@@ -42,6 +43,16 @@ export default async function DrivingLicensesPage({
     select: { drivingRefreshDays: true, drivingProcedureText: true, drivingProcedureUpdatedAt: true },
   });
   const drivingRefreshDays = battalion?.drivingRefreshDays ?? 180;
+
+  // 🔄 רישום מרוכז — ריענון נהיגה לכולם; שאר סוגי ההדרכה רק למי שמנהל הדרכות
+  const canOtherTrainings = isAdmin || can(user, "trainings");
+  const courseTypes = canOtherTrainings
+    ? await prisma.courseType.findMany({
+        where: { battalionId: bId, active: true },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, name: true },
+      })
+    : [];
 
   const [licenseTypes, soldiers, vehicleItemTypes, vehicleTypeLicenses] = await Promise.all([
     prisma.drivingLicenseType.findMany({
@@ -126,6 +137,7 @@ export default async function DrivingLicensesPage({
       <PageHeader
         title="הרשאות נהיגה"
         subtitle={`${soldiers.length} חיילים · ${licenseTypes.length} סוגי הרשאות · ${vehicleItemTypes.length} סוגי רכב`}
+        action={canEditLicenses ? <BulkTrainingModal courseTypes={courseTypes} canOtherTrainings={canOtherTrainings} /> : undefined}
       />
 
       <div className="flex gap-1 mb-4 border-b border-slate-200">

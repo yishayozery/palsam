@@ -202,3 +202,125 @@ export async function saveVehicleTypeLicenses(formData: FormData) {
   await audit(user.id, "UPDATE_VEHICLE_LICENSES", "ItemType", itemTypeId, { count: licenseTypeIds.length });
   revalidatePath("/driving-licenses");
 }
+
+// ===================== 🔄 רישום מרוכז להדרכה =====================
+// קצין הרכב מקיש מ.א, המערכת מחזירה שם, והוא רושם עשרות אנשים במכה.
+// "ריענון נהיגה" מעדכן את Soldier.drivingRefresherDate; כל שאר ההדרכות
+// נרשמות כמופע קורס (CourseInstance) עם שיבוצים שסומנו כהושלמו — שם
+// יש להן תיעוד אמיתי, ולא שדה נוסף על החייל לכל סוג הדרכה.
+
+const DRIVING_REFRESH = "__driving_refresh__";
+
+/** גישה לרישום מרוכז — קצין רכב / שלישות / אדמין */
+async function requireBulkTrainer() {
+  const user = await requireUser();
+  const { canVehicleAccess } = await import("@/lib/guard");
+  if (!canVehicleAccess(user) && !can(user, "dispatch.manage")) throw new Error("אין הרשאה");
+  return user;
+}
+
+/** חיפוש חייל לפי מספר אישי — להקלדה מהירה במסך הרישום. */
+export async function lookupSoldierByPn(personalNumber: string): Promise<
+  { ok: true; id: string; fullName: string; company: string | null; squad: string | null; refresherDate: string | null }
+  | { ok: false; error: string }
+> {
+  try {
+    const user = await requireBulkTrainer();
+    const pn = personalNumber.trim();
+    if (!pn) return { ok: false, error: "הזן מספר אישי" };
+    const s = await prisma.soldier.findFirst({
+      where: { battalionId: user.battalionId!, personalNumber: pn, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
+      select: {
+        id: true, fullName: true, drivingRefresherDate: true,
+        company: { select: { name: true } }, squad: { select: { name: true } },
+      },
+    });
+    if (!s) return { ok: false, error: `לא נמצא חייל פעיל עם מ.א ${pn}` };
+    return {
+      ok: true, id: s.id, fullName: s.fullName,
+      company: s.company?.name ?? null, squad: s.squad?.name ?? null,
+      refresherDate: s.drivingRefresherDate?.toISOString().slice(0, 10) ?? null,
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
+
+/**
+ * רישום מרוכז: מסמן לרשימת חיילים שביצעו הדרכה בתאריך נתון.
+ * courseTypeId = "__driving_refresh__" → ריענון נהיגה בלבד.
+ * אחרת → מופע קורס בתאריך + שיבוצים COMPLETED, כולל הענקת ההסמכות שהקורס מקנה.
+ */
+export async function bulkMarkTraining(payload: {
+  courseTypeId: string; date: string; soldierIds: string[]; note?: string;
+}): Promise<{ ok?: boolean; marked?: number; skipped?: number; error?: string }> {
+  try {
+    const user = await requireBulkTrainer();
+    const bId = user.battalionId!;
+    const { courseTypeId, date, soldierIds, note } = payload;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "תאריך לא תקין" };
+    if (soldierIds.length === 0) return { error: "לא נבחרו חיילים" };
+
+    // 🔒 IDOR: רק חיילים פעילים מהגדוד
+    const valid = (await prisma.soldier.findMany({
+      where: { id: { in: soldierIds }, battalionId: bId, status: { notIn: ["DISCHARGED", "INACTIVE"] } },
+      select: { id: true },
+    })).map((s) => s.id);
+    if (valid.length === 0) return { error: "לא נמצאו חיילים תקינים" };
+    const skipped = soldierIds.length - valid.length;
+    const when = new Date(date + "T00:00:00Z");
+
+    if (courseTypeId === DRIVING_REFRESH) {
+      await prisma.soldier.updateMany({ where: { id: { in: valid } }, data: { drivingRefresherDate: when } });
+      await audit(user.id, "BULK_DRIVING_REFRESH", "Battalion", bId, { count: valid.length, date });
+      revalidatePath("/driving-licenses"); revalidatePath("/soldiers"); revalidatePath("/dispatch");
+      return { ok: true, marked: valid.length, skipped };
+    }
+
+    // הדרכה כללית — דרך מנגנון הקורסים הקיים
+    const ct = await prisma.courseType.findFirst({
+      where: { id: courseTypeId, battalionId: bId },
+      include: { quals: true },
+    });
+    if (!ct) return { error: "סוג הדרכה לא נמצא" };
+
+    const grants = ct.quals.filter((q) => q.role === "GRANT");
+    await prisma.$transaction(async (tx) => {
+      // מופע אחד ליום — כך שרישומים חוזרים באותו יום מתאחדים
+      let inst = await tx.courseInstance.findFirst({ where: { battalionId: bId, courseTypeId: ct.id, startDate: when } });
+      if (!inst) {
+        inst = await tx.courseInstance.create({
+          data: { battalionId: bId, courseTypeId: ct.id, startDate: when, status: "DONE", createdById: user.id, notes: note?.trim() || "רישום מרוכז" },
+        });
+      }
+      for (const sid of valid) {
+        await tx.courseEnrollment.upsert({
+          where: { courseInstanceId_soldierId: { courseInstanceId: inst.id, soldierId: sid } },
+          update: { status: "COMPLETED", completedAt: when },
+          create: { battalionId: bId, courseInstanceId: inst.id, soldierId: sid, status: "COMPLETED", completedAt: when, enrolledById: user.id },
+        });
+        for (const g of grants) {
+          if (g.certificationTypeId) {
+            await tx.soldierCertification.upsert({
+              where: { soldierId_certificationTypeId: { soldierId: sid, certificationTypeId: g.certificationTypeId } },
+              update: {}, create: { soldierId: sid, certificationTypeId: g.certificationTypeId },
+            });
+          }
+          if (g.drivingLicenseTypeId) {
+            await tx.soldierDrivingLicense.upsert({
+              where: { soldierId_licenseTypeId: { soldierId: sid, licenseTypeId: g.drivingLicenseTypeId } },
+              update: {}, create: { soldierId: sid, licenseTypeId: g.drivingLicenseTypeId },
+            });
+            await tx.soldier.update({ where: { id: sid }, data: { drivingRefresherDate: when } });
+          }
+        }
+      }
+    });
+
+    await audit(user.id, "BULK_TRAINING", "CourseType", ct.id, { count: valid.length, date, name: ct.name });
+    revalidatePath("/driving-licenses"); revalidatePath("/trainings"); revalidatePath("/soldiers"); revalidatePath("/certifications");
+    return { ok: true, marked: valid.length, skipped };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "שגיאה" };
+  }
+}
