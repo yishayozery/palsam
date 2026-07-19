@@ -144,6 +144,11 @@ export async function unenlistSoldier(formData: FormData) {
   if (openPeriod) {
     await prisma.callupPeriod.update({ where: { id: openPeriod.id }, data: { endDate: new Date(), closedById: user.id, closedAt: new Date() } });
   }
+  // 🔫 סוף תעסוקה — איפוס דגלי הנשק (בזיכוי ציוד הם נשארים, כדי לא לפגוע במחליפי נשק)
+  {
+    const { resetSoldierWeaponsFlags } = await import("@/lib/weapons-eligibility");
+    await resetSoldierWeaponsFlags(id);
+  }
   await audit(user.id, "UNENLIST_SOLDIER", "Soldier", id);
   revalidatePath("/roster");
 }
@@ -161,6 +166,11 @@ export async function dischargeSoldier(formData: FormData) {
   }
 
   await prisma.soldier.update({ where: { id }, data: { status: "DISCHARGED", dischargedAt: new Date() } });
+  // 🔫 סוף תעסוקה — איפוס דגלי הנשק
+  {
+    const { resetSoldierWeaponsFlags } = await import("@/lib/weapons-eligibility");
+    await resetSoldierWeaponsFlags(id);
+  }
   await audit(user.id, "DISCHARGE_SOLDIER", "Soldier", id);
   revalidatePath("/roster");
 }

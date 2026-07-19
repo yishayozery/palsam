@@ -825,15 +825,8 @@ export async function checkinSerial(formData: FormData): Promise<{ error: string
     });
   }
 
-  // 🔫 איפוס דגלי נשק אם החייל החזיר את הנשק האחרון
-  if (su.signedSoldierId && !isPartial) {
-    const { soldierHasAnyWeapons, resetSoldierWeaponsFlags } = await import("@/lib/weapons-eligibility");
-    const stillHas = await soldierHasAnyWeapons(su.signedSoldierId);
-    if (!stillHas) {
-      await resetSoldierWeaponsFlags(su.signedSoldierId);
-      await audit(user.id, "RESET_WEAPONS_FLAGS", "Soldier", su.signedSoldierId, { reason: "החזיר נשק אחרון" });
-    }
-  }
+  // 🔫 דגלי הנשק אינם מתאפסים בזיכוי — חייל שמחליף נשק אמור לשמור על האישור.
+  // האיפוס מתבצע רק בסוף התעסוקה (סגירת שמ"פ / ביטול אישור / שחרור).
 
   if (su.signedSoldierId) void notifySoldierTelegram(su.signedSoldierId, bId, serialCheckinTransferId, "CHECKIN");
 
@@ -1190,18 +1183,8 @@ export async function checkinBatch(payload: {
       });
     }
 
-    for (const unitId of serialUnitIds) {
-      const su = await prisma.serialUnit.findUnique({ where: { id: unitId }, select: { signedSoldierId: true, itemTypeId: true } });
-      if (su && !su.signedSoldierId) {
-        const { soldierHasAnyWeapons, resetSoldierWeaponsFlags } = await import("@/lib/weapons-eligibility");
-        const stillHas = await soldierHasAnyWeapons(soldierId);
-        if (!stillHas) {
-          await resetSoldierWeaponsFlags(soldierId);
-          await audit(user.id, "RESET_WEAPONS_FLAGS", "Soldier", soldierId, { reason: "החזיר נשק אחרון" });
-        }
-        break;
-      }
-    }
+    // 🔫 דגלי הנשק אינם מתאפסים בזיכוי — חייל שמחליף נשק אמור לשמור על האישור.
+    // האיפוס מתבצע רק בסוף התעסוקה (סגירת שמ"פ / ביטול אישור / שחרור).
 
     void notifySoldierTelegram(soldierId, bId, transferId, "CHECKIN");
 

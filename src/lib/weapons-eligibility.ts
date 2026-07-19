@@ -86,18 +86,10 @@ export async function getSoldierWeaponsEligibility(
   };
 }
 
-/** האם חייל עדיין מחזיק נשק כלשהו אצלו? (לבדיקה אם לאפס את הדגלים אחרי CHECKIN) */
-export async function soldierHasAnyWeapons(soldierId: string): Promise<boolean> {
-  const cnt = await prisma.serialUnit.count({
-    where: {
-      signedSoldierId: soldierId,
-      itemType: { category: { warehouseType: "ARMORY" } },
-    },
-  });
-  return cnt > 0;
-}
-
-/** איפוס 3 דגלי תהליך נשק - כשחייל החזיר את הנשק האחרון שלו. */
+/**
+ * איפוס דגלי תהליך הנשק — רק בסוף התעסוקה (סגירת שמ"פ / ביטול אישור / שחרור).
+ * ⚠️ לא מופעל בזיכוי ציוד: חייל שמחליף נשק שומר על האישור, המבחן וחתימת הנוהל.
+ */
 export async function resetSoldierWeaponsFlags(soldierId: string): Promise<void> {
   await prisma.soldier.update({
     where: { id: soldierId },
