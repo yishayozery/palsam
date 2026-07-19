@@ -292,14 +292,70 @@ const CSS = `
   .aid-meta{direction:rtl;text-align:right;width:100%;}
 }
 @media print{
-  @page{size:A4;margin:10mm;}
-  .aid-wrap{background:#fff;padding:0;min-height:0;}
+  /* 🎯 יעד: התעודה כולה בעמוד A4 אחד. דחיסה טיפוגרפית — לא scale (שמשאיר שוליים ריקים). */
+  @page{size:A4;margin:7mm;}
+  .aid-wrap{background:#fff;padding:0;min-height:0;gap:0;}
   .aid-toolbar{display:none;}
-  /* ⚠️ overflow:hidden חותך את התעודה באמצע בהדפסה/ייצוא PDF — חייב visible כדי שתזרום לעמוד הבא */
-  .aid-sheet{box-shadow:none;border:none;width:100%;overflow:visible;}
-  .aid-tbl-wrap{overflow:visible;}
-  /* לא לפצל בלוקים באמצע בין עמודים */
-  .aid-tbl tr,.aid-sig-box,.aid-warn,.aid-declare li,.aid-ds{break-inside:avoid;page-break-inside:avoid;}
+  /* overflow:hidden חתך את התעודה — חייב visible */
+  .aid-sheet{box-shadow:none;border:none;width:100%;overflow:visible;padding:8px 10px 6px;}
+  .aid-sheet::before{height:3px;}
+
+  /* כותרת עליונה */
+  .aid-head{padding-bottom:6px;margin-top:2px;gap:10px;}
+  .aid-seal{width:46px;height:46px;padding:2px;}
+  .aid-uname{font-size:15px;}
+  .aid-umotto{font-size:9px;margin-top:1px;}
+  .aid-usys{font-size:7.5px;letter-spacing:.2em;margin-top:2px;}
+  .aid-meta{font-size:8.5px;min-width:130px;}
+  .aid-mrow{padding:0;}
+
+  /* כותרת ראשית */
+  .aid-title-wrap{margin:7px 0 6px;}
+  .aid-eyebrow{font-size:8px;letter-spacing:.18em;}
+  .aid-title{font-size:18px;margin:2px 0 0;}
+  .aid-title-rule{margin:5px auto 0;height:1.5px;width:90px;}
+
+  /* מקטעים ופרטי מקבל */
+  .aid-slabel{font-size:9px;margin:0 0 4px;gap:5px;}
+  .aid-slabel::before{height:10px;width:3px;}
+  .aid-grid{margin-bottom:7px;}
+  .aid-cell{padding:3px 7px;min-height:0;}
+  .aid-k{font-size:7.5px;}
+  .aid-v{font-size:10px;margin-top:1px;}
+
+  /* הצהרה — הבלוק הארוך ביותר */
+  .aid-declare{padding:6px 8px;margin-bottom:4px;}
+  .aid-declare h3{font-size:9.5px;margin:0 0 4px;}
+  .aid-declare ol{gap:1px;padding-inline-start:14px;}
+  .aid-declare li{font-size:8px;line-height:1.28;}
+  .aid-warn{margin:4px 0 5px;padding:4px 7px;font-size:8px;}
+  .aid-declare-sig{padding:4px 8px;margin-bottom:7px;gap:8px;}
+  .aid-ds-fields{font-size:8px;gap:1px;}
+  .aid-ds-fields b{font-size:9px;}
+  .aid-ds-label{font-size:7.5px;}
+  .aid-ds-img{max-height:30px;max-width:110px;}
+  .aid-ds-slot{width:110px;height:22px;}
+
+  /* טבלת הפריטים */
+  .aid-tbl-wrap{overflow:visible;margin-bottom:7px;}
+  .aid-tbl{font-size:8.5px;}
+  .aid-tbl thead th{padding:3px 6px;}
+  .aid-tbl tbody td{padding:2.5px 6px;}
+  .aid-tbl .mono{font-size:8px;}
+
+  /* חתימות */
+  .aid-sigs{gap:8px;margin-top:2px;}
+  .aid-sig{padding:6px 8px 7px;gap:3px;border-top-width:2px;}
+  .aid-role{font-size:8.5px;}
+  .aid-f{font-size:8px;}
+  .aid-f b{font-size:9px;}
+  .aid-sig-slot{height:30px;font-size:7.5px;}
+  .aid-sig-img{padding:2px;}
+  .aid-sig-img img{max-height:32px;}
+  .aid-foot{margin-top:7px;padding-top:5px;font-size:7.5px;}
+
+  /* לא לפצל בלוקים — ואם בכל זאת חורג, שלא ייחתך */
+  .aid-tbl tr,.aid-sig,.aid-warn,.aid-declare li,.aid-declare-sig{break-inside:avoid;page-break-inside:avoid;}
   .aid-tbl thead{display:table-header-group;}
   .aid-tbl thead th,.aid-declare,.aid-warn,.aid-sheet::before{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 }

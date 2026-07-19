@@ -215,50 +215,50 @@ export type ArmoryPdfData = {
 };
 
 const a = StyleSheet.create({
-  page: { fontFamily: "Heebo", fontSize: 10, padding: 34, direction: "rtl" as never, color: "#181c17" },
-  head: { borderBottomWidth: 2, borderBottomColor: "#38471f", paddingBottom: 12, marginBottom: 10, flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "flex-start" },
+  page: { fontFamily: "Heebo", fontSize: 10, padding: 18, direction: "rtl" as never, color: "#181c17" },
+  head: { borderBottomWidth: 2, borderBottomColor: "#38471f", paddingBottom: 6, marginBottom: 6, flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "flex-start" },
   unitBox: { flexDirection: "row-reverse", gap: 8, alignItems: "center" },
-  logo: { width: 54, height: 54, objectFit: "contain" as never },
-  uname: { fontSize: 16, fontWeight: 700, color: "#38471f" },
+  logo: { width: 40, height: 40, objectFit: "contain" as never },
+  uname: { fontSize: 13, fontWeight: 700, color: "#38471f" },
   umotto: { fontSize: 9, color: "#8a7440" },
   usys: { fontSize: 8, color: "#6b6f61", marginTop: 3 },
   meta: { textAlign: "left" as never, fontSize: 9, color: "#3b4038" },
   metaRow: { flexDirection: "row-reverse", justifyContent: "space-between", gap: 10 },
-  titleWrap: { alignItems: "center", marginBottom: 12 },
+  titleWrap: { alignItems: "center", marginBottom: 6 },
   eyebrow: { fontSize: 8, color: "#8a7440", fontWeight: 700, letterSpacing: 1 },
-  docTitle: { fontSize: 20, fontWeight: 700, marginTop: 3 },
-  slabel: { fontSize: 9, fontWeight: 700, color: "#38471f", marginBottom: 5, marginTop: 4 },
-  grid: { flexDirection: "row-reverse", flexWrap: "wrap", borderWidth: 1, borderColor: "#cdd0c0", marginBottom: 12 },
-  cell: { width: "33.33%", padding: 6, borderColor: "#cdd0c0", borderLeftWidth: 1, borderBottomWidth: 1 },
+  docTitle: { fontSize: 16, fontWeight: 700, marginTop: 2 },
+  slabel: { fontSize: 8.5, fontWeight: 700, color: "#38471f", marginBottom: 3, marginTop: 2 },
+  grid: { flexDirection: "row-reverse", flexWrap: "wrap", borderWidth: 1, borderColor: "#cdd0c0", marginBottom: 6 },
+  cell: { width: "33.33%", padding: 4, borderColor: "#cdd0c0", borderLeftWidth: 1, borderBottomWidth: 1 },
   ck: { fontSize: 7.5, color: "#6b6f61" },
-  cv: { fontSize: 11, fontWeight: 700, marginTop: 2 },
-  declare: { borderWidth: 1, borderColor: "#9aa085", backgroundColor: "#eef0e4", padding: 10, marginBottom: 6 },
-  clauseLine: { fontSize: 8.5, marginBottom: 3, lineHeight: 1.4 },
-  warn: { borderWidth: 1, borderColor: "#7a2a1e", backgroundColor: "#f7ece7", color: "#7a2a1e", fontSize: 8.5, padding: 6, marginBottom: 8 },
-  dsRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "flex-end", borderWidth: 1, borderColor: "#cdd0c0", padding: 8, marginBottom: 12 },
+  cv: { fontSize: 9.5, fontWeight: 700, marginTop: 1 },
+  declare: { borderWidth: 1, borderColor: "#9aa085", backgroundColor: "#eef0e4", padding: 6, marginBottom: 4 },
+  clauseLine: { fontSize: 7.5, marginBottom: 1, lineHeight: 1.25 },
+  warn: { borderWidth: 1, borderColor: "#7a2a1e", backgroundColor: "#f7ece7", color: "#7a2a1e", fontSize: 7.5, padding: 4, marginBottom: 5 },
+  dsRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "flex-end", borderWidth: 1, borderColor: "#cdd0c0", padding: 5, marginBottom: 6 },
   dsFields: { flexDirection: "column", gap: 3 },
   dsF: { fontSize: 8.5 },
   dsSig: { flexDirection: "row-reverse", alignItems: "flex-end", gap: 6 },
-  dsImg: { height: 34, width: 120, objectFit: "contain" as never },
-  dsSlot: { width: 120, height: 30, borderBottomWidth: 1, borderBottomColor: "#3b4038" },
-  table: { marginBottom: 14 },
+  dsImg: { height: 26, width: 100, objectFit: "contain" as never },
+  dsSlot: { width: 100, height: 22, borderBottomWidth: 1, borderBottomColor: "#3b4038" },
+  table: { marginBottom: 6 },
   tHead: { flexDirection: "row-reverse", backgroundColor: "#38471f" },
   tRow: { flexDirection: "row-reverse", borderColor: "#cdd0c0" },
-  th: { padding: 5, fontSize: 8, fontWeight: 700, color: "#fff", borderWidth: 0.5, borderColor: "#38471f", textAlign: "right" as never },
-  td: { padding: 5, fontSize: 8.5, borderWidth: 0.5, borderColor: "#cdd0c0", textAlign: "right" as never },
+  th: { padding: 3, fontSize: 7.5, fontWeight: 700, color: "#fff", borderWidth: 0.5, borderColor: "#38471f", textAlign: "right" as never },
+  td: { padding: 2.5, fontSize: 7.5, borderWidth: 0.5, borderColor: "#cdd0c0", textAlign: "right" as never },
   cNum: { width: "7%", textAlign: "center" as never },
   cSku: { width: "20%" },
   cName: { width: "38%" },
   cQty: { width: "12%", textAlign: "center" as never },
   cSerial: { width: "23%" },
-  sigs: { flexDirection: "row-reverse", gap: 10, marginTop: 4 },
-  sig: { flex: 1, borderWidth: 1, borderColor: "#cdd0c0", borderTopWidth: 3, borderTopColor: "#38471f", padding: 8, minHeight: 90 },
+  sigs: { flexDirection: "row-reverse", gap: 7, marginTop: 2 },
+  sig: { flex: 1, borderWidth: 1, borderColor: "#cdd0c0", borderTopWidth: 3, borderTopColor: "#38471f", padding: 5, minHeight: 62 },
   sigRole: { fontSize: 8.5, fontWeight: 700, color: "#38471f", marginBottom: 4 },
   sigF: { fontSize: 8, color: "#6b6f61", marginBottom: 2 },
   sigFb: { fontSize: 9.5, fontWeight: 700, color: "#181c17" },
-  sigImg: { height: 40, objectFit: "contain" as never, marginTop: 4 },
-  sigSlot: { marginTop: 6, height: 34, borderWidth: 1, borderColor: "#9aa085", borderStyle: "dashed" as never },
-  foot: { fontSize: 7.5, color: "#6b6f61", textAlign: "center" as never, marginTop: 16, borderTopWidth: 1, borderTopColor: "#cdd0c0", paddingTop: 6 },
+  sigImg: { height: 30, objectFit: "contain" as never, marginTop: 4 },
+  sigSlot: { marginTop: 4, height: 24, borderWidth: 1, borderColor: "#9aa085", borderStyle: "dashed" as never },
+  foot: { fontSize: 7.5, color: "#6b6f61", textAlign: "center" as never, marginTop: 6, borderTopWidth: 1, borderTopColor: "#cdd0c0", paddingTop: 6 },
 });
 
 function fmtD(d: Date | null | undefined): string {
@@ -266,6 +266,23 @@ function fmtD(d: Date | null | undefined): string {
 }
 
 function ArmoryIssuePDF({ d }: { d: ArmoryPdfData }) {
+  // 🎯 דחיסה אדפטיבית — התעודה חייבת להיכנס לעמוד A4 אחד גם עם הרבה פריטים.
+  //    ככל שיש יותר שורות, מכווצים את הטבלה ואת ההצהרה (הבלוקים הגדילים).
+  const n = d.lines.length;
+  const k = n <= 6 ? 1 : n <= 10 ? 0.86 : n <= 16 ? 0.72 : 0.6;
+  const cell = { padding: 2.5 * k, fontSize: 7.5 * k };
+  const tdD = [a.td, cell];
+  const thD = [a.th, { padding: 3 * k, fontSize: 7.5 * k }];
+  const clauseD = [a.clauseLine, { fontSize: 7.5 * k, marginBottom: 1 * k, lineHeight: 1.25 }];
+  const declareD = [a.declare, { padding: 6 * k, marginBottom: 4 * k }];
+  const warnD = [a.warn, { fontSize: 7.5 * k, padding: 4 * k, marginBottom: 5 * k }];
+  const dsRowD = [a.dsRow, { padding: 5 * k, marginBottom: 6 * k }];
+  const gridD = [a.grid, { marginBottom: 6 * k }];
+  const cellD = [a.cell, { padding: 4 * k }];
+  const sigD = [a.sig, { minHeight: 62 * k, padding: 5 * k }];
+  const sigSlotD = [a.sigSlot, { height: 24 * k, marginTop: 4 * k }];
+  const sigImgD = [a.sigImg, { height: 30 * k }];
+  const footD = [a.foot, { marginTop: 6 * k, paddingTop: 6 * k }];
   return (
     <Document>
       <Page size="A4" style={a.page}>
@@ -291,22 +308,22 @@ function ArmoryIssuePDF({ d }: { d: ArmoryPdfData }) {
         </View>
 
         <Text style={a.slabel}>פרטי מקבל הנשק</Text>
-        <View style={a.grid}>
-          <View style={a.cell}><Text style={a.ck}>שם מלא</Text><Text style={a.cv}>{d.recipientName}</Text></View>
-          <View style={a.cell}><Text style={a.ck}>מספר אישי (מ.א.)</Text><Text style={a.cv}>{d.soldier?.personalNumber ?? "—"}</Text></View>
-          <View style={a.cell}><Text style={a.ck}>פלוגה</Text><Text style={a.cv}>{d.soldier?.companyName ?? "—"}</Text></View>
-          <View style={a.cell}><Text style={a.ck}>מתאריך</Text><Text style={a.cv}>{fmtD(d.issueDate)}</Text></View>
-          <View style={a.cell}><Text style={a.ck}>עד תאריך (סיום תעסוקה)</Text><Text style={a.cv}>{fmtD(d.endDate)}</Text></View>
-          <View style={a.cell}><Text style={a.ck}>לצורך</Text><Text style={a.cv}>{d.purpose ?? "תע\"מ"}</Text></View>
+        <View style={gridD}>
+          <View style={cellD}><Text style={a.ck}>שם מלא</Text><Text style={a.cv}>{d.recipientName}</Text></View>
+          <View style={cellD}><Text style={a.ck}>מספר אישי (מ.א.)</Text><Text style={a.cv}>{d.soldier?.personalNumber ?? "—"}</Text></View>
+          <View style={cellD}><Text style={a.ck}>פלוגה</Text><Text style={a.cv}>{d.soldier?.companyName ?? "—"}</Text></View>
+          <View style={cellD}><Text style={a.ck}>מתאריך</Text><Text style={a.cv}>{fmtD(d.issueDate)}</Text></View>
+          <View style={cellD}><Text style={a.ck}>עד תאריך (סיום תעסוקה)</Text><Text style={a.cv}>{fmtD(d.endDate)}</Text></View>
+          <View style={cellD}><Text style={a.ck}>לצורך</Text><Text style={a.cv}>{d.purpose ?? "תע\"מ"}</Text></View>
         </View>
 
         <Text style={a.slabel}>הצהרת החייל</Text>
-        <View style={a.declare}>
-          {d.declarationClauses.map((c, i) => <Text key={i} style={a.clauseLine}>{i + 1}. {c}</Text>)}
+        <View style={declareD}>
+          {d.declarationClauses.map((c, i) => <Text key={i} style={clauseD}>{i + 1}. {c}</Text>)}
         </View>
-        <Text style={a.warn}>⚠ {d.warning}</Text>
+        <Text style={warnD}>⚠ {d.warning}</Text>
 
-        <View style={a.dsRow}>
+        <View style={dsRowD}>
           <View style={a.dsFields}>
             <Text style={a.dsF}>שם מלא: {d.recipientName}</Text>
             <Text style={a.dsF}>מ.א.: {d.soldier?.personalNumber ?? "—"}</Text>
@@ -321,49 +338,49 @@ function ArmoryIssuePDF({ d }: { d: ArmoryPdfData }) {
         <Text style={a.slabel}>פירוט הנשק והציוד המנופק</Text>
         <View style={a.table}>
           <View style={a.tHead}>
-            <Text style={[a.th, a.cNum]}>#</Text>
-            <Text style={[a.th, a.cSku]}>מק״ט</Text>
-            <Text style={[a.th, a.cName]}>שם פריט</Text>
-            <Text style={[a.th, a.cQty]}>כמות</Text>
-            <Text style={[a.th, a.cSerial]}>מסט״ב</Text>
+            <Text style={[...thD, a.cNum]}>#</Text>
+            <Text style={[...thD, a.cSku]}>מק״ט</Text>
+            <Text style={[...thD, a.cName]}>שם פריט</Text>
+            <Text style={[...thD, a.cQty]}>כמות</Text>
+            <Text style={[...thD, a.cSerial]}>מסט״ב</Text>
           </View>
           {d.lines.map((l, i) => (
             <View style={a.tRow} key={i}>
-              <Text style={[a.td, a.cNum]}>{i + 1}</Text>
-              <Text style={[a.td, a.cSku]}>{l.sku ?? "—"}</Text>
-              <Text style={[a.td, a.cName]}>{l.name}</Text>
-              <Text style={[a.td, a.cQty]}>{l.quantity}</Text>
-              <Text style={[a.td, a.cSerial]}>{l.serial ?? "—"}</Text>
+              <Text style={[...tdD, a.cNum]}>{i + 1}</Text>
+              <Text style={[...tdD, a.cSku]}>{l.sku ?? "—"}</Text>
+              <Text style={[...tdD, a.cName]}>{l.name}</Text>
+              <Text style={[...tdD, a.cQty]}>{l.quantity}</Text>
+              <Text style={[...tdD, a.cSerial]}>{l.serial ?? "—"}</Text>
             </View>
           ))}
         </View>
 
         <Text style={a.slabel}>חתימות</Text>
         <View style={a.sigs}>
-          <View style={a.sig}>
+          <View style={sigD}>
             <Text style={a.sigRole}>מוסר (מפקד הארמון)</Text>
             <Text style={a.sigF}>שם: <Text style={a.sigFb}>{d.issuerName}</Text></Text>
             {d.issuerHolderName && <Text style={a.sigF}>מחסן: <Text style={a.sigFb}>{d.issuerHolderName}</Text></Text>}
-            <View style={a.sigSlot} />
+            <View style={sigSlotD} />
           </View>
-          <View style={a.sig}>
+          <View style={sigD}>
             <Text style={a.sigRole}>מקבל (החייל)</Text>
             <Text style={a.sigF}>שם: <Text style={a.sigFb}>{d.recipientName}</Text></Text>
             <Text style={a.sigF}>מ.א.: <Text style={a.sigFb}>{d.soldier?.personalNumber ?? "—"}</Text></Text>
             <Text style={a.sigF}>תאריך: <Text style={a.sigFb}>{fmtD(d.signedAt ?? d.issueDate)}</Text></Text>
-            {d.soldierSignature ? <Image src={d.soldierSignature} style={a.sigImg} /> : <View style={a.sigSlot} />}
+            {d.soldierSignature ? <Image src={d.soldierSignature} style={sigImgD} /> : <View style={sigSlotD} />}
           </View>
-          <View style={a.sig}>
+          <View style={sigD}>
             <Text style={a.sigRole}>מאשר נשיאת הנשק</Text>
             <Text style={a.sigF}>שם: <Text style={a.sigFb}>{d.approverName ?? "________"}</Text></Text>
             <Text style={a.sigF}>מ.א.: <Text style={a.sigFb}>{d.approverPersonalNumber ?? "—"}</Text></Text>
             <Text style={a.sigF}>תפקיד: <Text style={a.sigFb}>{d.approverTitle ?? "מג\"ד / סמג\"ד / קמב\"ץ"}</Text></Text>
             <Text style={a.sigF}>תאריך: <Text style={a.sigFb}>{d.approvedAt ? fmtD(d.approvedAt) : "____"}</Text></Text>
-            {d.approverSignature ? <Image src={d.approverSignature} style={a.sigImg} /> : <View style={a.sigSlot} />}
+            {d.approverSignature ? <Image src={d.approverSignature} style={sigImgD} /> : <View style={sigSlotD} />}
           </View>
         </View>
 
-        <Text style={a.foot}>מסמך זה הופק אוטומטית ממערכת PALMY · אסמכתא {d.docNumber}</Text>
+        <Text style={footD}>מסמך זה הופק אוטומטית ממערכת PALMY · אסמכתא {d.docNumber}</Text>
       </Page>
     </Document>
   );
