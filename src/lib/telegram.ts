@@ -1,4 +1,40 @@
 import { decryptSecret } from "./crypto";
+import { prisma } from "./prisma";
+
+/**
+ * 📵 סינון דיוור — נקודת אכיפה אחת לכל 120+ מסלולי השליחה במערכת.
+ *
+ * "BULK" = דיוור יזום שאינו מחייב את הנמען אישית (ברודקאסט נוהל, תזכורות,
+ * הודעות מערכת). חייל שביקש להפסיק — לא יקבל.
+ * "OPERATIONAL" (ברירת המחדל) = הודעה אישית שהוא נדרש לה: בקשת חתימה,
+ * זיכוי ציוד, אימות ספירה, קוד כניסה. נשלחת תמיד, כי אי-קבלתה פוגעת בו.
+ *
+ * ברירת המחדל היא OPERATIONAL בכוונה — כך קריאה קיימת שלא עודכנה לא
+ * משתנה בהתנהגות, והחמרה נעשית רק במקומות שסומנו מפורשות.
+ */
+export type MessageKind = "OPERATIONAL" | "BULK";
+
+/** מחזיר את קבוצת ה-chatId שסירבו לדיוור, מתוך רשימה נתונה. */
+async function optedOutChatIds(chatIds: string[]): Promise<Set<string>> {
+  if (chatIds.length === 0) return new Set();
+  try {
+    const rows = await prisma.soldier.findMany({
+      where: { telegramChatId: { in: chatIds }, botOptOutAt: { not: null } },
+      select: { telegramChatId: true },
+    });
+    return new Set(rows.map((r) => r.telegramChatId!).filter(Boolean));
+  } catch {
+    // כשל בבדיקה לא יחסום הודעה תפעולית — פותחים בהצלחה ולא בכישלון
+    return new Set();
+  }
+}
+
+/** נספח שמסביר לנמען איך להפסיק — חובה על כל דיוור יזום. */
+export const OPT_OUT_FOOTER = [
+  "",
+  "—",
+  "להפסקת הודעות מסוג זה שלחו לבוט: /stop",
+].join("\n");
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -58,7 +94,13 @@ export async function sendTelegramMessage(
   chatId: string,
   text: string,
   replyMarkup?: object,
+  kind: MessageKind = "OPERATIONAL",
 ) {
+  if (kind === "BULK") {
+    const blocked = await optedOutChatIds([chatId]);
+    if (blocked.has(chatId)) return { ok: true, skipped: "opted-out" };
+    text += OPT_OUT_FOOTER;
+  }
   return telegramRequest(botToken, "sendMessage", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -83,8 +125,15 @@ export type BulkMessage = { chatId: string; text: string; replyMarkup?: object }
 export async function sendTelegramBulk(
   botToken: string,
   messages: BulkMessage[],
-  opts: { ratePerSec?: number; concurrency?: number } = {},
+  opts: { ratePerSec?: number; concurrency?: number; kind?: MessageKind } = {},
 ): Promise<{ sent: number; failed: number; results: boolean[] }> {
+  // 📵 סינון מסרבי-דיוור. results[] נשאר מיושר לקלט: מסורב מסומן false ולכן
+  //    לא יסומן כ"נשלח" ע"י הקורא, ולא תיווצר לו רשומת מסירה.
+  let skipped = new Set<string>();
+  if (opts.kind === "BULK") {
+    skipped = await optedOutChatIds([...new Set(messages.map((m) => m.chatId))]);
+    messages = messages.map((m) => (skipped.has(m.chatId) ? m : { ...m, text: m.text + OPT_OUT_FOOTER }));
+  }
   const minGapMs = Math.ceil(1000 / (opts.ratePerSec ?? 25));
   const concurrency = Math.min(opts.concurrency ?? 8, messages.length || 1);
   const results = new Array<boolean>(messages.length).fill(false);
@@ -106,8 +155,10 @@ export async function sendTelegramBulk(
     while (cursor < messages.length) {
       const i = cursor++;
       const m = messages[i];
+      if (skipped.has(m.chatId)) continue; // מסרב דיוור — לא נשלח, לא נספר
       await gate();
       try {
+        // ה-footer כבר נוסף למעלה; שולחים כ-OPERATIONAL כדי לא לבדוק שוב פר-הודעה
         await sendTelegramMessage(botToken, m.chatId, m.text, m.replyMarkup);
         results[i] = true;
         sent++;

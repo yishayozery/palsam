@@ -658,6 +658,9 @@ model Soldier {
   weaponsAgreementSignature  String? // data URL של החתימה
   // גיוס
   telegramChatId String? // Telegram chat ID לשליחת הודעות מבוט
+  // 📵 סירוב לדיוור: החייל ביקש להפסיק לקבל הודעות שאינן תפעוליות-מחייבות.
+  //    הודעות אישיות שהוא נדרש להן (חתימה, זיכוי, אימות) ממשיכות להישלח.
+  botOptOutAt    DateTime?
   drivingRefresherDate DateTime? @db.Date // ריענון נהיגה כללי
   drivingProcedureSignedAt DateTime? // חתימה על נוהל נהיגה (דרך קצין רכב / בוט)
   // תיק נהג — פרטי רישיון אזרחי + צילום (קובץ 4)

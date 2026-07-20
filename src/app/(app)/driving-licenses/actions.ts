@@ -128,7 +128,7 @@ export async function broadcastDrivingProcedure() {
   let sent = 0;
   for (let i = 0; i < chatIds.length; i += 20) {
     const batch = chatIds.slice(i, i + 20);
-    const res = await Promise.allSettled(batch.map((c) => sendTelegramMessage(battalion.telegramBotToken!, c, text)));
+    const res = await Promise.allSettled(batch.map((c) => sendTelegramMessage(battalion.telegramBotToken!, c, text, undefined, "BULK")));
     sent += res.filter((r) => r.status === "fulfilled").length;
   }
   await audit(user.id, "BROADCAST_DRIVING_PROCEDURE", "Battalion", bId, { sent });

@@ -70,7 +70,7 @@ export async function sendAttendanceInitial(todayYmd: string): Promise<number> {
       const text = b.attendanceReminderText?.trim()
         ? `🗓️ <b>${escapeTelegram(b.attendanceReminderText.trim())}</b>\n\n👉 <a href="${link}">פתח דיווח נוכחות</a> (בלי התחברות — הרשימה תופיע ישר)`
         : `🗓️ <b>בוקר טוב!</b>\nנא לדווח את נוכחות ${escapeTelegram(scope)} להיום.\n\n👉 <a href="${link}">פתח דיווח נוכחות</a> (בלי התחברות — הרשימה תופיע ישר)`;
-      try { await sendTelegramMessage(b.telegramBotToken!, rep.chatId, text); sent++; } catch { /* non-fatal */ }
+      try { await sendTelegramMessage(b.telegramBotToken!, rep.chatId, text, undefined, "BULK"); sent++; } catch { /* non-fatal */ }
     }
   }
   return sent;
@@ -122,7 +122,7 @@ export async function sendAttendanceFollowup(nowMin: number, today: Date, todayY
       if (missing === 0) continue;
       const link = reportLink(baseUrl, rep.soldierId);
       const text = `⏰ <b>תזכורת דיווח נוכחות</b>\nטרם דווחה נוכחות ${escapeTelegram(rep.label)} — נותרו <b>${missing}</b> חיילים.\nשעת גג לדיווח: <b>${escapeTelegram(deadlineLabel)}</b>.\n\n👉 <a href="${link}">פתח דיווח נוכחות</a>`;
-      try { await sendTelegramMessage(b.telegramBotToken!, rep.chatId, text); sent++; } catch { /* non-fatal */ }
+      try { await sendTelegramMessage(b.telegramBotToken!, rep.chatId, text, undefined, "BULK"); sent++; } catch { /* non-fatal */ }
     }
   }
   return sent;

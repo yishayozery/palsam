@@ -135,6 +135,39 @@ export async function POST(
     };
     const cmd = CMD_MAP[text] || text;
 
+    // 📵 /stop ו-/resume — סירוב והצטרפות מחדש לדיוור יזום.
+    //    הודעות תפעוליות אישיות (בקשת חתימה, זיכוי, אימות) ממשיכות בכל מקרה,
+    //    ולכן מציינים זאת מפורשות כדי שהחייל לא יחשוב שניתק את עצמו מהמערכת.
+    if (cmd === "/stop" || cmd === "/unsubscribe") {
+      const s = await prisma.soldier.findFirst({ where: { battalionId, telegramChatId: chatId }, select: { id: true, fullName: true } });
+      if (!s) {
+        await sendTelegramMessage(token, chatId, "לא נמצא חייל מקושר לצ׳אט הזה.");
+        return NextResponse.json({ ok: true });
+      }
+      await prisma.soldier.update({ where: { id: s.id }, data: { botOptOutAt: new Date() } });
+      await sendTelegramMessage(token, chatId, [
+        "📵 <b>הופסק הדיוור</b>",
+        "",
+        "לא תקבל יותר הודעות יזומות: ברודקאסטים, תזכורות והודעות מערכת.",
+        "",
+        "⚠️ הודעות אישיות שאתה נדרש להן — בקשת חתימה על ציוד, זיכוי, אימות ספירה —",
+        "ימשיכו להישלח, כי אי-קבלתן פוגעת בך.",
+        "",
+        "לחידוש הדיוור: /resume",
+      ].join("\n"));
+      return NextResponse.json({ ok: true });
+    }
+    if (cmd === "/resume") {
+      const s = await prisma.soldier.findFirst({ where: { battalionId, telegramChatId: chatId }, select: { id: true } });
+      if (!s) {
+        await sendTelegramMessage(token, chatId, "לא נמצא חייל מקושר לצ׳אט הזה.");
+        return NextResponse.json({ ok: true });
+      }
+      await prisma.soldier.update({ where: { id: s.id }, data: { botOptOutAt: null } });
+      await sendTelegramMessage(token, chatId, "✅ הדיוור חודש. תקבל שוב תזכורות והודעות מערכת.");
+      return NextResponse.json({ ok: true });
+    }
+
     // /start — registration (תומך ב-deep-link "/start <מספר אישי>" מהזמנת וואטסאפ — חיבור בקליק)
     if (cmd === "/start" || text.startsWith("/start ")) {
       const rawParam = text.includes(" ") ? text.slice(text.indexOf(" ") + 1).trim() : "";
