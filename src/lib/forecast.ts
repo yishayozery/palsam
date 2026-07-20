@@ -39,10 +39,13 @@ export function buildForecast(
   return {
     stateOf,
     orderOf: (soldierId: string) => orderBy.get(soldierId) ?? null,
-    exceptionOf: (soldierId: string, date: string) => {
-      const ex = exceptionBy.get(`${soldierId}|${date}`);
-      return ex && !inServiceStatus.has(ex) ? ex : null;
-    },
+    /**
+     * הסיבה להיעדרות ביום — או null.
+     * ⚠️ חייב לעבור דרך stateOf: סימון שנשאר מחוץ לצו (למשל אחרי קיצור הצו,
+     * או רשומות ישנות מלפני שהצווים הונהגו) אינו היעדרות ואסור שייספר כסיבה.
+     */
+    exceptionOf: (soldierId: string, date: string) =>
+      stateOf(soldierId, date) === "ABSENT" ? exceptionBy.get(`${soldierId}|${date}`)! : null,
     /** ספירה לקבוצת חיילים ביום — הבסיס לכל הסיכומים */
     countOn(soldierIds: string[], date: string) {
       let inService = 0, absent = 0, notOrdered = 0;
