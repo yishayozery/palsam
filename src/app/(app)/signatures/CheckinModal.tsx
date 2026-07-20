@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { checkinBatch } from "./actions";
 import { returnKitWithCheck, type KitReturnItem } from "../ymach/actions";
 import { useEscClose } from "@/lib/useEscClose";
+import BarcodeScanner from "@/components/BarcodeScanner";
+import type { ScanHit } from "@/app/(app)/scan-actions";
+import type { ScanMsg } from "@/lib/scan-feedback";
 import SigPadInline from "./SigPadInline";
 
 type Unit = {
@@ -43,6 +46,7 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
   const [partialLotQty, setPartialLotQty] = useState<Map<string, number>>(new Map());
   const [newStatusId, setNewStatusId] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [scanMsg, setScanMsg] = useState<ScanMsg | null>(null);
   const [busy, setBusy] = useState(false);
   const [lotPicker, setLotPicker] = useState<{ unit: Unit; qty: number } | null>(null);
   // מארזים מבצעיים — כמות שהוחזרה (kitId → itemTypeId → qty)
@@ -98,6 +102,41 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
     setPartialLotQty(new Map()); setQtyReturn(new Map()); setNewStatusId(""); setError(null);
     setOpKitReturned({}); setOpKitReason({}); setDoneData(null); setTargetHolderId(defaultToHolderId ?? ""); setReceiverSig("");
   };
+
+  /**
+   * 📷 סריקה בזיכוי — הרווח הגדול: סורקים את הנשק, והמערכת קופצת לחייל
+   * שחתום עליו ומסמנת אותו. אין צורך לדעת מראש אצל מי הפריט.
+   */
+  function handleScan(hit: ScanHit) {
+    if (hit.kind === "NOT_FOUND") return;
+
+    if (hit.kind === "SERIAL") {
+      const u = signedUnits.find((x) => x.id === hit.unitId);
+      if (!u) {
+        setScanMsg({ ok: false, text: `${hit.itemName} · ${hit.serialNumber} — לא חתום על אף חייל${hit.holderName ? ` (נמצא ב${hit.holderName})` : ""}` });
+        return;
+      }
+      // קפיצה אוטומטית לחייל הנכון
+      if (u.soldierId !== soldierId) { setSoldierId(u.soldierId); setSelectedUnits(new Set()); }
+      if (u.lotQuantity && u.lotQuantity > 1) {
+        setLotPicker({ unit: u, qty: u.lotQuantity });
+        setScanMsg({ ok: true, text: `${u.itemName} · ${u.serial} — ${u.soldierName} · בחר כמות` });
+        return;
+      }
+      setSelectedUnits((sel) => new Set(sel).add(u.id));
+      setScanMsg({ ok: true, text: `${u.itemName} · ${u.serial} — ${u.soldierName}` });
+      return;
+    }
+
+    // כמותי — חייב חייל נבחר, כי אותו פריט מוחזק ע"י כמה חיילים
+    if (!soldierId) { setScanMsg({ ok: false, text: `${hit.itemName} — בחר קודם חייל (פריט כמותי)` }); return; }
+    const q = qtyHoldings.find((x) => x.soldierId === soldierId && x.itemTypeId === hit.itemTypeId && x.quantity > 0);
+    if (!q) { setScanMsg({ ok: false, text: `${hit.itemName} — לא חתום על החייל הנבחר` }); return; }
+    const key = `${q.itemTypeId}|${q.statusId}`;
+    const next = Math.min(q.quantity, (qtyReturn.get(key) ?? 0) + 1);
+    setQtyReturn((m) => { const n = new Map(m); n.set(key, next); return n; });
+    setScanMsg({ ok: true, text: `${q.itemName} — ${next}/${q.quantity}` });
+  }
 
   // לחיצה על יחידה — אם זו אצווה, פתח דיאלוג; אחרת סמן/בטל
   const toggleUnit = (u: Unit, checked: boolean) => {
@@ -239,8 +278,16 @@ export default function CheckinModal({ signedUnits, qtyHoldings = [], defaultToH
           <div className="flex gap-2 items-end flex-wrap">
             <div className="flex-1 min-w-40">
               <label className="block text-[11px] text-slate-600 mb-0.5">חיפוש שם / מ.א.</label>
-              <input value={soldierSearch} onChange={(e) => setSoldierSearch(e.target.value)} placeholder="הקלד..."
-                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white" />
+              <div className="flex gap-2">
+                <input value={soldierSearch} onChange={(e) => setSoldierSearch(e.target.value)} placeholder="הקלד..."
+                  className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white" />
+                <BarcodeScanner label="📷 סרוק" compact onHit={handleScan} />
+              </div>
+              {scanMsg && (
+                <div className={`mt-1 rounded-lg px-2 py-1 text-[11px] ${scanMsg.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>
+                  {scanMsg.ok ? "✅" : "⚠️"} {scanMsg.text}
+                </div>
+              )}
             </div>
             <div className="flex-[2] min-w-48">
               <label className="block text-[11px] text-slate-600 mb-0.5">חייל ({soldiers.length} חתומים)</label>

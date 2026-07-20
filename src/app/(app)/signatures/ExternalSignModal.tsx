@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import SigPadInline from "./SigPadInline";
 import { createExternalSignout } from "./external-actions";
 import { useEscClose } from "@/lib/useEscClose";
+import BarcodeScanner from "@/components/BarcodeScanner";
+import type { ScanHit } from "@/app/(app)/scan-actions";
+import { whyUnavailable, type ScanMsg } from "@/lib/scan-feedback";
 
 type Unit = { id: string; itemTypeId: string; itemName: string; serial: string; statusId: string; lotQuantity: number | null; holderId?: string | null };
 type Balance = { itemTypeId: string; itemName: string; unit: string; statusId: string; status: string; quantity: number; holderId?: string | null };
@@ -27,6 +30,7 @@ export default function ExternalSignModal({ warehouseId, warehouseName, units, b
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [scanMsg, setScanMsg] = useState<ScanMsg | null>(null);
   useEscClose(open, () => setOpen(false));
 
   const whName = warehouses.find((w) => w.id === wh)?.name ?? (wh && wh === warehouseId ? warehouseName : null);
@@ -40,6 +44,25 @@ export default function ExternalSignModal({ warehouseId, warehouseName, units, b
   function reset() { setName(""); setPersonalId(""); setPhone(""); setAffiliation(""); setSerials(new Set()); setQty({}); setSig(""); setSearch(""); setErr(null); }
   function toggleSerial(id: string) { setSerials((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; }); }
   function setQtyVal(k: string, v: number, max: number) { setQty((q) => ({ ...q, [k]: Math.max(0, Math.min(max, v)) })); }
+
+  /** 📷 סריקה → בחירה. הפריט חייב להיות במלאי המחסן שנבחר בראש המודל. */
+  function handleScan(hit: ScanHit) {
+    if (hit.kind === "NOT_FOUND") return;
+    if (hit.kind === "SERIAL") {
+      if (serials.has(hit.unitId)) { setScanMsg({ ok: false, text: `${hit.itemName} · ${hit.serialNumber} — כבר נבחר` }); return; }
+      const u = whUnits.find((x) => x.id === hit.unitId);
+      if (!u) { setScanMsg({ ok: false, text: `${hit.itemName} · ${hit.serialNumber} — ${whyUnavailable(hit)}` }); return; }
+      toggleSerial(u.id);
+      setScanMsg({ ok: true, text: `${u.itemName} · ${u.serial}` });
+      return;
+    }
+    const opts = whBal.filter((b) => b.itemTypeId === hit.itemTypeId && b.quantity > 0);
+    if (opts.length === 0) { setScanMsg({ ok: false, text: `${hit.itemName} — אין יתרה במחסן הנבחר` }); return; }
+    const b = [...opts].sort((x, y) => y.quantity - x.quantity)[0];
+    const k = `${b.itemTypeId}|${b.statusId}`;
+    setQtyVal(k, (qty[k] ?? 0) + 1, b.quantity);
+    setScanMsg({ ok: true, text: `${b.itemName} (${b.status})` });
+  }
 
   async function submit() {
     setErr(null);
@@ -92,7 +115,15 @@ export default function ExternalSignModal({ warehouseId, warehouseName, units, b
                 <input value={affiliation} onChange={(e) => setAffiliation(e.target.value)} placeholder="שייכות (יחידה / גורם)" className="border border-slate-300 rounded-lg px-2 py-2 text-sm col-span-2" />
               </div>
 
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 חיפוש פריט…" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              <div className="flex gap-2">
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 חיפוש פריט…" className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                <BarcodeScanner label="📷 סרוק" compact onHit={handleScan} />
+              </div>
+              {scanMsg && (
+                <div className={`rounded-lg px-2 py-1.5 text-xs ${scanMsg.ok ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
+                  {scanMsg.ok ? "✅ נבחר:" : "⚠️"} {scanMsg.text}
+                </div>
+              )}
 
               {/* פריטים כמותיים */}
               {filtBal.length > 0 && (

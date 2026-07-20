@@ -2,6 +2,9 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import BarcodeScanner from "@/components/BarcodeScanner";
+import type { ScanHit } from "@/app/(app)/scan-actions";
+import type { ScanMsg } from "@/lib/scan-feedback";
 import { createSoldierTransfer } from "./actions";
 
 type SignedUnit = { id: string; serial: string; itemName: string; soldierId: string; soldierName: string; soldierPN: string | null; statusName: string; lotQuantity: number | null };
@@ -28,6 +31,7 @@ export default function SoldierTransferModal({
   const [keepLoc, setKeepLoc] = useState(true);
   const [locId, setLocId] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
+  const [scanMsg, setScanMsg] = useState<ScanMsg | null>(null);
 
   // חיילים שיש להם ציוד חתום (סריאלי או כמותי) — מקור אפשרי
   const fromSoldiers = useMemo(() => {
@@ -57,6 +61,26 @@ export default function SoldierTransferModal({
   }
   function setQty(key: string, v: number) {
     setQtyPick((prev) => { const n = new Map(prev); if (v > 0) n.set(key, v); else n.delete(key); return n; });
+  }
+
+  /** 📷 סריקה → בחירת פריט להעברה; קופצת אוטומטית לחייל המוסר. */
+  function handleScan(hit: ScanHit) {
+    if (hit.kind === "NOT_FOUND") return;
+    if (hit.kind === "SERIAL") {
+      const u = signedUnits.find((x) => x.id === hit.unitId);
+      if (!u) { setScanMsg({ ok: false, text: `${hit.itemName} · ${hit.serialNumber} — לא חתום על אף חייל` }); return; }
+      if (u.soldierId !== fromId) { setFromId(u.soldierId); setSelected(new Set()); setLotPick(new Map()); setQtyPick(new Map()); }
+      setSelected((prev) => new Set(prev).add(u.id));
+      setScanMsg({ ok: true, text: `${u.itemName} · ${u.serial} — ${u.soldierName}` });
+      return;
+    }
+    if (!fromId) { setScanMsg({ ok: false, text: `${hit.itemName} — בחר קודם חייל מוסר (פריט כמותי)` }); return; }
+    const q = qtyHoldings.find((x) => x.soldierId === fromId && x.itemTypeId === hit.itemTypeId && x.quantity > 0);
+    if (!q) { setScanMsg({ ok: false, text: `${hit.itemName} — לא חתום על החייל המוסר` }); return; }
+    const key = `${q.itemTypeId}|${q.statusId}`;
+    const next = Math.min(q.quantity, (qtyPick.get(key) ?? 0) + 1);
+    setQty(key, next);
+    setScanMsg({ ok: true, text: `${q.itemName} — ${next}/${q.quantity}` });
   }
 
   const totalPicked = selected.size + [...qtyPick.values()].filter((v) => v > 0).length;
@@ -105,6 +129,16 @@ export default function SoldierTransferModal({
               <p className="text-xs text-slate-500">
                 הציוד יעבור לחייל המקבל, והוא יתבקש לחתום דיגיטלית בבוט. עד לחתימה — התעודה במצב &quot;ממתין&quot;.
               </p>
+
+              {/* סריקה — מזהה את החייל המוסר לבד */}
+              <div className="flex items-center gap-2">
+                <BarcodeScanner label="📷 סרוק פריט להעברה" onHit={handleScan} />
+                {scanMsg && (
+                  <span className={`flex-1 rounded-lg px-2 py-1 text-[11px] ${scanMsg.ok ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
+                    {scanMsg.ok ? "✅" : "⚠️"} {scanMsg.text}
+                  </span>
+                )}
+              </div>
 
               {/* חייל מוסר */}
               <label className="block text-sm">חייל מוסר

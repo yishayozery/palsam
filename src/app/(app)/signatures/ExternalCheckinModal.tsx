@@ -4,6 +4,9 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { externalCheckin } from "./external-actions";
 import { useEscClose } from "@/lib/useEscClose";
+import BarcodeScanner from "@/components/BarcodeScanner";
+import type { ScanHit } from "@/app/(app)/scan-actions";
+import type { ScanMsg } from "@/lib/scan-feedback";
 
 type Held = { id: string; itemName: string; serial: string; holder: string; status: string };
 type QtyHeld = { itemTypeId: string; itemName: string; unit: string; statusId: string; statusName: string; holder: string; qty: number };
@@ -19,12 +22,35 @@ export default function ExternalCheckinModal({ warehouses, defaultWarehouseId, h
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [scanMsg, setScanMsg] = useState<ScanMsg | null>(null);
   useEscClose(open, () => setOpen(false));
 
   const filt = useMemo(() => search ? held.filter((h) => h.itemName.includes(search) || h.serial.includes(search) || h.holder.includes(search)) : held, [held, search]);
   const qtyFilt = useMemo(() => search ? qtyHeld.filter((q) => q.itemName.includes(search) || q.holder.includes(search)) : qtyHeld, [qtyHeld, search]);
   function toggle(id: string) { setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; }); }
   const qKey = (q: QtyHeld) => `${q.itemTypeId}|${q.statusId}|${q.holder}`;
+
+  /** 📷 סריקה → סימון לזיכוי. הפריט חייב להיות כרגע אצל גורם חוץ. */
+  function handleScan(hit: ScanHit) {
+    if (hit.kind === "NOT_FOUND") return;
+    if (hit.kind === "SERIAL") {
+      if (picked.has(hit.unitId)) { setScanMsg({ ok: false, text: `${hit.itemName} · ${hit.serialNumber} — כבר נבחר` }); return; }
+      const h = held.find((x) => x.id === hit.unitId);
+      if (!h) {
+        setScanMsg({ ok: false, text: `${hit.itemName} · ${hit.serialNumber} — לא רשום אצל גורם חוץ${hit.holderName ? ` (נמצא ב${hit.holderName})` : ""}` });
+        return;
+      }
+      toggle(h.id);
+      setScanMsg({ ok: true, text: `${h.itemName} · ${h.serial} — מ${h.holder}` });
+      return;
+    }
+    const opts = qtyHeld.filter((q) => q.itemTypeId === hit.itemTypeId && q.qty > 0);
+    if (opts.length === 0) { setScanMsg({ ok: false, text: `${hit.itemName} — אין ממנו אצל גורמי חוץ` }); return; }
+    const q = [...opts].sort((x, y) => y.qty - x.qty)[0];
+    const k = qKey(q);
+    setQtyPick((p) => ({ ...p, [k]: Math.min(q.qty, (p[k] ?? 0) + 1) }));
+    setScanMsg({ ok: true, text: `${q.itemName} — מ${q.holder}` });
+  }
   const qtyTotal = Object.values(qtyPick).reduce((a, b) => a + (b || 0), 0);
   const totalPicked = picked.size + qtyTotal;
 
@@ -68,7 +94,15 @@ export default function ExternalCheckinModal({ warehouses, defaultWarehouseId, h
                   {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </select>
               </div>
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 חיפוש פריט / גורם…" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              <div className="flex gap-2">
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 חיפוש פריט / גורם…" className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                <BarcodeScanner label="📷 סרוק" compact onHit={handleScan} />
+              </div>
+              {scanMsg && (
+                <div className={`rounded-lg px-2 py-1.5 text-xs ${scanMsg.ok ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
+                  {scanMsg.ok ? "✅ נבחר:" : "⚠️"} {scanMsg.text}
+                </div>
+              )}
               <div className="space-y-1 max-h-72 overflow-y-auto">
                 {filt.map((h) => (
                   <label key={h.id} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 cursor-pointer ${picked.has(h.id) ? "bg-emerald-50 border border-emerald-200" : "bg-slate-50"}`}>

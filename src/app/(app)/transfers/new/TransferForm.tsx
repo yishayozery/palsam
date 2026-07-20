@@ -1,7 +1,11 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { createIssue, createReturn } from "../actions";
 import { Card } from "@/components/ui";
+import BarcodeScanner from "@/components/BarcodeScanner";
+import type { ScanHit } from "@/app/(app)/scan-actions";
+import type { ScanMsg } from "@/lib/scan-feedback";
 
 type Balance = {
   itemTypeId: string; statusId: string; name: string; unit: string; status: string; quantity: number;
@@ -25,9 +29,57 @@ export default function TransferForm({
   statuses: Ref[];
 }) {
   const action = isReturn ? createReturn : createIssue;
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const [scanMsg, setScanMsg] = useState<ScanMsg | null>(null);
+
+  /**
+   * 📷 סריקה בטופס לא-מבוקר: מסמנים ישירות את השדה הקיים במקום לנהל
+   * state מקביל — כך לא צריך לשכתב את הטופס, והשליחה נשארת form action.
+   */
+  function handleScan(hit: ScanHit) {
+    if (hit.kind === "NOT_FOUND") return;
+    const form = formRef.current;
+    if (!form) return;
+
+    if (hit.kind === "SERIAL") {
+      const box = form.querySelector<HTMLInputElement>(`input[name="serial"][value="${hit.unitId}"]`);
+      if (!box) {
+        setScanMsg({ ok: false, text: `${hit.itemName} · ${hit.serialNumber} — לא זמין במקור${hit.holderName ? ` (נמצא ב${hit.holderName})` : ""}` });
+        return;
+      }
+      if (box.checked) { setScanMsg({ ok: false, text: `${hit.itemName} · ${hit.serialNumber} — כבר מסומן` }); return; }
+      box.checked = true;
+      box.closest("label")?.scrollIntoView({ block: "center", behavior: "smooth" });
+      setScanMsg({ ok: true, text: `${hit.itemName} · ${hit.serialNumber}` });
+      return;
+    }
+
+    // כללי — מגדילים ב-1 את השדה עם היתרה הגדולה ביותר לפריט הזה
+    const rows = balances.filter((b) => b.itemTypeId === hit.itemTypeId && b.quantity > 0);
+    if (rows.length === 0) { setScanMsg({ ok: false, text: `${hit.itemName} — אין יתרה במקור` }); return; }
+    const b = [...rows].sort((x, y) => y.quantity - x.quantity)[0];
+    const input = form.querySelector<HTMLInputElement>(`input[name="qty:${b.itemTypeId}:${b.statusId}"]`);
+    if (!input) { setScanMsg({ ok: false, text: `${hit.itemName} — לא נמצא שדה כמות` }); return; }
+    const next = Math.min(b.quantity, (parseInt(input.value || "0", 10) || 0) + 1);
+    input.value = String(next);
+    input.scrollIntoView({ block: "center", behavior: "smooth" });
+    setScanMsg({ ok: true, text: `${b.name} (${b.status}) — ${next}` });
+  }
 
   return (
-    <form action={action} className="space-y-6">
+    <form ref={formRef} action={action} className="space-y-6">
+      <Card className="p-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <BarcodeScanner label="📷 סרוק פריט" onHit={handleScan} />
+          {scanMsg ? (
+            <span className={`flex-1 rounded-lg px-2 py-1.5 text-xs ${scanMsg.ok ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
+              {scanMsg.ok ? "✅ סומן:" : "⚠️"} {scanMsg.text}
+            </span>
+          ) : (
+            <span className="text-[11px] text-slate-500">אפשר לסרוק ברקוד או לסמן ידנית מהרשימות למטה.</span>
+          )}
+        </div>
+      </Card>
       {fromHolderId && <input type="hidden" name="fromHolderId" value={fromHolderId} />}
       <Card className="p-5">
         <div className="grid md:grid-cols-2 gap-4">

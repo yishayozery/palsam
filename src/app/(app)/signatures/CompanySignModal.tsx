@@ -4,6 +4,9 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createCompanySign } from "./company-actions";
 import { useEscClose } from "@/lib/useEscClose";
+import BarcodeScanner from "@/components/BarcodeScanner";
+import type { ScanHit } from "@/app/(app)/scan-actions";
+import { whyUnavailable, type ScanMsg } from "@/lib/scan-feedback";
 
 type Member = { id: string; name: string; role: string; personalNumber: string | null };
 type Company = { id: string; name: string; members: Member[] };
@@ -31,6 +34,7 @@ export default function CompanySignModal({
   const [busy, setBusy] = useState(false);
   const submittingRef = useRef(false);
   const [lotPicker, setLotPicker] = useState<{ unit: Unit; qty: number } | null>(null);
+  const [scanMsg, setScanMsg] = useState<ScanMsg | null>(null);
 
   useEscClose(open && !lotPicker, () => {
     if (step === "summary") { setStep("items"); return; }
@@ -87,6 +91,33 @@ export default function CompanySignModal({
     setPickedSerials((p) => [...p, { unitId: unit.id, itemName: unit.itemName, serial: unit.serial, status: unit.status, lotQty: qty, lotTotal: unit.lotQuantity ?? qty }]);
     setLotPicker(null);
   };
+  /** 📷 סריקה → בחירה. פריט אישי (נשק) נחסם כאן — הוא עובר דרך "החתמת חייל". */
+  function handleScan(hit: ScanHit) {
+    if (hit.kind === "NOT_FOUND") return;
+    if (hit.kind === "SERIAL") {
+      if (pickedSerialIds.has(hit.unitId)) { setScanMsg({ ok: false, text: `${hit.itemName} · ${hit.serialNumber} — כבר נבחר` }); return; }
+      const inScreen = units.find((x) => x.id === hit.unitId);
+      if (inScreen && inScreen.signMode !== "COMPANY") {
+        setScanMsg({ ok: false, text: `${hit.itemName} · ${hit.serialNumber} — פריט אישי, יש להחתים דרך ״החתמת חייל״` });
+        return;
+      }
+      if (!inScreen) { setScanMsg({ ok: false, text: `${hit.itemName} · ${hit.serialNumber} — ${whyUnavailable(hit)}` }); return; }
+      toggleSerial(inScreen);
+      setScanMsg({ ok: true, text: `${inScreen.itemName} · ${inScreen.serial}` });
+      return;
+    }
+    const opts = balances.filter((b) => b.itemTypeId === hit.itemTypeId && b.quantity > 0);
+    if (opts.length === 0) { setScanMsg({ ok: false, text: `${hit.itemName} — אין יתרה במחסן` }); return; }
+    if (!opts.some((b) => b.signMode === "COMPANY")) {
+      setScanMsg({ ok: false, text: `${hit.itemName} — פריט אישי, יש להחתים דרך ״החתמת חייל״` });
+      return;
+    }
+    const b = [...opts.filter((x) => x.signMode === "COMPANY")].sort((x, y) => y.quantity - x.quantity)[0];
+    const cur = pickedQtys.find((p) => p.itemTypeId === b.itemTypeId && p.statusId === b.statusId);
+    setQtyFor(b, (cur?.quantity ?? 0) + 1);
+    setScanMsg({ ok: true, text: `${b.itemName} (${b.status})` });
+  }
+
   const getQtyPick = (itemTypeId: string, statusId: string) =>
     pickedQtys.find((p) => p.itemTypeId === itemTypeId && p.statusId === statusId);
 
@@ -253,8 +284,16 @@ export default function CompanySignModal({
         {step === "items" && (
           <>
             <div className="bg-white border-b border-slate-200 p-3 shrink-0">
-              <input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="🔍 חפש פריט..."
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" autoFocus />
+              <div className="flex gap-2">
+                <input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="🔍 חפש פריט..."
+                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" autoFocus />
+                <BarcodeScanner label="📷 סרוק" compact onHit={handleScan} />
+              </div>
+              {scanMsg && (
+                <div className={`mt-1 rounded-lg px-2 py-1.5 text-xs ${scanMsg.ok ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
+                  {scanMsg.ok ? "✅ נבחר:" : "⚠️"} {scanMsg.text}
+                </div>
+              )}
               <p className="text-[11px] text-slate-500 mt-1">לחץ על פריט כדי לבחור. פריטים אישיים (נשק) — דרך &quot;החתמת חייל&quot;.</p>
             </div>
 

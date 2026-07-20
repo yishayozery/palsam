@@ -4,6 +4,9 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { companyReturn } from "./company-actions";
 import { useEscClose } from "@/lib/useEscClose";
+import BarcodeScanner from "@/components/BarcodeScanner";
+import type { ScanHit } from "@/app/(app)/scan-actions";
+import type { ScanMsg } from "@/lib/scan-feedback";
 
 type Company = { id: string; name: string };
 type SerialAtCompany = {
@@ -54,6 +57,7 @@ export default function CompanyCheckinModal({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [picker, setPicker] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
+  const [scanMsg, setScanMsg] = useState<ScanMsg | null>(null);
   const [recipientName, setRecipientName] = useState("");
   const [recipientPersonalId, setRecipientPersonalId] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +125,30 @@ export default function CompanyCheckinModal({
       lotQty: qty, lotTotal: unit.lotQuantity ?? qty }]);
     setLotPicker(null); setPicker(false); setPickerSearch("");
   }
+  /** 📷 סריקה → הוספה לסל. הפריט חייב להיות רשום על הפלוגה הנבחרת. */
+  function handleScan(hit: ScanHit) {
+    if (hit.kind === "NOT_FOUND") return;
+    if (!companyId) { setScanMsg({ ok: false, text: "בחר קודם פלוגה" }); return; }
+
+    if (hit.kind === "SERIAL") {
+      if (inCartSerialIds.has(hit.unitId)) { setScanMsg({ ok: false, text: `${hit.itemName} · ${hit.serialNumber} — כבר בסל` }); return; }
+      const u = compSerials.find((x) => x.id === hit.unitId);
+      if (!u) {
+        const other = serials.find((x) => x.id === hit.unitId);
+        setScanMsg({ ok: false, text: `${hit.itemName} · ${hit.serialNumber} — ${other ? "רשום על פלוגה אחרת" : hit.signedSoldierName ? `חתום על ${hit.signedSoldierName}` : "לא רשום על הפלוגה"}` });
+        return;
+      }
+      addSerial(u);
+      setScanMsg({ ok: true, text: `${u.itemName} · ${u.serial}` });
+      return;
+    }
+
+    const opts = compBalances.filter((b) => b.itemTypeId === hit.itemTypeId);
+    if (opts.length === 0) { setScanMsg({ ok: false, text: `${hit.itemName} — לא רשום על הפלוגה` }); return; }
+    addQty(opts[0]);
+    setScanMsg({ ok: true, text: hit.itemName });
+  }
+
   function addQty(b: QtyAtCompany) {
     setCart((c) => [...c, { type: "qty", uid: UID++, itemTypeId: b.itemTypeId, statusId: b.statusId,
       itemName: b.itemName, unit: b.unit, statusName: b.statusName,
@@ -291,9 +319,17 @@ export default function CompanyCheckinModal({
                 <button onClick={() => setPicker(false)} className="text-white text-xl">✕</button>
               </div>
               <div className="p-3 border-b border-slate-200 shrink-0">
-                <input value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)}
-                  placeholder="חפש פריט / SN..." autoFocus
-                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+                <div className="flex gap-2">
+                  <input value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)}
+                    placeholder="חפש פריט / SN..." autoFocus
+                    className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+                  <BarcodeScanner label="📷 סרוק" compact onHit={handleScan} />
+                </div>
+                {scanMsg && (
+                  <div className={`mt-1 rounded-lg px-2 py-1 text-[11px] ${scanMsg.ok ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
+                    {scanMsg.ok ? "✅ נוסף:" : "⚠️"} {scanMsg.text}
+                  </div>
+                )}
               </div>
               <div className="flex-1 overflow-y-auto p-2 space-y-1">
                 {pickerBalances.length === 0 && pickerSerials.length === 0 && (
