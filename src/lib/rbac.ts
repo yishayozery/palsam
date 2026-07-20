@@ -100,6 +100,14 @@ export type Capability =
   | "ymach.manage"
   | "certifications.view";
 
+/**
+ * ⚠️ needsEdit:false = השער עובר גם ברמת VIEW. ה-capabilities האלה הן
+ * **צפייה בלבד** ואסור להגן בהן על פעולת כתיבה:
+ *   battalion.profile · dispatch.manage · reports.view · audit.view ·
+ *   weapons.view · attendance.view · weapons.view_report · certifications.view
+ * לכתיבה: canEdit(user, screen) / requireScreenEdit(screen), או capability
+ * עם needsEdit:true (למשל dispatch.edit, maintenance.edit).
+ */
 const CAP_TO_SCREEN: Record<Capability, { screen: Screen; needsEdit: boolean }> = {
   "battalions.manage": { screen: "settings", needsEdit: true },
   "users.manage": { screen: "settings", needsEdit: true },

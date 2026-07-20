@@ -44,9 +44,9 @@ export async function saveAttendance(
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
     const user = await requireUser();
-    const canManage = can(user, "attendance.manage");
-    const canView = can(user, "attendance.view");
-    if (!canManage && !canView) return { error: "אין הרשאה" };
+    // ⚠️ ללא נפילה ל-attendance.view: נוכחות מזינה את ספירת ימי המילואים,
+    //    ולכן כתיבה כאן דורשת ניהול. attendance.view הוא שער צפייה בלבד.
+    if (!can(user, "attendance.manage")) return { error: "אין הרשאה" };
 
     // 🔒 נעילת שלישות: נציג פלוגה חסום מלערוך נוכחות ליום נעול. שלישות/אדמין עוקפים.
     const isRoster = can(user, "soldiers.roster") || user.isAdmin;
