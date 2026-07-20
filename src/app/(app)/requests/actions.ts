@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/guard";
-import { can } from "@/lib/rbac";
+import { can, canEdit } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { nanoid } from "nanoid";
 import { escapeTelegram } from "@/lib/escape-html";
@@ -23,9 +23,13 @@ async function myUnit(user: Sessionish) {
 function isCommander(user: Sessionish): boolean {
   return !!user.isAdmin || can(user, "battalion.profile");
 }
-/** מלכ"א = מפקד/מנהל יחידת החטיבה (רואה ומטפל בכל הסוגים). */
+/**
+ * מלכ"א = מפקד/מנהל יחידת החטיבה (רואה ומטפל בכל הסוגים).
+ * ⚠️ canEdit ולא can: "battalion.profile" עובר עם VIEW על settings, ואז
+ * משתמש-צפייה יכול היה להעניק לעצמו ולאחרים סמכות טיפול בסוגי בקשות.
+ */
 function isMalka(user: Sessionish): boolean {
-  return !!user.isAdmin || can(user, "battalion.profile");
+  return !!user.isAdmin || canEdit(user, "settings");
 }
 /** האם המשתמש רשאי לטפל בסוג נתון: מלכ"א → הכל; בעל תפקיד → רק סוגים שהוקצו לו. */
 async function canHandleType(user: Sessionish, type: RequestType): Promise<boolean> {

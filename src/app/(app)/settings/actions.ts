@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireCapability } from "@/lib/guard";
+import { requireCapability, requireScreenEdit } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 import { encryptSecret } from "@/lib/crypto";
 
@@ -12,7 +12,7 @@ export async function updateOperationalSettings(
   _prev: OpsState,
   formData: FormData,
 ): Promise<OpsState> {
-  const user = await requireCapability("battalion.profile");
+  const user = await requireScreenEdit("settings");
   const bId = user.battalionId!;
 
   const requirePersonalIdOnHandover = formData.get("requirePersonalIdOnHandover") === "on";

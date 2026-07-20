@@ -8,7 +8,7 @@ import { hashPassword } from "@/lib/auth";
 import { resolveUniqueUsername } from "@/lib/usernames";
 import { sendTelegramMessage } from "@/lib/telegram";
 import { buildInviteText } from "@/lib/goliveTasks";
-import { PRESET_ROLES, AREA_ROLE_EQUIP, AREA_ROLE_PERSONNEL } from "@/lib/rbac";
+import { PRESET_ROLES, AREA_ROLE_EQUIP, AREA_ROLE_PERSONNEL, canEdit } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 
 const SQUAD_ROLE_NAME = "מפקד מחלקה";
@@ -21,8 +21,17 @@ const AREA_TO_ROLE: Record<string, string | null> = {
 };
 
 /** האם המשתמש רשאי לנהל את ה-Holder (מנהל ישיר, או מנהל מערכת). */
-function canManageHolder(user: { holderIds: string[]; isAdmin: boolean; isSuperAdmin: boolean }, holderId: string) {
-  return user.isAdmin || user.isSuperAdmin || user.holderIds.includes(holderId);
+/**
+ * ⚠️ שייכות ל-holder אינה מספיקה למינוי משתמשים: הפעולה יוצרת חשבון עם
+ * תפקיד-מערכת ברמת EDIT, כלומר מי שיש לו צפייה-בלבד היה יכול להסלים
+ * את עצמו דרך חשבון חדש. נדרשת גם הרשאת עריכה על ניהול החיילים.
+ */
+function canManageHolder(
+  user: { holderIds: string[]; isAdmin: boolean; isSuperAdmin: boolean; permissions: import("@/lib/rbac").UserPermissions },
+  holderId: string,
+) {
+  if (user.isAdmin || user.isSuperAdmin) return true;
+  return user.holderIds.includes(holderId) && canEdit(user, "soldiers");
 }
 
 /** מחזיר את מזהה תפקיד-התחום לגדוד — יוצר אותו lazily מהגדרת ה-preset אם חסר. */

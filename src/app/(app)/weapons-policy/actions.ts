@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireCapability } from "@/lib/guard";
+import { requireCapability, requireScreenEdit } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 
 export type WpState = { ok?: boolean; error?: string };
@@ -11,7 +11,7 @@ export async function updateWeaponsPolicy(
   _prev: WpState,
   formData: FormData,
 ): Promise<WpState> {
-  const user = await requireCapability("battalion.profile");
+  const user = await requireScreenEdit("settings");
   const bId = user.battalionId!;
 
   const requireEnlistment = formData.get("requireEnlistment") === "on";

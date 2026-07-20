@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireCapability } from "@/lib/guard";
+import { requireCapability, requireScreenEdit } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 
 export type ProfileState = { ok?: boolean; error?: string };
@@ -11,7 +11,7 @@ export async function updateProfile(
   _prev: ProfileState,
   formData: FormData,
 ): Promise<ProfileState> {
-  const user = await requireCapability("battalion.profile");
+  const user = await requireScreenEdit("settings");
   const bId = user.battalionId!;
   const name = String(formData.get("name") || "").trim();
   const code = String(formData.get("code") || "").trim();
