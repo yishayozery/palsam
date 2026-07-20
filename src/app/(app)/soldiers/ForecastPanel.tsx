@@ -128,11 +128,11 @@ export default function ForecastPanel({
           </select>
           {canEdit && (
             <>
-              <button onClick={toggleAll} className="border border-slate-300 rounded-lg px-3 py-2 text-xs hover:bg-slate-50 whitespace-nowrap">
+              <button onClick={toggleAll} className="border border-slate-300 rounded-lg px-3 py-2 min-h-9 text-xs hover:bg-slate-50 whitespace-nowrap">
                 {picked.size === filtered.length && filtered.length > 0 ? "נקה בחירה" : `בחר הכל (${filtered.length})`}
               </button>
               <button onClick={() => { setPicked(new Set(filtered.map((r) => r.s.id))); setModal({ kind: "order", ids: filtered.map((r) => r.s.id) }); }}
-                className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs font-medium whitespace-nowrap">
+                className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 min-h-9 text-xs font-medium whitespace-nowrap">
                 📜 צו לכל המסוננים
               </button>
             </>
@@ -142,9 +142,9 @@ export default function ForecastPanel({
           <div className="flex items-center gap-2 flex-wrap mt-2 pt-2 border-t border-slate-200">
             <span className="text-xs text-slate-600">{picked.size} נבחרו:</span>
             <button onClick={() => setModal({ kind: "order", ids: [...picked] })}
-              className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-1.5 text-xs font-medium">📜 קבע צו</button>
+              className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 min-h-9 text-xs font-medium">📜 קבע צו</button>
             <button onClick={() => setModal({ kind: "exception", ids: [...picked] })}
-              className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg px-3 py-1.5 text-xs font-medium">🚫 סמן היעדרות</button>
+              className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg px-3 py-2 min-h-9 text-xs font-medium">🚫 סמן היעדרות</button>
             <button onClick={() => setPicked(new Set())} className="text-xs text-slate-500 hover:underline mr-auto">בטל בחירה</button>
           </div>
         )}
@@ -157,7 +157,11 @@ export default function ForecastPanel({
           <Card key={s.id} className={`p-3 ${!o ? "opacity-70 border-r-4 border-r-slate-300" : absentDays > 0 ? "border-r-4 border-r-amber-400" : "border-r-4 border-r-emerald-400"}`}>
             <div className="flex items-center gap-2 flex-wrap">
               {canEdit && (
-                <input type="checkbox" checked={picked.has(s.id)} onChange={() => toggle(s.id)} className="w-4 h-4 accent-blue-600 shrink-0" />
+                // אזור מגע 40px סביב צ'קבוקס של 16px — בטלפון קשה לפגוע בריבוע קטן
+                <label className="-m-3 p-3 shrink-0 cursor-pointer flex items-center">
+                  <input type="checkbox" checked={picked.has(s.id)} onChange={() => toggle(s.id)}
+                    className="w-4 h-4 accent-blue-600" />
+                </label>
               )}
               <div className="min-w-0">
                 <div className="font-medium text-sm">{s.fullName} <span className="font-mono text-[10px] text-slate-400">{s.personalNumber ?? ""}</span></div>
@@ -181,10 +185,10 @@ export default function ForecastPanel({
               {canEdit && (
                 <div className="mr-auto flex gap-1.5">
                   <button onClick={() => setModal({ kind: "order", ids: [s.id] })}
-                    className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs hover:bg-slate-50">📜 צו</button>
+                    className="border border-slate-300 rounded-lg px-3 py-2 min-h-9 text-xs hover:bg-slate-50">📜 צו</button>
                   {o && (
                     <button onClick={() => setModal({ kind: "exception", ids: [s.id] })}
-                      className="border border-rose-300 text-rose-700 rounded-lg px-2.5 py-1.5 text-xs hover:bg-rose-50">🚫 היעדרות</button>
+                      className="border border-rose-300 text-rose-700 rounded-lg px-3 py-2 min-h-9 text-xs hover:bg-rose-50">🚫 היעדרות</button>
                   )}
                 </div>
               )}

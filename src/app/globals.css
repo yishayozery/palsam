@@ -82,3 +82,14 @@ html, body { min-height: 100%; }
 @media print {
   html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
 }
+
+/* 📱 iOS מקרב את הדף אוטומטית כשממקדים שדה עם פונט קטן מ-16px — והוא לא חוזר.
+   רוב השדות במערכת הם text-sm (14px), ולכן כל הקלדה בטלפון "קופצת".
+   רצפה של 16px במובייל בלבד; בדסקטופ הגדלים נשארים כפי שהם. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
