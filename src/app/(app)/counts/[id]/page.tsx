@@ -100,6 +100,7 @@ export default async function CountSessionPage({
         lines={session.lines.map((l) => ({
           id: l.id,
           item: l.itemType.name,
+          itemTypeId: l.itemTypeId,
           holder: l.holder?.name ?? "—",
           holderId: l.holderId ?? null,
           serial: l.serialUnit?.serialNumber ?? null,

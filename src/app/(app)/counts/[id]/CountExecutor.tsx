@@ -3,9 +3,11 @@
 import { useState, useMemo, useRef } from "react";
 import { submitCount } from "../actions";
 import { Card } from "@/components/ui";
+import BarcodeScanner from "@/components/BarcodeScanner";
+import type { ScanHit } from "@/app/(app)/scan-actions";
 
 type Line = {
-  id: string; item: string; holder: string; holderId?: string | null;
+  id: string; item: string; itemTypeId?: string | null; holder: string; holderId?: string | null;
   serial: string | null;
   serialUnitId?: string | null;
   signedSoldier?: string | null;
@@ -75,6 +77,37 @@ export default function CountExecutor({
     setScanInput("");
   }
 
+  /**
+   * 📷 סריקת ברקוד בספירה — הרווח הגדול: סורקים פריט אחרי פריט בלי להקליד.
+   * סיריאלי מזוהה לפי serialUnitId (מדויק יותר מהתאמת ספרות); כללי לפי מק"ט,
+   * ואז מגדילים את הכמות שנספרה ב-1 — כך סופרים ערימה בסריקות חוזרות.
+   */
+  function handleScanHit(hit: ScanHit) {
+    if (hit.kind === "NOT_FOUND") { setScanMsg({ ok: false, text: `⚠️ ${hit.code} — לא מזוהה` }); return; }
+
+    if (hit.kind === "SERIAL") {
+      const line = lines.find((l) => l.serialUnitId === hit.unitId);
+      if (!line) { setScanMsg({ ok: false, text: `⚠️ ${hit.itemName} · ${hit.serialNumber} — לא ברשימת הספירה` }); return; }
+      const already = (counts[line.id] ?? "") !== "";
+      setCounts((c) => ({ ...c, [line.id]: String(line.expected || 1) }));
+      setSerials((sv) => ({ ...sv, [line.id]: hit.serialNumber }));
+      setScanMsg({ ok: !already, text: already ? `כבר סומן: ${line.item}` : `✓ נמצא: ${line.item}` });
+      return;
+    }
+
+    // כללי — כל סריקה מוסיפה 1 לשורה של אותו פריט
+    const qtyLines = lines.filter((l) => !l.isSerial && l.itemTypeId === hit.itemTypeId);
+    if (qtyLines.length === 0) { setScanMsg({ ok: false, text: `⚠️ ${hit.itemName} — לא ברשימת הספירה` }); return; }
+    if (qtyLines.length > 1 && !holderFilter) {
+      setScanMsg({ ok: false, text: `${hit.itemName} מופיע ב-${qtyLines.length} מחזיקים — בחר טאב מחזיק` });
+      return;
+    }
+    const line = qtyLines.find((l) => !holderFilter || l.holder === holderFilter) ?? qtyLines[0];
+    const next = (parseInt(counts[line.id] ?? "", 10) || 0) + 1;
+    setCounts((c) => ({ ...c, [line.id]: String(next) }));
+    setScanMsg({ ok: true, text: `✓ ${line.item} — נספרו ${next}` });
+  }
+
   const stats = useMemo(() => {
     let match = 0, gap = 0, filled = 0;
     for (const l of lines) {
@@ -142,23 +175,22 @@ export default function CountExecutor({
         </div>
       )}
 
-      {/* 🔫 סורק סריאלי — הקלד/סרוק מספר סריאלי ולחץ Enter, הפריט יסומן "נמצא" */}
-      {lines.some((l) => l.isSerial) && (
-        <Card className="p-3 sticky top-2 z-20">
+      {/* 🔫 סורק — מצלמה, סורק חומרה, או הקלדה. סיריאלי וכללי כאחד. */}
+      <Card className="p-3 sticky top-2 z-20">
           <div className="flex items-center gap-2">
             <input value={scanInput} onChange={(e) => setScanInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); doScan(); } }}
               inputMode="numeric" autoFocus placeholder="🔫 סרוק / הקלד מס׳ סריאלי → Enter"
               className="flex-1 rounded-lg border-2 border-indigo-300 px-3 py-2 text-sm font-mono" />
             <button type="button" onClick={doScan} className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-bold">סמן</button>
+            <BarcodeScanner label="📷" compact onHit={handleScanHit} />
           </div>
           {scanMsg && <div className={`text-xs mt-1.5 font-medium ${scanMsg.ok ? "text-emerald-600" : "text-amber-600"}`}>{scanMsg.text}</div>}
           <div className="mt-2">
             <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="חיפוש בטבלה (שם / סריאלי)…"
               className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-xs" />
           </div>
-        </Card>
-      )}
+      </Card>
 
       {/* 📑 טאבים לפי מחזיק (פלוגה / מחסן) — כמו בדוח, עם כמה הושלמו */}
       {holderNames.length > 1 && (
