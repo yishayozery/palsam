@@ -16,9 +16,21 @@ export default function LoginForm({ battalion }: { battalion?: BattalionInfo | n
   const [state, formAction, pending] = useActionState(loginAction, initial);
   const isTotpStep = state.step === "totp";
 
+  // ⚠️ מובייל: אין כאן overflow-hidden ואין 100vh.
+  // overflow-hidden חסם גלילה לגמרי (הסמל השקוף ממילא נחתך ע"י הכרטיס עצמו),
+  // ו-100vh מתעלם משורת הכתובת. dvh + my-auto במקום items-center — כך הכרטיס
+  // ממורכז כשיש מקום, ונגלל במלואו כשאין (מקלדת פתוחה / מסך נמוך).
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
-      style={{ background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)" }}>
+    <div className="min-h-screen flex justify-center p-4 relative"
+      style={{
+        // dvh ב-style ולא כ-utility: הערך השרירותי לא נוצר ע"י Tailwind כאן.
+        // min-h-screen (100vh) נשאר כ-fallback לדפדפנים בלי dvh.
+        minHeight: "100dvh",
+        // "safe center" — ממרכז כשיש מקום, ונצמד לראש כשהכרטיס גבוה מהחלון,
+        // כך שהחלק העליון לעולם לא נחתך מחוץ להישג הגלילה.
+        alignItems: "safe center",
+        background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+      }}>
 
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-8 relative">
         {battalion?.logoData && (
@@ -101,8 +113,10 @@ export default function LoginForm({ battalion }: { battalion?: BattalionInfo | n
                 <p className="text-[10px] text-slate-400 mt-1">הקוד שקיבלת מהמפ״מ</p>
               </div>
 
-              {/* 🪤 Honeypot */}
-              <div aria-hidden="true" style={{ position: "absolute", left: "-9999px", top: "-9999px" }}>
+              {/* 🪤 Honeypot — מוסתר ע"י clip ולא ע"י left:-9999px.
+                  מיקום שלילי מותח את הדף אופקית ברגע שאין overflow-hidden על העוטף. */}
+              <div aria-hidden="true"
+                style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)", whiteSpace: "nowrap" }}>
                 <label>אל תמלא:
                   <input type="text" name="website" tabIndex={-1} autoComplete="off" />
                 </label>
