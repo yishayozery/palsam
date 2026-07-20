@@ -33,9 +33,14 @@ async function scopedIds(
   return rows.map((r) => r.id);
 }
 
+/**
+ * ⚠️ canEdit ולא can: `can(user,"soldiers")` מחזיר true גם ל-VIEW, ואז תפקידי
+ * צפייה יכלו לכתוב — ועם startDate=null גם למחוק את כל הצווים והחריגים בגדוד.
+ */
 async function requireForecastEditor() {
   const user = await requireUser();
-  if (!can(user, "attendance.manage") && !can(user, "soldiers")) throw new Error("אין הרשאה");
+  const { canEdit } = await import("@/lib/rbac");
+  if (!can(user, "attendance.manage") && !canEdit(user, "soldiers")) throw new Error("אין הרשאה");
   return user;
 }
 

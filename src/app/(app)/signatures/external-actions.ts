@@ -92,13 +92,22 @@ export async function externalCheckin(payload: {
         },
       });
       for (const sid of serialUnitIds) {
-        const su = await tx.serialUnit.findUnique({ where: { id: sid } });
-        if (!su || su.externalHolderName == null) continue;
+        // 🔒 IDOR: חובה לסנן לגדוד. בלי זה אפשר "לזכות" למחסן שלך יחידה של
+        //    גדוד אחר שנמצאת אצל גורם חוץ, ולהעביר אותה לספרים שלך.
+        const su = await tx.serialUnit.findFirst({ where: { id: sid, battalionId: bId, externalHolderName: { not: null } } });
+        if (!su) continue;
         await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: su.itemTypeId, quantity: su.lotQuantity ?? 1, serialUnitId: sid, statusId: su.statusId } });
         await tx.serialUnit.update({ where: { id: sid }, data: { currentHolderId: warehouseId, externalHolderName: null } });
       }
       for (const q of qtyItems) {
         if (q.quantity < 1) continue;
+        // 🔒 סוג הפריט והסטטוס חייבים להיות של הגדוד — אחרת אפשר להמציא מלאי
+        //    לפריט של גדוד אחר (adjustQuantity יוצר שורה חדשה כשאין התאמה).
+        const [it, st] = await Promise.all([
+          tx.itemType.findFirst({ where: { id: q.itemTypeId, battalionId: bId }, select: { id: true } }),
+          tx.itemStatus.findFirst({ where: { id: q.statusId, battalionId: bId }, select: { id: true } }),
+        ]);
+        if (!it || !st) continue;
         await adjustQuantity(tx, bId, q.itemTypeId, warehouseId, q.statusId, q.quantity);
         await tx.transferLine.create({ data: { transferId: transfer.id, itemTypeId: q.itemTypeId, quantity: q.quantity, statusId: q.statusId } });
       }

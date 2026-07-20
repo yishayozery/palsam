@@ -211,11 +211,21 @@ export async function saveVehicleTypeLicenses(formData: FormData) {
 
 const DRIVING_REFRESH = "__driving_refresh__";
 
-/** גישה לרישום מרוכז — קצין רכב / שלישות / אדמין */
+/**
+ * גישה לרישום מרוכז.
+ * ⚠️ חייב EDIT ולא VIEW: `can()` מחזיר true לכל רמת הרשאה, כולל VIEW, ולכן
+ * תפקידים לקריאה-בלבד (קה"ד, מפקד מחלקה) היו יכולים להעניק רישיונות נהיגה
+ * והסמכות לכל חייל בגדוד — הפעולה כותבת SoldierDrivingLicense ו-SoldierCertification.
+ */
 async function requireBulkTrainer() {
   const user = await requireUser();
-  const { canVehicleAccess } = await import("@/lib/guard");
-  if (!canVehicleAccess(user) && !can(user, "dispatch.manage")) throw new Error("אין הרשאה");
+  const { canEdit } = await import("@/lib/rbac");
+  const ok = user.isAdmin
+    || canEdit(user, "driving_licenses")
+    || canEdit(user, "dispatch")
+    || canEdit(user, "trainings")
+    || canEdit(user, "maintenance");
+  if (!ok) throw new Error("אין הרשאה");
   return user;
 }
 

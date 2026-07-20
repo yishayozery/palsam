@@ -2,6 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/guard";
+import { can } from "@/lib/rbac";
+import { resolveHolderKinds } from "@/lib/scope";
 
 /**
  * 📷 זיהוי ברקוד — נקודה אחת שמחליטה *מה* הקוד, בכל המסכים.
@@ -58,6 +60,21 @@ function loose(v: string): string {
 export async function resolveBarcode(raw: string): Promise<ScanHit> {
   const user = await requireUser();
   const bId = user.battalionId!;
+
+  // 🔒 סריקה היא פעולה תפעולית — לא כל משתמש מאומת. בלי זה, חשבון צפייה
+  //    יכול להזין מספרים סריאליים ולמפות מי מחזיק כל נשק בגדוד.
+  const mayScan = user.isAdmin
+    || can(user, "signatures") || can(user, "stock") || can(user, "counts")
+    || can(user, "transfers") || can(user, "driving_licenses") || can(user, "dispatch");
+  if (!mayScan) return { kind: "NOT_FOUND", code: normalize(raw) };
+
+  // מי מחזיק את הפריט נחשף רק למי שהפריט בסקופ שלו. למשתמש מוגבל-פלוגה
+  //    מוחזר הפריט עצמו, בלי לחשוף אצל מי הוא נמצא.
+  const { companyHolderIds, warehouseHolderIds } = await resolveHolderKinds(user);
+  const scoped = [...companyHolderIds, ...warehouseHolderIds];
+  const seesAll = user.isAdmin || scoped.length === 0;
+  const maySeeHolder = (holderId: string | null) =>
+    seesAll || (!!holderId && scoped.includes(holderId));
   const code = normalize(raw);
   if (!code) return { kind: "NOT_FOUND", code: "" };
 
@@ -107,11 +124,16 @@ export async function resolveBarcode(raw: string): Promise<ScanHit> {
       statusId: unit.statusId,
       statusName: unit.status.name,
       lotQuantity: unit.lotQuantity,
-      holderId: unit.currentHolderId,
-      holderName: unit.currentHolder?.name ?? null,
-      signedSoldierId: unit.signedSoldierId,
-      signedSoldierName: unit.signedSoldier?.fullName ?? null,
-      externalHolderName: unit.externalHolderName,
+      // פרטי המחזיק רק אם הפריט בסקופ של המשתמש
+      ...(maySeeHolder(unit.currentHolderId)
+        ? {
+            holderId: unit.currentHolderId,
+            holderName: unit.currentHolder?.name ?? null,
+            signedSoldierId: unit.signedSoldierId,
+            signedSoldierName: unit.signedSoldier?.fullName ?? null,
+            externalHolderName: unit.externalHolderName,
+          }
+        : { holderId: null, holderName: null, signedSoldierId: null, signedSoldierName: null, externalHolderName: null }),
     };
   }
 
