@@ -221,7 +221,7 @@ const CSS = `
 .aid-uname{font-family:var(--serif);font-size:23px;font-weight:700;color:var(--olive);line-height:1.15;}
 .aid-umotto{font-size:12.5px;color:var(--brass);font-style:italic;margin-top:2px;}
 .aid-usys{font-size:10.5px;letter-spacing:.34em;color:var(--label);margin-top:5px;text-transform:uppercase;}
-.aid-meta{text-align:left;direction:ltr;font-size:12px;color:var(--ink-soft);min-width:168px;}
+.aid-meta{text-align:right;direction:rtl;font-size:12px;color:var(--ink-soft);min-width:168px;}
 .aid-mrow{display:flex;justify-content:space-between;gap:14px;padding:2px 0;border-bottom:1px dotted var(--rule);}
 .aid-mrow span{color:var(--label);}
 .aid-mrow b{font-family:var(--mono);font-variant-numeric:tabular-nums;}

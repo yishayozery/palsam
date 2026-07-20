@@ -11,11 +11,11 @@ Font.register({
 });
 
 const s = StyleSheet.create({
-  page: { fontFamily: "Heebo", fontSize: 11, padding: 40, direction: "rtl" as never },
+  page: { fontFamily: "Heebo", fontSize: 11, padding: 40, direction: "rtl" as never, textAlign: "right" as never },
   header: { borderBottomWidth: 2, borderBottomColor: "#1e293b", paddingBottom: 12, marginBottom: 16, flexDirection: "row-reverse", justifyContent: "space-between" },
   title: { fontSize: 18, fontWeight: 700, color: "#1e293b" },
   subtitle: { fontSize: 10, color: "#64748b", marginTop: 4 },
-  meta: { textAlign: "left" as never, fontSize: 10 },
+  meta: { textAlign: "right" as never, fontSize: 10 },
   metaBold: { fontWeight: 700 },
   metaLight: { color: "#64748b" },
   grid: { flexDirection: "row-reverse", flexWrap: "wrap", marginBottom: 16, gap: 8 },
@@ -215,14 +215,16 @@ export type ArmoryPdfData = {
 };
 
 const a = StyleSheet.create({
-  page: { fontFamily: "Heebo", fontSize: 10, padding: 18, direction: "rtl" as never, color: "#181c17" },
+  // ⚠️ ב-react-pdf, direction:"rtl" לא משנה את יישור הטקסט — ברירת המחדל נשארת left.
+  //    textAlign:"right" כאן הוא מה שגורם לכל הטקסט לרשת יישור לימין, כמו בעברית.
+  page: { fontFamily: "Heebo", fontSize: 10, padding: 18, direction: "rtl" as never, textAlign: "right" as never, color: "#181c17" },
   head: { borderBottomWidth: 2, borderBottomColor: "#38471f", paddingBottom: 6, marginBottom: 6, flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "flex-start" },
   unitBox: { flexDirection: "row-reverse", gap: 8, alignItems: "center" },
   logo: { width: 40, height: 40, objectFit: "contain" as never },
   uname: { fontSize: 13, fontWeight: 700, color: "#38471f" },
   umotto: { fontSize: 9, color: "#8a7440" },
   usys: { fontSize: 8, color: "#6b6f61", marginTop: 3 },
-  meta: { textAlign: "left" as never, fontSize: 9, color: "#3b4038" },
+  meta: { textAlign: "right" as never, fontSize: 9, color: "#3b4038" },
   metaRow: { flexDirection: "row-reverse", justifyContent: "space-between", gap: 10 },
   titleWrap: { alignItems: "center", marginBottom: 6 },
   eyebrow: { fontSize: 8, color: "#8a7440", fontWeight: 700, letterSpacing: 1 },
