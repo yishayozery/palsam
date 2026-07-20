@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireCapability } from "@/lib/guard";
+import { requireCapability , requireScreenEdit } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 import { type FormType, DEFAULT_VALIDITY_DAYS, DRIVER_FORMS, FORM_ORDER, FORM_TITLES } from "@/lib/driverForms";
 import { linkTokenQuery } from "@/lib/link-token";
@@ -10,7 +10,7 @@ import { linkTokenQuery } from "@/lib/link-token";
 const BASE = process.env.NEXT_PUBLIC_APP_URL || "https://www.palmy.co.il";
 
 async function guard() {
-  const user = await requireCapability("dispatch.manage");
+  const user = await requireScreenEdit("driving_licenses");
   return { user, bId: user.battalionId! };
 }
 

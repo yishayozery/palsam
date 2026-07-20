@@ -90,6 +90,8 @@ export type Capability =
   | "reports.view"
   | "audit.view"
   | "dispatch.manage"
+  | "dispatch.edit"
+  | "maintenance.edit"
   | "weapons.approve"
   | "weapons.view"
   | "attendance.manage"
@@ -120,7 +122,11 @@ const CAP_TO_SCREEN: Record<Capability, { screen: Screen; needsEdit: boolean }> 
   "maintenance.manage": { screen: "maintenance", needsEdit: true },
   "reports.view": { screen: "reports", needsEdit: false },
   "audit.view": { screen: "audit", needsEdit: false },
+  // ⚠️ dispatch.manage נשאר needsEdit:false לתאימות — הוא שומר על *צפייה* במסך.
+  //    לכתיבה יש להשתמש ב-dispatch.edit. אותו הפרדה ל-maintenance.
   "dispatch.manage": { screen: "dispatch", needsEdit: false },
+  "dispatch.edit": { screen: "dispatch", needsEdit: true },
+  "maintenance.edit": { screen: "maintenance", needsEdit: true },
   "weapons.approve": { screen: "armory", needsEdit: true },
   "weapons.view": { screen: "armory", needsEdit: false },
   "attendance.manage": { screen: "attendance", needsEdit: true },
@@ -291,7 +297,7 @@ export const PRESET_ROLES: {
       { screen: "vacation", level: "EDIT" },
       { screen: "stock", level: "VIEW" }, { screen: "gaps", level: "VIEW" },
       { screen: "reports", level: "VIEW" }, { screen: "armory_allocations", level: "VIEW" },
-      { screen: "maintenance", level: "VIEW" }, { screen: "ymach", level: "EDIT" },
+      { screen: "maintenance", level: "EDIT" }, { screen: "ymach", level: "EDIT" },
       { screen: "trainings", level: "VIEW" },
     ],
   },
@@ -299,7 +305,7 @@ export const PRESET_ROLES: {
     name: "מפקד מחלקה", isAdmin: false, isCommander: true, sortOrder: 5,
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "soldiers", level: "VIEW" },
-      { screen: "attendance", level: "EDIT" }, { screen: "dispatch", level: "VIEW" }, { screen: "certifications", level: "VIEW" },
+      { screen: "attendance", level: "EDIT" }, { screen: "dispatch", level: "EDIT" }, { screen: "certifications", level: "VIEW" },
       { screen: "vacation", level: "VIEW" }, { screen: "trainings", level: "VIEW" },
     ],
   },
@@ -315,7 +321,7 @@ export const PRESET_ROLES: {
       { screen: "vacation", level: "EDIT" },
       { screen: "stock", level: "VIEW" }, { screen: "gaps", level: "VIEW" },
       { screen: "reports", level: "VIEW" }, { screen: "armory_allocations", level: "VIEW" },
-      { screen: "maintenance", level: "VIEW" }, { screen: "ymach", level: "EDIT" },
+      { screen: "maintenance", level: "EDIT" }, { screen: "ymach", level: "EDIT" },
       { screen: "trainings", level: "VIEW" },
     ],
   },
@@ -371,7 +377,7 @@ export const PRESET_ROLES: {
     permissions: [
       { screen: "dashboard", level: "VIEW" }, { screen: "trainings", level: "EDIT" },
       { screen: "soldiers", level: "VIEW" }, { screen: "certifications", level: "VIEW" },
-      { screen: "driving_licenses", level: "VIEW" }, { screen: "reports", level: "VIEW" },
+      { screen: "driving_licenses", level: "EDIT" }, { screen: "reports", level: "VIEW" },
     ],
   },
   {

@@ -2,11 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireCapability } from "@/lib/guard";
+import { requireCapability , requireScreenEdit } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 
 async function guard() {
-  const user = await requireCapability("dispatch.manage");
+  const user = await requireScreenEdit("driving_licenses");
   return { user, bId: user.battalionId! };
 }
 

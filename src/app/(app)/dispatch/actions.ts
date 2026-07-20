@@ -50,7 +50,7 @@ export async function saveAssignment(
   formData: FormData,
 ): Promise<{ ok?: boolean; error?: string; id?: string }> {
   try {
-    const user = await requireCapability("dispatch.manage");
+    const user = await requireCapability("dispatch.edit");
     if (!user.battalionId) return { error: "אינך משויך לגדוד" };
     const bId = user.battalionId;
 
@@ -137,7 +137,7 @@ export async function toggleAssignmentComplete(
   formData: FormData,
 ): Promise<{ ok?: boolean; error?: string; completedAt?: string | null }> {
   try {
-    const user = await requireCapability("dispatch.manage");
+    const user = await requireCapability("dispatch.edit");
     const id = String(formData.get("id") || "");
     const setCompletedRaw = String(formData.get("completed") || "true");
     const setCompleted = setCompletedRaw === "true";
@@ -162,7 +162,7 @@ export async function toggleAssignmentComplete(
 /** מחיקת שיבוץ. כל המשתמשים יכולים. */
 export async function deleteAssignment(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireCapability("dispatch.manage");
+    const user = await requireCapability("dispatch.edit");
     const id = String(formData.get("id") || "");
     if (!id) return { error: "חסר מזהה" };
     const existing = await prisma.vehicleAssignment.findUnique({ where: { id }, select: { battalionId: true } });
@@ -182,7 +182,7 @@ export async function deleteAssignment(formData: FormData): Promise<{ ok?: boole
 /** יצירה/עדכון של משימה רב-רכבית (שיירה). כולל רכבי-חוץ וחיילי-חוץ. */
 export async function saveMission(formData: FormData): Promise<{ ok?: boolean; error?: string; id?: string }> {
   try {
-    const user = await requireCapability("dispatch.manage");
+    const user = await requireCapability("dispatch.edit");
     if (!user.battalionId) return { error: "אינך משויך לגדוד" };
     const bId = user.battalionId;
 
@@ -205,7 +205,7 @@ export async function saveMission(formData: FormData): Promise<{ ok?: boolean; e
 /** סימון/ביטול סיום משימה שלמה. */
 export async function toggleMissionComplete(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireCapability("dispatch.manage");
+    const user = await requireCapability("dispatch.edit");
     const id = String(formData.get("id") || "");
     const setCompleted = String(formData.get("completed") || "true") === "true";
     if (!id) return { error: "חסר מזהה" };
@@ -227,7 +227,7 @@ export async function toggleMissionComplete(formData: FormData): Promise<{ ok?: 
 /** דיווח/ביטול הקמת הרשאת נסיעה ע"י נהג (ידני מהמסך — קצין רכב/מפקד). */
 export async function toggleTripConfirmed(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireCapability("dispatch.manage");
+    const user = await requireCapability("dispatch.edit");
     const vasId = String(formData.get("vasId") || "");
     const confirmed = String(formData.get("confirmed") || "true") === "true";
     if (!vasId) return { error: "חסר מזהה" };
@@ -250,7 +250,7 @@ export async function toggleTripConfirmed(formData: FormData): Promise<{ ok?: bo
 /** התחלת משימה — נחסמת עד שכל הנהגים (רכב מערכת) דיווחו שהקימו הרשאת נסיעה. */
 export async function startMission(formData: FormData): Promise<{ ok?: boolean; error?: string; missing?: string[] }> {
   try {
-    const user = await requireCapability("dispatch.manage");
+    const user = await requireCapability("dispatch.edit");
     const id = String(formData.get("id") || "");
     const force = String(formData.get("force") || "") === "true";
     if (!id) return { error: "חסר מזהה" };
@@ -282,7 +282,7 @@ export async function startMission(formData: FormData): Promise<{ ok?: boolean; 
 /** מחיקת משימה (כולל כל הרכבים שלה — cascade). */
 export async function deleteMission(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireCapability("dispatch.manage");
+    const user = await requireCapability("dispatch.edit");
     const id = String(formData.get("id") || "");
     if (!id) return { error: "חסר מזהה" };
     const m = await prisma.mission.findUnique({ where: { id }, select: { battalionId: true } });

@@ -13,7 +13,7 @@ type SlotAssignment = {
 
 export async function saveTemplate(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireCapability("dispatch.manage");
+    const user = await requireCapability("dispatch.edit");
     const bId = user.battalionId!;
 
     const id = String(formData.get("id") || "").trim() || undefined;
@@ -114,7 +114,7 @@ export async function saveTemplate(formData: FormData): Promise<{ ok?: boolean; 
 
 export async function deleteTemplate(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const user = await requireCapability("dispatch.manage");
+    const user = await requireCapability("dispatch.edit");
     const bId = user.battalionId!;
     const id = String(formData.get("id") || "");
     const existing = await prisma.dispatchTemplate.findUnique({ where: { id }, select: { battalionId: true } });
@@ -130,7 +130,7 @@ export async function deleteTemplate(formData: FormData): Promise<{ ok?: boolean
 }
 
 export async function saveDispatchRole(formData: FormData) {
-  const user = await requireCapability("dispatch.manage");
+  const user = await requireCapability("dispatch.edit");
   const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
@@ -151,7 +151,7 @@ export async function saveDispatchRole(formData: FormData) {
 }
 
 export async function toggleDispatchRole(formData: FormData) {
-  const user = await requireCapability("dispatch.manage");
+  const user = await requireCapability("dispatch.edit");
   const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
   const existing = await prisma.dispatchRole.findUnique({ where: { id } });

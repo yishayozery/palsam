@@ -27,6 +27,23 @@ export async function requireVehicleAccess(): Promise<SessionUser> {
   return user;
 }
 
+/**
+ * מקבילת-עריכה ל-canVehicleAccess. canVehicleAccess נבנה מ-capabilities
+ * שעוברות עם VIEW, ולכן הוא שער *צפייה* בלבד — כל כתיבה בתחום הרכב
+ * (תיקי נהג, כרטיסי דלק, דיווחי תאונה) חייבת לעבור דרך כאן.
+ */
+export function canVehicleEdit(user: SessionUser): boolean {
+  return user.isAdmin
+    || canEdit(user, "driving_licenses")
+    || canEdit(user, "maintenance")
+    || canEdit(user, "dispatch");
+}
+export async function requireVehicleEdit(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!canVehicleEdit(user)) redirect("/");
+  return user;
+}
+
 /** הרשאה פר-משתמש לאשר חיילים לנשק (canApproveWeapons) — אדמין תמיד מורשה. */
 export function canApproveWeapons(user: SessionUser): boolean {
   return user.isSuperAdmin || user.isAdmin || user.canApproveWeapons;

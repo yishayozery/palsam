@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireVehicleAccess } from "@/lib/guard";
+import { requireVehicleEdit } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { linkTokenQuery } from "@/lib/link-token";
 
@@ -14,7 +14,7 @@ function fillLink(id: string): string {
 
 /** יצירת דיווח תאונה חדש (DRAFT) + החזרת לינק למילוי חלק א ע"י החייל. */
 export async function createAccidentReport(type: AType): Promise<{ id: string; link: string }> {
-  const user = await requireVehicleAccess();
+  const user = await requireVehicleEdit();
   const r = await prisma.accidentReport.create({
     data: { battalionId: user.battalionId!, type, status: "DRAFT" },
     select: { id: true },
@@ -25,7 +25,7 @@ export async function createAccidentReport(type: AType): Promise<{ id: string; l
 
 /** לינק למילוי חלק א של דיווח קיים (לשליחה חוזרת). */
 export async function getAccidentFillLink(id: string): Promise<{ link?: string; error?: string }> {
-  const user = await requireVehicleAccess();
+  const user = await requireVehicleEdit();
   const r = await prisma.accidentReport.findFirst({ where: { id, battalionId: user.battalionId! }, select: { id: true } });
   if (!r) return { error: "לא נמצא" };
   return { link: fillLink(r.id) };
@@ -33,7 +33,7 @@ export async function getAccidentFillLink(id: string): Promise<{ link?: string; 
 
 /** מחיקת דיווח (רק בשלב DRAFT — טרם הוגש). */
 export async function deleteAccidentReport(id: string): Promise<{ ok?: boolean; error?: string }> {
-  const user = await requireVehicleAccess();
+  const user = await requireVehicleEdit();
   const r = await prisma.accidentReport.findFirst({ where: { id, battalionId: user.battalionId! }, select: { status: true } });
   if (!r) return { error: "לא נמצא" };
   if (r.status !== "DRAFT") return { error: "לא ניתן למחוק דיווח שכבר הוגש" };
