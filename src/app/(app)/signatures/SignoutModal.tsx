@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useMemo, useRef } from "react";
+import BarcodeScanner from "@/components/BarcodeScanner";
+import type { ScanHit } from "@/app/(app)/scan-actions";
 import { createSignout, updateSoldierPhone } from "./actions";
 import { signKit } from "../ymach/actions";
 import { useEscClose } from "@/lib/useEscClose";
@@ -62,6 +64,7 @@ export default function SignoutModal({
   const [kitPickerSearch, setKitPickerSearch] = useState("");
   // התראת חוסר ערכה — לפני שמרחיבים: מפרטת מה חסר, מאפשרת המשך עם מה שיש
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [scanMsg, setScanMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [phoneInput, setPhoneInput] = useState("");
   const [phoneSaving, setPhoneSaving] = useState(false);
   const [phoneError, setPhoneError] = useState("");
@@ -160,6 +163,37 @@ export default function SignoutModal({
   };
 
   const removeCart = (idx: number) => setCart((c) => c.filter((_, i) => i !== idx));
+
+  /**
+   * 📷 סריקת ברקוד → הוספה לסל. הזיהוי (סיריאלי/כללי) כבר נעשה בשרת;
+   * כאן רק בודקים שהפריט באמת זמין להחתמה מהמחסן הזה, ומסבירים אם לא.
+   */
+  const handleScan = (hit: ScanHit) => {
+    if (hit.kind === "NOT_FOUND") return;
+
+    if (hit.kind === "SERIAL") {
+      if (cartSerialIds.has(hit.unitId)) { setScanMsg({ ok: false, text: `${hit.itemName} · ${hit.serialNumber} — כבר בסל` }); return; }
+      const u = units.find((x) => x.id === hit.unitId);
+      if (!u) {
+        const why = hit.signedSoldierName ? `חתום על ${hit.signedSoldierName}`
+          : hit.externalHolderName ? `אצל גורם חוץ (${hit.externalHolderName})`
+          : hit.holderName ? `נמצא ב${hit.holderName}`
+          : "לא זמין להחתמה מהמחסן הזה";
+        setScanMsg({ ok: false, text: `${hit.itemName} · ${hit.serialNumber} — ${why}` });
+        return;
+      }
+      addSerial(u);
+      setScanMsg({ ok: true, text: `${u.itemName} · ${u.serial}` });
+      return;
+    }
+
+    // כללי — בוחרים את היתרה עם הכמות הגדולה ביותר (בד"כ "תקין")
+    const options = balances.filter((b) => b.itemTypeId === hit.itemTypeId && b.quantity > 0);
+    if (options.length === 0) { setScanMsg({ ok: false, text: `${hit.itemName} — אין יתרה במחסן` }); return; }
+    const b = [...options].sort((x, y) => y.quantity - x.quantity)[0];
+    addQty(b);
+    setScanMsg({ ok: true, text: `${b.itemName} (${b.status})` });
+  };
 
   const reset = () => {
     setSoldierId(""); setCompanyFilter(lockCompanyId ?? ""); setSoldierSearch("");
@@ -609,14 +643,23 @@ export default function SignoutModal({
           {/* === עמודה שמאלית — מלאי זמין === */}
           <div className="flex flex-col bg-white order-1 md:order-2 md:min-h-0">
             <div className="p-2 border-b border-slate-200 bg-white sticky top-0 shrink-0">
-              <details>
-                <summary className="cursor-pointer text-sm text-slate-600 flex items-center gap-1.5 px-1 py-1">
-                  🔍 חפש פריט...
-                  <span className="text-xs text-slate-400 mr-auto">({availableUnits.length + availableBalances.length})</span>
-                </summary>
-                <input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="הקלד שם פריט..."
-                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm mt-1" autoFocus />
-              </details>
+              <div className="flex items-start gap-2">
+                <details className="flex-1 min-w-0">
+                  <summary className="cursor-pointer text-sm text-slate-600 flex items-center gap-1.5 px-1 py-1">
+                    🔍 חפש פריט...
+                    <span className="text-xs text-slate-400 mr-auto">({availableUnits.length + availableBalances.length})</span>
+                  </summary>
+                  <input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="הקלד שם פריט..."
+                    className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm mt-1" autoFocus />
+                </details>
+                {/* סריקה — לצד החיפוש הידני, לא במקומו */}
+                <BarcodeScanner label="📷 סרוק" compact onHit={handleScan} />
+              </div>
+              {scanMsg && (
+                <div className={`mt-1 rounded-lg px-2 py-1.5 text-xs ${scanMsg.ok ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
+                  {scanMsg.ok ? "✅ נוסף:" : "⚠️"} {scanMsg.text}
+                </div>
+              )}
             </div>
             <div className="flex-1 md:overflow-y-auto p-2 space-y-1.5 min-h-[200px]">
               {/* בורר ערכה — נגלל עם שאר הפריטים */}
