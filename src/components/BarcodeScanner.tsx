@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { resolveBarcode, type ScanHit } from "@/app/(app)/scan-actions";
 import { useEscClose } from "@/lib/useEscClose";
 
@@ -34,6 +35,8 @@ export default function BarcodeScanner({
   const [camState, setCamState] = useState<"idle" | "starting" | "live" | "unavailable">("idle");
   const [scanned, setScanned] = useState(0);
   const [flash, setFlash] = useState<"good" | "bad" | null>(null);
+  // מה שהמצלמה קראה בפועל — מבדיל בין "לא זוהה ברקוד" ל"זוהה אבל לא במאגר"
+  const [rawSeen, setRawSeen] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -137,7 +140,7 @@ export default function BarcodeScanner({
             if (cancelled || !videoRef.current) return;
             try {
               const found = await det.detect(videoRef.current);
-              if (found[0]?.rawValue) await handleCode(found[0].rawValue);
+              if (found[0]?.rawValue) { setRawSeen(found[0].rawValue); await handleCode(found[0].rawValue); }
             } catch { /* פריים לא קריא — ממשיכים */ }
             if (!cancelled) setTimeout(tick, 250);
           };
@@ -147,11 +150,22 @@ export default function BarcodeScanner({
         }
 
         // מסלול ב׳ — ZXing (אייפון/ספארי). נטען רק כאן, כדי לא להכביד על שאר המערכת.
+        // decodeFromStream ולא decodeFromVideoElement: ZXing מחבר בעצמו את הזרם
+        // לאלמנט ומחכה למטא-דאטה, כך שהוא לא מנסה לפענח פריים חסר-מימדים.
         const { BrowserMultiFormatReader } = await import("@zxing/browser");
+        const { DecodeHintType, BarcodeFormat } = await import("@zxing/library");
         if (cancelled) return;
-        const reader = new BrowserMultiFormatReader();
-        const controls = await reader.decodeFromVideoElement(video, (result) => {
-          if (result) void handleCode(result.getText());
+        const hints = new Map();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX,
+          BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.ITF,
+          BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+          BarcodeFormat.CODABAR,
+        ]);
+        hints.set(DecodeHintType.TRY_HARDER, true);
+        const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 150 });
+        const controls = await reader.decodeFromStream(stream, video, (result) => {
+          if (result) { setRawSeen(result.getText()); void handleCode(result.getText()); }
         });
         stopRef.current = () => { cancelled = true; controls.stop(); };
       } catch {
@@ -183,15 +197,18 @@ export default function BarcodeScanner({
 
   return (
     <>
-      <button type="button" onClick={() => { setOpen(true); setLast(null); setScanned(0); setErr(null); }}
+      <button type="button" onClick={() => { setOpen(true); setLast(null); setScanned(0); setErr(null); setRawSeen(null); }}
         className={compact
           ? "bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-xs hover:bg-slate-50 whitespace-nowrap"
           : "bg-white border border-indigo-300 text-indigo-700 rounded-lg px-3 py-2 text-xs md:text-sm font-medium hover:bg-indigo-50 whitespace-nowrap"}>
         {label}
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-[60] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl">
+      {/* ⚠️ portal ל-body: הסורק נפתח מתוך מודלים אחרים. position:fixed מאבד
+          את משמעותו כשיש אב עם transform/filter, ואז החלון נדחס לזרימת המסמך
+          במקום לצוף — והווידאו מקבל גובה מעוות שלא ניתן לפענוח. */}
+      {open && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl">
           <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[92dvh] flex flex-col overflow-hidden">
 
             {/* 📷 המצלמה ראשונה ובגובה מלא — היא העיקר. הכותרת והסגירה מרחפות עליה,
@@ -264,6 +281,14 @@ export default function BarcodeScanner({
                 </div>
               </div>
 
+              {rawSeen && (
+                <div className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] text-slate-600">
+                  הקוד שנקרא מהמצלמה: <span className="font-mono text-slate-900 select-all break-all">{rawSeen}</span>
+                  <button type="button" onClick={() => { setManual(rawSeen); }}
+                    className="mr-2 text-indigo-700 underline">העתק לשדה</button>
+                </div>
+              )}
+
               <p className="text-[11px] text-slate-400 text-center">
                 המערכת מזהה לבד אם הקוד סיריאלי או מק״ט כללי. הסורק נשאר פתוח לסריקה רצופה.
               </p>
@@ -275,7 +300,8 @@ export default function BarcodeScanner({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
