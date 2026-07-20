@@ -44,14 +44,34 @@ function normalize(raw: string): string {
   return raw.replace(/[‎‏‪-‮]/g, "").trim();
 }
 
+/**
+ * מפתח השוואה סלחני. הברקוד המודפס והמק"ט במאגר לא תמיד זהים תו-בתו:
+ * מק"ט צה"לי מרופד באפסים מובילים (000170053), הסורק עשוי להחזיר אותו בלי
+ * הריפוד, ולעיתים יש מקפים או רווחים בתוך הקוד. כאן מנרמלים את שניהם.
+ */
+function loose(v: string): string {
+  const t = v.replace(/[\s\-_.\/]/g, "").toUpperCase();
+  // קוד מספרי בלבד → מסירים אפסים מובילים כדי ש-170053 יתאים ל-000170053
+  return /^\d+$/.test(t) ? t.replace(/^0+/, "") || "0" : t;
+}
+
 export async function resolveBarcode(raw: string): Promise<ScanHit> {
   const user = await requireUser();
   const bId = user.battalionId!;
   const code = normalize(raw);
   if (!code) return { kind: "NOT_FOUND", code: "" };
 
+  const SERIAL_SELECT = {
+    id: true, serialNumber: true, itemTypeId: true, statusId: true, lotQuantity: true,
+    currentHolderId: true, externalHolderName: true, signedSoldierId: true,
+    itemType: { select: { name: true, sku: true, unit: true } },
+    status: { select: { name: true } },
+    currentHolder: { select: { name: true } },
+    signedSoldier: { select: { fullName: true } },
+  } as const;
+
   // 1️⃣ סיריאלי / אצוותי — הברקוד מקודד את המספר הסריאלי עצמו
-  const unit = await prisma.serialUnit.findFirst({
+  let unit = await prisma.serialUnit.findFirst({
     where: { battalionId: bId, serialNumber: code },
     select: {
       id: true, serialNumber: true, itemTypeId: true, statusId: true, lotQuantity: true,
@@ -62,6 +82,19 @@ export async function resolveBarcode(raw: string): Promise<ScanHit> {
       signedSoldier: { select: { fullName: true } },
     },
   });
+  // נפילה להשוואה סלחנית — מקפים/רווחים/אפסים מובילים בין המדבקה למאגר
+  if (!unit) {
+    const key = loose(code);
+    const tail = code.replace(/\D/g, "").slice(-6);
+    if (tail.length >= 4) {
+      const candidates = await prisma.serialUnit.findMany({
+        where: { battalionId: bId, serialNumber: { contains: tail } },
+        select: SERIAL_SELECT,
+        take: 50,
+      });
+      unit = candidates.find((u) => loose(u.serialNumber) === key) ?? null;
+    }
+  }
   if (unit) {
     return {
       kind: "SERIAL",
@@ -82,11 +115,20 @@ export async function resolveBarcode(raw: string): Promise<ScanHit> {
     };
   }
 
-  // 2️⃣ כללי — הברקוד הוא המק"ט
-  const itemType = await prisma.itemType.findFirst({
+  // 2️⃣ כללי — הברקוד הוא המק"ט. התאמה מדויקת קודם (מאונדקס), ורק אם נכשלה
+  //    נופלים להשוואה סלחנית מול הקטלוג של הגדוד (כמה מאות שורות בלבד).
+  let itemType = await prisma.itemType.findFirst({
     where: { battalionId: bId, sku: code, active: true },
     select: { id: true, name: true, sku: true, unit: true, trackingMethod: true },
   });
+  if (!itemType) {
+    const key = loose(code);
+    const catalog = await prisma.itemType.findMany({
+      where: { battalionId: bId, active: true, sku: { not: null } },
+      select: { id: true, name: true, sku: true, unit: true, trackingMethod: true },
+    });
+    itemType = catalog.find((i) => loose(i.sku!) === key) ?? null;
+  }
   if (itemType) {
     return {
       kind: "ITEM_TYPE",
