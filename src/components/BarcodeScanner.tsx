@@ -37,6 +37,9 @@ export default function BarcodeScanner({
   const [flash, setFlash] = useState<"good" | "bad" | null>(null);
   // מה שהמצלמה קראה בפועל — מבדיל בין "לא זוהה ברקוד" ל"זוהה אבל לא במאגר"
   const [rawSeen, setRawSeen] = useState<string | null>(null);
+  const [engine, setEngine] = useState<string | null>(null);
+  const [camInfo, setCamInfo] = useState<string | null>(null);
+  const framesRef = useRef(0);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -119,9 +122,21 @@ export default function BarcodeScanner({
     (async () => {
       setCamState("starting");
       try {
+        // רזולוציה גבוהה + פוקוס רציף. ברירת המחדל של getUserMedia עלולה להיות
+        // 640x480 ואז ברקוד צפוף (Code 128) לא מפוענח אלא מקרוב מאוד.
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 }, height: { ideal: 1080 },
+            // @ts-expect-error — נתמך בכרום/אנדרואיד, מתעלמים ממנו במקום אחר
+            focusMode: "continuous",
+          },
         });
+        {
+          const track = stream.getVideoTracks()[0];
+          const st = track?.getSettings?.();
+          if (st) setCamInfo(`${st.width ?? "?"}×${st.height ?? "?"}`);
+        }
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = stream;
         const video = videoRef.current;
@@ -133,6 +148,7 @@ export default function BarcodeScanner({
         // מסלול א׳ — BarcodeDetector מובנה (אנדרואיד/כרום): ללא ספריה
         const W = window as unknown as { BarcodeDetector?: new (o?: unknown) => DetectorLike };
         if (W.BarcodeDetector) {
+          setEngine("BarcodeDetector");
           const det = new W.BarcodeDetector({
             formats: ["code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e", "itf", "codabar", "qr_code", "data_matrix"],
           });
@@ -141,6 +157,7 @@ export default function BarcodeScanner({
             try {
               const found = await det.detect(videoRef.current);
               if (found[0]?.rawValue) { setRawSeen(found[0].rawValue); await handleCode(found[0].rawValue); }
+              framesRef.current++;
             } catch { /* פריים לא קריא — ממשיכים */ }
             if (!cancelled) setTimeout(tick, 250);
           };
@@ -163,8 +180,10 @@ export default function BarcodeScanner({
           BarcodeFormat.CODABAR,
         ]);
         hints.set(DecodeHintType.TRY_HARDER, true);
+        setEngine("ZXing");
         const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 150 });
         const controls = await reader.decodeFromStream(stream, video, (result) => {
+          framesRef.current++;
           if (result) { setRawSeen(result.getText()); void handleCode(result.getText()); }
         });
         stopRef.current = () => { cancelled = true; controls.stop(); };
@@ -197,7 +216,7 @@ export default function BarcodeScanner({
 
   return (
     <>
-      <button type="button" onClick={() => { setOpen(true); setLast(null); setScanned(0); setErr(null); setRawSeen(null); }}
+      <button type="button" onClick={() => { setOpen(true); setLast(null); setScanned(0); setErr(null); setRawSeen(null); setEngine(null); setCamInfo(null); }}
         className={compact
           ? "bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-xs hover:bg-slate-50 whitespace-nowrap"
           : "bg-white border border-indigo-300 text-indigo-700 rounded-lg px-3 py-2 text-xs md:text-sm font-medium hover:bg-indigo-50 whitespace-nowrap"}>
@@ -213,7 +232,9 @@ export default function BarcodeScanner({
 
             {/* 📷 המצלמה ראשונה ובגובה מלא — היא העיקר. הכותרת והסגירה מרחפות עליה,
                 כדי שבמובייל לא יידחף למטה ולא ייחתך. */}
-            <div className="relative bg-slate-900 shrink-0" style={{ aspectRatio: "3 / 4", maxHeight: "52dvh" }}>
+            {/* ⚠️ בלי aspect-ratio: aspect-ratio יחד עם maxHeight מכווץ גם את *הרוחב*,
+                והווידאו יוצא רצועה צרה שממנה אי-אפשר לפענח ברקוד. גובה קבוע + w-full. */}
+            <div className="relative bg-slate-900 shrink-0 w-full" style={{ height: "46dvh", minHeight: 240 }}>
               <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
 
               {/* הבזק ירוק/אדום על כל חלון המצלמה — המשוב שרואים גם מזווית העין */}
@@ -280,6 +301,12 @@ export default function BarcodeScanner({
                   </button>
                 </div>
               </div>
+
+              {(engine || camInfo) && (
+                <p className="text-[10px] text-slate-400 text-center">
+                  מנוע: {engine ?? "…"}{camInfo ? ` · מצלמה ${camInfo}` : ""}
+                </p>
+              )}
 
               {rawSeen && (
                 <div className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] text-slate-600">
