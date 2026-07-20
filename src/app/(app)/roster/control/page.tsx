@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/ui";
 import ControlClient from "./ControlClient";
 import ForecastSummary from "./ForecastSummary";
+import { buildForecast } from "@/lib/forecast";
 
 export const dynamic = "force-dynamic";
 
@@ -198,14 +199,19 @@ export default async function RosterControlPage({
     reasons: { name: string; icon: string; color: string; days: number }[];
     companies: { name: string; min: number; max: number; total: number }[];
   } = { days: [], reasons: [], companies: [] };
+  let fcOrderedCount = 0;
 
   if (fcDays.length > 0) {
     const fcDateObjs = fcDays.map((d) => new Date(d + "T00:00:00Z"));
-    const [fcStatuses, fcEntries, fcAllocs] = await Promise.all([
+    const [fcStatuses, fcEntries, fcOrders, fcAllocs] = await Promise.all([
       prisma.forecastStatus.findMany({ where: { battalionId: bId }, select: { id: true, name: true, icon: true, color: true, inService: true } }),
       prisma.forecastEntry.findMany({
         where: { soldier: { battalionId: bId }, date: { in: fcDateObjs } },
         select: { soldierId: true, date: true, statusId: true },
+      }),
+      prisma.forecastOrder.findMany({
+        where: { employmentId: selectedEmp!.id, soldier: { battalionId: bId } },
+        select: { soldierId: true, startDate: true, endDate: true },
       }),
       prisma.employmentAllocation.findMany({
         where: { employmentId: selectedEmp!.id, date: { in: fcDateObjs } },
@@ -213,31 +219,30 @@ export default async function RosterControlPage({
       }),
     ]);
     const fcStatusById = new Map(fcStatuses.map((s) => [s.id, s]));
-    const fcEntryMap = new Map(fcEntries.map((e) => [`${e.soldierId}|${iso(e.date)}`, e.statusId]));
-    // לא סומן → בשמ"פ (ברירת מחדל: מגיע)
-    const fcInService = (sid: string, day: string) => {
-      const st = fcEntryMap.get(`${sid}|${day}`);
-      return st ? (fcStatusById.get(st)?.inService ?? true) : true;
-    };
+    // ⚠️ ללא צו החייל אינו מגויס — לא נספר, ואינו "נעדר"
+    const fc = buildForecast(
+      fcOrders.map((o) => ({ soldierId: o.soldierId, startDate: iso(o.startDate), endDate: iso(o.endDate) })),
+      fcEntries.map((e) => ({ soldierId: e.soldierId, date: iso(e.date), statusId: e.statusId })),
+      fcStatuses,
+    );
+    const fcInService = (sid: string, day: string) => fc.stateOf(sid, day) === "IN_SERVICE";
     const allocByDay = new Map<string, number>();
     for (const a of fcAllocs) allocByDay.set(iso(a.date), (allocByDay.get(iso(a.date)) ?? 0) + a.allocated);
 
     const reasonDays = new Map<string, number>();
     forecast.days = fcDays.map((day) => {
-      let n = 0;
+      const { inService: n, absent } = fc.countOn(soldiers.map((s) => s.id), day);
+      const ordered = n + absent;
       for (const s of soldiers) {
-        if (fcInService(s.id, day)) n++;
-        else {
-          const st = fcStatusById.get(fcEntryMap.get(`${s.id}|${day}`)!);
-          if (st) reasonDays.set(st.id, (reasonDays.get(st.id) ?? 0) + 1);
-        }
+        const ex = fc.exceptionOf(s.id, day);
+        if (ex) reasonDays.set(ex, (reasonDays.get(ex) ?? 0) + 1);
       }
       const d = new Date(day + "T00:00:00Z");
       return {
         date: day,
         dayLabel: ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"][d.getUTCDay()],
         inService: n,
-        absent: soldiers.length - n,
+        absent: ordered - n,
         allocated: allocByDay.get(day) ?? null,
       };
     });
@@ -248,8 +253,11 @@ export default async function RosterControlPage({
       const cs = soldiers.filter((s) => s.companyId === c.id);
       if (cs.length === 0) return null;
       const perDay = fcDays.map((day) => cs.filter((s) => fcInService(s.id, day)).length);
-      return { name: c.name, min: Math.min(...perDay), max: Math.max(...perDay), total: cs.length };
+      const orderedSet = new Set(fcOrders.map((o) => o.soldierId));
+      const orderedEver = cs.filter((s) => orderedSet.has(s.id)).length;
+      return { name: c.name, min: Math.min(...perDay), max: Math.max(...perDay), total: orderedEver };
     }).filter((x): x is { name: string; min: number; max: number; total: number } => x !== null);
+    fcOrderedCount = new Set(fcOrders.map((o) => o.soldierId)).size;
   }
 
   return (
@@ -261,7 +269,7 @@ export default async function RosterControlPage({
         days={forecast.days}
         reasons={forecast.reasons}
         companies={forecast.companies}
-        soldierCount={soldiers.length}
+        soldierCount={fcOrderedCount}
       />
       <ControlClient
         date={dateStr}

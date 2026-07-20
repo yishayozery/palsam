@@ -691,6 +691,7 @@ model Soldier {
   attendanceRecords  AttendanceRecord[]
   callupPeriods      CallupPeriod[]
   forecastEntries    ForecastEntry[]
+  forecastOrders     ForecastOrder[]
   scheduleDaySoldiers ScheduleDaySoldier[] @relation("SoldierScheduleDay")
   attachmentRequests  AttachmentRequest[]
   operationalKits     OperationalKit[] @relation("SoldierOpKits")
@@ -1563,7 +1564,28 @@ model ForecastStatus {
   @@index([battalionId])
 }
 
-/** סימון תחזית לחייל ביום בודד. ימים מפוצלים = כמה שורות בתאריכים שונים. */
+/**
+ * צו — טווח הגיוס של החייל לתעסוקה מסוימת. יכול להיות שונה מתאריכי התעסוקה
+ * (מגבלות ימים, צו חלקי וכו'). ⚠️ ללא צו החייל אינו מגויס ואינו נספר בתחזית.
+ */
+model ForecastOrder {
+  id           String     @id @default(cuid())
+  soldierId    String
+  soldier      Soldier    @relation(fields: [soldierId], references: [id], onDelete: Cascade)
+  employmentId String
+  employment   Employment @relation(fields: [employmentId], references: [id], onDelete: Cascade)
+  startDate    DateTime   @db.Date
+  endDate      DateTime   @db.Date
+  note         String?
+  updatedById  String?
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([soldierId, employmentId])
+  @@index([employmentId])
+  @@index([soldierId])
+}
+
+/** חריג בתוך הצו — יום שבו החייל מגויס אך לא מגיע, עם הסיבה. ימים מפוצלים = כמה שורות. */
 model ForecastEntry {
   id           String         @id @default(cuid())
   soldierId    String
@@ -1685,6 +1707,7 @@ model Employment {
   createdAt   DateTime @default(now())
 
   allocations EmploymentAllocation[]
+  forecastOrders ForecastOrder[]
 
   @@index([battalionId])
 }

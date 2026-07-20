@@ -4,9 +4,8 @@ import { useState, useMemo, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PageHeader, Card } from "@/components/ui";
-import { markForecastRange } from "./actions";
 import { useEscClose } from "@/lib/useEscClose";
-import SoldierForecastView from "./SoldierForecastView";
+import { buildForecast } from "@/lib/forecast";
 
 type Employment = { id: string; name: string; startDate: string; endDate: string; active: boolean };
 type Day = { date: string; dayLabel: string; gregDay: number; gregMonth: number; isShabbat: boolean; isHoliday: boolean; holiday: string | null };
@@ -33,39 +32,30 @@ function cellTone(c: Cell): string {
   return "bg-rose-100 text-rose-900";
 }
 
+type Order = { soldierId: string; startDate: string; endDate: string };
+
 export default function ForecastClient({
-  view, employments, selectedEmploymentId, startDate, dayCount, days,
-  soldiers, entries, statuses, allocations, canManage,
+  employments, selectedEmploymentId, startDate, dayCount, days,
+  soldiers, entries, orders, statuses, allocations, canManage,
 }: {
-  view: "soldiers" | "matrix";
   employments: Employment[]; selectedEmploymentId: string | null;
   startDate: string; dayCount: number; days: Day[];
-  soldiers: Soldier[]; entries: Entry[]; statuses: Status[]; allocations: Allocation[]; canManage: boolean;
+  soldiers: Soldier[]; entries: Entry[]; orders: Order[]; statuses: Status[];
+  allocations: Allocation[]; canManage: boolean;
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<{ date: string; groupLabel: string; soldiers: Soldier[] } | null>(null);
-  const [showRange, setShowRange] = useState(false);
   useEscClose(!!detail, () => setDetail(null));
 
   const statusById = useMemo(() => new Map(statuses.map((s) => [s.id, s])), [statuses]);
-  const entryMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const e of entries) m.set(`${e.soldierId}|${e.date}`, e.statusId);
-    return m;
-  }, [entries]);
+  const fc = useMemo(() => buildForecast(orders, entries, statuses), [orders, entries, statuses]);
   const allocMap = useMemo(() => {
     const m = new Map<string, number>();
     for (const a of allocations) m.set(`${a.companyId}|${a.date}`, a.allocated);
     return m;
   }, [allocations]);
 
-  /** לא סומן → בשמ"פ (ברירת מחדל: מגיע). */
-  const inService = (soldierId: string, date: string): boolean => {
-    const sid = entryMap.get(`${soldierId}|${date}`);
-    if (!sid) return true;
-    return statusById.get(sid)?.inService ?? true;
-  };
 
   const groups = useMemo(() => {
     const byCompany = new Map<string, { id: string; name: string; soldiers: Soldier[]; squads: Map<string, { id: string; name: string; soldiers: Soldier[] }> }>();
@@ -81,20 +71,21 @@ export default function ForecastClient({
   }, [soldiers]);
 
   const cellFor = (list: Soldier[], date: string, companyId?: string): Cell => {
-    let n = 0;
-    for (const s of list) if (inService(s.id, date)) n++;
+    const { inService: n, absent } = fc.countOn(list.map((s) => s.id), date);
+    const ordered = n + absent;
     const allocated = companyId ? allocMap.get(`${companyId}|${date}`) ?? null
       : (allocations.length > 0 ? [...groups].reduce((sum, g) => sum + (allocMap.get(`${g.id}|${date}`) ?? 0), 0) || null : null);
-    return { inService: n, total: list.length, allocated };
+    return { inService: n, total: ordered, allocated };
   };
 
   /** פילוח הסיבות ליום — רק מי שלא בשמ"פ */
   const reasonsFor = (list: Soldier[], date: string) => {
     const m = new Map<string, number>();
     for (const s of list) {
-      const sid = entryMap.get(`${s.id}|${date}`);
-      const st = sid ? statusById.get(sid) : null;
-      if (st && !st.inService) m.set(st.id, (m.get(st.id) ?? 0) + 1);
+      const ex = fc.exceptionOf(s.id, date);
+      if (!ex) continue;
+      const st = statusById.get(ex);
+      if (st) m.set(st.id, (m.get(st.id) ?? 0) + 1);
     }
     return [...m.entries()].map(([id, n]) => ({ status: statusById.get(id)!, n })).sort((a, b) => b.n - a.n);
   };
@@ -103,7 +94,6 @@ export default function ForecastClient({
     const q = new URLSearchParams();
     if (selectedEmploymentId) q.set("employmentId", selectedEmploymentId);
     else { q.set("start", startDate); q.set("days", String(dayCount)); }
-    q.set("view", view);
     for (const [k, v] of Object.entries(params)) q.set(k, v);
     router.push(`/attendance/forecast?${q.toString()}`);
   }
@@ -119,31 +109,19 @@ export default function ForecastClient({
         action={
           <div className="flex gap-2 flex-wrap items-center">
             <Link href="/attendance" className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs md:text-sm hover:bg-slate-50">← נוכחות</Link>
-            {canManage && view === "matrix" && (
-              <button onClick={() => setShowRange(true)} className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs md:text-sm font-medium">
-                🗓️ סימון קבוצתי
-              </button>
+            {canManage && (
+              <Link href="/soldiers?view=forecast" className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-3 py-2 text-xs md:text-sm font-medium">
+                ✏️ עדכון בחיילי הפלוגה
+              </Link>
             )}
           </div>
         }
       />
 
-      {/* מעבר בין תצוגת עדכון (חייל-חייל) לתצוגת פיקוד (תאריכים × פלוגות) */}
-      <div className="flex rounded-xl overflow-hidden border-2 border-slate-200 text-sm font-bold mb-3 w-fit">
-        <button onClick={() => go({ view: "soldiers" })}
-          className={`px-4 py-2 transition-colors ${view === "soldiers" ? "bg-blue-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
-          🙋 לפי חייל
-        </button>
-        <button onClick={() => go({ view: "matrix" })}
-          className={`px-4 py-2 transition-colors ${view === "matrix" ? "bg-slate-700 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
-          📊 לפי תאריך
-        </button>
-      </div>
-
       <Card className="p-3 mb-4">
         <div className="flex items-center gap-2 flex-wrap">
           <label className="text-xs text-slate-600">תעסוקה</label>
-          <select value={selectedEmploymentId ?? ""} onChange={(e) => router.push(`/attendance/forecast?employmentId=${e.target.value}&view=${view}`)}
+          <select value={selectedEmploymentId ?? ""} onChange={(e) => router.push(`/attendance/forecast?employmentId=${e.target.value}`)}
             className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white">
             {employments.length === 0 && <option value="">— לא הוגדרו תעסוקות —</option>}
             {employments.map((e) => <option key={e.id} value={e.id}>{e.active ? "🟢 " : ""}{e.name} ({e.startDate} → {e.endDate})</option>)}
@@ -157,17 +135,11 @@ export default function ForecastClient({
             </>
           )}
           <span className="text-[11px] text-slate-500 mr-auto">
-            מי שלא סומן נחשב בשמ״פ. קליק על תא → פירוט.{allocations.length > 0 ? " המספר התחתון = התקן ליום." : ""}
+            רק חיילים עם צו נספרים. קליק על תא → פירוט.{allocations.length > 0 ? " המספר התחתון = התקן ליום." : ""}
           </span>
         </div>
       </Card>
 
-      {view === "soldiers" && (
-        <SoldierForecastView days={days} soldiers={soldiers} entries={entries} statuses={statuses}
-          employmentId={selectedEmploymentId} canManage={canManage} />
-      )}
-
-      {view === "matrix" && (
       <Card className="p-0 overflow-x-auto">
         <table className="text-xs border-collapse min-w-max">
           <thead className="sticky top-0 z-10">
@@ -183,7 +155,7 @@ export default function ForecastClient({
           </thead>
           <tbody>
             <tr className="border-b-2 border-slate-300">
-              <td className="sticky right-0 z-10 bg-slate-100 px-3 py-2 font-bold text-slate-800">בשמ״פ — סה״כ ({soldiers.length})</td>
+              <td className="sticky right-0 z-10 bg-slate-100 px-3 py-2 font-bold text-slate-800">בשמ״פ — סה״כ <span className="text-[10px] font-normal text-slate-500">({soldiers.length} בפלוגות)</span></td>
               {days.map((d) => {
                 const c = totalCell(d.date);
                 return (
@@ -196,7 +168,7 @@ export default function ForecastClient({
               })}
             </tr>
             <tr className="border-b-2 border-slate-300 bg-rose-50/40">
-              <td className="sticky right-0 z-10 bg-rose-50 px-3 py-1.5 font-medium text-rose-800">לא בשמ״פ</td>
+              <td className="sticky right-0 z-10 bg-rose-50 px-3 py-1.5 font-medium text-rose-800">נעדרים <span className="text-[10px] font-normal text-rose-500">(מתוך המגויסים)</span></td>
               {days.map((d) => {
                 const c = totalCell(d.date);
                 const missing = c.total - c.inService;
@@ -253,12 +225,11 @@ export default function ForecastClient({
           </tbody>
         </table>
       </Card>
-      )}
 
       {detail && (() => {
         const list = detail.soldiers;
-        const coming = list.filter((s) => inService(s.id, detail.date));
-        const notComing = list.filter((s) => !inService(s.id, detail.date));
+        const coming = list.filter((s) => fc.stateOf(s.id, detail.date) === "IN_SERVICE");
+        const notComing = list.filter((s) => fc.stateOf(s.id, detail.date) === "ABSENT");
         const reasons = reasonsFor(list, detail.date);
         return (
           <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl" onClick={() => setDetail(null)}>
@@ -282,7 +253,7 @@ export default function ForecastClient({
               <div className="flex-1 overflow-y-auto p-3 space-y-1">
                 {notComing.length > 0 && <div className="text-[11px] font-bold text-rose-700 mt-1 mb-1">לא בשמ״פ</div>}
                 {notComing.map((s) => {
-                  const st = statusById.get(entryMap.get(`${s.id}|${detail.date}`)!);
+                  const st = statusById.get(fc.exceptionOf(s.id, detail.date)!);
                   return (
                     <div key={s.id} className="flex items-center gap-2 bg-rose-50 rounded-lg px-2 py-1.5 text-sm">
                       <span className="flex-1">{s.fullName} <span className="font-mono text-[10px] text-slate-400">{s.personalNumber ?? ""}</span></span>
@@ -293,7 +264,7 @@ export default function ForecastClient({
                 })}
                 {coming.length > 0 && <div className="text-[11px] font-bold text-emerald-700 mt-3 mb-1">בשמ״פ</div>}
                 {coming.map((s) => {
-                  const st = statusById.get(entryMap.get(`${s.id}|${detail.date}`)!);
+                  const st = statusById.get(fc.exceptionOf(s.id, detail.date)!);
                   return (
                     <div key={s.id} className="flex items-center gap-2 bg-emerald-50/60 rounded-lg px-2 py-1.5 text-sm">
                       <span className="flex-1">{s.fullName} <span className="font-mono text-[10px] text-slate-400">{s.personalNumber ?? ""}</span></span>
@@ -307,127 +278,6 @@ export default function ForecastClient({
           </div>
         );
       })()}
-
-      {showRange && (
-        <RangeModal soldiers={soldiers} statuses={statuses} defaultStart={startDate} defaultEnd={days[days.length - 1]?.date ?? startDate}
-          employmentId={selectedEmploymentId}
-          onClose={() => setShowRange(false)} onDone={() => { setShowRange(false); router.refresh(); }} />
-      )}
-    </div>
-  );
-}
-
-/** מודל סימון טווח — חיילים × טווח תאריכים × סטטוס תחזית */
-function RangeModal({ soldiers, statuses, defaultStart, defaultEnd, employmentId, onClose, onDone }: {
-  soldiers: Soldier[]; statuses: Status[]; defaultStart: string; defaultEnd: string;
-  employmentId: string | null; onClose: () => void; onDone: () => void;
-}) {
-  const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [from, setFrom] = useState(defaultStart);
-  const [to, setTo] = useState(defaultEnd);
-  const [statusId, setStatusId] = useState<string>(statuses.find((s) => !s.inService)?.id ?? statuses[0]?.id ?? "");
-  const [clear, setClear] = useState(false);
-  const [overwrite, setOverwrite] = useState(true);
-  const [search, setSearch] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
-  useEscClose(true, onClose);
-
-  const filt = useMemo(() => search
-    ? soldiers.filter((s) => s.fullName.includes(search) || (s.personalNumber ?? "").includes(search) || s.squadName.includes(search) || s.companyName.includes(search))
-    : soldiers, [soldiers, search]);
-
-  function toggle(id: string) { setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; }); }
-  function toggleAll() { setPicked((s) => s.size === filt.length ? new Set() : new Set(filt.map((x) => x.id))); }
-
-  async function submit() {
-    setErr(null); setOkMsg(null);
-    if (picked.size === 0) { setErr("בחר לפחות חייל אחד"); return; }
-    if (to < from) { setErr("תאריך הסיום מוקדם מההתחלה"); return; }
-    setBusy(true);
-    const r = await markForecastRange({ soldierIds: [...picked], startDate: from, endDate: to, statusId: clear ? null : statusId, employmentId });
-    setBusy(false);
-    if (r.error) { setErr(r.error); return; }
-    setOkMsg(`✅ ${r.written} ימים עודכנו (${r.days} ימים × ${picked.size} חיילים)`);
-    setTimeout(onDone, 1200);
-  }
-
-  const inServiceOpts = statuses.filter((s) => s.inService);
-  const absentOpts = statuses.filter((s) => !s.inService);
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-start sm:items-center justify-center p-0 sm:p-4 overflow-y-auto" dir="rtl">
-      <div className="bg-white w-full sm:max-w-2xl sm:rounded-2xl rounded-t-2xl max-h-[92dvh] flex flex-col overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-700 to-blue-800 text-white p-4 flex items-center justify-between shrink-0">
-          <div>
-            <h3 className="font-bold text-lg">🗓️ סימון תחזית לטווח</h3>
-            <p className="text-xs text-blue-200 mt-0.5">שלב הצווים — לא נוגע בנוכחות בפועל</p>
-          </div>
-          <button onClick={onClose} className="text-blue-200 hover:text-white text-2xl">✕</button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[11px] text-slate-600 mb-1">מתאריך</label>
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="block text-[11px] text-slate-600 mb-1">עד תאריך</label>
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm" />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[11px] text-slate-600 mb-1">סטטוס</label>
-            <select value={clear ? "__clear__" : statusId}
-              onChange={(e) => { if (e.target.value === "__clear__") setClear(true); else { setClear(false); setStatusId(e.target.value); } }}
-              className="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
-              <optgroup label="בשמ״פ">
-                {inServiceOpts.map((s) => <option key={s.id} value={s.id}>{s.icon ?? ""} {s.name}</option>)}
-              </optgroup>
-              <optgroup label="לא בשמ״פ">
-                {absentOpts.map((s) => <option key={s.id} value={s.id}>{s.icon ?? ""} {s.name}</option>)}
-              </optgroup>
-              <option value="__clear__">✕ נקה סימון בטווח (חוזר לבשמ״פ)</option>
-            </select>
-          </div>
-
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} className="w-4 h-4 accent-blue-600" />
-            דרוס סימונים קיימים בטווח
-          </label>
-
-          <div className="border-t border-slate-200 pt-3">
-            <div className="flex items-center gap-2 mb-2">
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 חיפוש חייל / מחלקה…" className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              <button onClick={toggleAll} className="border border-slate-300 rounded-lg px-3 py-2 text-xs whitespace-nowrap hover:bg-slate-50">
-                {picked.size === filt.length ? "נקה הכל" : `בחר הכל (${filt.length})`}
-              </button>
-            </div>
-            <div className="space-y-1 max-h-60 overflow-y-auto">
-              {filt.map((s) => (
-                <label key={s.id} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 cursor-pointer ${picked.has(s.id) ? "bg-blue-50 border border-blue-200" : "bg-slate-50"}`}>
-                  <input type="checkbox" checked={picked.has(s.id)} onChange={() => toggle(s.id)} className="accent-blue-600" />
-                  <span className="text-sm flex-1">{s.fullName}</span>
-                  <span className="text-[11px] text-slate-500">{s.companyName} · {s.squadName}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {err && <p className="text-rose-600 text-sm text-center">{err}</p>}
-          {okMsg && <p className="text-emerald-700 text-sm text-center font-medium">{okMsg}</p>}
-        </div>
-
-        <div className="border-t border-slate-200 p-3 bg-white shrink-0 flex items-center gap-2">
-          <button onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm">ביטול</button>
-          <button onClick={submit} disabled={busy || picked.size === 0} className="flex-1 bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white rounded-lg px-4 py-2.5 text-sm font-bold">
-            {busy ? "שומר…" : `🗓️ סמן (${picked.size} חיילים)`}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

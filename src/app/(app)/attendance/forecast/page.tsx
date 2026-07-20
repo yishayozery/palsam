@@ -15,7 +15,7 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 export default async function AttendanceForecastPage({
   searchParams,
 }: {
-  searchParams: Promise<{ employmentId?: string; start?: string; days?: string; view?: string }>;
+  searchParams: Promise<{ employmentId?: string; start?: string; days?: string }>;
 }) {
   const user = await requireUser();
   const canManage = can(user, "attendance.manage");
@@ -92,11 +92,17 @@ export default async function AttendanceForecastPage({
   }
 
   const soldierIds = soldiers.map((s) => s.id);
-  const [entries, allocations] = await Promise.all([
+  const [entries, orders, allocations] = await Promise.all([
     prisma.forecastEntry.findMany({
       where: { soldierId: { in: soldierIds }, date: { in: dateObjs } },
       select: { soldierId: true, date: true, statusId: true },
     }),
+    selectedEmp
+      ? prisma.forecastOrder.findMany({
+          where: { employmentId: selectedEmp.id, soldierId: { in: soldierIds } },
+          select: { soldierId: true, startDate: true, endDate: true },
+        })
+      : Promise.resolve([]),
     selectedEmp
       ? prisma.employmentAllocation.findMany({
           where: { employmentId: selectedEmp.id, date: { in: dateObjs } },
@@ -105,14 +111,8 @@ export default async function AttendanceForecastPage({
       : Promise.resolve([]),
   ]);
 
-  // מ"פ / נציג פלוגה — סקופ פלוגתי; פותחים לו את תצוגת החיילים, שם הוא מעדכן.
-  // מטה / שלישות — מטריצת פלוגות × תאריכים, מסך הפיקוד.
-  const isCompanyScoped = companyHolderIds.length > 0 || user.squadIds.length > 0;
-  const view = sp.view === "matrix" || sp.view === "soldiers" ? sp.view : (isCompanyScoped ? "soldiers" : "matrix");
-
   return (
     <ForecastClient
-      view={view}
       employments={employments.map((e) => ({ id: e.id, name: e.name, startDate: iso(e.startDate), endDate: iso(e.endDate), active: e.active }))}
       selectedEmploymentId={selectedEmp?.id ?? null}
       startDate={startStr}
@@ -124,6 +124,7 @@ export default async function AttendanceForecastPage({
         squadId: s.squad?.id ?? "__none__", squadName: s.squad?.name ?? "ללא מחלקה",
       }))}
       entries={entries.map((e) => ({ soldierId: e.soldierId, date: iso(e.date), statusId: e.statusId }))}
+      orders={orders.map((o) => ({ soldierId: o.soldierId, startDate: iso(o.startDate), endDate: iso(o.endDate) }))}
       statuses={statuses}
       allocations={allocations.map((a) => ({ companyId: a.companyId, date: iso(a.date), allocated: a.allocated }))}
       canManage={canManage}

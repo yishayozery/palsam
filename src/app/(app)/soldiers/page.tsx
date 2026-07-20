@@ -10,12 +10,18 @@ import { importSoldiers } from "./import-actions";
 import AttachmentRequestSection from "./AttachmentRequestSection";
 import PeopleTabs from "@/components/PeopleTabs";
 import SoldiersTable, { type SoldierRow } from "./SoldiersTable";
+import ForecastPanel from "./ForecastPanel";
 
 export const dynamic = "force-dynamic";
 
-export default async function SoldiersPage() {
+export default async function SoldiersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
   const user = await requireCapability("company.manage");
   const bId = user.battalionId!;
+  const view = (await searchParams).view === "forecast" ? "forecast" : "list";
 
   const companies = await prisma.holder.findMany({
     where: { battalionId: bId, kind: "COMPANY", active: true },
@@ -247,6 +253,37 @@ export default async function SoldiersPage() {
 
   // הצמדת הסמכות לחייל נעשית ע"י מי שמנהל את החיילים (מפ/מפמ/אדמין) — הרשאת עריכה על מסך חיילים.
   const canEditCerts = canEdit(user, "soldiers");
+  // ── 📅 תחזית הגעה — צווים וחריגים לתעסוקה הפעילה/הקרובה ──
+  const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
+  const employments = await prisma.employment.findMany({
+    where: { battalionId: bId, active: true },
+    orderBy: { startDate: "desc" },
+    select: { id: true, name: true, startDate: true, endDate: true },
+  });
+  const fcEmp =
+    employments.find((e) => e.startDate.toISOString().slice(0, 10) <= todayStr && e.endDate.toISOString().slice(0, 10) >= todayStr)
+    ?? employments.find((e) => e.startDate.toISOString().slice(0, 10) > todayStr)
+    ?? employments[0] ?? null;
+
+  const soldierIdsForFc = rows.map((r) => r.id);
+  const [fcOrders, fcExceptions, fcStatuses] = fcEmp
+    ? await Promise.all([
+        prisma.forecastOrder.findMany({
+          where: { employmentId: fcEmp.id, soldierId: { in: soldierIdsForFc } },
+          select: { soldierId: true, startDate: true, endDate: true },
+        }),
+        prisma.forecastEntry.findMany({
+          where: { soldierId: { in: soldierIdsForFc }, date: { gte: fcEmp.startDate, lte: fcEmp.endDate } },
+          select: { soldierId: true, date: true, statusId: true },
+        }),
+        prisma.forecastStatus.findMany({
+          where: { battalionId: bId, active: true },
+          orderBy: [{ inService: "desc" }, { sortOrder: "asc" }],
+          select: { id: true, name: true, icon: true, color: true, inService: true },
+        }),
+      ])
+    : [[], [], []];
+
   const squadOpts = squads.map((sq) => ({ id: sq.id, name: showCompany ? `${sq.name} · ${sq.company.name}` : sq.name, companyId: sq.companyId }));
   const roleOpts = companyRoles.map((r) => ({ id: r.id, name: r.name, companyId: r.companyId ?? null, isCommander: r.isCommander }));
 
@@ -259,6 +296,28 @@ export default async function SoldiersPage() {
         action={<ImportExcel action={importSoldiers} templateHref="/soldiers/template" label="ייבוא חיילים" />}
       />
       <PeopleTabs active="soldiers" />
+
+      <div className="flex rounded-xl overflow-hidden border-2 border-slate-200 text-sm font-bold mb-4 w-fit">
+        <a href="/soldiers" className={`px-4 py-2 transition-colors ${view === "list" ? "bg-blue-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+          👤 רשימת חיילים
+        </a>
+        <a href="/soldiers?view=forecast" className={`px-4 py-2 transition-colors ${view === "forecast" ? "bg-blue-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+          📅 תחזית הגעה
+        </a>
+      </div>
+
+      {view === "forecast" && (
+        <ForecastPanel
+          employment={fcEmp ? { id: fcEmp.id, name: fcEmp.name, startDate: fcEmp.startDate.toISOString().slice(0, 10), endDate: fcEmp.endDate.toISOString().slice(0, 10) } : null}
+          soldiers={rows.map((r) => ({ id: r.id, fullName: r.fullName, personalNumber: r.personalNumber, squadName: r.squadName }))}
+          orders={fcOrders.map((o) => ({ soldierId: o.soldierId, startDate: o.startDate.toISOString().slice(0, 10), endDate: o.endDate.toISOString().slice(0, 10) }))}
+          exceptions={fcExceptions.map((e) => ({ soldierId: e.soldierId, date: e.date.toISOString().slice(0, 10), statusId: e.statusId }))}
+          statuses={fcStatuses}
+          canEdit={canEditCerts}
+        />
+      )}
+
+      {view === "list" && (<>
 
       <AttachmentRequestSection
         companies={companies.map((c) => ({ id: c.id, name: c.name }))}
@@ -364,6 +423,7 @@ export default async function SoldiersPage() {
           ),
         }))}
       />
+      </>)}
     </div>
   );
 }
