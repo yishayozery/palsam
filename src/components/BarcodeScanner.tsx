@@ -33,6 +33,7 @@ export default function BarcodeScanner({
   const [last, setLast] = useState<{ text: string; ok: boolean } | null>(null);
   const [camState, setCamState] = useState<"idle" | "starting" | "live" | "unavailable">("idle");
   const [scanned, setScanned] = useState(0);
+  const [flash, setFlash] = useState<"good" | "bad" | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -41,6 +42,36 @@ export default function BarcodeScanner({
   const lastCodeRef = useRef<{ code: string; at: number }>({ code: "", at: 0 });
 
   useEscClose(open, () => setOpen(false));
+
+  /**
+   * 🔔 ביפ דרך WebAudio — בלי קובץ קול, ועובד גם באייפון (שם navigator.vibrate
+   * לא קיים בכלל, ולכן רטט לבדו היה משאיר את המשתמש בלי שום משוב).
+   * ה-AudioContext נוצר בלחיצה על "סרוק" — מחווה של המשתמש, כנדרש ב-iOS.
+   */
+  const audioRef = useRef<AudioContext | null>(null);
+  const beep = useCallback((ok: boolean) => {
+    try {
+      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx) return;
+      audioRef.current ??= new Ctx();
+      const ctx = audioRef.current;
+      if (ctx.state === "suspended") void ctx.resume();
+      const play = (freq: number, start: number, dur: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "square";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime + start);
+        gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + start + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + dur);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + start);
+        osc.stop(ctx.currentTime + start + dur + 0.02);
+      };
+      if (ok) play(1180, 0, 0.09);           // ביפ אחד גבוה — נמצא
+      else { play(320, 0, 0.13); play(240, 0.16, 0.18); }  // שתי נמוכות — לא נמצא
+    } catch { /* אודיו חסום — המשוב הוויזואלי עדיין קיים */ }
+  }, []);
 
   const handleCode = useCallback(async (code: string) => {
     const clean = code.trim();
@@ -55,22 +86,27 @@ export default function BarcodeScanner({
       const hit = await resolveBarcode(clean);
       if (hit.kind === "NOT_FOUND") {
         setLast({ text: `לא נמצא: ${clean}`, ok: false });
-        if (navigator.vibrate) navigator.vibrate([60, 40, 60]);
+        beep(false);
+        navigator.vibrate?.([60, 40, 60]);
+        setFlash("bad");
       } else {
         const name = hit.kind === "SERIAL" ? `${hit.itemName} · ${hit.serialNumber}` : hit.itemName;
         setLast({ text: name, ok: true });
         setScanned((n) => n + 1);
-        if (navigator.vibrate) navigator.vibrate(40);
+        beep(true);
+        navigator.vibrate?.(40);
+        setFlash("good");
         onHit(hit);
         if (autoClose) setOpen(false);
       }
+      setTimeout(() => setFlash(null), 450);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "שגיאה בזיהוי");
     } finally {
       setBusy(false);
       setManual("");
     }
-  }, [onHit, autoClose]);
+  }, [onHit, autoClose, beep]);
 
   // ── מצלמה ──
   useEffect(() => {
@@ -155,43 +191,53 @@ export default function BarcodeScanner({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[60] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl">
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl">
           <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[92dvh] flex flex-col overflow-hidden">
-            <div className="bg-gradient-to-r from-indigo-700 to-indigo-800 text-white p-4 flex items-center justify-between shrink-0">
-              <div>
-                <h3 className="font-bold">📷 סריקת ברקוד</h3>
-                <p className="text-xs text-indigo-200 mt-0.5">
-                  {scanned > 0 ? `${scanned} פריטים נסרקו` : "כוון את המצלמה, או השתמש בסורק"}
-                </p>
-              </div>
-              <button onClick={() => setOpen(false)} className="text-indigo-200 hover:text-white text-2xl">✕</button>
-            </div>
 
-            <div className="flex-1 overflow-y-auto p-3 space-y-3">
-              {/* חלון המצלמה */}
-              <div className="relative bg-slate-900 rounded-xl overflow-hidden" style={{ aspectRatio: "4 / 3" }}>
-                <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
-                {camState !== "live" && (
-                  <div className="absolute inset-0 flex items-center justify-center text-center text-slate-300 text-sm p-4">
-                    {camState === "starting" ? "מפעיל מצלמה…"
-                      : camState === "unavailable" ? "אין גישה למצלמה — אפשר לסרוק עם סורק חומרה או להקליד ידנית"
-                      : ""}
-                  </div>
-                )}
-                {camState === "live" && (
-                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                    <div className="w-4/5 h-1/3 border-2 border-white/70 rounded-lg" />
-                  </div>
-                )}
+            {/* 📷 המצלמה ראשונה ובגובה מלא — היא העיקר. הכותרת והסגירה מרחפות עליה,
+                כדי שבמובייל לא יידחף למטה ולא ייחתך. */}
+            <div className="relative bg-slate-900 shrink-0" style={{ aspectRatio: "3 / 4", maxHeight: "52dvh" }}>
+              <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
+
+              {/* הבזק ירוק/אדום על כל חלון המצלמה — המשוב שרואים גם מזווית העין */}
+              {flash && (
+                <div className={`absolute inset-0 pointer-events-none ${flash === "good" ? "bg-emerald-400/45" : "bg-rose-500/45"}`} />
+              )}
+
+              {camState === "live" && !flash && (
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                  <div className="w-[85%] h-24 border-2 border-white/80 rounded-lg shadow-[0_0_0_9999px_rgba(0,0,0,0.28)]" />
+                </div>
+              )}
+              {camState !== "live" && (
+                <div className="absolute inset-0 flex items-center justify-center text-center text-slate-300 text-sm p-6">
+                  {camState === "starting" ? "מפעיל מצלמה…"
+                    : camState === "unavailable" ? "אין גישה למצלמה — סרוק עם סורק חומרה או הקלד למטה"
+                    : ""}
+                </div>
+              )}
+
+              {/* שורת כותרת מרחפת */}
+              <div className="absolute top-0 inset-x-0 flex items-start justify-between gap-2 p-3 bg-gradient-to-b from-black/65 to-transparent">
+                <span className="text-white text-sm font-bold drop-shadow">
+                  {scanned > 0 ? `${scanned} נסרקו` : "כוון לברקוד"}
+                </span>
+                <button onClick={() => setOpen(false)} aria-label="סגור"
+                  className="text-white/90 hover:text-white text-2xl leading-none w-8 h-8 rounded-full bg-black/40 flex items-center justify-center">✕</button>
               </div>
 
-              {/* תוצאה אחרונה */}
+              {/* התוצאה האחרונה — צמודה לתחתית המצלמה, בשדה הראייה */}
               {last && (
-                <div className={`rounded-lg px-3 py-2 text-sm font-medium ${last.ok ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"}`}>
+                <div className={`absolute bottom-0 inset-x-0 px-3 py-2.5 text-sm font-bold ${last.ok ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>
                   {last.ok ? "✅" : "⚠️"} {last.text}
                 </div>
               )}
-              {busy && <p className="text-xs text-slate-500 text-center">מזהה…</p>}
+              {busy && !last && (
+                <div className="absolute bottom-0 inset-x-0 px-3 py-2 text-xs text-white bg-black/55">מזהה…</div>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
               {err && <p className="text-rose-600 text-sm text-center">{err}</p>}
 
               {/* סורק חומרה — נסתר, תמיד ממוקד */}
@@ -204,7 +250,6 @@ export default function BarcodeScanner({
                   el.value = "";
                 }} />
 
-              {/* הקלדה ידנית */}
               <div>
                 <label className="block text-[11px] text-slate-600 mb-1">הקלדה ידנית (מספר סריאלי או מק״ט)</label>
                 <div className="flex gap-2">
@@ -220,12 +265,12 @@ export default function BarcodeScanner({
               </div>
 
               <p className="text-[11px] text-slate-400 text-center">
-                המערכת מזהה לבד אם הקוד סיריאלי או מק״ט כללי.
+                המערכת מזהה לבד אם הקוד סיריאלי או מק״ט כללי. הסורק נשאר פתוח לסריקה רצופה.
               </p>
             </div>
 
             <div className="border-t border-slate-200 p-3 bg-white shrink-0">
-              <button onClick={() => setOpen(false)} className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm">
+              <button onClick={() => setOpen(false)} className="w-full rounded-lg bg-slate-800 text-white px-4 py-3 text-sm font-bold">
                 {scanned > 0 ? `סיום (${scanned} נסרקו)` : "סגור"}
               </button>
             </div>
