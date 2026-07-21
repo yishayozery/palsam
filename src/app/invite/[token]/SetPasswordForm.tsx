@@ -33,6 +33,18 @@ export default function SetPasswordForm({ token, username }: { token: string; us
         <div>תו מיוחד (!@#$%...)</div>
       </div>
       {state.error && <p className="text-sm text-rose-600 bg-rose-50 rounded-lg px-3 py-2">{state.error}</p>}
+      {/* 📜 הסכמה לתנאים — נאכפת גם בשרת ב-activateAccount */}
+      <label className="flex items-start gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3">
+        <input type="checkbox" name="acceptTerms" required className="mt-0.5 w-4 h-4 accent-slate-800 shrink-0" />
+        <span>
+          קראתי ואני מאשר/ת את{" "}
+          <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">
+            תנאי השימוש ומדיניות הפרטיות
+          </a>
+          .
+        </span>
+      </label>
+
       <button type="submit" disabled={pending}
         className="w-full bg-slate-800 hover:bg-slate-900 disabled:opacity-60 text-white rounded-lg py-2.5 font-medium transition">
         {pending ? "מפעיל..." : "הפעלת חשבון וכניסה"}

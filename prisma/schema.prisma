@@ -245,6 +245,10 @@ model AppUser {
   customRoleId String?
   customRole   CustomRole? @relation(fields: [customRoleId], references: [id])
   passwordSet  Boolean    @default(true) // false עד הגדרת סיסמה דרך קישור ההזמנה
+  // 📜 הסכמה לתנאי השימוש — נרשמת בהפעלת החשבון (קישור ההזמנה).
+  //    שינוי TERMS_VERSION מחייב אישור מחדש בכניסה הבאה.
+  termsAcceptedAt      DateTime?
+  termsAcceptedVersion String?
   // 🔫 הרשאה פר-משתמש לאשר חיילים לנשק (לא לפי תפקיד) — נקבע בהקמת/עריכת משתמש
   canApproveWeapons Boolean @default(false)
   inviteToken  String?    @unique
@@ -661,6 +665,10 @@ model Soldier {
   // 📵 סירוב לדיוור: החייל ביקש להפסיק לקבל הודעות שאינן תפעוליות-מחייבות.
   //    הודעות אישיות שהוא נדרש להן (חתימה, זיכוי, אימות) ממשיכות להישלח.
   botOptOutAt    DateTime?
+  // 📜 הסכמה לתנאי השימוש — נרשמת ברגע החיבור לבוט, עם הגרסה שאושרה.
+  //    שינוי גרסה מחייב אישור מחדש.
+  termsAcceptedAt      DateTime?
+  termsAcceptedVersion String?
   drivingRefresherDate DateTime? @db.Date // ריענון נהיגה כללי
   drivingProcedureSignedAt DateTime? // חתימה על נוהל נהיגה (דרך קצין רכב / בוט)
   // תיק נהג — פרטי רישיון אזרחי + צילום (קובץ 4)

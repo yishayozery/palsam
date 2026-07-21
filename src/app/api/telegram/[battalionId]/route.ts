@@ -581,11 +581,23 @@ async function handleContactShare(
   if (prevChat && prevChat !== chatId) {
     await sendTelegramMessage(token, prevChat, "ℹ️ החשבון שלך חובר למכשיר חדש (מאומת בטלפון). אם זה לא אתה — דווח/י לשלישות.").catch(() => {});
   }
-  // סדר ה-onboarding: (1) אישור חיבור + מקלדת ראשית → (2) עדכון מזון → (3) הסבר על התפריט
+  // סדר ה-onboarding: (1) אישור חיבור → (2) תנאי שימוש → (3) מזון → (4) תפריט
   // 1️⃣ אישור חיבור
   await sendTelegramMessage(token, chatId, `מעולה, ${escapeTelegram(soldier.fullName)}! ✅\nהתחברת בהצלחה (מאומת בטלפון) למערכת PALMY.`, MAIN_KEYBOARD);
 
-  // 2️⃣ עדכון מזון/כשרות — רק אם טרם עודכן
+  // 2️⃣ 📜 תנאי שימוש — רגע ההצטרפות הוא נקודת ההסכמה. ההסכמה נרשמת עם
+  //    הגרסה, כך ששינוי נוסח יחייב אישור מחדש. אינו חוסם את החיבור עצמו.
+  {
+    const { TERMS_BOT_SUMMARY, TERMS_VERSION, termsAccepted } = await import("@/lib/terms");
+    const fresh = await prisma.soldier.findUnique({ where: { id: soldier.id }, select: { termsAcceptedVersion: true } });
+    if (!termsAccepted(fresh?.termsAcceptedVersion)) {
+      await sendTelegramMessage(token, chatId, TERMS_BOT_SUMMARY, {
+        inline_keyboard: [[{ text: "✅ אני מאשר/ת את התנאים", callback_data: `terms:${TERMS_VERSION}` }]],
+      }).catch(() => {});
+    }
+  }
+
+  // 3️⃣ עדכון מזון/כשרות — רק אם טרם עודכן
   if (soldier.dietType == null) {
     const { DIET_OPTIONS } = await import("@/lib/diet");
     const buttons = DIET_OPTIONS.map((d, i) => [{ text: d, callback_data: `diet:${i}` }]);
@@ -605,6 +617,26 @@ async function handleCallback(
   const chatId = String(callback.message.chat.id);
   const messageId = callback.message.message_id;
   const data = callback.data;
+
+  // 📜 אישור תנאי שימוש: terms:<version> — נרשם עם הגרסה שאושרה בפועל,
+  //    ולא עם הגרסה הנוכחית, כדי שלחיצה על כפתור ישן לא תיחשב לאישור חדש.
+  if (data.startsWith("terms:")) {
+    const version = data.slice("terms:".length);
+    const { TERMS_VERSION } = await import("@/lib/terms");
+    if (version !== TERMS_VERSION) {
+      await answerCallbackQuery(token, callback.id, "התנאים עודכנו — נשלח אישור חדש");
+      return;
+    }
+    const soldier = await prisma.soldier.findFirst({ where: { battalionId, telegramChatId: chatId }, select: { id: true } });
+    if (!soldier) { await answerCallbackQuery(token, callback.id, "לא נמצא"); return; }
+    await prisma.soldier.update({
+      where: { id: soldier.id },
+      data: { termsAcceptedAt: new Date(), termsAcceptedVersion: version },
+    });
+    await editMessageText(token, chatId, messageId, `📜 <b>התנאים אושרו</b> ✅\nגרסה ${version}\n\nלהפסקת דיוור יזום: /stop`);
+    await answerCallbackQuery(token, callback.id, "תודה");
+    return;
+  }
 
   // 🍽️ עדכון מזון/כשרות: diet:<index> — החייל המחובר בלבד (לפי chatId)
   if (data.startsWith("diet:")) {
