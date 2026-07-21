@@ -12,13 +12,19 @@ if (typeof window !== "undefined") throw new Error("backup.ts is server-only");
  *    התהליך: gzip → base64 → הצפנת AES-256-GCM → צרופה. שקוף לכשל (לא שובר את הגיבוי ל-DB).
  *    היעד נקבע ע"י env BACKUP_EMAIL; אם חסר — מדלגים. שחזור: scripts/decrypt-backup.ts.
  */
-async function sendOffsiteBackup(plain: string, ts: string): Promise<"sent" | "skipped" | "failed"> {
+type OffsiteResult = { status: "sent" | "skipped" | "failed"; reason?: string };
+
+async function sendOffsiteBackup(plain: string, ts: string): Promise<OffsiteResult> {
   const to = process.env.BACKUP_EMAIL;
-  if (!to) return "skipped";
+  if (!to) return { status: "skipped", reason: "BACKUP_EMAIL לא מוגדר" };
+  let attachKb = 0;
   try {
     const gz = gzipSync(Buffer.from(plain, "utf8")).toString("base64");
     const enc = encryptSecret(gz); // "v1:iv:tag:ct" — ASCII, ניתן לפענוח רק עם ENCRYPTION_KEY
-    const attachment = { filename: `palmy-backup-${ts}.json.gz.enc`, content: Buffer.from(enc, "utf8").toString("base64") };
+    // base64 של הצרופה מנפח ~33% מעבר ל-enc; ספקי מייל חוסמים סביב 10-25MB.
+    const content = Buffer.from(enc, "utf8").toString("base64");
+    attachKb = Math.round(Buffer.byteLength(content, "utf8") / 1024);
+    const attachment = { filename: `palmy-backup-${ts}.json.gz.enc`, content };
     const { sendEmail } = await import("./email"); // דינמי — email.ts הוא server-only ולא נטען בסקריפטי DR
     const r = await sendEmail({
       to,
@@ -26,9 +32,11 @@ async function sendOffsiteBackup(plain: string, ts: string): Promise<"sent" | "s
       text: `מצורף גיבוי מוצפן של מסד הנתונים (${(Buffer.byteLength(enc, "utf8") / 1024).toFixed(0)}KB).\nלשחזור: npx tsx scripts/decrypt-backup.ts <קובץ> (דורש ENCRYPTION_KEY של הפרודקשן).`,
       attachments: [attachment],
     });
-    return r.ok ? "sent" : "failed";
-  } catch {
-    return "failed";
+    // ⚠️ אסור לבלוע: זה העותק היחיד מחוץ ל-Neon/Vercel. בלי הסיבה אי-אפשר לתקן.
+    return r.ok ? { status: "sent" } : { status: "failed", reason: `${r.error ?? "unknown"} (צרופה ${attachKb}KB)` };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { status: "failed", reason: `${msg} (צרופה ${attachKb}KB)` };
   }
 }
 
@@ -117,9 +125,16 @@ export async function runBackup(opts: { force?: boolean } = {}): Promise<{ id: s
     const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const offsitePlain = JSON.stringify({ version: 2, tables, reference });
     const offsite = await sendOffsiteBackup(offsitePlain, ts);
-    rowCounts._offsite = offsite === "sent" ? 1 : 0;
+    rowCounts._offsite = offsite.status === "sent" ? 1 : 0;
 
-    const payload = { status: "OK", target: offsite === "sent" ? "DB+OFFSITE" : "DB", sizeBytes, rowCounts, data: json, referenceData, referenceHash };
+    // 🔊 כשל בעותק החיצוני אינו מפיל את הגיבוי (ה-snapshot ל-DB הצליח), אבל **חייב להיות גלוי**:
+    //    נרשם ב-error ומוצג במסך הגיבויים. בעבר הוא נבלע ו-target פשוט ירד ל-"DB" בלי הסבר.
+    const payload = {
+      status: "OK",
+      target: offsite.status === "sent" ? "DB+OFFSITE" : "DB",
+      sizeBytes, rowCounts, data: json, referenceData, referenceHash,
+      error: offsite.status === "failed" ? `offsite: ${offsite.reason?.slice(0, 400)}` : null,
+    };
     const run = claimId
       ? await prisma.backupRun.update({ where: { id: claimId }, data: payload, select: { id: true } })
       : await prisma.backupRun.create({ data: payload, select: { id: true } });
