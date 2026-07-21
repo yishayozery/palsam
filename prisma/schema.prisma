@@ -228,6 +228,7 @@ model Battalion {
   ymachGaps              YmachGap[]          @relation("BattalionYmachGaps")
   verificationRequests   VerificationRequest[] @relation("BattalionVerifications")
   dispatchTokens         DispatchToken[]       @relation("BattalionDispatchTokens")
+  intakeDrafts           IntakeDraft[]         @relation("BattalionIntakeDrafts")
 }
 
 // ===================== משתמשים =====================
@@ -455,6 +456,7 @@ model Holder {
   companyWarehouses     CompanyWarehouse[]     @relation("HolderCompanyWarehouses")
   operationalKits       OperationalKit[]       @relation("HolderOpKits")
   ymachGaps             YmachGap[]             @relation("HolderYmachGaps")
+  intakeDrafts          IntakeDraft[]          @relation("HolderIntakeDrafts")
   verificationRequests  VerificationRequest[]  @relation("HolderVerifications")
 
   @@index([battalionId])
@@ -969,6 +971,7 @@ model ItemType {
   companyShelfItems CompanyShelfItem[] @relation("ItemTypeOnShelf")
   operationalKitItems OperationalKitItem[] @relation("ItemTypeInOpKit")
   ymachGaps         YmachGap[]           @relation("YmachGapItemType")
+  intakeDraftLines  IntakeDraftLine[]    @relation("IntakeDraftLineItemType")
 
   @@unique([battalionId, sku])
   @@index([categoryId])
@@ -3085,4 +3088,72 @@ model AccidentPhoto {
   createdAt DateTime          @default(now())
 
   @@index([reportId])
+}
+
+/**
+ * 📄 טיוטת קליטה משובר השאלה של החטיבה (SAP).
+ * העיקרון: **קריאה אוטומטית לעולם לא נוגעת במלאי.** היא יוצרת טיוטה שאדם
+ * מתקן ומאשר. המלאי זז רק באישור, ואז נוצר Transfer אחד מסוג INTAKE.
+ * שני שערים, בסדר הזה:
+ * שער 1 — הקמת פריטים חסרים בקטלוג (מק"ט שלא מוכר)
+ * שער 2 — אישור הקליטה עצמה
+ * שער 2 נעול כל עוד יש שורה חוסמת. אין קליטה חלקית.
+ */
+model IntakeDraft {
+  id          String    @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation("BattalionIntakeDrafts", fields: [battalionId], references: [id], onDelete: Cascade)
+  holderId    String // לאן נקלט הציוד
+  holder      Holder    @relation("HolderIntakeDrafts", fields: [holderId], references: [id], onDelete: Cascade)
+
+  // כותרת השובר — כפי שנקראה, לתיעוד ולאיתור כפילויות
+  voucherNo   String? // "כלי" — 30866833
+  symbol      String? // "סימול" — 3360
+  storageSite String? // "אתר אחסון" — CY60
+  voucherDate DateTime?
+  pageCount   Int       @default(1)
+
+  status     String @default("DRAFT") // "DRAFT" | "APPROVED" | "CANCELLED"
+  sourceKind String @default("OCR") // "OCR" | "PDF" | "MANUAL"
+
+  createdById  String?
+  approvedAt   DateTime?
+  approvedById String?
+  // ה-INTAKE שנוצר באישור. ללא FK במכוון — הטיוטה היא רשומת מקור ושורדת
+  // גם אם התעודה בוטלה מאוחר יותר, אחרת נאבד התיעוד של מה נקרא מהנייר.
+  transferId   String?
+
+  lines     IntakeDraftLine[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([battalionId, status])
+  @@index([holderId])
+}
+
+model IntakeDraftLine {
+  id      String      @id @default(cuid())
+  draftId String
+  draft   IntakeDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  sku          String // מק"ט מרופד ל-9 ספרות — אפסים מובילים נשמרים
+  description  String
+  standardQty  Int // תקן מוקצה
+  allocatedQty Int // מלאי מוקצה — זו הכמות הנקלטת
+  gap          Int // פער; תקן − מלאי = פער הוא ה-checksum של השורה
+
+  itemTypeId String?
+  // SetNull ולא Cascade: מחיקת סוג פריט מהקטלוג לא תמחק את ההיסטוריה של
+  // מה שנקלט בפועל. השורה נשארת עם המק"ט והתיאור כצילום.
+  itemType   ItemType? @relation("IntakeDraftLineItemType", fields: [itemTypeId], references: [id], onDelete: SetNull)
+
+  status String // "OK" | "CHECKSUM_MISMATCH" | "UNKNOWN_SKU" | "SERIAL_BLOCKED" | "ZERO_QTY"
+  note   String?
+  pageNo Int     @default(1)
+
+  rawText      String? // הטקסט הגולמי שנקרא — לתחקור קריאה שגויה
+  editedByUser Boolean @default(false) // האם אדם תיקן את השורה ידנית
+
+  @@index([draftId])
+  @@index([itemTypeId])
 }
