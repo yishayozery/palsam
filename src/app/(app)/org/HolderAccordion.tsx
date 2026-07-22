@@ -214,7 +214,8 @@ function SoldierQuickAdd({ companyId, onDone }: { companyId: string; onDone: () 
   async function submit(fd: FormData) {
     setError(null); setBusy(true);
     try {
-      await createSoldier(fd);
+      const r = await createSoldier(fd);
+      if (r?.error) { setError(r.error); return; }
       setFirstName(""); setLastName(""); setPersonalNumber(""); setPhone("");
       // לא סוגרים — נשארים פתוחים להוספה רצופה
     } catch (e) {

@@ -45,7 +45,8 @@ function SoldierQuickAdd({ companyId, onDone }: { companyId: string; onDone: () 
   async function submit(fd: FormData) {
     setError(null);
     try {
-      await createSoldier(fd);
+      const r = await createSoldier(fd);
+      if (r?.error) { setError(r.error); return; }
       setFirstName(""); setLastName(""); setPersonalNumber(""); setPhone("");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }

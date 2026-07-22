@@ -43,7 +43,7 @@ function AddForm({ companies, squads, onDone }: { companies: Company[]; squads: 
   const companySquads = squads.filter((s) => s.companyId === selectedCompany);
   async function submit(fd: FormData) {
     setError(null);
-    try { await createSoldier(fd); onDone(); }
+    try { const r = await createSoldier(fd); if (r?.error) { setError(r.error); return; } onDone(); }
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
   return (

@@ -5,8 +5,14 @@ import { prisma } from "@/lib/prisma";
 import { requireCapability } from "@/lib/guard";
 import { audit } from "@/lib/audit";
 
-/** הקמת חייל ע"י השליש (מטה גדוד). לא משויך אוטומטית — דרוש אישור גיוס בשלב נפרד. */
-export async function createSoldier(formData: FormData) {
+/**
+ * הקמת חייל ע"י השליש (מטה גדוד). לא משויך אוטומטית — דרוש אישור גיוס בשלב נפרד.
+ *
+ * ⚠️ שגיאות ולידציה **מוחזרות** ({ error }) ולא נזרקות: ב-Next בפרודקשן כל
+ *    Error שנזרק מ-server action מוחלף במסר גנרי מפחיד ("...omitted in
+ *    production...") שמסתיר את הסיבה האמיתית. החזרה שומרת על ההודעה בעברית.
+ */
+export async function createSoldier(formData: FormData): Promise<{ error?: string } | void> {
   const user = await requireCapability("soldiers.roster");
   const bId = user.battalionId!;
   const firstName = String(formData.get("firstName") || "").trim();
@@ -17,21 +23,21 @@ export async function createSoldier(formData: FormData) {
   const squadId = String(formData.get("squadId") || "") || null;
   const platoon = String(formData.get("platoon") || "").trim() || null;
   const enlistNow = formData.get("enlistNow") === "on";
-  if (!firstName || !lastName) throw new Error("שם פרטי + שם משפחה חובה");
-  if (!companyId) throw new Error("חובה לשייך לפלוגה");
+  if (!firstName || !lastName) return { error: "שם פרטי + שם משפחה חובה" };
+  if (!companyId) return { error: "חובה לשייך לפלוגה" };
 
   const company = await prisma.holder.findUnique({ where: { id: companyId }, select: { battalionId: true } });
-  if (!company || company.battalionId !== bId) throw new Error("פלוגה לא נמצאה");
+  if (!company || company.battalionId !== bId) return { error: "פלוגה לא נמצאה" };
   if (squadId) {
     const squad = await prisma.squad.findUnique({ where: { id: squadId }, select: { battalionId: true } });
-    if (!squad || squad.battalionId !== bId) throw new Error("מחלקה לא נמצאה");
+    if (!squad || squad.battalionId !== bId) return { error: "מחלקה לא נמצאה" };
   }
 
   if (personalNumber) {
     const existing = await prisma.soldier.findFirst({
       where: { battalionId: bId, personalNumber },
     });
-    if (existing) throw new Error(`חייל עם מ.א. ${personalNumber} כבר קיים (${existing.fullName})`);
+    if (existing) return { error: `חייל עם מ.א. ${personalNumber} כבר קיים (${existing.fullName})` };
   }
 
   const fullName = `${firstName} ${lastName}`;
