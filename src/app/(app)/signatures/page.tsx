@@ -444,10 +444,10 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                 warehouses={myWarehouses.length > 0 ? myWarehouses.map((w) => ({ id: w.id, name: w.name })) : allWarehouses}
                 statuses={statuses.map((s) => ({ id: s.id, name: s.name, isWear: s.isWear, isLoss: s.isLoss, isDefault: s.isDefault }))}
                 operationalKits={operationalKits.filter((k) => k.assignedSoldier).map((k) => ({
-                  id: k.id, name: k.name, status: k.status,
+                  id: k.id, name: k.name, status: k.status, templateId: k.templateId,
                   soldierId: k.assignedSoldierId!,
                   soldierName: k.assignedSoldier!.fullName,
-                  items: k.items.map((i) => ({ itemTypeId: i.itemTypeId, itemName: i.itemType.name, sku: i.itemType.sku, quantity: i.quantity })),
+                  items: k.items.map((i) => ({ itemTypeId: i.itemTypeId, itemName: i.itemType.name, sku: i.itemType.sku, quantity: i.quantity, present: i.present, presentQuantity: i.presentQuantity })),
                 }))}
               />
               <SoldierTransferModal
@@ -501,11 +501,11 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
                   id: l.id, name: l.name, companyId: l.holderId, isVehicle: !!l.vehicleSerialUnitId,
                 }))}
                 operationalKits={operationalKits.filter((k) => k.assignedSoldier).map((k) => ({
-                  id: k.id, name: k.name, status: k.status,
+                  id: k.id, name: k.name, status: k.status, templateId: k.templateId,
                   soldierId: k.assignedSoldierId!,
                   soldierName: k.assignedSoldier!.fullName,
                   shelfLabel: k.shelf ? `${k.shelf.warehouse.name} ${k.shelf.column}-${k.shelf.row}` : null,
-                  items: k.items.map((i) => ({ itemTypeId: i.itemTypeId, itemName: i.itemType.name, sku: i.itemType.sku, quantity: i.quantity })),
+                  items: k.items.map((i) => ({ itemTypeId: i.itemTypeId, itemName: i.itemType.name, sku: i.itemType.sku, quantity: i.quantity, present: i.present, presentQuantity: i.presentQuantity })),
                 }))}
               />
             </div>

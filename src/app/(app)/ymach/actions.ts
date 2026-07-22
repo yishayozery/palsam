@@ -432,17 +432,21 @@ export async function signKit(
   if (!kit.assignedSoldierId) return { error: "מארז לא צוות לחייל" };
   if (kit.status === "ISSUED") return { error: "מארז כבר אצל חייל" };
 
-  // הסרת פריטים אם צוין
-  if (removedItems && removedItems.length > 0) {
-    for (const rm of removedItems) {
-      const existing = kit.items.find((i) => i.itemTypeId === rm.itemTypeId);
-      if (!existing) continue;
-      const newQty = existing.quantity - rm.quantity;
-      if (newQty <= 0) {
-        await prisma.operationalKitItem.delete({ where: { id: existing.id } });
-      } else {
-        await prisma.operationalKitItem.update({ where: { id: existing.id }, data: { quantity: newQty } });
-      }
+  // כמה בפועל מוחתם לכל פריט:
+  //  • ארגז מתבנית (templateId) — מכבד את הצ'קליסט: רק מה שסומן "יש" ובכמות
+  //    שנמצאה (present ? min(presentQuantity, quantity) : 0). פריט חסר לא מוחתם.
+  //  • ארגז חופשי — לא עבר צ'קליסט, מוחתם על הכמות המלאה כבעבר.
+  //  מעל זה מופחתות ההסרות הידניות של המחסנאי. הכל בפעולה אחת פר-פריט.
+  const removedMap = new Map((removedItems ?? []).map((r) => [r.itemTypeId, r.quantity]));
+  for (const item of kit.items) {
+    const base = kit.templateId
+      ? (item.present ? Math.min(item.presentQuantity, item.quantity) : 0)
+      : item.quantity;
+    const finalQty = base - (removedMap.get(item.itemTypeId) ?? 0);
+    if (finalQty <= 0) {
+      await prisma.operationalKitItem.delete({ where: { id: item.id } });
+    } else if (finalQty !== item.quantity) {
+      await prisma.operationalKitItem.update({ where: { id: item.id }, data: { quantity: finalQty } });
     }
   }
 

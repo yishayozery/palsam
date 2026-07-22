@@ -20,7 +20,7 @@ type EquipLocation = { id: string; name: string; isVehicle: boolean; companyId: 
 type CartSerial = { type: "serial"; unitId: string; itemName: string; serial: string; status: string; lotQty?: number; lotTotal?: number };
 type CartQty = { type: "qty"; itemTypeId: string; itemName: string; unit: string; quantity: number; statusId: string; statusName: string; fromKit?: string };
 type CartItem = CartSerial | CartQty;
-type OpKitProp = { id: string; name: string; status: string; soldierId: string; soldierName: string; shelfLabel: string | null; items: { itemTypeId: string; itemName: string; sku: string | null; quantity: number }[] };
+type OpKitProp = { id: string; name: string; status: string; templateId: string | null; soldierId: string; soldierName: string; shelfLabel: string | null; items: { itemTypeId: string; itemName: string; sku: string | null; quantity: number; present: boolean; presentQuantity: number }[] };
 
 export default function SignoutModal({
   soldiers, companies = [], balances = [], units, kits, vehicles, equipmentLocations = [], lockCompanyId, isArmory = false, reopenForSoldierId, preselectSerialIds, operationalKits = [], warehouseId = null, warehouseName = null,
@@ -499,13 +499,19 @@ export default function SignoutModal({
                       <div className="mt-1 space-y-0.5 mr-6">
                         {kit.items.map((item) => {
                           const removedQty = opKitRemovedItems[kit.id]?.[item.itemTypeId] ?? 0;
-                          const effectiveQty = item.quantity - removedQty;
+                          // ארגז-תבנית: הבסיס הוא מה שסומן "יש" בצ'קליסט; חסר = 0.
+                          // ארגז חופשי: הכמות המלאה.
+                          const base = kit.templateId ? (item.present ? Math.min(item.presentQuantity, item.quantity) : 0) : item.quantity;
+                          const effectiveQty = base - removedQty;
+                          const shortFromChecklist = kit.templateId ? base < item.quantity : false;
                           return (
                             <div key={item.itemTypeId} className="flex items-center justify-between text-xs">
                               <span className={effectiveQty <= 0 ? "line-through text-slate-400" : "text-slate-700"}>
                                 {item.itemName} {item.sku ? `(${item.sku})` : ""}
+                                {shortFromChecklist && <span className="text-rose-500 mr-1" title={`בתבנית ${item.quantity}, בצ'קליסט נמצאו ${base}`}>⚠</span>}
                               </span>
                               <div className="flex items-center gap-1">
+                                {shortFromChecklist && effectiveQty >= 0 && <span className="text-[10px] text-rose-400">מתוך {item.quantity}</span>}
                                 <span className={effectiveQty <= 0 ? "text-slate-400" : "text-emerald-700 font-medium"}>{effectiveQty}</span>
                                 {effectiveQty > 0 && (
                                   <button
