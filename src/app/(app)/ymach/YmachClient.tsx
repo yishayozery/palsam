@@ -494,26 +494,49 @@ function KitsTab({
   );
 
   function printKit(kit: OpKit) {
-    const w = window.open("", "_blank", "width=400,height=600");
+    const w = window.open("", "_blank", "width=420,height=640");
     if (!w) return;
-    const rows = kit.items.map((i) =>
-      `<tr><td style="padding:4px 8px;border:1px solid #ccc">${escapeHtml(i.itemName)}${i.sku ? ` <small style="color:#888">(${escapeHtml(i.sku)})</small>` : ""}</td><td style="padding:4px 8px;border:1px solid #ccc;text-align:center">${i.quantity}</td></tr>`
-    ).join("");
-    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>מארז ${escapeHtml(kit.kitNumber ?? "")} — ${escapeHtml(kit.name)}</title>
-<style>body{font-family:Arial,sans-serif;padding:20px}table{border-collapse:collapse;width:100%}th{background:#f1f5f9;padding:6px 8px;border:1px solid #ccc;text-align:right}h1{font-size:18px}h2{font-size:14px;color:#475569}.meta{font-size:13px;color:#64748b;margin:4px 0}@media print{button{display:none}}</style></head>
+    const isTemplate = !!kit.templateId;
+    // בארגז-תבנית מציגים יש/אין; אחרת רק פריט+כמות.
+    const rows = kit.items.map((i) => {
+      const found = i.present ? Math.min(i.presentQuantity, i.quantity) : 0;
+      const short = isTemplate && found < i.quantity;
+      const extras = [i.serialNumber && `ס"ד ${escapeHtml(i.serialNumber)}`, i.lotNumber && `אצווה ${escapeHtml(i.lotNumber)}`, i.expiryDate && `תוקף ${i.expiryDate}`].filter(Boolean).join(" · ");
+      const status = isTemplate ? (short ? `<b style="color:#dc2626">${found}/${i.quantity} ✗</b>` : `<b style="color:#16a34a">${i.quantity} ✓</b>`) : `${i.quantity}`;
+      return `<tr style="${short ? "background:#fff1f2" : ""}"><td>${escapeHtml(i.itemName)}${extras ? `<br><span class="ex">${extras}</span>` : ""}</td><td class="c">${status}</td></tr>`;
+    }).join("");
+    const missing = kit.items.filter((i) => isTemplate && (!i.present || i.presentQuantity < i.quantity)).length;
+    const summary = isTemplate ? `<span class="${missing ? "bad" : "ok"}">${missing ? `חסרים ${missing}` : "מלא ✓"}</span>` : `${kit.items.length} פריטים`;
+    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>ארגז ${escapeHtml(kit.kitNumber ?? "")}</title>
+<style>
+@page{size:55mm 100mm;margin:2mm}
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;margin:0;padding:3mm;width:55mm;font-size:8pt;color:#0f172a}
+h1{font-size:11pt;margin:0 0 1mm}
+.hd{border-bottom:1px solid #000;padding-bottom:1mm;margin-bottom:1mm}
+.m{font-size:7pt;color:#334155;line-height:1.35}
+.m b{color:#000}
+table{border-collapse:collapse;width:100%;margin-top:1mm}
+td{border:0.3mm solid #94a3b8;padding:0.6mm 1mm;vertical-align:top;font-size:7.5pt}
+td.c{text-align:center;width:12mm;white-space:nowrap}
+.ex{font-size:6pt;color:#64748b}
+.ok{color:#16a34a;font-weight:bold}.bad{color:#dc2626;font-weight:bold}
+.ft{font-size:6pt;color:#94a3b8;margin-top:1mm}
+@media print{button{display:none}}
+button{margin-top:2mm;padding:4px 12px;font-size:8pt;background:#0f172a;color:#fff;border:0;border-radius:4px}
+</style></head>
 <body>
-<h1>🎒 מארז: ${escapeHtml(kit.name)}</h1>
-${kit.kitNumber ? `<p class="meta"><b>מספר מארז:</b> ${escapeHtml(kit.kitNumber)}</p>` : ""}
-${kit.assignedSoldierName ? `<p class="meta"><b>חייל:</b> ${escapeHtml(kit.assignedSoldierName)}</p>` : `<p class="meta"><b>חייל:</b> לא משובץ</p>`}
-${kit.shelfLabel ? `<p class="meta"><b>מדף:</b> ${escapeHtml(kit.shelfLabel)}</p>` : ""}
-${kit.equipmentLocationName ? `<p class="meta"><b>מיקום תעסוקתי:</b> ${escapeHtml(kit.equipmentLocationName)}</p>` : ""}
-<p class="meta"><b>סטטוס:</b> ${kit.status === "ISSUED" ? "אצל חייל" : "על המדף"}</p>
-${kit.notes ? `<p class="meta"><b>הערה:</b> ${escapeHtml(kit.notes)}</p>` : ""}
-<hr style="margin:12px 0">
-<h2>תכולת המארז (${kit.items.length} פריטים)</h2>
-<table><thead><tr><th>פריט</th><th style="width:60px">כמות</th></tr></thead><tbody>${rows}</tbody></table>
-<p style="margin-top:16px;font-size:11px;color:#94a3b8">הודפס: ${new Date().toLocaleDateString("he-IL")} ${new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}</p>
-<button onclick="window.print()" style="margin-top:12px;padding:8px 20px;background:#0f172a;color:white;border:none;border-radius:6px;cursor:pointer">🖨️ הדפס</button>
+<div class="hd">
+<h1>🎒 ${escapeHtml(kit.name)}${kit.kitNumber ? ` <span style="font-family:monospace">#${escapeHtml(kit.kitNumber)}</span>` : ""}</h1>
+<div class="m">
+${kit.assignedSoldierName ? `<b>חייל:</b> ${escapeHtml(kit.assignedSoldierName)} · ` : ""}<b>סטטוס:</b> ${kit.status === "ISSUED" ? "אצל חייל" : "על המדף"} · ${summary}<br>
+${kit.shelfLabel ? `<b>מדף:</b> ${escapeHtml(kit.shelfLabel)} ` : ""}${kit.equipmentLocationName ? `· <b>מיקום:</b> ${escapeHtml(kit.equipmentLocationName)}` : ""}
+${kit.notes ? `<br><b>הערה:</b> ${escapeHtml(kit.notes)}` : ""}
+</div>
+</div>
+<table><tbody>${rows}</tbody></table>
+<div class="ft">${new Date().toLocaleDateString("he-IL")} ${new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}</div>
+<button onclick="window.print()">🖨️ הדפס</button>
 </body></html>`);
     w.document.close();
   }
@@ -1029,6 +1052,11 @@ function ReportsTab({
           desc="פריט, כמות, שייכות לחייל — עם סמל וחותמת"
           onClick={() => generateReport("soldier", { companyName, companyLogo, battalionName, battalionLogo, warehouses, baselines, operationalKits })}
         />
+        <ReportCard
+          icon="🎒" title="חוסרי ארגזים (כללי)"
+          desc="צבירת נדרש מול קיים על פני כל ארגזי-התבנית"
+          onClick={() => printKitShortages(operationalKits, companyName)}
+        />
       </div>
     </div>
   );
@@ -1054,4 +1082,44 @@ function ReportCard({ icon, title, desc, onClick }: { icon: string; title: strin
 // placeholder — PDF generation will be implemented as server action
 function generateReport(type: string, data: Record<string, unknown>) {
   alert(`הפקת דוח "${type}" — ייושם בשלב הבא (PDF)`);
+}
+
+/**
+ * 🎒 דוח חוסרים כללי — צבירה על פני כל ארגזי-התבנית: לכל פריט, כמה נדרש
+ * בסך כל הארגזים מול כמה נמצא בפועל, והחוסר. רק ארגזים שהוקמו מתבנית.
+ */
+function printKitShortages(kits: OpKit[], companyName: string) {
+  const templateKits = kits.filter((k) => k.templateId);
+  const agg = new Map<string, { name: string; sku: string | null; required: number; present: number }>();
+  for (const k of templateKits) {
+    for (const it of k.items) {
+      const cur = agg.get(it.itemTypeId) ?? { name: it.itemName, sku: it.sku, required: 0, present: 0 };
+      cur.required += it.quantity;
+      cur.present += it.present ? Math.min(it.presentQuantity, it.quantity) : 0;
+      agg.set(it.itemTypeId, cur);
+    }
+  }
+  const rows = [...agg.values()]
+    .map((r) => ({ ...r, gap: r.required - r.present }))
+    .sort((a, b) => b.gap - a.gap);
+  const totalGap = rows.reduce((s, r) => s + Math.max(0, r.gap), 0);
+
+  const w = window.open("", "_blank", "width=600,height=800");
+  if (!w) return;
+  const body = rows.map((r) => {
+    const short = r.gap > 0;
+    return `<tr style="${short ? "background:#fff1f2" : ""}"><td style="padding:4px 8px;border:1px solid #ccc">${escapeHtml(r.name)}${r.sku ? ` <small style="color:#888">(${escapeHtml(r.sku)})</small>` : ""}</td>`
+      + `<td style="padding:4px 8px;border:1px solid #ccc;text-align:center">${r.required}</td>`
+      + `<td style="padding:4px 8px;border:1px solid #ccc;text-align:center">${r.present}</td>`
+      + `<td style="padding:4px 8px;border:1px solid #ccc;text-align:center;font-weight:bold;color:${short ? "#dc2626" : "#16a34a"}">${short ? r.gap : "✓"}</td></tr>`;
+  }).join("");
+  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>חוסרי ארגזים — ${escapeHtml(companyName)}</title>
+<style>body{font-family:Arial,sans-serif;padding:20px}table{border-collapse:collapse;width:100%}th{background:#f1f5f9;padding:6px 8px;border:1px solid #ccc;text-align:right}h1{font-size:18px;margin-bottom:2px}.meta{font-size:13px;color:#64748b;margin:2px 0 12px}@media print{button{display:none}}</style></head>
+<body>
+<h1>🎒 דוח חוסרי ארגזים — ${escapeHtml(companyName)}</h1>
+<p class="meta">${templateKits.length} ארגזים · סה"כ חוסר: <b style="color:#dc2626">${totalGap}</b> יחידות · ${new Date().toLocaleDateString("he-IL")}</p>
+<table><thead><tr><th>פריט</th><th style="width:70px">נדרש</th><th style="width:70px">קיים</th><th style="width:70px">חוסר</th></tr></thead><tbody>${body || '<tr><td colspan="4" style="padding:12px;text-align:center;color:#94a3b8">אין ארגזים מתבנית</td></tr>'}</tbody></table>
+<button onclick="window.print()" style="margin-top:12px;padding:8px 20px;background:#0f172a;color:white;border:none;border-radius:6px;cursor:pointer">🖨️ הדפס</button>
+</body></html>`);
+  w.document.close();
 }
