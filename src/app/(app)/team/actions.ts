@@ -66,7 +66,7 @@ async function countCompanyReps(holderId: string, excludeUserId: string): Promis
  * - מחסן → סגן (אותו תפקיד/הרשאות כמו מנהל המחסן)
  * scoped, capped, + הזמנה בטלגרם אם החייל מחובר לבוט.
  */
-export async function appointSubUser(formData: FormData) {
+export async function appointSubUser(formData: FormData): Promise<{ error?: string } | void> {
   const user = await requireUser();
   const bId = user.battalionId;
   if (!bId) throw new Error("אין גדוד");
@@ -77,7 +77,7 @@ export async function appointSubUser(formData: FormData) {
     where: { id: holderId },
     select: { id: true, kind: true, name: true, delegateCap: true, battalionId: true },
   });
-  if (!holder || holder.battalionId !== bId) throw new Error("יחידה לא נמצאה");
+  if (!holder || holder.battalionId !== bId) return { error: "יחידה לא נמצאה" };
 
   const isWarehouse = holder.kind === "WAREHOUSE";
   const apptType = isWarehouse ? "deputy" : String(formData.get("apptType") || "rep");
@@ -104,15 +104,15 @@ export async function appointSubUser(formData: FormData) {
     });
     if (soldier && soldier.battalionId === bId) {
       const linked = await prisma.appUser.findUnique({ where: { soldierId: rawSoldierId }, select: { username: true } });
-      if (linked) throw new Error(`החייל כבר מקושר למשתמש @${linked.username}`);
+      if (linked) return { error: `החייל כבר מקושר למשתמש @${linked.username}` };
       soldierId = soldier.id;
       fullName = soldier.fullName;
       phone = soldier.phone ?? phone;
       telegramChatId = soldier.telegramChatId;
     }
   }
-  if (!soldierId) throw new Error("יש לבחור חייל מהרשימה (אין הקמה ידנית)");
-  if (!fullName || !enteredUsername) throw new Error("חסר שם או שם משתמש");
+  if (!soldierId) return { error: "יש לבחור חייל מהרשימה (אין הקמה ידנית)" };
+  if (!fullName || !enteredUsername) return { error: "חסר שם או שם משתמש" };
 
   // ===== קביעת תפקיד + אכיפת תקרה לפי סוג המינוי =====
   let roleData: { role: "COMPANY_REP" | "WAREHOUSE_MANAGER"; systemRoleId: string | null; customRoleId: string | null };
@@ -120,21 +120,21 @@ export async function appointSubUser(formData: FormData) {
 
   if (apptType === "squad") {
     // מפקד מחלקה — דורש מחלקה תקינה של הפלוגה, ומפקד אחד פעיל למחלקה
-    if (!squadId) throw new Error("יש לבחור מחלקה");
+    if (!squadId) return { error: "יש לבחור מחלקה" };
     const squad = await prisma.squad.findUnique({ where: { id: squadId }, select: { companyId: true, battalionId: true, name: true } });
-    if (!squad || squad.companyId !== holderId || squad.battalionId !== bId) throw new Error("מחלקה לא נמצאה בפלוגה זו");
+    if (!squad || squad.companyId !== holderId || squad.battalionId !== bId) return { error: "מחלקה לא נמצאה בפלוגה זו" };
     const existing = await prisma.userSquad.findFirst({
       where: { squadId, user: { active: true } },
       select: { user: { select: { fullName: true } } },
     });
-    if (existing) throw new Error(`למחלקה ${squad.name} כבר יש מפקד פעיל (${existing.user.fullName}). הסר קודם.`);
+    if (existing) return { error: `למחלקה ${squad.name} כבר יש מפקד פעיל (${existing.user.fullName}). הסר קודם.` };
     const roleId = await ensureAreaRole(bId, SQUAD_ROLE_NAME);
     roleData = { role: "COMPANY_REP", systemRoleId: roleId, customRoleId: null };
   } else if (isWarehouse) {
     // סגן מחסן — אותו תפקיד כמו מנהל המחסן (הרשאות זהות)
     const cap = holder.delegateCap ?? defaultCap;
     const current = await prisma.appUser.count({ where: { holderId, active: true, id: { not: user.id } } });
-    if (current >= cap) throw new Error(`הגעת לתקרה (${cap}). הסר קיים, או בקש ממנהל המערכת להגדיל.`);
+    if (current >= cap) return { error: `הגעת לתקרה (${cap}). הסר קיים, או בקש ממנהל המערכת להגדיל.` };
     // מקור התפקיד: אם הממנה מנהל את המחסן — התפקיד שלו. אחרת (מנהל מערכת) — תפקיד מנהל קיים, אחרת WAREHOUSE_MANAGER.
     let src = user.holderIds.includes(holderId)
       ? await prisma.appUser.findUnique({ where: { id: user.id }, select: { role: true, systemRoleId: true, customRoleId: true } })
@@ -149,7 +149,7 @@ export async function appointSubUser(formData: FormData) {
     // רס"פ פלוגתי — לפי תחום: כללי / ציוד / כ"א
     const cap = holder.delegateCap ?? defaultCap;
     const current = await countCompanyReps(holderId, user.id);
-    if (current >= cap) throw new Error(`הגעת לתקרה (${cap}). הסר קיים, או בקש ממנהל המערכת להגדיל.`);
+    if (current >= cap) return { error: `הגעת לתקרה (${cap}). הסר קיים, או בקש ממנהל המערכת להגדיל.` };
     const areaRoleName = AREA_TO_ROLE[apptArea] ?? null;
     const systemRoleId = areaRoleName ? await ensureAreaRole(bId, areaRoleName) : null;
     roleData = { role: "COMPANY_REP", systemRoleId, customRoleId: null };
@@ -188,10 +188,10 @@ export async function appointSubUser(formData: FormData) {
 }
 
 /** הסרת משתמש-משנה (השבתה — בטוח מול היסטוריה). scoped ליחידה שבניהול המשתמש. */
-export async function removeSubUser(formData: FormData) {
+export async function removeSubUser(formData: FormData): Promise<{ error?: string } | void> {
   const user = await requireUser();
   const id = String(formData.get("id") || "");
-  if (id === user.id) throw new Error("אי אפשר להסיר את עצמך");
+  if (id === user.id) return { error: "אי אפשר להסיר את עצמך" };
   const target = await prisma.appUser.findUnique({ where: { id }, select: { id: true, holderId: true, username: true, battalionId: true } });
   if (!target || !target.holderId || !canManageHolder(user, target.holderId)) throw new Error("אין הרשאה");
   // 🔒 canManageHolder מחזיר true לכל אדמין ללא קשר לגדוד — חוסמים השבתת משתמש של גדוד אחר (IDOR)

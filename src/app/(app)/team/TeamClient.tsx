@@ -24,6 +24,10 @@ function suggestUsername(fullName: string) {
 
 // שורת בעל-תפקיד עם לינק הזמנה / הסרה
 function PersonRow({ u, baseUrl, inviteRole, suffix }: { u: SubUser; baseUrl: string; inviteRole: "rep" | null; suffix?: string }) {
+  async function remove(fd: FormData) {
+    const r = await removeSubUser(fd);
+    if (r?.error) alert(r.error);
+  }
   return (
     <div className="flex items-center gap-2 flex-wrap px-4 py-2 text-sm">
       <span className="font-medium text-slate-800">{u.fullName}</span>
@@ -35,7 +39,7 @@ function PersonRow({ u, baseUrl, inviteRole, suffix }: { u: SubUser; baseUrl: st
       ) : (
         <span className="text-[10px] text-emerald-600">פעיל</span>
       )}
-      <form action={removeSubUser} className="mr-auto" onSubmit={(e) => { if (!confirm(`להסיר את ${u.fullName}?`)) e.preventDefault(); }}>
+      <form action={remove} className="mr-auto" onSubmit={(e) => { if (!confirm(`להסיר את ${u.fullName}?`)) e.preventDefault(); }}>
         <input type="hidden" name="id" value={u.id} />
         <button className="text-[11px] text-rose-400 hover:text-rose-600">🗑️ הסר</button>
       </form>
@@ -49,6 +53,14 @@ function AppointForm({ holder, apptType }: { holder: Holder; apptType: "rep" | "
   const [username, setUsername] = useState("");
   const [squadId, setSquadId] = useState("");
   const [area, setArea] = useState("general");
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(fd: FormData) {
+    setError(null);
+    const r = await appointSubUser(fd);
+    if (r?.error) { setError(r.error); return; }
+    setSoldierId(""); setUsername(""); setSquadId(""); setArea("general");
+  }
 
   const label = apptType === "squad" ? "מפקד מחלקה" : apptType === "deputy" ? "סגן" : "רס״פ";
   // למפקד מחלקה — אם נבחרה מחלקה, מסנן חיילים לפיה
@@ -65,8 +77,7 @@ function AppointForm({ holder, apptType }: { holder: Holder; apptType: "rep" | "
 
   return (
     <form
-      action={appointSubUser}
-      onSubmit={() => { setSoldierId(""); setUsername(""); setSquadId(""); setArea("general"); }}
+      action={submit}
       className="px-4 py-3 border-t border-slate-100 bg-slate-50/50 flex flex-wrap items-end gap-2"
     >
       <input type="hidden" name="holderId" value={holder.id} />
@@ -112,6 +123,7 @@ function AppointForm({ holder, apptType }: { holder: Holder; apptType: "rep" | "
         : selected?.telegramLinked
           ? <span className="text-[11px] text-sky-600">📲 יישלח בטלגרם</span>
           : <span className="text-[11px] text-slate-400">לינק לוואטסאפ</span>}
+      {error && <p className="w-full text-[11px] text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5">⚠️ {error}</p>}
     </form>
   );
 }
