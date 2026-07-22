@@ -103,7 +103,8 @@ function InviteRow({ holderId, kind, onDone }: { holderId: string; kind: "WAREHO
   async function submit(fd: FormData) {
     setError(null);
     try {
-      await inviteHolderUser(fd);
+      const r = await inviteHolderUser(fd);
+      if (r && "error" in r && r.error) { setError(r.error); return; }
       setFullName(""); setUsername(""); setPhone("");
       onDone();
     } catch (e) {

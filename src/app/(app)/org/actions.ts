@@ -10,7 +10,7 @@ import { audit } from "@/lib/audit";
 import type { WarehouseType, Role } from "@/generated/prisma";
 
 /** הזמנת משתמש לישות (מחסן / פלוגה) ישירות מהאקורדיון. אופציונלית מקושר לחייל ברוסטר. */
-export async function inviteHolderUser(formData: FormData) {
+export async function inviteHolderUser(formData: FormData): Promise<{ username: string; inviteToken: string } | { error: string }> {
   const admin = await requireCapability("users.manage");
   const bId = admin.battalionId!;
   const holderId = String(formData.get("holderId") || "");
@@ -23,18 +23,18 @@ export async function inviteHolderUser(formData: FormData) {
   const soldierId = String(formData.get("soldierId") || "") || null;
   if (soldierId) {
     const soldier = await prisma.soldier.findUnique({ where: { id: soldierId } });
-    if (!soldier || soldier.battalionId !== bId) throw new Error("חייל לא נמצא");
+    if (!soldier || soldier.battalionId !== bId) return { error: "חייל לא נמצא" };
     const linked = await prisma.appUser.findUnique({ where: { soldierId } });
-    if (linked) throw new Error(`החייל ${soldier.fullName} כבר מקושר למשתמש @${linked.username}`);
+    if (linked) return { error: `החייל ${soldier.fullName} כבר מקושר למשתמש @${linked.username}` };
     fullName = soldier.fullName;
     phone = phone ?? soldier.phone;
   }
   if (!holderId || !fullName || !enteredUsername) {
-    throw new Error("חובה: שם, שם משתמש, ובחירת מחסן/פלוגה");
+    return { error: "חובה: שם, שם משתמש, ובחירת מחסן/פלוגה" };
   }
 
   const holder = await prisma.holder.findUnique({ where: { id: holderId } });
-  if (!holder || holder.battalionId !== bId) throw new Error("מחסן/פלוגה לא נמצא");
+  if (!holder || holder.battalionId !== bId) return { error: "מחסן/פלוגה לא נמצא" };
 
   // תפקיד נקבע אוטומטית לפי סוג ה-holder
   const role: Role = holder.kind === "WAREHOUSE" ? "WAREHOUSE_MANAGER" : "COMPANY_REP";
@@ -58,7 +58,7 @@ export async function inviteHolderUser(formData: FormData) {
 }
 
 /** עדכון פרטי משתמש קיים (שם, תואר, נייד, קישור לחייל) */
-export async function updateHolderUser(formData: FormData) {
+export async function updateHolderUser(formData: FormData): Promise<{ error?: string } | void> {
   const admin = await requireCapability("users.manage");
   const userId = String(formData.get("userId") || "");
   const fullName = String(formData.get("fullName") || "").trim();
@@ -67,21 +67,21 @@ export async function updateHolderUser(formData: FormData) {
   const soldierIdRaw = String(formData.get("soldierId") || "").trim();
   const unlink = formData.get("unlinkSoldier") === "on";
 
-  if (!userId || !fullName) throw new Error("חסרים פרטים");
+  if (!userId || !fullName) return { error: "חסרים פרטים" };
 
   const target = await prisma.appUser.findUnique({ where: { id: userId } });
-  if (!target || target.battalionId !== admin.battalionId) throw new Error("משתמש לא נמצא");
+  if (!target || target.battalionId !== admin.battalionId) return { error: "משתמש לא נמצא" };
 
   let soldierId: string | null | undefined = undefined;
   if (unlink) {
     soldierId = null;
   } else if (soldierIdRaw) {
     const soldier = await prisma.soldier.findUnique({ where: { id: soldierIdRaw } });
-    if (!soldier || soldier.battalionId !== admin.battalionId) throw new Error("חייל לא נמצא");
+    if (!soldier || soldier.battalionId !== admin.battalionId) return { error: "חייל לא נמצא" };
     // ודא שלא מקושר למשתמש אחר
     const linked = await prisma.appUser.findUnique({ where: { soldierId: soldierIdRaw } });
     if (linked && linked.id !== userId) {
-      throw new Error(`החייל ${soldier.fullName} כבר מקושר למשתמש @${linked.username}`);
+      return { error: `החייל ${soldier.fullName} כבר מקושר למשתמש @${linked.username}` };
     }
     soldierId = soldierIdRaw;
   }
