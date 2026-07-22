@@ -48,6 +48,7 @@ export const NAV: NavItem[] = [
   { href: "/items", label: "הגדרות פריטים", icon: "🏷️", group: "לוגיסטי", screen: "catalog" },
   { href: "/stock", label: "מלאי מחסן גדודי", icon: "📋", group: "לוגיסטי", screen: "stock" },
   { href: "/stock/brigade", label: "החתמות חטיבה", icon: "🤝", group: "לוגיסטי", screen: "stock" },
+  { href: "/stock/intake", label: "קליטת שובר SAP", icon: "📄", group: "לוגיסטי", screen: "stock" },
   { href: "/signatures", label: "החתמות", icon: "✍️", group: "לוגיסטי", screen: "signatures" },
   { href: "/signatures/warehouse-report", label: "דוח ציוד חתום (לפי פלוגה)", icon: "📋", group: "דוחות", screen: "signatures" },
   { href: "/counts", label: "ספירות מלאי", icon: "🔢", group: "לוגיסטי", screen: "counts" },

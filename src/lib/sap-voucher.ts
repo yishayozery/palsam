@@ -151,6 +151,44 @@ export function canApproveIntake(lines: ClassifiedLine[]): { ready: boolean; blo
   return { ready: Object.keys(blocking).length === 0, blocking };
 }
 
+/**
+ * חילוץ שורות שובר מטקסט חופשי (הדבקה מ-OCR, מאקסל, או הקלדה).
+ *
+ * כל שורה: מחפשים מק"ט (הרצף הראשון של 6–9 ספרות שאינו חלק ממספר ארוך),
+ * ואז את שלושת מספרי הכמות מהשאר. תיאור = הטקסט הלא-מספרי שנשאר.
+ * שורה בלי מק"ט או בלי שלישייה תקפה — מדולגת ומדווחת ב-skipped.
+ */
+export function parseVoucherText(text: string): { rows: RawVoucherRow[]; skipped: string[] } {
+  const rows: RawVoucherRow[] = [];
+  const skipped: string[] = [];
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+  for (const line of lines) {
+    // מק"ט: 6–9 ספרות רצופות, לא צמוד לספרה נוספת (כדי לא לתפוס מסטב ארוך)
+    const skuMatch = line.match(/(?<!\d)(\d{6,9})(?!\d)/);
+    if (!skuMatch) { skipped.push(line); continue; }
+    const sku = skuMatch[1];
+    // כל שאר המספרים בשורה (כולל שליליים) — למעט המק"ט עצמו
+    const rest = line.slice(0, skuMatch.index) + " " + line.slice(skuMatch.index! + sku.length);
+    const nums = (rest.match(/-?\d+/g) ?? []).map(Number);
+    // בשובר, שלוש עמודות הכמות (תקן, מלאי, פער) הן המספרים האחרונים בשורה,
+    // ומספרי התיאור ("30 כדור") מקדימים אותם. לכן קודם מנסים את שלושת האחרונים
+    // בסדרם; רק אם ה-checksum לא מסתדר נופלים לחיפוש הכללי. זה מסיר עמימות
+    // שנוצרת כשמספר תיאור במקרה משלים משוואה שנייה.
+    let triple: { standardQty: number; allocatedQty: number; gap: number } | null = null;
+    if (nums.length >= 3) {
+      const [s, a, g] = nums.slice(-3);
+      if (s >= 0 && a >= 0 && s - a === g) triple = { standardQty: s, allocatedQty: a, gap: g };
+    }
+    if (!triple) triple = pickQuantityTriple(nums);
+    if (!triple) { skipped.push(line); continue; }
+    // תיאור: הסרת כל הספרות והסימנים המספריים, מה שנשאר הוא הטקסט
+    const description = rest.replace(/-?\d+/g, " ").replace(/\s+/g, " ").trim();
+    rows.push({ sku, description, ...triple });
+  }
+  return { rows, skipped };
+}
+
 /** סיכום לתצוגה בראש הטיוטה. */
 export function summarize(lines: ClassifiedLine[]) {
   const byStatus: Record<string, number> = {};

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   normalizeSku, checksumOk, pickQuantityTriple, classifyLines, canApproveIntake, summarize,
-  type RawVoucherRow, type CatalogItem,
+  parseVoucherText, type RawVoucherRow, type CatalogItem,
 } from "../src/lib/sap-voucher";
 
 /**
@@ -136,6 +136,35 @@ describe("classifyLines", () => {
     const out = classifyLines([{ ...PAGE1[0], allocatedQty: 0, gap: 0 }], FULL_CATALOG);
     expect(out[0].status).toBe("ZERO_QTY");
     expect(canApproveIntake(out).ready).toBe(true);
+  });
+});
+
+describe("parseVoucherText", () => {
+  it("מחלץ שורה בסיסית: מק\"ט + שלישיית כמות", () => {
+    const { rows } = parseVoucherText("408132924 מעיל סערה זית 0 71 -71");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ sku: "408132924", standardQty: 0, allocatedQty: 71, gap: -71 });
+    expect(rows[0].description).toContain("מעיל סערה");
+  });
+
+  it("לא מבלבל מספר בתיאור עם מספרי הכמות", () => {
+    // "30 כדור 16mm" — 30 ו-16 בתיאור; העמודות הן 2 283 -281
+    const { rows } = parseVoucherText("113516500 מחסנית מתכת 30 כדור 16 2 283 -281");
+    expect(rows[0]).toMatchObject({ sku: "113516500", standardQty: 2, allocatedQty: 283, gap: -281 });
+  });
+
+  it("מדלג על שורה בלי מק\"ט או בלי שלישייה, ומדווח", () => {
+    const { rows, skipped } = parseVoucherText("פרטי הכלי\n408132924 מעיל 0 71 -71\nכותרת בלי מספרים");
+    expect(rows).toHaveLength(1);
+    expect(skipped).toHaveLength(2);
+  });
+
+  it("מחלץ את כל 18 השורות של השובר האמיתי מטקסט מודבק", () => {
+    const text = PAGE1.map((r) => `${r.sku} ${r.description} ${r.standardQty} ${r.allocatedQty} ${r.gap}`).join("\n");
+    const { rows } = parseVoucherText(text);
+    expect(rows).toHaveLength(18);
+    // ה-checksum מתקיים בכל השורות שחולצו
+    expect(rows.every(checksumOk)).toBe(true);
   });
 });
 
