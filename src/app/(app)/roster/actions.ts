@@ -74,7 +74,7 @@ export async function setSoldierRound(formData: FormData) {
   revalidatePath("/roster");
 }
 
-export async function updateSoldier(formData: FormData) {
+export async function updateSoldier(formData: FormData): Promise<{ error?: string } | void> {
   const user = await requireCapability("soldiers.roster");
   const id = String(formData.get("id") || "");
   const firstName = String(formData.get("firstName") || "").trim();
@@ -87,7 +87,7 @@ export async function updateSoldier(formData: FormData) {
   const attached = formData.get("attached") === "on";
   const roundRaw = String(formData.get("dutyRound") || "").trim();
   const dutyRound = roundRaw ? (Math.min(3, Math.max(1, parseInt(roundRaw, 10))) || null) : null;
-  if (!firstName || !lastName) throw new Error("שם פרטי + שם משפחה חובה");
+  if (!firstName || !lastName) return { error: "שם פרטי + שם משפחה חובה" };
 
   const s = await prisma.soldier.findUnique({ where: { id } });
   if (!s || s.battalionId !== user.battalionId) return;
@@ -130,7 +130,7 @@ export async function enlistSoldier(formData: FormData) {
 }
 
 /** ביטול אישור — לא יוכל לחתום עד אישור מחדש */
-export async function unenlistSoldier(formData: FormData) {
+export async function unenlistSoldier(formData: FormData): Promise<{ error?: string } | void> {
   const user = await requireCapability("soldiers.roster");
   const id = String(formData.get("id") || "");
   const s = await prisma.soldier.findUnique({ where: { id } });
@@ -138,7 +138,7 @@ export async function unenlistSoldier(formData: FormData) {
 
   const signedCount = await prisma.serialUnit.count({ where: { signedSoldierId: id } });
   if (signedCount > 0) {
-    throw new Error(`לא ניתן לבטל אישור — החייל חתום על ${signedCount} פריטי ציוד. יש לזכות את הציוד תחילה.`);
+    return { error: `לא ניתן לבטל אישור — החייל חתום על ${signedCount} פריטי ציוד. יש לזכות את הציוד תחילה.` };
   }
 
   await prisma.soldier.update({
@@ -160,7 +160,7 @@ export async function unenlistSoldier(formData: FormData) {
 }
 
 /** שחרור חייל */
-export async function dischargeSoldier(formData: FormData) {
+export async function dischargeSoldier(formData: FormData): Promise<{ error?: string } | void> {
   const user = await requireCapability("soldiers.roster");
   const id = String(formData.get("id") || "");
   const s = await prisma.soldier.findUnique({ where: { id } });
@@ -168,7 +168,7 @@ export async function dischargeSoldier(formData: FormData) {
 
   const signedCount = await prisma.serialUnit.count({ where: { signedSoldierId: id } });
   if (signedCount > 0) {
-    throw new Error(`לא ניתן לשחרר — החייל חתום על ${signedCount} פריטי ציוד. יש לזכות את הציוד תחילה.`);
+    return { error: `לא ניתן לשחרר — החייל חתום על ${signedCount} פריטי ציוד. יש לזכות את הציוד תחילה.` };
   }
 
   await prisma.soldier.update({ where: { id }, data: { status: "DISCHARGED", dischargedAt: new Date() } });
@@ -182,7 +182,7 @@ export async function dischargeSoldier(formData: FormData) {
 }
 
 /** השבתה/הפעלה */
-export async function deactivateSoldier(formData: FormData) {
+export async function deactivateSoldier(formData: FormData): Promise<{ error?: string } | void> {
   const user = await requireCapability("soldiers.roster");
   const id = String(formData.get("id") || "");
   const s = await prisma.soldier.findUnique({ where: { id } });
@@ -191,7 +191,7 @@ export async function deactivateSoldier(formData: FormData) {
   if (s.status !== "INACTIVE") {
     const signedCount = await prisma.serialUnit.count({ where: { signedSoldierId: id } });
     if (signedCount > 0) {
-      throw new Error(`לא ניתן להשבית — החייל חתום על ${signedCount} פריטי ציוד. יש לזכות את הציוד תחילה.`);
+      return { error: `לא ניתן להשבית — החייל חתום על ${signedCount} פריטי ציוד. יש לזכות את הציוד תחילה.` };
     }
   }
 
@@ -213,7 +213,7 @@ export async function toggleAttached(formData: FormData) {
   revalidatePath("/roster");
 }
 
-export async function deleteSoldier(formData: FormData) {
+export async function deleteSoldier(formData: FormData): Promise<{ error?: string } | void> {
   const user = await requireCapability("soldiers.roster");
   const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
@@ -222,15 +222,15 @@ export async function deleteSoldier(formData: FormData) {
     select: { id: true, fullName: true, personalNumber: true, battalionId: true,
       _count: { select: { signedSerialUnits: true, signedKitInstances: true } } },
   });
-  if (!s || s.battalionId !== bId) throw new Error("חייל לא נמצא");
+  if (!s || s.battalionId !== bId) return { error: "חייל לא נמצא" };
   if (s._count.signedSerialUnits > 0 || s._count.signedKitInstances > 0) {
-    throw new Error(`לא ניתן למחוק — לחייל ${s._count.signedSerialUnits + s._count.signedKitInstances} פריטים חתומים. יש לזכות אותו קודם.`);
+    return { error: `לא ניתן למחוק — לחייל ${s._count.signedSerialUnits + s._count.signedKitInstances} פריטים חתומים. יש לזכות אותו קודם.` };
   }
 
   try {
     await prisma.soldier.delete({ where: { id } });
   } catch {
-    throw new Error("לא ניתן למחוק — החייל מקושר לנתונים במערכת.");
+    return { error: "לא ניתן למחוק — החייל מקושר לנתונים במערכת." };
   }
   await audit(user.id, "DELETE", "Soldier", id, { fullName: s.fullName, pn: s.personalNumber });
   revalidatePath("/roster");

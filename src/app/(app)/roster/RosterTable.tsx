@@ -113,7 +113,11 @@ function EditForm({ soldier, companies, squads, onDone }: { soldier: Soldier; co
   const companySquads = squads.filter((s) => s.companyId === selectedCompany);
   async function submit(fd: FormData) {
     setError(null);
-    try { await updateSoldier(fd); onDone(); }
+    try {
+      const r = await updateSoldier(fd);
+      if (r?.error) { setError(r.error); return; }
+      onDone();
+    }
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
 
@@ -466,7 +470,8 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
     try {
       const fd = new FormData();
       fd.append("id", id);
-      await dischargeSoldier(fd);
+      const r = await dischargeSoldier(fd);
+      if (r?.error) { setActionError(r.error); return; }
     } catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
   }
 
@@ -668,7 +673,8 @@ export default function RosterTable({ soldiers, companies, squads, initialQ, ini
                       setActionError(null);
                       try {
                         const fd = new FormData(); fd.set("id", s.id);
-                        await deleteSoldier(fd);
+                        const r = await deleteSoldier(fd);
+                        if (r?.error) { setActionError(r.error); return; }
                       } catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
                     }} className="text-xs text-rose-500 hover:text-rose-700 border border-rose-200 rounded-md px-2.5 py-1 hover:bg-rose-50">
                       🗑️
