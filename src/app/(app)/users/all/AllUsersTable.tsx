@@ -727,7 +727,7 @@ export default function AllUsersTable({ users, baseUrl, initialQ, initialRole, i
                         if (!confirm(`למחוק את המשתמש ${u.fullName}?`)) return;
                         if (!confirm(`בטוח? פעולה זו לא ניתנת לביטול.`)) return;
                         const fd = new FormData(); fd.set("id", u.id);
-                        try { await deleteUser(fd); } catch (e) { alert(e instanceof Error ? e.message : "שגיאה"); }
+                        try { const r = await deleteUser(fd); if (r?.error) { alert(r.error); return; } } catch (e) { alert(e instanceof Error ? e.message : "שגיאה"); }
                       }} className="text-xs text-rose-500 hover:text-rose-700">🗑️</button>
                     </div>
                   </Td>

@@ -9,7 +9,7 @@ import { resolveUniqueUsername } from "@/lib/usernames";
 import { audit } from "@/lib/audit";
 
 /** קצין מחסן מזמין רס"פ חדש לפלוגה + מקשר אותו למחסן שלו (אונבורדינג בהזמנה) */
-export async function inviteRep(formData: FormData) {
+export async function inviteRep(formData: FormData): Promise<{ error?: string } | void> {
   const user = await requireCapability("reps.manage");
   const bId = user.battalionId!;
   if (!user.holderId) return;
@@ -27,20 +27,20 @@ export async function inviteRep(formData: FormData) {
     if (soldier && soldier.battalionId === bId) {
       // ודא שלא מקושר למשתמש אחר
       const linked = await prisma.appUser.findUnique({ where: { soldierId: rawSoldierId } });
-      if (linked) throw new Error(`החייל ${soldier.fullName} כבר מקושר למשתמש @${linked.username}`);
+      if (linked) return { error: `החייל ${soldier.fullName} כבר מקושר למשתמש @${linked.username}` };
       validatedSoldierId = rawSoldierId;
       fullName = soldier.fullName;
       phone = soldier.phone ?? phone;
     }
   }
-  if (!companyId || !fullName || !enteredUsername) throw new Error("חסרים שדות חובה (פלוגה / שם / שם משתמש)");
+  if (!companyId || !fullName || !enteredUsername) return { error: "חסרים שדות חובה (פלוגה / שם / שם משתמש)" };
 
   // הגנה: כבר יש רס"פ פעיל לאותה פלוגה במחסן הזה?
   const existingLink = await prisma.warehouseCompany.findUnique({
     where: { warehouseId_companyId: { warehouseId: user.holderId, companyId } },
   });
   if (existingLink?.repUserId) {
-    throw new Error("REP_EXISTS: כבר קיים נציג לפלוגה זו במחסן. הסר את הקיים לפני הוספת חדש.");
+    return { error: "כבר קיים נציג לפלוגה זו במחסן. הסר את הקיים לפני הוספת חדש." };
   }
 
   // ייחודיות שם משתמש בתוך הגדוד (per-battalion) — cross-gadud לא מתנגש
@@ -64,7 +64,7 @@ export async function inviteRep(formData: FormData) {
 }
 
 /** עדכון פרטי רס"פ קיים — שם, תואר, נייד, קישור לחייל */
-export async function updateRep(formData: FormData) {
+export async function updateRep(formData: FormData): Promise<{ error?: string } | void> {
   const user = await requireCapability("reps.manage");
   const bId = user.battalionId!;
   const userId = String(formData.get("userId") || "");
@@ -74,19 +74,19 @@ export async function updateRep(formData: FormData) {
   const unlinkSoldier = formData.get("unlinkSoldier") === "on";
   const rawSoldierId = String(formData.get("soldierId") || "").trim() || null;
 
-  if (!userId || !fullName) throw new Error("חסרים פרטים");
+  if (!userId || !fullName) return { error: "חסרים פרטים" };
 
   const target = await prisma.appUser.findUnique({ where: { id: userId } });
-  if (!target || target.battalionId !== bId) throw new Error("רס״פ לא נמצא");
+  if (!target || target.battalionId !== bId) return { error: "רס״פ לא נמצא" };
 
   let newSoldierId: string | null | undefined = undefined;
   if (unlinkSoldier) {
     newSoldierId = null;
   } else if (rawSoldierId) {
     const soldier = await prisma.soldier.findUnique({ where: { id: rawSoldierId } });
-    if (!soldier || soldier.battalionId !== bId) throw new Error("חייל לא נמצא");
+    if (!soldier || soldier.battalionId !== bId) return { error: "חייל לא נמצא" };
     const linked = await prisma.appUser.findUnique({ where: { soldierId: rawSoldierId } });
-    if (linked && linked.id !== userId) throw new Error(`החייל ${soldier.fullName} כבר מקושר למשתמש @${linked.username}`);
+    if (linked && linked.id !== userId) return { error: `החייל ${soldier.fullName} כבר מקושר למשתמש @${linked.username}` };
     newSoldierId = rawSoldierId;
     fullName = soldier.fullName;
     phone = soldier.phone ?? phone;

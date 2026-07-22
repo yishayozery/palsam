@@ -144,7 +144,8 @@ export default function ReturnModal({ serialUnits, balances, statuses, warehouse
             }
           }
         }
-        await createReturn(fd);
+        const r = await createReturn(fd);
+        if (r?.error) { setError(r.error); return; }
       }
       reset();
       setOpen(false);

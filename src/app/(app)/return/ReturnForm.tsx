@@ -42,7 +42,8 @@ export default function ReturnForm({ items, serialUnits, balances, statuses }: {
   async function submit(fd: FormData) {
     setError(null); setOk(false);
     try {
-      await createReturn(fd);
+      const r = await createReturn(fd);
+      if (r?.error) { setError(r.error); return; }
       setOk(true);
       reset();
     } catch (e) {

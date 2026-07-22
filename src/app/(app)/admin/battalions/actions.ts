@@ -20,7 +20,7 @@ const WH_DEFS: { type: WarehouseType; name: string }[] = [
 ];
 
 /** הקמת גדוד חדש + משתמש מפמ + 4 מחסנים + מילוני בסיס */
-export async function createBattalion(formData: FormData) {
+export async function createBattalion(formData: FormData): Promise<{ error?: string } | void> {
   const admin = await requireSuperAdmin();
   const name = String(formData.get("name") || "").trim();
   const code = String(formData.get("code") || "").trim().toUpperCase();
@@ -33,8 +33,8 @@ export async function createBattalion(formData: FormData) {
   if (!name || !code || !mafamUser || !mafamName) return;
 
   // ולידציה: מספר גדוד ומספר חטיבה — ספרות בלבד
-  if (!/^\d+$/.test(code)) throw new Error("מספר גדוד חייב להכיל ספרות בלבד");
-  if (brigade && !/^\d+$/.test(brigade)) throw new Error("מספר חטיבה חייב להכיל ספרות בלבד");
+  if (!/^\d+$/.test(code)) return { error: "מספר גדוד חייב להכיל ספרות בלבד" };
+  if (brigade && !/^\d+$/.test(brigade)) return { error: "מספר חטיבה חייב להכיל ספרות בלבד" };
 
   const exists = await prisma.battalion.findUnique({ where: { code } });
   if (exists) return;

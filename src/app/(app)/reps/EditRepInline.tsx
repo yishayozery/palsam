@@ -49,7 +49,8 @@ export default function EditRepInline({ rep }: { rep: Rep }) {
     try {
       if (selectedSoldier) fd.append("soldierId", selectedSoldier.id);
       if (unlinkSoldier) fd.append("unlinkSoldier", "on");
-      await updateRep(fd);
+      const r = await updateRep(fd);
+      if (r?.error) { setError(r.error); return; }
       setOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

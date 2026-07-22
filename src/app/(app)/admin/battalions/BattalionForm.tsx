@@ -5,6 +5,7 @@ import { createBattalion } from "./actions";
 
 export default function BattalionForm() {
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
     <>
       <button onClick={() => setOpen(true)} className="bg-slate-800 text-white rounded-lg px-4 py-2 text-sm hover:bg-slate-900">
@@ -17,7 +18,8 @@ export default function BattalionForm() {
               <h3 className="font-bold text-slate-800">הקמת גדוד חדש</h3>
               <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700">✕</button>
             </div>
-            <form action={async (fd) => { await createBattalion(fd); setOpen(false); }} className="p-5 space-y-3">
+            <form action={async (fd) => { setError(null); const r = await createBattalion(fd); if (r?.error) { setError(r.error); return; } setOpen(false); }} className="p-5 space-y-3">
+              {error && <div className="bg-rose-50 border border-rose-300 rounded-lg p-2.5 text-sm text-rose-800">⚠️ {error}</div>}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">שם הגדוד</label>

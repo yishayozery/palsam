@@ -83,7 +83,8 @@ function InviteForm({ companies, onDone }: { companies: Ref2[]; onDone: () => vo
     setError(null);
     if (selectedSoldier) fd.append("soldierId", selectedSoldier.id);
     try {
-      await inviteRep(fd);
+      const r = await inviteRep(fd);
+      if (r?.error) { setError(r.error); return; }
       onDone();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
