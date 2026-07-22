@@ -44,7 +44,7 @@ export async function deleteCategory(formData: FormData) {
 }
 
 // ---------- סטטוסים ----------
-export async function saveStatus(formData: FormData) {
+export async function saveStatus(formData: FormData): Promise<string | void> {
   const user = await guard();
   const bId = user.battalionId!;
   const id = String(formData.get("id") || "");
@@ -62,7 +62,7 @@ export async function saveStatus(formData: FormData) {
     where: { battalionId: bId, name: { equals: name, mode: "insensitive" }, ...(id ? { NOT: { id } } : {}) },
     select: { id: true },
   });
-  if (dup) throw new Error(`כבר קיים סטטוס בשם "${name}"`);
+  if (dup) return `כבר קיים סטטוס בשם "${name}"`;
   if (id) {
     const row = await prisma.itemStatus.findUnique({ where: { id }, select: { battalionId: true } });
     if (!row || row.battalionId !== bId) return;

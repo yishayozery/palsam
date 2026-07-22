@@ -64,7 +64,8 @@ export default function CountPlanForm({ holders, categories, items, holderItemTy
     setError(null);
     setSubmitting(true);
     try {
-      await createCountPlan(fd);
+      const r = await createCountPlan(fd);
+      if (r?.error) { setError(r.error); setSubmitting(false); return; }
       setName(""); setDescription(""); setScopeHolderIds([]); setScopeCategoryIds([]);
       setScopeItemTypeIds([]); setTrackingMethods([]); setFrequencyDays(0);
       setScheduledTimes("08:00"); setDaysOfWeek([]); setGraceMinutes(60);

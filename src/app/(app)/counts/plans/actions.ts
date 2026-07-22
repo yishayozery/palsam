@@ -12,12 +12,12 @@ function listFrom(fd: FormData, name: string): string[] {
   return fd.getAll(name).map(String).filter(Boolean);
 }
 
-export async function createCountPlan(formData: FormData) {
+export async function createCountPlan(formData: FormData): Promise<{ error?: string } | void> {
   const user = await requireCapability("counts.manage");
   const bId = user.battalionId!;
   const name = String(formData.get("name") || "").trim();
   const description = String(formData.get("description") || "").trim() || null;
-  if (!name) throw new Error("שם תכנית חובה");
+  if (!name) return { error: "שם תכנית חובה" };
 
   const scopeHolderIds = listFrom(formData, "scopeHolderIds");
   const scopeCategoryIds = listFrom(formData, "scopeCategoryIds");
