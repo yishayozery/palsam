@@ -78,6 +78,61 @@ export async function saveTemplateLine(fd: FormData) {
   return { ok: true as const };
 }
 
+/**
+ * 📉 נתוני דוח חוסרים ברמת חייל — נטענים מהשרת כדי לא להיות תחומים למחסן
+ * שנבחר בבורר. משתמש הנעול לפלוגה שלו רואה רק אותה; משתמש עם הרשאות
+ * רחבות (בלי holder ספציפי / אדמין) רואה את **כל** הגדוד בדוח אחד.
+ */
+export type KitShortageRow = {
+  kitName: string; kitNumber: string | null; status: string; item: string; sku: string | null;
+  required: number; present: number; serialNumber: string | null; lotNumber: string | null; expiryDate: string | null;
+};
+export type KitShortageSoldier = { soldierId: string; name: string; rows: KitShortageRow[] };
+
+export async function getKitShortages(): Promise<{ scope: "battalion" | "holder"; soldiers: KitShortageSoldier[] }> {
+  const user = await requireCapability("ymach.manage");
+  const bId = user.battalionId!;
+
+  // תיחום זהה ללוגיקת העמוד: נעול לפלוגה רק אם ל-holder של המשתמש יש רשומה בגדוד.
+  const own = user.holderId
+    ? await prisma.holder.findFirst({ where: { id: user.holderId, battalionId: bId }, select: { id: true } })
+    : null;
+  const scopedHolderId = user.isAdmin ? null : own?.id ?? null;
+
+  const kits = await prisma.operationalKit.findMany({
+    where: {
+      battalionId: bId, active: true,
+      templateId: { not: null }, assignedSoldierId: { not: null },
+      ...(scopedHolderId ? { holderId: scopedHolderId } : {}),
+    },
+    select: {
+      name: true, kitNumber: true, status: true,
+      assignedSoldierId: true, assignedSoldier: { select: { fullName: true } },
+      items: { select: { quantity: true, present: true, presentQuantity: true, serialNumber: true, lotNumber: true, expiryDate: true, itemType: { select: { name: true, sku: true } } } },
+    },
+  });
+
+  const bySoldier = new Map<string, KitShortageSoldier>();
+  for (const k of kits) {
+    if (!k.assignedSoldierId || !k.assignedSoldier) continue;
+    const missing = k.items
+      .map((it) => ({ it, present: it.present ? Math.min(it.presentQuantity, it.quantity) : 0 }))
+      .filter(({ it, present }) => present < it.quantity)
+      .map(({ it, present }) => ({
+        kitName: k.name, kitNumber: k.kitNumber, status: k.status,
+        item: it.itemType.name, sku: it.itemType.sku, required: it.quantity, present,
+        serialNumber: it.serialNumber, lotNumber: it.lotNumber,
+        expiryDate: it.expiryDate ? it.expiryDate.toISOString().slice(0, 10) : null,
+      }));
+    if (missing.length === 0) continue;
+    const cur = bySoldier.get(k.assignedSoldierId) ?? { soldierId: k.assignedSoldierId, name: k.assignedSoldier.fullName, rows: [] };
+    cur.rows.push(...missing);
+    bySoldier.set(k.assignedSoldierId, cur);
+  }
+  const soldiers = [...bySoldier.values()].sort((a, b) => a.name.localeCompare(b.name));
+  return { scope: scopedHolderId ? "holder" : "battalion", soldiers };
+}
+
 export async function deleteTemplateLine(id: string) {
   const user = await requireCapability("ymach.manage");
   const bId = user.battalionId!;

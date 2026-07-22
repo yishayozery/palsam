@@ -6,7 +6,7 @@ import { Card, Badge, EmptyState } from "@/components/ui";
 import { escapeHtml } from "@/lib/escape-html";
 import KitTemplatesTab, { type KitTemplateData, type TemplateItemOption } from "./KitTemplatesTab";
 import KitChecklist from "./KitChecklist";
-import { createKitFromTemplate } from "./kit-template-actions";
+import { createKitFromTemplate, getKitShortages, type KitShortageSoldier } from "./kit-template-actions";
 import {
   saveWarehouse, deleteWarehouse,
   saveShelf, deleteShelf,
@@ -74,6 +74,7 @@ export default function YmachClient({
       {tab === "kits" && (
         <KitsTab
           holderId={holderId}
+          companyName={companyName}
           kits={operationalKits}
           warehouses={warehouses}
           allItems={allItems}
@@ -471,9 +472,10 @@ function ItemsTab({
 
 // ===================== טאב ארגזים מבצעיים =====================
 function KitsTab({
-  holderId, kits, warehouses, allItems, soldiers, equipmentLocations, templates,
+  holderId, companyName, kits, warehouses, allItems, soldiers, equipmentLocations, templates,
 }: {
   holderId: string;
+  companyName: string;
   kits: OpKit[];
   warehouses: Warehouse[];
   allItems: ItemOption[];
@@ -547,8 +549,18 @@ ${kit.notes ? `<br><b>הערה:</b> ${escapeHtml(kit.notes)}` : ""}
         <h2 className="font-bold text-slate-800">ארגזים מבצעיים</h2>
         <div className="flex gap-2">
           <button
-            onClick={() => printKitShortagesBySoldier(kits)}
-            className="bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg px-3 py-2 text-xs font-bold"
+            onClick={() => {
+              // פותחים סינכרונית בתוך ה-gesture כדי לא להיחסם ע"י חוסם-פופ-אפ,
+              // ואז ממלאים כשהנתונים חוזרים מהשרת.
+              const w = window.open("", "_blank", "width=680,height=860");
+              if (w) w.document.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"></head><body style="font-family:Arial;padding:20px;color:#64748b">טוען דוח חוסרים…</body></html>');
+              startTransition(async () => {
+                const data = await getKitShortages();
+                renderKitShortagesReport(data, companyName, w);
+              });
+            }}
+            disabled={pending}
+            className="bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-50"
           >
             📉 דוח חוסרים
           </button>
@@ -1133,40 +1145,23 @@ function printKitShortages(kits: OpKit[], companyName: string) {
 }
 
 /**
- * 📉 דוח חוסרים ברמת חייל — פריסת הארגזים אצל החיילים, ומה חסר בכל אחד
- * מול התבנית. מקובץ לפי חייל; מציג רק ארגזי-תבנית עם חייל משויך שיש בהם חוסר.
- * חוסר פר-פריט = נדרש − (present ? presentQuantity : 0).
+ * 📉 דוח חוסרים ברמת חייל — נתונים נטענים מהשרת (getKitShortages) כדי לחצות
+ * את בורר המחסן: משתמש עם הרשאות רחבות מקבל את **כל הגדוד** בדוח אחד;
+ * משתמש הנעול לפלוגה — רק אותה. חוסר פר-פריט = נדרש − (present ? presentQuantity : 0).
  */
-function printKitShortagesBySoldier(kits: OpKit[]) {
-  type Row = { kitName: string; kitNumber: string | null; status: string; item: string; sku: string | null; required: number; present: number; extra: string };
-  const bySoldier = new Map<string, { name: string; rows: Row[] }>();
-  for (const k of kits) {
-    if (!k.templateId || !k.assignedSoldierName) continue;
-    const missing: Row[] = [];
-    for (const it of k.items) {
-      const present = it.present ? Math.min(it.presentQuantity, it.quantity) : 0;
-      if (present >= it.quantity) continue; // מלא — לא חוסר
-      const extra = [it.serialNumber && `ס"ד ${it.serialNumber}`, it.lotNumber && `אצווה ${it.lotNumber}`, it.expiryDate && `תוקף ${it.expiryDate}`].filter(Boolean).join(" · ");
-      missing.push({ kitName: k.name, kitNumber: k.kitNumber, status: k.status, item: it.itemName, sku: it.sku, required: it.quantity, present, extra });
-    }
-    if (missing.length === 0) continue;
-    const key = k.assignedSoldierId ?? k.assignedSoldierName;
-    const cur = bySoldier.get(key) ?? { name: k.assignedSoldierName, rows: [] };
-    cur.rows.push(...missing);
-    bySoldier.set(key, cur);
-  }
-
-  const soldiers = [...bySoldier.values()].sort((a, b) => a.name.localeCompare(b.name));
-  const totalGap = soldiers.reduce((s, x) => s + x.rows.reduce((t, r) => t + (r.required - r.present), 0), 0);
-
-  const w = window.open("", "_blank", "width=680,height=860");
+function renderKitShortagesReport(data: { scope: "battalion" | "holder"; soldiers: KitShortageSoldier[] }, companyName: string, w: Window | null) {
   if (!w) return;
+  const { scope, soldiers } = data;
+  const totalGap = soldiers.reduce((s, x) => s + x.rows.reduce((t, r) => t + (r.required - r.present), 0), 0);
+  const scopeLabel = scope === "battalion" ? "כלל הגדוד" : `פלוגה: ${companyName}`;
+  w.document.open(); // ניקוי הודעת ה"טוען…"
   const blocks = soldiers.map((s) => {
-    const rows = s.rows.map((r) =>
-      `<tr><td>${escapeHtml(r.kitName)}${r.kitNumber ? ` <small style="color:#888">#${escapeHtml(r.kitNumber)}</small>` : ""} <small style="color:${r.status === "ISSUED" ? "#16a34a" : "#94a3b8"}">${r.status === "ISSUED" ? "אצל חייל" : "על המדף"}</small></td>`
-      + `<td>${escapeHtml(r.item)}${r.extra ? `<br><small style="color:#94a3b8">${r.extra}</small>` : ""}</td>`
-      + `<td class="c">${r.required}</td><td class="c">${r.present}</td><td class="c" style="color:#dc2626;font-weight:bold">${r.required - r.present}</td></tr>`
-    ).join("");
+    const rows = s.rows.map((r) => {
+      const extra = [r.serialNumber && `ס"ד ${r.serialNumber}`, r.lotNumber && `אצווה ${r.lotNumber}`, r.expiryDate && `תוקף ${r.expiryDate}`].filter(Boolean).join(" · ");
+      return `<tr><td>${escapeHtml(r.kitName)}${r.kitNumber ? ` <small style="color:#888">#${escapeHtml(r.kitNumber)}</small>` : ""} <small style="color:${r.status === "ISSUED" ? "#16a34a" : "#94a3b8"}">${r.status === "ISSUED" ? "אצל חייל" : "על המדף"}</small></td>`
+        + `<td>${escapeHtml(r.item)}${extra ? `<br><small style="color:#94a3b8">${extra}</small>` : ""}</td>`
+        + `<td class="c">${r.required}</td><td class="c">${r.present}</td><td class="c" style="color:#dc2626;font-weight:bold">${r.required - r.present}</td></tr>`;
+    }).join("");
     const gap = s.rows.reduce((t, r) => t + (r.required - r.present), 0);
     return `<h2>👤 ${escapeHtml(s.name)} <span style="color:#dc2626;font-size:12px">— חוסר ${gap}</span></h2>`
       + `<table><thead><tr><th>ארגז</th><th>פריט חסר</th><th style="width:52px">נדרש</th><th style="width:52px">קיים</th><th style="width:52px">חוסר</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -1176,7 +1171,7 @@ function printKitShortagesBySoldier(kits: OpKit[]) {
 <style>body{font-family:Arial,sans-serif;padding:20px}table{border-collapse:collapse;width:100%;margin:4px 0 14px}th{background:#f1f5f9;padding:5px 8px;border:1px solid #ccc;text-align:right;font-size:12px}td{padding:4px 8px;border:1px solid #ccc;font-size:12px;vertical-align:top}td.c{text-align:center}h1{font-size:18px;margin-bottom:2px}h2{font-size:14px;color:#334155;margin:12px 0 2px}.meta{font-size:13px;color:#64748b;margin:2px 0 12px}@media print{button{display:none}}</style></head>
 <body>
 <h1>📉 דוח חוסרים בארגזים — ברמת חייל</h1>
-<p class="meta">${soldiers.length} חיילים עם חוסר · סה"כ ${totalGap} יחידות חסרות · ${new Date().toLocaleDateString("he-IL")}</p>
+<p class="meta">${scopeLabel} · ${soldiers.length} חיילים עם חוסר · סה"כ ${totalGap} יחידות חסרות · ${new Date().toLocaleDateString("he-IL")}</p>
 ${blocks || '<p style="color:#16a34a;font-weight:bold">✓ אין חוסרים — כל הארגזים מלאים</p>'}
 <button onclick="window.print()" style="margin-top:8px;padding:8px 20px;background:#0f172a;color:white;border:none;border-radius:6px;cursor:pointer">🖨️ הדפס</button>
 </body></html>`);
