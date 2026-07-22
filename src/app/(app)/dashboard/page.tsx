@@ -15,26 +15,29 @@ function AlertCard({ icon, title, count, tone, href, children }: {
 }) {
   const bg = tone === "rose" ? "bg-rose-50 border-rose-300" : tone === "amber" ? "bg-amber-50 border-amber-300" : "bg-blue-50 border-blue-300";
   const text = tone === "rose" ? "text-rose-800" : tone === "amber" ? "text-amber-800" : "text-blue-800";
-  return (
-    <Card className={`p-4 ${bg}`}>
-      <div className="flex items-start gap-3">
-        <span className="text-2xl">{icon}</span>
-        <div className="flex-1 min-w-0">
-          <h3 className={`font-bold text-sm ${text} flex items-center gap-2`}>
-            {title}
-            <span className={`text-xs rounded-full px-2 py-0.5 font-bold ${tone === "rose" ? "bg-rose-200 text-rose-900" : tone === "amber" ? "bg-amber-200 text-amber-900" : "bg-blue-200 text-blue-900"}`}>
-              {count}
-            </span>
-          </h3>
-          {children}
-        </div>
-        {href && (
-          <Link href={href} className={`text-xs ${text} hover:underline shrink-0 whitespace-nowrap`}>
-            טפל ←
-          </Link>
-        )}
+  const inner = (
+    <div className="flex items-start gap-3">
+      <span className="text-2xl">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <h3 className={`font-bold text-sm ${text} flex items-center gap-2`}>
+          {title}
+          <span className={`text-xs rounded-full px-2 py-0.5 font-bold ${tone === "rose" ? "bg-rose-200 text-rose-900" : tone === "amber" ? "bg-amber-200 text-amber-900" : "bg-blue-200 text-blue-900"}`}>
+            {count}
+          </span>
+        </h3>
+        {children}
       </div>
-    </Card>
+      {/* אינדיקציה ויזואלית בלבד — כל הכרטיס לחיץ (אסור Link בתוך Link) */}
+      {href && <span className={`text-xs ${text} shrink-0 whitespace-nowrap`}>טפל ←</span>}
+    </div>
+  );
+  // כשיש יעד — כל המלבן הוא הקישור, לא רק "טפל"
+  return href ? (
+    <Link href={href} className="block">
+      <Card className={`p-4 ${bg} transition hover:brightness-95 active:brightness-90`}>{inner}</Card>
+    </Link>
+  ) : (
+    <Card className={`p-4 ${bg}`}>{inner}</Card>
   );
 }
 
