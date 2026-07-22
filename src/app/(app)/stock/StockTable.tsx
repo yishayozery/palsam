@@ -36,7 +36,8 @@ function UnitEditRow({ unit }: { unit: { id: string; serialNumber: string; lotQu
   async function save(fd: FormData) {
     setError(null);
     try {
-      await editSerialNumber(fd);
+      const r = await editSerialNumber(fd);
+      if (r?.error) { setError(r.error); return; }
       setEditing(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

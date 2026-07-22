@@ -118,6 +118,7 @@ export default function StatusChangeModal({ statuses, stocks, units }: {
         fd.append("newStatusId", newStatusId);
         if (reason) fd.append("reason", reason);
         const r = await changeUnitsStatus(fd);
+        if (r?.error) { setError(r.error); setBusy(false); return; }
         totalChanged += r?.changed ?? unitIds.length;
       }
       // שינוי כמותי - פעם אחת לכל שורה
@@ -128,7 +129,8 @@ export default function StatusChangeModal({ statuses, stocks, units }: {
         fd.append("newStatusId", c.newStatusId);
         fd.append("quantity", String(c.quantity));
         if (reason) fd.append("reason", reason);
-        await changeQuantityStatus(fd);
+        const rq = await changeQuantityStatus(fd);
+        if (rq?.error) { setError(rq.error); setBusy(false); return; }
         totalChanged += c.quantity;
       }
       setOk(`✓ עודכנו ${totalChanged} פריטים`);
