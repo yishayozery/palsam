@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Card, Badge, EmptyState } from "@/components/ui";
 import { escapeHtml } from "@/lib/escape-html";
 import KitTemplatesTab, { type KitTemplateData, type TemplateItemOption } from "./KitTemplatesTab";
+import KitChecklist from "./KitChecklist";
+import { createKitFromTemplate } from "./kit-template-actions";
 import {
   saveWarehouse, deleteWarehouse,
   saveShelf, deleteShelf,
@@ -26,7 +28,12 @@ type OpKit = {
   shelfId: string | null; shelfLabel: string | null;
   equipmentLocationId: string | null; equipmentLocationName: string | null;
   assignedSoldierId: string | null; assignedSoldierName: string | null;
-  items: { itemTypeId: string; itemName: string; sku: string | null; quantity: number }[];
+  templateId: string | null;
+  items: {
+    itemTypeId: string; itemName: string; sku: string | null; quantity: number;
+    present: boolean; presentQuantity: number;
+    serialNumber: string | null; lotNumber: string | null; expiryDate: string | null;
+  }[];
 };
 type Baseline = { itemTypeId: string; itemName: string; sku: string | null; permanentQuantity: number };
 type StockItem = { itemTypeId: string; itemName: string; sku: string | null; stockQuantity: number };
@@ -72,6 +79,7 @@ export default function YmachClient({
           allItems={allItems}
           soldiers={soldiers}
           equipmentLocations={equipmentLocations}
+          templates={kitTemplates}
         />
       )}
       {tab === "templates" && (
@@ -463,7 +471,7 @@ function ItemsTab({
 
 // ===================== טאב ארגזים מבצעיים =====================
 function KitsTab({
-  holderId, kits, warehouses, allItems, soldiers, equipmentLocations,
+  holderId, kits, warehouses, allItems, soldiers, equipmentLocations, templates,
 }: {
   holderId: string;
   kits: OpKit[];
@@ -471,10 +479,13 @@ function KitsTab({
   allItems: ItemOption[];
   soldiers: SoldierOption[];
   equipmentLocations: EquipLocOption[];
+  templates: KitTemplateData[];
 }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editingKit, setEditingKit] = useState<string | null>(null);
   const [editingDetails, setEditingDetails] = useState<string | null>(null);
+  const [checklistKit, setChecklistKit] = useState<string | null>(null);
+  const [newTemplateId, setNewTemplateId] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -518,6 +529,30 @@ ${kit.notes ? `<p class="meta"><b>הערה:</b> ${escapeHtml(kit.notes)}</p>` : 
           + ארגז חדש
         </button>
       </div>
+
+      {showAdd && templates.length > 0 && (
+        <Card className="p-4 bg-indigo-50 border-indigo-200">
+          <form action={(fd) => { setFormError(null); fd.set("holderId", holderId); fd.set("templateId", newTemplateId); startTransition(async () => { const r = await createKitFromTemplate(fd); if (r?.error) { setFormError(r.error); return; } setShowAdd(false); setNewTemplateId(""); if (r?.id) setChecklistKit(r.id); }); }} className="mb-3">
+            <div className="text-xs font-bold text-indigo-800 mb-2">📋 הקמה מתבנית — המערכת תפרוש את הרשימה ותפתח צ&apos;קליסט יש/אין</div>
+            <div className="flex flex-wrap gap-2 items-end">
+              <label className="block flex-1 min-w-[150px]">
+                <span className="text-[10px] block mb-0.5">תבנית</span>
+                <select value={newTemplateId} onChange={(e) => setNewTemplateId(e.target.value)} className="border rounded px-2 py-1.5 text-sm w-full">
+                  <option value="">בחר תבנית…</option>
+                  {templates.map((t) => <option key={t.id} value={t.id}>{t.name} ({t.lines.length} פריטים)</option>)}
+                </select>
+              </label>
+              <label className="block w-28">
+                <span className="text-[10px] block mb-0.5">מספר (רשות)</span>
+                <input name="kitNumber" className="border rounded px-2 py-1.5 text-sm w-full" placeholder="אוטומטי" />
+              </label>
+              <button type="submit" disabled={pending || !newTemplateId} className="bg-indigo-600 text-white px-4 py-1.5 rounded text-sm disabled:bg-slate-300">הקם מתבנית</button>
+            </div>
+            {formError && <p className="text-red-600 text-sm mt-2">{formError}</p>}
+          </form>
+          <div className="text-[11px] text-slate-400 text-center">— או הקמה חופשית —</div>
+        </Card>
+      )}
 
       {showAdd && (
         <Card className="p-4 bg-amber-50 border-amber-200">
@@ -600,9 +635,17 @@ ${kit.notes ? `<p class="meta"><b>הערה:</b> ${escapeHtml(kit.notes)}</p>` : 
                 >
                   ✏️ עריכה
                 </button>
+                {kit.templateId && (
+                  <button
+                    onClick={() => { setChecklistKit(checklistKit === kit.id ? null : kit.id); setEditingKit(null); setEditingDetails(null); }}
+                    className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200"
+                  >
+                    ✅ צ&apos;קליסט
+                  </button>
+                )}
                 <button
                   onClick={() => { setEditingKit(editingKit === kit.id ? null : kit.id); setEditingDetails(null); }}
-                  className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200"
+                  className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded hover:bg-slate-200"
                 >
                   📦 תכולה
                 </button>
@@ -688,6 +731,16 @@ ${kit.notes ? `<p class="meta"><b>הערה:</b> ${escapeHtml(kit.notes)}</p>` : 
                   </div>
                 </form>
               </div>
+            )}
+
+            {/* צ'קליסט מול תבנית */}
+            {checklistKit === kit.id && kit.templateId && (
+              <KitChecklist
+                kitId={kit.id}
+                items={kit.items}
+                template={templates.find((t) => t.id === kit.templateId)}
+                onClose={() => setChecklistKit(null)}
+              />
             )}
 
             {/* רשימת פריטים */}

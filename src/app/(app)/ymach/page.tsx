@@ -252,11 +252,17 @@ export default async function YmachPage({
           equipmentLocationName: k.equipmentLocation?.name ?? null,
           assignedSoldierId: k.assignedSoldierId,
           assignedSoldierName: k.assignedSoldier?.fullName ?? null,
+          templateId: k.templateId,
           items: k.items.map((ki) => ({
             itemTypeId: ki.itemTypeId,
             itemName: ki.itemType.name,
             sku: ki.itemType.sku,
             quantity: ki.quantity,
+            present: ki.present,
+            presentQuantity: ki.presentQuantity,
+            serialNumber: ki.serialNumber,
+            lotNumber: ki.lotNumber,
+            expiryDate: ki.expiryDate ? ki.expiryDate.toISOString().slice(0, 10) : null,
           })),
         }))}
         baselines={baselines.map((b) => ({
