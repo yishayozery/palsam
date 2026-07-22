@@ -114,6 +114,29 @@ export default async function YmachPage({
   const stockItems = [...stockMap.values()].sort((a, b) => a.itemName.localeCompare(b.itemName));
   const allItems = stockItems.map((s) => ({ id: s.itemTypeId, name: s.itemName, sku: s.sku, trackingMethod: s.trackingMethod }));
 
+  // קטלוג מלא (לא רק פריטים על מדפים) — לבחירת פריטים בתבניות ובהקמת ארגז
+  const catalogItems = (
+    await prisma.itemType.findMany({ where: { battalionId: bId, active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, sku: true, trackingMethod: true } })
+  );
+
+  // תבניות ארגז — גדודיות, משותפות לכל הפלוגות
+  const kitTemplatesRaw = await prisma.kitTemplate.findMany({
+    where: { battalionId: bId, active: true },
+    orderBy: { name: "asc" },
+    select: {
+      id: true, name: true, description: true,
+      _count: { select: { kits: true } },
+      lines: {
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, itemTypeId: true, quantity: true, requiresSerial: true, requiresLot: true, requiresExpiry: true, itemType: { select: { name: true, trackingMethod: true } } },
+      },
+    },
+  });
+  const kitTemplates = kitTemplatesRaw.map((t) => ({
+    id: t.id, name: t.name, description: t.description, kitCount: t._count.kits,
+    lines: t.lines.map((l) => ({ id: l.id, itemTypeId: l.itemTypeId, itemName: l.itemType.name, trackingMethod: l.itemType.trackingMethod, quantity: l.quantity, requiresSerial: l.requiresSerial, requiresLot: l.requiresLot, requiresExpiry: l.requiresExpiry })),
+  }));
+
   // מיקומי ציוד (לשיוך ארגזים)
   const equipmentLocations = await prisma.equipmentLocation.findMany({
     where: { holderId, active: true },
@@ -181,6 +204,7 @@ export default async function YmachPage({
           { key: "warehouses", label: "🗄️ מחסנים ומדפים", href: `/ymach?tab=warehouses${companyQ}` },
           { key: "items", label: "📦 פריטים על מדפים", href: `/ymach?tab=items${companyQ}` },
           { key: "kits", label: "🎒 ארגזים מבצעיים", href: `/ymach?tab=kits${companyQ}` },
+          { key: "templates", label: "📋 תבניות ארגז", href: `/ymach?tab=templates${companyQ}` },
           { key: "count", label: "🔢 ספירת ימ\"ח", href: `/ymach?tab=count${companyQ}` },
           { key: "reports", label: "📊 דוחות", href: `/ymach?tab=reports${companyQ}` },
         ]}
@@ -193,6 +217,8 @@ export default async function YmachPage({
         companyLogo={company?.logoData ?? null}
         battalionName={battalion?.name ?? ""}
         battalionLogo={battalion?.logoData ?? null}
+        kitTemplates={kitTemplates}
+        catalogItems={catalogItems}
         warehouses={warehouses.map((wh) => ({
           id: wh.id,
           name: wh.name,

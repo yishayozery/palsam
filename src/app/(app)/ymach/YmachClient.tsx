@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Badge, EmptyState } from "@/components/ui";
 import { escapeHtml } from "@/lib/escape-html";
+import KitTemplatesTab, { type KitTemplateData, type TemplateItemOption } from "./KitTemplatesTab";
 import {
   saveWarehouse, deleteWarehouse,
   saveShelf, deleteShelf,
@@ -46,11 +47,14 @@ type Props = {
   allItems: ItemOption[];
   soldiers: SoldierOption[];
   equipmentLocations: EquipLocOption[];
+  kitTemplates: KitTemplateData[];
+  catalogItems: TemplateItemOption[];
 };
 
 export default function YmachClient({
   tab, holderId, companyName, companyLogo, battalionName, battalionLogo,
   warehouses, operationalKits, baselines, stockItems, allItems, soldiers, equipmentLocations,
+  kitTemplates, catalogItems,
 }: Props) {
   return (
     <div className="mt-4">
@@ -69,6 +73,9 @@ export default function YmachClient({
           soldiers={soldiers}
           equipmentLocations={equipmentLocations}
         />
+      )}
+      {tab === "templates" && (
+        <KitTemplatesTab templates={kitTemplates} allItems={catalogItems} />
       )}
       {tab === "count" && (
         <CountTab warehouses={warehouses} baselines={baselines} />
