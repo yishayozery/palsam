@@ -229,6 +229,7 @@ model Battalion {
   verificationRequests   VerificationRequest[] @relation("BattalionVerifications")
   dispatchTokens         DispatchToken[]       @relation("BattalionDispatchTokens")
   intakeDrafts           IntakeDraft[]         @relation("BattalionIntakeDrafts")
+  kitTemplates           KitTemplate[]         @relation("BattalionKitTemplates")
 }
 
 // ===================== משתמשים =====================
@@ -972,6 +973,7 @@ model ItemType {
   operationalKitItems OperationalKitItem[] @relation("ItemTypeInOpKit")
   ymachGaps         YmachGap[]           @relation("YmachGapItemType")
   intakeDraftLines  IntakeDraftLine[]    @relation("IntakeDraftLineItemType")
+  kitTemplateLines  KitTemplateLine[]    @relation("ItemTypeInKitTemplate")
 
   @@unique([battalionId, sku])
   @@index([categoryId])
@@ -2245,6 +2247,9 @@ model OperationalKit {
   assignedSoldier   Soldier? @relation("SoldierOpKits", fields: [assignedSoldierId], references: [id], onDelete: SetNull)
   // סטטוס: STORED=על המדף, ISSUED=אצל החייל
   status      String    @default("STORED") // "STORED" | "ISSUED"
+  // התבנית שממנה הוקם הארגז (אם הוקם מתבנית). SetNull — מחיקת תבנית לא מוחקת ארגז קיים.
+  templateId  String?
+  template    KitTemplate? @relation("KitFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
   notes       String?
   active      Boolean   @default(true)
   createdAt   DateTime  @default(now())
@@ -2298,6 +2303,12 @@ model OperationalKitItem {
   itemTypeId String
   itemType   ItemType       @relation("ItemTypeInOpKit", fields: [itemTypeId], references: [id], onDelete: Cascade)
   quantity   Int            @default(1)
+  // מעקב יש/אין בהקמת ארגז מול תבנית:
+  present         Boolean   @default(true)  // סומן כקיים בארגז
+  presentQuantity Int       @default(0)     // כמה נמצאו בפועל (מול quantity הנדרש)
+  serialNumber    String?   // אם הפריט סריאלי — המספר שהוזן
+  lotNumber       String?   // אם הפריט באצווה — מספר האצווה
+  expiryDate      DateTime? // אם לפריט תוקף — תאריך התפוגה
 
   @@unique([kitId, itemTypeId])
   @@index([kitId])
@@ -3155,5 +3166,47 @@ model IntakeDraftLine {
   editedByUser Boolean @default(false) // האם אדם תיקן את השורה ידנית
 
   @@index([draftId])
+  @@index([itemTypeId])
+}
+
+// ===================== תבניות ארגז מבצעי =====================
+
+/**
+ * 📦 תבנית ארגז מבצעי — הגדרה קבועה של "מה צריך להיות בארגז".
+ * לדוגמה: "ארגז לוחם" = רשימת פריטים + כמות + אילו דורשים סריאלי/אצווה/תוקף.
+ * בהקמת ארגז מהתבנית, המערכת פורשת את הרשימה והמשתמש מסמן יש/אין.
+ */
+model KitTemplate {
+  id          String    @id @default(cuid())
+  battalionId String
+  battalion   Battalion @relation("BattalionKitTemplates", fields: [battalionId], references: [id], onDelete: Cascade)
+  name        String // "ארגז לוחם"
+  description String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  lines KitTemplateLine[]
+  kits  OperationalKit[]  @relation("KitFromTemplate")
+
+  @@unique([battalionId, name])
+  @@index([battalionId])
+}
+
+model KitTemplateLine {
+  id         String      @id @default(cuid())
+  templateId String
+  template   KitTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  itemTypeId String
+  itemType   ItemType    @relation("ItemTypeInKitTemplate", fields: [itemTypeId], references: [id], onDelete: Cascade)
+  quantity   Int         @default(1)
+  // אילו שדות יש למלא בהקמת הארגז לפריט הזה:
+  requiresSerial Boolean @default(false)
+  requiresLot    Boolean @default(false)
+  requiresExpiry Boolean @default(false)
+  sortOrder      Int     @default(0)
+
+  @@unique([templateId, itemTypeId])
+  @@index([templateId])
   @@index([itemTypeId])
 }

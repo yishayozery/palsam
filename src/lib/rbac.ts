@@ -30,7 +30,7 @@ export const SCREENS = {
   catalog: "הגדרות פריטים",
   warehouses: "מחסנים",
   allocations: "הקצאות/ציוד קבוע",
-  ymach: "מידוף ימ\"ח",
+  ymach: "מחסן ימ\"ח",
   settings: "הגדרות גדוד",
 } as const;
 

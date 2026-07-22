@@ -55,7 +55,7 @@ export const NAV: NavItem[] = [
   { href: "/gaps", label: "פערים", icon: "⚠️", group: "לוגיסטי", screen: "gaps" },
   { href: "/my-inventory", label: "מלאי פלוגתי", icon: "📦", group: "לוגיסטי", screen: "soldiers" },
   { href: "/my-inventory/locations", label: "מיקומי ציוד", icon: "📍", group: "לוגיסטי", screen: "soldiers" },
-  { href: "/ymach", label: "מידוף ימ\"ח", icon: "🗄️", group: "לוגיסטי", screen: "ymach" },
+  { href: "/ymach", label: "מחסן ימ\"ח", icon: "🗄️", group: "לוגיסטי", screen: "ymach" },
 
   // ===== דוחות =====
   { href: "/reports", label: "דוחות", icon: "📈", group: "דוחות", screen: "reports" },

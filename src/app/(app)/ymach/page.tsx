@@ -30,7 +30,7 @@ export default async function YmachPage({
   if (!holderId) {
     return (
       <div>
-        <PageHeader title="מידוף ימ״ח" subtitle="ניהול מידוף, ארגזים מבצעיים, ספירות ודוחות" />
+        <PageHeader title="מחסן ימ״ח" subtitle="ניהול מחסן, ארגזים מבצעיים, תבניות, ספירות ודוחות" />
         <Card className="p-6">
           <p className="text-sm text-slate-400">אין פלוגות או מחסנים בגדוד.</p>
         </Card>
