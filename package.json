@@ -16,7 +16,8 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prebuild": "node scripts/setup-tesseract.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

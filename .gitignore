@@ -64,3 +64,9 @@ commit_msg.txt
 *.sql.gz
 
 .vercel
+
+# Tesseract self-hosted core — מיוצר ב-prebuild מ-node_modules (scripts/setup-tesseract.mjs)
+/public/tesseract/*.wasm
+/public/tesseract/*.js
+/public/tesseract/worker.min.js
+# ה-traineddata כן נשמר ב-git (חיוני, ואין הורדה בזמן build)

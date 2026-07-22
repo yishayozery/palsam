@@ -4,12 +4,14 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Button } from "@/components/ui";
 import { createDraftFromText } from "./actions";
+import OcrCapture from "./OcrCapture";
 
 export default function NewIntakeForm({ warehouses }: { warehouses: { id: string; name: string }[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [holderId, setHolderId] = useState(warehouses[0]?.id ?? "");
+  const [text, setText] = useState("");
 
   function submit(formData: FormData) {
     setError(null);
@@ -40,13 +42,17 @@ export default function NewIntakeForm({ warehouses }: { warehouses: { id: string
             <input name="voucherNo" className="w-full mt-1 rounded-lg border border-slate-300 px-3 py-2 text-base" placeholder="30866833" />
           </label>
         </div>
+        <OcrCapture onText={(t) => setText((prev) => (prev ? `${prev}\n${t}` : t))} />
+
         <label className="block">
-          <span className="text-xs text-slate-500">שורות השובר — הדבקה או הקלדה</span>
+          <span className="text-xs text-slate-500">שורות השובר — צילום, הדבקה או הקלדה</span>
           <textarea
             name="text"
             rows={6}
             required
             dir="rtl"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
             className="w-full mt-1 rounded-lg border border-slate-300 px-3 py-2 text-base font-mono"
             placeholder={"408132924 מעיל סערה זית 0 71 -71\n113516500 מחסנית מתכת 30 כדור 2 283 -281"}
           />

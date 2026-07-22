@@ -1,0 +1,4 @@
+נכסי Tesseract self-hosted (CSP: connect-src 'self').
+ליבה: node_modules/tesseract.js*.
+מודל: tessdata_fast (eng, heb).
+מיוצר ע"י scripts/setup-tesseract.mjs — אין לערוך ידנית.
